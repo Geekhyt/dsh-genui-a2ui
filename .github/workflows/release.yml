@@ -42,26 +42,24 @@ jobs:
           npm run build
           npm test
 
-      - name: Pack release tarball
-        run: |
-          TARBALL="$(npm pack --ignore-scripts --json | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync(0, 'utf8'))[0].filename)")"
-          echo "TARBALL=${TARBALL}" >> "${GITHUB_ENV}"
-
       - name: Publish to npm (OIDC Trusted Publisher or NPM_TOKEN)
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          if [ -n "${NPM_TOKEN}" ]; then
-            npm config set "//registry.npmjs.org/:_authToken" "${NPM_TOKEN}"
+          PKG_VERSION="$(node -p "require('./package.json').version")"
+          if npm view "dsh-genui-a2ui@${PKG_VERSION}" version --registry=https://registry.npmjs.org/ >/dev/null 2>&1; then
+            echo "dsh-genui-a2ui@${PKG_VERSION} is already published on npm; skipping npm publish."
+          else
+            if [ -n "${NPM_TOKEN}" ]; then
+              npm config set "//registry.npmjs.org/:_authToken" "${NPM_TOKEN}"
+            fi
+            npm publish --ignore-scripts --provenance --access public --registry=https://registry.npmjs.org/
           fi
-          npm publish "${TARBALL}" --provenance --access public --registry=https://registry.npmjs.org/
 
-      - name: Create GitHub Release with tarball asset
+      - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
-            gh release upload "${GITHUB_REF_NAME}" "${TARBALL}" --clobber
-          else
-            gh release create "${GITHUB_REF_NAME}" "${TARBALL}" --generate-notes --verify-tag
+          if ! gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            gh release create "${GITHUB_REF_NAME}" --generate-notes --verify-tag
           fi
