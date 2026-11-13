@@ -16,6 +16,10 @@
 4. **URL 协议白名单与 Mermaid 严格沙箱**：`Image`、`AudioPlayer`、`Video` 与 `openUrl` 严格过滤 `javascript:`、`vbscript:`、`file:` 等危险协议；`Mermaid` 强制运行于 `securityLevel: "strict"` 并对生成的 SVG 进行二次节点与属性净化。
 5. **敏感字段过滤**：本地表单草稿缓存与回传快照会自动剔除匹配密码、密钥、Token 等敏感命名模式的字段。
 
+## 已知上游依赖说明 / Upstream Advisory Notes
+
+当前 Google 官方 `@a2ui/web_core@0.15.0` 与 `@a2ui/react@0.15.0` 仍绑定 `zod` v3 分支（`^3.25.76`），运行 `npm audit` 会显示针对 `zod < 4.6.6` 超大受限集合内存占用的上游通告（`GHSA-mrhx-c7xc-m3w5`）。`dsh-genui-a2ui` 已在进入 Schema 校验前通过 `A2UI_LIMITS` 强制拦截超长源码（上限 `64,000` 字符）、超多组件树（单 Surface 上限 `250` 节点）与超大初始数据模型（上限 `256 KB`），实际运行不受该上游问题影响；待 `@a2ui` 官方包迁移至 `zod` v4 后将第一时间同步升级。
+
 ## 报告安全漏洞 / Reporting a Vulnerability
 
 请勿在公开 Issue 中披露未修复的安全漏洞。请直接通过 GitHub 私密安全通告提交报告：
