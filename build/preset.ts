@@ -44,10 +44,10 @@ const RUNTIME_CHUNK_ONLY = /^(@a2ui\/(web_core|react|agent)|antlr4ng|@tanstack\/
 const MAX_MAIN_CLIENT_BYTES = 500 * 1024
 
 const localRequire = createRequire(import.meta.url)
-const UUID_BROWSER_ENTRY = resolve(
-  dirname(localRequire.resolve('uuid/package.json')),
-  'dist/esm-browser/index.js',
-)
+const uuidPkgDir = dirname(localRequire.resolve('uuid/package.json'))
+const UUID_BROWSER_ENTRY = existsSync(resolve(uuidPkgDir, 'dist/esm-browser/index.js'))
+  ? resolve(uuidPkgDir, 'dist/esm-browser/index.js')
+  : resolve(uuidPkgDir, 'dist/index.js')
 
 export const CLIENT_EXTERNALS: readonly string[] = [...PLATFORM_MODULES]
 
