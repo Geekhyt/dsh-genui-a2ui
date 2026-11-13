@@ -25,14 +25,16 @@ To install from a local clone instead, run `npm ci && npm run build` and then `d
 Once enabled, ask questions as usual. Click **A2UI** below the input box or type `/a2ui off` anytime to switch back to plain text.
 
 <details>
-<summary><strong>Click to expand 6 ready-to-run example prompts</strong></summary>
+<summary><strong>Click to expand 8 ready-to-run example prompts</strong></summary>
 
 1. **Executive conversion and health dashboard**: `Build a quarterly growth and conversion diagnostic dashboard with four KPI cards with sparklines on top, a four-stage Sankey flow paired with a five-axis health radar chart side by side, plus tabs for regional growth bars and a searchable channel ROI table.`
 2. **Live multi-store operations dashboard**: `Create a live chain coffee store operations dashboard showing daily revenue, total orders, peak fulfillment rate, and stock alerts, paired with hourly channel area curves, a store-by-hour order heatmap, and a searchable inventory warning table.`
-3. **Zero-latency cost and margin simulator**: `Build an interactive AI inference cost and margin calculator where I can drag sliders for daily active users, cost per call, and cache hit rate, switch pricing tiers, and see monthly spend, gross margin, and a cost breakdown bar chart update live.`
+3. **Zero-latency LLM inference and cache simulator**: `Build a zero-latency LLM inference and prompt-cache cost calculator where I can switch models (DeepSeek-V3 vs DeepSeek-R1), drag sliders for daily call volume, prompt cache hit rate, and average output tokens, and see monthly spend, net cache savings, budget utilization, and a cost breakdown bar chart update live.`
 4. **Code diff approval gate**: `Suppose you are updating our production gateway canary weight from 5% to 20% and adding a circuit-breaker timeout. Pause with a review card showing the split config diff, target cluster selector, and auto-rollback checkbox for my confirmation before proceeding.`
 5. **Workspace architecture diagram and source explorer**: `Analyze the architecture of this workspace, render a layered Mermaid diagram alongside a clickable file tree and config JSON inspector so I can open any file directly in the right sidebar.`
 6. **Persistent bottom task tracker**: `Pin a five-stage release verification tracker above the chat input showing step status and overall completion percentage across typecheck, bundle build, host API check, test suite, and tarball audit.`
+7. **Market candlestick and volatility distribution**: `Create a 10-day market review dashboard combining a sentiment gauge with a daily OHLC candlestick chart and a sector return boxplot side by side.`
+8. **Incident triage accordion and detail modal**: `Generate a layered API latency incident report using collapsible accordions for root-cause summary, key-value metrics, and mitigation steps, plus a modal button to inspect full slow-query details.`
 
 </details>
 
@@ -78,7 +80,7 @@ Keep multi-stage pipelines anchored at the bottom of the window. Stages and comp
 
 - **Safe by design**: Built on Google's A2UI 1.0 specification, models output declarative JSON only and never execute untrusted HTML or scripts.
 - **Native look and feel**: Every surface renders with DeepSeek Harness UI primitives, adapting automatically to light mode, dark mode, and community themes.
-- **Zero host patches, fast startup**: Built on official plugin APIs with a 12.6 KB gzipped core; chart and diagram engines load only on demand.
+- **Zero host patches, fast startup**: Built on official plugin APIs with a 15.0 KB gzipped core; chart and diagram engines load only on demand.
 
 ## Component catalog
 

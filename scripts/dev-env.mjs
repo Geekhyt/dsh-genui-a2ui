@@ -23,7 +23,16 @@ function resolveDshBin() {
     '/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh',
     join(homedir(), '.dsh', 'bin', process.platform === 'win32' ? 'dsh.cmd' : 'dsh'),
     process.env.LOCALAPPDATA
-      ? join(process.env.LOCALAPPDATA, 'Programs', 'DeepSeek Harness', 'resources', 'runtime', 'cli', 'bin', 'dsh.cmd')
+      ? join(
+          process.env.LOCALAPPDATA,
+          'Programs',
+          'DeepSeek Harness',
+          'resources',
+          'runtime',
+          'cli',
+          'bin',
+          'dsh.cmd',
+        )
       : '',
     '/opt/DeepSeek Harness/resources/runtime/cli/bin/dsh',
   ].filter(Boolean)
@@ -35,7 +44,8 @@ function resolveDshBin() {
 }
 
 const DSH_BIN = resolveDshBin()
-const USE_WIN_SHELL = process.platform === 'win32' && (DSH_BIN === 'dsh' || DSH_BIN.endsWith('.cmd'))
+const USE_WIN_SHELL =
+  process.platform === 'win32' && (DSH_BIN === 'dsh' || DSH_BIN.endsWith('.cmd'))
 
 const baseEnv = {
   ...process.env,
@@ -60,15 +70,21 @@ const cmd = process.argv[2] ?? 'setup'
 mkdirSync(DSH_HOME, { recursive: true })
 
 if (cmd === 'setup') {
-  console.log(`[dev-env] Installing dsh-genui-a2ui into isolated DSH_HOME=${DSH_HOME} (profile: web)...`)
+  console.log(
+    `[dev-env] Installing dsh-genui-a2ui into isolated DSH_HOME=${DSH_HOME} (profile: web)...`,
+  )
   runSync(['plugin', '--profile', 'web', 'add', `link:${ROOT}`])
   console.log('[dev-env] Verifying composed config...')
-  const check = spawnSync(DSH_BIN, ['--profile', 'web', '--patch', resolve(ROOT, 'scripts/mock-overlay.yml'), '--dump-config'], {
-    cwd: ROOT,
-    env: baseEnv,
-    encoding: 'utf8',
-    shell: USE_WIN_SHELL,
-  })
+  const check = spawnSync(
+    DSH_BIN,
+    ['--profile', 'web', '--patch', resolve(ROOT, 'scripts/mock-overlay.yml'), '--dump-config'],
+    {
+      cwd: ROOT,
+      env: baseEnv,
+      encoding: 'utf8',
+      shell: USE_WIN_SHELL,
+    },
+  )
   if (check.status !== 0) {
     console.error(check.stderr)
     process.exit(check.status ?? 1)
@@ -95,7 +111,7 @@ if (cmd === 'setup') {
       String(WEB_PORT),
     ],
     {
-      cwd: ROOT,
+      cwd: process.env.DSH_DEV_CWD || ROOT,
       env: baseEnv,
       stdio: 'inherit',
       shell: USE_WIN_SHELL,

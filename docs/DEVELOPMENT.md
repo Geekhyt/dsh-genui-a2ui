@@ -36,7 +36,7 @@ flowchart TB
   end
 
   subgraph S3["Stage 3 · Client 4-Chunk Runtime & Native Light-DOM Slots"]
-    SHELL["Cold-Boot Shell lib/client.js (45.9 kB)"]
+    SHELL["Cold-Boot Shell lib/client.js (53.3 kB)"]
     RT["Lazy Runtime client.runtime.js (32 Components + StreamingExpressSession)"]
     EC["Lazy Chart Engine client.echarts.js (14 ECharts 6 Kinds)"]
     MM["Lazy Diagram Engine client.mermaid.js (Strict Sandbox Mermaid 11)"]
@@ -87,11 +87,11 @@ flowchart TB
 
 | Bundle Target | Raw Size | Gzip Size | Role & Load Trigger |
 | :--- | :--- | :--- | :--- |
-| `lib/client.js` | **`45.9 kB`** | **`12.6 kB`** | Cold-boot shell: registers UI Slots and composer pill (enforced by `< 500 kB` build & test gate). |
-| `lib/client.runtime.js` | `1.03 MB` | ~`310 kB` | Loaded on first A2UI surface mount (`@a2ui/react`, 32-component catalog, TanStack Table, React Aria). |
-| `lib/client.echarts.js` | `776.7 kB` | `256.6 kB` | Loaded only when a surface renders `Chart` (ECharts 6 modular registration for 14 chart kinds). |
-| `lib/client.mermaid.js` | `3.51 MB` | ~`1.04 MB` | Loaded only when a surface renders `Mermaid` (Mermaid 11 under `securityLevel: "strict"` + SVG sanitizer). |
-| `lib/index.js` | `688.0 kB` | `187.1 kB` | Self-contained Host ESM bundle (`@a2ui/agent` + Zod catalog) — ships with zero runtime `dependencies`. |
+| `lib/client.js` | **`53.3 kB`** | **`15.0 kB`** | Cold-boot shell: registers UI Slots, bilingual chrome, and composer pill (enforced by `< 500 kB` build & test gate). |
+| `lib/client.runtime.js` | `1.05 MB` | ~`289 kB` | Loaded on first A2UI surface mount (`@a2ui/react`, 32-component catalog, TanStack Table, React Aria). |
+| `lib/client.echarts.js` | `782.0 kB` | `258.7 kB` | Loaded only when a surface renders `Chart` (ECharts 6 modular registration for 14 chart kinds). |
+| `lib/client.mermaid.js` | `3.51 MB` | ~`943 kB` | Loaded only when a surface renders `Mermaid` (Mermaid 11 under `securityLevel: "strict"` + SVG sanitizer). |
+| `lib/index.js` | `689.6 kB` | `187.9 kB` | Self-contained Host ESM bundle (`@a2ui/agent` + Zod catalog) — ships with zero runtime `dependencies`. |
 
 ---
 
@@ -229,7 +229,7 @@ node scripts/dev-env.mjs serve
 - `src/index.ts` — Host Cordis plugin entry (`tools`, `skills`, `commands`, `systemPrompt`)
 - `src/host/` — `a2ui_render`, `a2ui_ask`, `SurfaceSessions` compiler & self-repair engine
 - `src/shared/` — Isomorphic `dshSchemaCatalog`, Host/Client `wire-types.ts`, `calc` parser/evaluator, and shared constants
-- `src/client/index.ts` — `45.9 kB` cold-boot UI slot shell & composer toggle pill
+- `src/client/index.ts` — `53.3 kB` cold-boot UI slot shell & composer toggle pill
 - `src/client/chunks/` — On-demand entrypoints (`runtime-chunk.ts`, `echarts-chunk.ts`, `mermaid-chunk.ts`)
 - `src/client/catalog/` — Light-DOM React implementations of all 32 components & 23 functions
 - `build/` — `tsdown` 5-target build preset & DSH web platform externalizer

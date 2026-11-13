@@ -294,7 +294,7 @@ export const SHOWCASE_ARCHITECTURE_UI = [
     ].join('\n'),
   )}`,
   '$/files = [',
-  '  { path: "src/index.ts", status: "modified", line: 239, summary: "Host 插件入口、工具与系统提示词注册" },',
+  '  { path: "src/index.ts", status: "modified", line: 261, summary: "Host 插件入口、工具与系统提示词注册" },',
   '  { path: "src/shared/catalog-schema.ts", status: "modified", line: 585, summary: "32 组件与 23 函数同构 Schema 契约" },',
   '  { path: "src/client/chunk-loader.ts", status: "added", line: 1, summary: "window.__ModuleLoader__ 四分包懒加载" },',
   '  { path: "src/client/chunks/mermaid-chunk.ts", status: "added", line: 1, summary: "strict 沙盒与 SVG 净化架构图渲染" },',
@@ -305,10 +305,10 @@ export const SHOWCASE_ARCHITECTURE_UI = [
   '  protocol: "A2UI 1.0",',
   '  zeroHostHacks: true,',
   '  chunks: {',
-  '    "client.js (Cold Boot)": "45.9 KB (12.6 KB gzip)",',
-  '    "client.runtime.js": "1.03 MB (on-demand)",',
-  '    "client.echarts.js": "778 KB (14 chart kinds)",',
-  '    "client.mermaid.js": "3.12 MB (diagram-only)"',
+  '    "client.js (Cold Boot)": "53.3 KB (15.0 KB gzip)",',
+  '    "client.runtime.js": "1.05 MB (on-demand)",',
+  '    "client.echarts.js": "782 KB (14 chart kinds)",',
+  '    "client.mermaid.js": "3.51 MB (diagram-only)"',
   '  }',
   '}',
   'root = Card(Column([',
@@ -376,19 +376,19 @@ export const SHOWCASE_DOCK_PIPELINE_UI = [
   'surface("release_dock")',
   '$/stages = [',
   '  { title: "TypeScript 类型检查", status: "done", description: "0 errors" },',
-  '  { title: "四分包构建与体积门禁", status: "done", description: "45.9 kB < 500 kB" },',
+  '  { title: "四分包构建与体积门禁", status: "done", description: "53.3 kB < 500 kB" },',
   '  { title: "Host API 契约核验", status: "done", description: "Slots & Primitives OK" },',
-  '  { title: "Vitest 45 项回归测试", status: "active", description: "执行中 (41/45)" },',
+  '  { title: "Vitest 49 项回归测试", status: "active", description: "执行中 (45/49)" },',
   '  { title: "npm 预打包产物审计", status: "pending", description: "等待前序完成" }',
   ']',
   'root = Column([',
   '  Steps($/stages, direction="horizontal"),',
   '  Row([',
-  '    Stat("首屏 client.js", "45.9 kB", delta="12.6 kB gzip", trend="up", weight=1),',
-  '    Stat("回归测试套件", "41 / 45", delta="运行中", trend="up", weight=1),',
+  '    Stat("首屏 client.js", "53.3 kB", delta="15.0 kB gzip", trend="up", weight=1),',
+  '    Stat("回归测试套件", "45 / 49", delta="运行中", trend="up", weight=1),',
   '    Stat("零宿主 Hack 检查", "100% 通过", trend="up", weight=1)',
   '  ]),',
-  '  Progress(84, label="v0.1.0 开源发布质量流水线总进度（跨轮次常驻监控）", tone="success")',
+  '  Progress(86, label="v0.1.0 开源发布质量流水线总进度（跨轮次常驻监控）", tone="success")',
   '])',
 ].join('\n')
 
@@ -398,7 +398,9 @@ function extractText(content) {
   if (typeof content === 'string') return content
   if (Array.isArray(content)) {
     return content
-      .map((part) => (typeof part === 'object' && part !== null && 'text' in part ? String(part.text) : ''))
+      .map((part) =>
+        typeof part === 'object' && part !== null && 'text' in part ? String(part.text) : '',
+      )
       .join('\n')
   }
   return ''
@@ -465,7 +467,9 @@ async function streamToolCall(res, model, toolName, argsObj) {
         index: 0,
         delta: {
           role: 'assistant',
-          tool_calls: [{ index: 0, id: callId, type: 'function', function: { name: toolName, arguments: '' } }],
+          tool_calls: [
+            { index: 0, id: callId, type: 'function', function: { name: toolName, arguments: '' } },
+          ],
         },
         finish_reason: null,
       },
@@ -532,7 +536,13 @@ export function startMockLlmServer(port = PORT) {
             object: 'chat.completion',
             created: Math.floor(Date.now() / 1000),
             model,
-            choices: [{ index: 0, message: { role: 'assistant', content: 'A2UI 交互演示' }, finish_reason: 'stop' }],
+            choices: [
+              {
+                index: 0,
+                message: { role: 'assistant', content: 'A2UI 交互演示' },
+                finish_reason: 'stop',
+              },
+            ],
             usage: { prompt_tokens: 30, completion_tokens: 8, total_tokens: 38 },
           }),
         )
@@ -658,7 +668,10 @@ export function startMockLlmServer(port = PORT) {
             })
             return
           }
-          if (userText.includes('surface="pipeline"') || userText.includes('action="advance_pipeline"')) {
+          if (
+            userText.includes('surface="pipeline"') ||
+            userText.includes('action="advance_pipeline"')
+          ) {
             await streamToolCall(res, model, 'a2ui_render', {
               title: 'CI/CD 发布流水线监控（已全量）',
               placement: 'dock',
@@ -755,21 +768,21 @@ export function startMockLlmServer(port = PORT) {
           ? '已汇总 12 家直营门店实时营收、高峰单量热力与原料库存预警，北京国贸旗舰店鲜奶余量低于 20%，建议安排即时调拨。'
           : isShowcase2
             ? '已绘制分层系统架构全景图与核心模块目录，点击左侧任意文件节点即可在右侧边栏打开对应源码并定位行号。'
-          : isShowcase3
-            ? '已就绪 0ms 推理算力成本测算沙盘，拖动任意滑块或切换主力模型即可在本地零延迟重算月度账单与节省额度。'
-            : isShowcase4
-              ? '已收到您的双栏 Diff 审核放行指令，正在将分包加载降级保护补丁写入工作区。'
-              : isShowcase5
-                ? '已将 v0.1.0 发布前自动化质量流水线挂载至会话底部常驻工作台（Dock），后续各阶段核验状态将原地实时刷新。'
-                : userText.includes('[a2ui-action]')
-                  ? '已根据您的操作实时增量刷新界面数据模型。'
-                  : isDock
-                    ? '已将 CI/CD 发布流水线监控面板固定在输入框上方的常驻工作台（Dock），后续轮次将继续实时原地刷新。'
-                    : isInline
-                      ? '已在工具步骤流内嵌渲染诊断摘要。'
-                      : isDashboard
-                        ? '已为您生成 2026 区域经营交互看板（示例数据），可切换图表、搜索排序明细表或一键调整预测情景。'
-                        : '已为您准备好餐厅预订交互卡片，您可直接在下方调整人数、口味或包间选项后点击确认。'
+            : isShowcase3
+              ? '已就绪 0ms 推理算力成本测算沙盘，拖动任意滑块或切换主力模型即可在本地零延迟重算月度账单与节省额度。'
+              : isShowcase4
+                ? '已收到您的双栏 Diff 审核放行指令，正在将分包加载降级保护补丁写入工作区。'
+                : isShowcase5
+                  ? '已将 v0.1.0 发布前自动化质量流水线挂载至会话底部常驻工作台（Dock），后续各阶段核验状态将原地实时刷新。'
+                  : userText.includes('[a2ui-action]')
+                    ? '已根据您的操作实时增量刷新界面数据模型。'
+                    : isDock
+                      ? '已将 CI/CD 发布流水线监控面板固定在输入框上方的常驻工作台（Dock），后续轮次将继续实时原地刷新。'
+                      : isInline
+                        ? '已在工具步骤流内嵌渲染诊断摘要。'
+                        : isDashboard
+                          ? '已为您生成 2026 区域经营交互看板（示例数据），可切换图表、搜索排序明细表或一键调整预测情景。'
+                          : '已为您准备好餐厅预订交互卡片，您可直接在下方调整人数、口味或包间选项后点击确认。'
       await streamTextReply(res, model, reply)
       return
     }
@@ -786,6 +799,8 @@ export function startMockLlmServer(port = PORT) {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   const server = await startMockLlmServer(PORT)
-  console.log(`[mock-llm] listening on http://127.0.0.1:${PORT}/v1 (chunk=${CHUNK_SIZE} chars, delay=${CHUNK_DELAY_MS}ms)`)
+  console.log(
+    `[mock-llm] listening on http://127.0.0.1:${PORT}/v1 (chunk=${CHUNK_SIZE} chars, delay=${CHUNK_DELAY_MS}ms)`,
+  )
   process.on('SIGINT', () => server.close(() => process.exit(0)))
 }
