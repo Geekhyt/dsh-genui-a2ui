@@ -173,7 +173,7 @@ describe('Spike 1 & Dynamic Chunk Architecture: DSH bundle purity & <500 kB gate
     15_000,
   )
 
-  it('keeps every locale/*.json detail markdown present on disk and listed in package.json files', () => {
+  it('keeps every locale/*.json detail markdown clean, HTML-free, and fully packaged in package.json files', () => {
     const rootDir = resolve(import.meta.dirname, '..')
     const localeDir = join(rootDir, 'locale')
     const pkg = JSON.parse(readFileSync(PKG_PATH, 'utf8')) as { files: string[] }
@@ -184,12 +184,27 @@ describe('Spike 1 & Dynamic Chunk Architecture: DSH bundle purity & <500 kB gate
       const parsed = JSON.parse(readFileSync(join(localeDir, localeFile), 'utf8')) as {
         meta?: { title?: string; description?: string; detail?: string }
       }
-      expect(parsed.meta?.title).toBe('dsh-genui-a2ui')
+      const expectedTitle = localeFile.startsWith('zh') ? 'A2UI 生成式交互界面' : 'A2UI generative UI'
+      expect(parsed.meta?.title).toBe(expectedTitle)
       expect(parsed.meta?.description?.length).toBeGreaterThan(20)
       const detail = parsed.meta?.detail
       expect(typeof detail).toBe('string')
-      expect(existsSync(join(rootDir, detail!))).toBe(true)
+      const detailPath = join(rootDir, detail!)
+      expect(existsSync(detailPath)).toBe(true)
       expect(pkg.files).toContain(detail)
+
+      const detailMd = readFileSync(detailPath, 'utf8')
+      expect(detailMd).not.toMatch(/<\/?(?:details|summary)\b/i)
+      expect(detailMd).not.toContain('img.shields.io')
+
+      for (const imgMatch of detailMd.matchAll(/!\[[^\]]*\]\(([^)]+)\)/g)) {
+        const rawTarget = imgMatch[1]!
+        expect(rawTarget.startsWith('http')).toBe(false)
+        const resolvedImg = resolve(join(detailPath, '..'), rawTarget)
+        expect(existsSync(resolvedImg)).toBe(true)
+        const relImg = resolvedImg.slice(rootDir.length + 1).replace(/\\/g, '/')
+        expect(pkg.files).toContain(relImg)
+      }
     }
   })
 })

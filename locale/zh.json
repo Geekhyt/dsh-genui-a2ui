@@ -1,7 +1,7 @@
 {
   "meta": {
-    "title": "dsh-genui-a2ui",
+    "title": "A2UI 生成式交互界面",
     "description": "让 DeepSeek Harness 在对话中直接生成交互式数据看板、14 类动态图表、Mermaid 架构图、实时参数测算器、双栏代码对比确认单与底部任务进度栏。安装后自动启用，可通过输入框上方 A2UI 按钮或 /a2ui off 随时切换。",
-    "detail": "README.md"
+    "detail": "docs/DETAIL.zh.md"
   }
 }

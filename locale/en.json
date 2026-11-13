@@ -1,7 +1,7 @@
 {
   "meta": {
-    "title": "dsh-genui-a2ui",
+    "title": "A2UI generative UI",
     "description": "Turn DeepSeek Harness chats into interactive dashboards, 14 chart types, Mermaid diagrams, live parameter calculators, split code diff review cards, and persistent task progress bars. Enabled automatically after install; toggle anytime via the A2UI button or /a2ui off.",
-    "detail": "README.en.md"
+    "detail": "docs/DETAIL.md"
   }
 }
