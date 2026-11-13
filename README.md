@@ -10,7 +10,11 @@
 
 ## 快速开始
 
-在终端运行以下命令安装插件：
+**方式一：客户端界面一键安装（推荐，免终端与重启）**
+
+打开 DeepSeek Harness 左侧边栏的 **插件** 页面，点击 **添加插件**，输入 `dsh-genui-a2ui` 并选择 **立即启用** 即可直接使用。
+
+**方式二：命令行安装**
 
 ```bash
 dsh plugin --profile desktop add dsh-genui-a2ui
@@ -18,7 +22,7 @@ dsh plugin --profile desktop add dsh-genui-a2ui
 
 如果是从源码仓库本地体验，克隆后运行 `npm ci && npm run build`，再执行 `dsh plugin --profile desktop add link:./dsh-genui-a2ui` 即可。后续升级版本执行 `dsh plugin --profile desktop add dsh-genui-a2ui@latest`，卸载可执行 `dsh plugin --profile desktop remove dsh-genui-a2ui`。
 
-重启 DeepSeek Harness 桌面端即可生效。像平时一样用自然语言提问，点击输入框上方的 **A2UI** 按钮或输入 `/a2ui off` 可随时切回纯文字模式。
+安装启用后，像平时一样用自然语言提问；点击输入框左下方的 **A2UI** 按钮或输入 `/a2ui off` 可随时切回纯文字模式。
 
 <details>
 <summary><strong>点击展开 6 个可直接复制试跑的提示词示例</strong></summary>

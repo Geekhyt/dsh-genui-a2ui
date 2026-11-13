@@ -89,9 +89,9 @@ flowchart TB
 | :--- | :--- | :--- | :--- |
 | `lib/client.js` | **`45.9 kB`** | **`12.6 kB`** | Cold-boot shell: registers UI Slots and composer pill (enforced by `< 500 kB` build & test gate). |
 | `lib/client.runtime.js` | `1.03 MB` | ~`310 kB` | Loaded on first A2UI surface mount (`@a2ui/react`, 32-component catalog, TanStack Table, React Aria). |
-| `lib/client.echarts.js` | `777.6 kB` | `256.5 kB` | Loaded only when a surface renders `Chart` (ECharts 6 modular registration for 14 chart kinds). |
-| `lib/client.mermaid.js` | `3.12 MB` | ~`940 kB` | Loaded only when a surface renders `Mermaid` (Mermaid 11 under `securityLevel: "strict"` + SVG sanitizer). |
-| `lib/index.js` | `688.8 kB` | `187.4 kB` | Self-contained Host ESM bundle (`@a2ui/agent` + Zod catalog) — ships with zero runtime `dependencies`. |
+| `lib/client.echarts.js` | `776.7 kB` | `256.6 kB` | Loaded only when a surface renders `Chart` (ECharts 6 modular registration for 14 chart kinds). |
+| `lib/client.mermaid.js` | `3.51 MB` | ~`1.04 MB` | Loaded only when a surface renders `Mermaid` (Mermaid 11 under `securityLevel: "strict"` + SVG sanitizer). |
+| `lib/index.js` | `688.0 kB` | `187.1 kB` | Self-contained Host ESM bundle (`@a2ui/agent` + Zod catalog) — ships with zero runtime `dependencies`. |
 
 ---
 
@@ -201,8 +201,8 @@ Every surface begins with `surface("snake_id")` (or `surface("snake_id", update=
 ## 7. Local Development, Testing & Packaging
 
 ```bash
-# Install dependencies
-npm install
+# Install dependencies from lockfile
+npm ci
 
 # TypeScript strict check
 npm run typecheck

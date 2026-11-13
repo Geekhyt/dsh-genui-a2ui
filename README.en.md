@@ -10,7 +10,11 @@
 
 ## Quick start
 
-Install the plugin in DeepSeek Harness Desktop:
+**Option 1: Install directly inside DeepSeek Harness (recommended, no terminal or restart needed)**
+
+Open **Plugins** in the left sidebar, click **Add plugin**, enter `dsh-genui-a2ui`, and choose **Enable now**.
+
+**Option 2: Install via CLI**
 
 ```bash
 dsh plugin --profile desktop add dsh-genui-a2ui
@@ -18,7 +22,7 @@ dsh plugin --profile desktop add dsh-genui-a2ui
 
 To install from a local clone instead, run `npm ci && npm run build` and then `dsh plugin --profile desktop add link:./dsh-genui-a2ui`. To upgrade later, run `dsh plugin --profile desktop add dsh-genui-a2ui@latest`; to uninstall, run `dsh plugin --profile desktop remove dsh-genui-a2ui`.
 
-Restart DeepSeek Harness Desktop and ask questions as usual. Click **A2UI** above the input box or type `/a2ui off` anytime to switch back to plain text.
+Once enabled, ask questions as usual. Click **A2UI** below the input box or type `/a2ui off` anytime to switch back to plain text.
 
 <details>
 <summary><strong>Click to expand 6 ready-to-run example prompts</strong></summary>

@@ -89,9 +89,9 @@ flowchart TB
 | :--- | :--- | :--- | :--- |
 | `lib/client.js` | **`45.9 kB`** | **`12.6 kB`** | 首屏冷启动轻量壳：仅注册 UI Slots 与顶部开关胶囊（构建与单测双重强制 `< 500 kB` 硬门禁）。 |
 | `lib/client.runtime.js` | `1.03 MB` | ~`310 kB` | 仅当对话中真正挂载 A2UI 卡片时才加载（含 `@a2ui/react`、32 组件目录、TanStack Table）。 |
-| `lib/client.echarts.js` | `777.6 kB` | `256.5 kB` | 仅当卡片使用 `Chart` 组件时按需加载 ECharts 6（按需注册 14 类图表模块）。 |
-| `lib/client.mermaid.js` | `3.12 MB` | ~`940 kB` | 仅当卡片使用 `Mermaid` 组件时按需加载 Mermaid 11（强制 `securityLevel: "strict"` + SVG 净化）。 |
-| `lib/index.js` | `688.8 kB` | `187.4 kB` | 自包含 Host ESM 产物（打包 `@a2ui/agent` 与同构 Zod 契约），用户安装时零运行时 npm 依赖。 |
+| `lib/client.echarts.js` | `776.7 kB` | `256.6 kB` | 仅当卡片使用 `Chart` 组件时按需加载 ECharts 6（按需注册 14 类图表模块）。 |
+| `lib/client.mermaid.js` | `3.51 MB` | ~`1.04 MB` | 仅当卡片使用 `Mermaid` 组件时按需加载 Mermaid 11（强制 `securityLevel: "strict"` + SVG 净化）。 |
+| `lib/index.js` | `688.0 kB` | `187.1 kB` | 自包含 Host ESM 产物（打包 `@a2ui/agent` 与同构 Zod 契约），用户安装时零运行时 npm 依赖。 |
 
 ---
 
@@ -201,8 +201,8 @@ flowchart TB
 ## 7. 本地开发、测试与隔离验证
 
 ```bash
-# 安装依赖
-npm install
+# 从锁文件严格安装依赖
+npm ci
 
 # TypeScript 类型检查
 npm run typecheck
