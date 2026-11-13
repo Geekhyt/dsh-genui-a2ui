@@ -15,10 +15,12 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
+import { z } from 'zod'
 import { createAskTool, PendingAskRegistry } from './host/ask-tool.ts'
 import { createGenerator, RENDER_TOOL, SurfaceSessions } from './host/generator.ts'
 import { createRenderTool, isSubagentCall, sessionIdOf, type ToolExec } from './host/render-tool.ts'
 import { ANSWER_COMMAND, TIER_COMMAND } from './shared/catalog-schema.ts'
+import { HOST_MESSAGES, resolveHostLocale } from './shared/i18n.ts'
 import type { AskAnswerInput } from './shared/wire-types.ts'
 
 export { ANSWER_COMMAND, TIER_COMMAND }
@@ -27,10 +29,24 @@ export const name = 'dsh-genui-a2ui'
 export const inject: string[] = []
 
 export interface Config {
-  readonly defaultEnabled?: boolean
+  readonly defaultEnabled?: boolean | undefined
   /** Optional JSON file path to persist `/a2ui on|off` across Host restarts (`null` disables). */
-  readonly stateFile?: string | null
+  readonly stateFile?: string | null | undefined
 }
+
+export const Config = z
+  .object({
+    defaultEnabled: z
+      .boolean()
+      .optional()
+      .describe('Enable A2UI generative surfaces by default in new sessions'),
+    stateFile: z
+      .string()
+      .nullable()
+      .optional()
+      .describe('Optional JSON file path to persist /a2ui on|off across Host restarts (null disables)'),
+  })
+  .default({})
 
 function resolveDefaultStateFile(explicit: string | null | undefined): string | null {
   if (explicit === null) return null
@@ -309,16 +325,17 @@ export function apply(ctx: Context, config: Config = {}): void {
       () =>
         commands.register({
           name: TIER_COMMAND,
-          description: '开关 A2UI 生成式界面（on / off，不传参直接切换）',
+          description: HOST_MESSAGES[resolveHostLocale()].tierCommandDesc,
           input: { hint: 'on | off' },
           recordInput: false,
           handler({ agent, rawInput }) {
+            const msg = HOST_MESSAGES[resolveHostLocale()]
             const sid = sessionIdOf({ agent })
             const arg = rawInput.trim().toLowerCase()
             if (arg === 'status') {
               return {
                 kind: 'success',
-                text: sessions.isEnabled(sid) ? 'A2UI 生成式界面已开启' : 'A2UI 生成式界面已关闭',
+                text: sessions.isEnabled(sid) ? msg.enabledStatus : msg.disabledStatus,
               }
             }
             let next: boolean
@@ -329,14 +346,14 @@ export function apply(ctx: Context, config: Config = {}): void {
             } else if (arg === 'off' || arg === 'false' || arg === '0') {
               next = false
             } else {
-              return { kind: 'error', text: `无效参数 "${arg}"，可选值：on | off | status（或不传参直接切换）` }
+              return { kind: 'error', text: msg.invalidTierArg(arg) }
             }
             sessions.setEnabled(sid, next)
             sessions.setDefaultEnabled(next)
             writePersistedEnabled(stateFile, next)
             return {
               kind: 'success',
-              text: next ? 'A2UI 生成式界面已开启' : 'A2UI 生成式界面已关闭',
+              text: next ? msg.enabledStatus : msg.disabledStatus,
             }
           },
         }),
@@ -347,23 +364,24 @@ export function apply(ctx: Context, config: Config = {}): void {
       () =>
         commands.register({
           name: ANSWER_COMMAND,
-          description: '提交正在等待输入的 A2UI 交互表单（内部桥接命令）',
+          description: HOST_MESSAGES[resolveHostLocale()].answerCommandDesc,
           recordInput: false,
           handler({ agent, rawInput }) {
+            const msg = HOST_MESSAGES[resolveHostLocale()]
             const trimmed = rawInput.trim()
             if (trimmed === '') {
-              return { kind: 'error', text: '缺少回传数据' }
+              return { kind: 'error', text: msg.missingPayload }
             }
             let payload: AskAnswerInput
             try {
               payload = JSON.parse(trimmed) as AskAnswerInput
             } catch {
-              return { kind: 'error', text: '回传 JSON 解析失败' }
+              return { kind: 'error', text: msg.invalidPayloadJson }
             }
             const sid = sessionIdOf({ agent })
             const settled = asks.settle(sid, payload)
             if (!settled) {
-              return { kind: 'error', text: '当前会话没有待处理的 a2ui_ask 请求' }
+              return { kind: 'error', text: msg.noPendingAsk }
             }
             return { kind: 'success' }
           },

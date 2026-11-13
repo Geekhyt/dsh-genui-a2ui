@@ -5,6 +5,31 @@ updates:
     schedule:
       interval: "monthly"
     open-pull-requests-limit: 5
+    groups:
+      react-ecosystem:
+        patterns:
+          - "react"
+          - "react-dom"
+          - "@types/react"
+          - "@types/react-dom"
+    ignore:
+      # Upstream @a2ui/web_core & @a2ui/react currently require zod v3 (^3.25.x)
+      - dependency-name: "zod"
+        versions:
+          - ">= 4.0.0"
+      # DeepSeek Harness 0.2.x host provides React 18 via PLATFORM_MODULES
+      - dependency-name: "react"
+        versions:
+          - ">= 19.0.0"
+      - dependency-name: "react-dom"
+        versions:
+          - ">= 19.0.0"
+      - dependency-name: "@types/react"
+        versions:
+          - ">= 19.0.0"
+      - dependency-name: "@types/react-dom"
+        versions:
+          - ">= 19.0.0"
 
   - package-ecosystem: "github-actions"
     directory: "/"

@@ -2,6 +2,7 @@
  * Pure, zero-DOM normalization & LCS line-diff helpers for P0 components
  * (`DiffView`, `Steps`, `KeyValue`).
  */
+import { resolveClientLocale, RUNTIME_MESSAGES, type UiLocale } from '../../shared/i18n.ts'
 import type { TagTone } from '../ui/primitives.tsx'
 
 export interface DiffLineOp {
@@ -160,8 +161,13 @@ export interface NormalizedStep {
   readonly status: StepStatus
 }
 
-export function normalizeStepItems(rawItems: unknown, currentRaw: unknown): NormalizedStep[] {
+export function normalizeStepItems(
+  rawItems: unknown,
+  currentRaw: unknown,
+  locale?: UiLocale,
+): NormalizedStep[] {
   if (!Array.isArray(rawItems)) return []
+  const effectiveLocale = locale ?? resolveClientLocale()
   const currentIdx =
     typeof currentRaw === 'number' && Number.isFinite(currentRaw) ? Math.trunc(currentRaw) : undefined
 
@@ -180,7 +186,8 @@ export function normalizeStepItems(rawItems: unknown, currentRaw: unknown): Norm
       return { title: String(entry), status: derived }
     }
     const obj = (typeof entry === 'object' && entry !== null ? entry : {}) as Record<string, unknown>
-    const title = String(obj.title ?? obj.label ?? obj.name ?? `步骤 ${idx + 1}`)
+    const fallbackStepTitle = RUNTIME_MESSAGES[effectiveLocale].stepFallbackTitle(idx + 1)
+    const title = String(obj.title ?? obj.label ?? obj.name ?? fallbackStepTitle)
     const description =
       obj.description !== undefined && obj.description !== null && String(obj.description).trim() !== ''
         ? String(obj.description)

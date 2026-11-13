@@ -18,6 +18,8 @@
  *   6. `"test-error"`: `BROKEN_UI` -> compiler rejection -> `HEALED_UI`.
  */
 import { createServer } from 'node:http'
+import { resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 const PORT = Number(process.env.MOCK_LLM_PORT ?? 18991)
 const CHUNK_SIZE = Number(process.env.MOCK_CHUNK_SIZE ?? 18)
@@ -782,7 +784,7 @@ export function startMockLlmServer(port = PORT) {
   })
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   const server = await startMockLlmServer(PORT)
   console.log(`[mock-llm] listening on http://127.0.0.1:${PORT}/v1 (chunk=${CHUNK_SIZE} chars, delay=${CHUNK_DELAY_MS}ms)`)
   process.on('SIGINT', () => server.close(() => process.exit(0)))

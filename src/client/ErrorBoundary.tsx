@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
+import { resolveClientLocale, RUNTIME_MESSAGES } from '../shared/i18n.ts'
 
 export interface ErrorBoundaryProps {
   readonly label?: string
@@ -23,9 +24,10 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
   override render(): ReactNode {
     if (this.state.error !== null) {
+      const defaultLabel = RUNTIME_MESSAGES[resolveClientLocale()].renderErrorDefault
       return (
         <div role="alert" data-a2ui-error>
-          <strong>{this.props.label ?? 'A2UI 渲染异常'}</strong>
+          <strong>{this.props.label ?? defaultLabel}</strong>
           <span>{this.state.error.message}</span>
         </div>
       )

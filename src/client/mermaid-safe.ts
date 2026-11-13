@@ -23,11 +23,27 @@ export const ALLOWED_MERMAID_KINDS = [
   'xychart-beta',
 ] as const
 
-const SVG_INJECTION_RE = /<script|<iframe|<object|<embed|[\s"']on[a-z]+\s*=|javascript:|data:text\/html/i
+const SVG_INJECTION_RE =
+  /<script|<iframe|<object|<embed|<applet|<meta|<base|[\s"'/]on[a-z]+\s*=|(?:javascript|vbscript)\s*:|data\s*:\s*text\/html/i
 
-/** Reject any rendered SVG carrying script/embed tags, inline event handlers, or `javascript:` URIs. */
+const OBFUSCATED_URI_RE = /(?:javascript|vbscript)\s*:|data\s*:\s*text\/html/i
+
+function decodeHtmlNumericEntities(input: string): string {
+  return input
+    .replace(/&#x([0-9a-f]+);?/gi, (_, hex: string) => {
+      const cp = Number.parseInt(hex, 16)
+      return Number.isFinite(cp) && cp > 0 && cp <= 0x10ffff ? String.fromCodePoint(cp) : ''
+    })
+    .replace(/&#([0-9]+);?/g, (_, dec: string) => {
+      const cp = Number.parseInt(dec, 10)
+      return Number.isFinite(cp) && cp > 0 && cp <= 0x10ffff ? String.fromCodePoint(cp) : ''
+    })
+    .replace(/[\u0000-\u0020]+/g, '')
+}
+
+/** Reject any rendered SVG carrying script/embed tags, inline event handlers, or `javascript:`/`vbscript:` URIs. */
 export function assertSafeSvg(svg: string): void {
-  if (SVG_INJECTION_RE.test(svg)) {
+  if (SVG_INJECTION_RE.test(svg) || OBFUSCATED_URI_RE.test(decodeHtmlNumericEntities(svg))) {
     throw new Error('Mermaid SVG failed sanitization check; refusing to render')
   }
 }
@@ -139,7 +155,7 @@ export function repairMermaidSource(code: string): string {
     const trimmed = text.trim()
     const label = /[@[\]()]/.test(trimmed) && !trimmed.includes('"') ? `"${trimmed}"` : text
     pipeSpans.push(`${link[0]}${label}|`)
-    maskedPipes += masked.slice(copied, i) + `\uE002${pipeSpans.length - 1}\uE003`
+    maskedPipes += `${masked.slice(copied, i)}\uE002${pipeSpans.length - 1}\uE003`
     copied = end + 1
     i = end
   }

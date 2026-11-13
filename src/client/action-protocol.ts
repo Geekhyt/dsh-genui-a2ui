@@ -5,6 +5,7 @@
  * unit tests can import it directly.
  */
 import type { ActionPayload } from '@a2ui/web_core/v1_0'
+import { resolveClientLocale, SHELL_MESSAGES } from '../shared/i18n.ts'
 import { sanitizeDataModel } from './persistence.ts'
 
 export const A2UI_ACTION_NODE_ID = 'a2ui-action'
@@ -19,8 +20,22 @@ export interface ParsedA2uiActionData {
   readonly summaryLabel: string
 }
 
-const TRAILING_PROMPT_LINE =
-  '请根据上述交互结果继续处理；如需更新界面，请调用 a2ui_render（对已有 surface 可使用 update=true）。'
+const USER_NOTE_PREFIXES = ['用户说明：', 'User note:'] as const
+const PARAMS_PREFIXES = ['动作参数：', 'Action params:'] as const
+const DATA_MODEL_PREFIXES = ['当前数据模型：', 'Current data model:'] as const
+const TRAILING_PROMPT_PREFIXES = [
+  '请根据上述交互结果继续处理',
+  'Please continue based on the interaction above',
+] as const
+
+function stripMatchingPrefix(line: string, prefixes: readonly string[]): string | null {
+  for (const prefix of prefixes) {
+    if (line.startsWith(prefix)) {
+      return line.slice(prefix.length).trim()
+    }
+  }
+  return null
+}
 
 function extractClickSelection(action: ActionPayload): Record<string, unknown> | null {
   const meta = (action as { readonly metadata?: { readonly extensions?: Record<string, unknown> } }).metadata
@@ -31,6 +46,7 @@ function extractClickSelection(action: ActionPayload): Record<string, unknown> |
 }
 
 function formatSelectionLabel(selection: Record<string, unknown>): string | undefined {
+  const msg = SHELL_MESSAGES[resolveClientLocale()]
   if (
     selection.source === 'fileTree' &&
     typeof selection.path === 'string' &&
@@ -41,7 +57,7 @@ function formatSelectionLabel(selection: Record<string, unknown>): string | unde
       typeof selection.line === 'number' && Number.isFinite(selection.line)
         ? `:${Math.trunc(selection.line)}`
         : ''
-    return `查看文件：${p}${ln}`
+    return msg.actionViewFile(`${p}${ln}`)
   }
   const label = typeof selection.label === 'string' && selection.label.trim() !== '' ? selection.label.trim() : ''
   const series = typeof selection.series === 'string' && selection.series.trim() !== '' ? selection.series.trim() : ''
@@ -50,8 +66,7 @@ function formatSelectionLabel(selection: Record<string, unknown>): string | unde
       ? String(selection.value)
       : ''
   const head = [label, series].filter(Boolean).join(' · ')
-  if (head && val) return `下钻查看：${head} (${val})`
-  if (head) return `下钻查看：${head}`
+  if (head) return msg.actionDrillDown(head, val || undefined)
   return undefined
 }
 
@@ -80,22 +95,23 @@ export function formatActionMessage(
   rawAction: ActionPayload,
   dataModels: Record<string, unknown> | undefined,
 ): string {
+  const msg = SHELL_MESSAGES[resolveClientLocale()]
   const action = enrichActionWithSelection(rawAction)
   const parts: string[] = [
     `[a2ui-action] surface="${action.surfaceId}" action="${action.name}" component="${action.sourceComponentId}"`,
   ]
   if (action.userMessage !== undefined && action.userMessage.trim() !== '') {
-    parts.push(`用户说明：${action.userMessage.trim()}`)
+    parts.push(`${msg.actionUserNotePrefix}${action.userMessage.trim()}`)
   }
   const cleanContext = sanitizeDataModel(action.context ?? {})
   if (Object.keys(cleanContext).length > 0) {
-    parts.push(`动作参数：${JSON.stringify(cleanContext)}`)
+    parts.push(`${msg.actionParamsPrefix}${JSON.stringify(cleanContext)}`)
   }
   const cleanModels = dataModels !== undefined ? sanitizeDataModel(dataModels) : {}
   if (Object.keys(cleanModels).length > 0) {
-    parts.push(`当前数据模型：${JSON.stringify(cleanModels)}`)
+    parts.push(`${msg.actionDataModelPrefix}${JSON.stringify(cleanModels)}`)
   }
-  parts.push(TRAILING_PROMPT_LINE)
+  parts.push(msg.actionTrailingPrompt)
   return parts.join('\n')
 }
 
@@ -134,22 +150,25 @@ export function matchA2uiActionUserText(
     const lineEnd = nextNewline < 0 ? text.length : nextNewline
     const rawLine = text.slice(lineStart, lineEnd).replace(/\r$/, '')
 
-    if (rawLine.startsWith('用户说明：')) {
-      userMessage = rawLine.slice('用户说明：'.length).trim() || null
+    const noteVal = stripMatchingPrefix(rawLine, USER_NOTE_PREFIXES)
+    if (noteVal !== null) {
+      userMessage = noteVal || null
       cursor = lineEnd
       continue
     }
-    if (rawLine.startsWith('动作参数：')) {
-      paramsText = rawLine.slice('动作参数：'.length).trim() || null
+    const paramsVal = stripMatchingPrefix(rawLine, PARAMS_PREFIXES)
+    if (paramsVal !== null) {
+      paramsText = paramsVal || null
       cursor = lineEnd
       continue
     }
-    if (rawLine.startsWith('当前数据模型：')) {
-      dataModelText = rawLine.slice('当前数据模型：'.length).trim() || null
+    const modelVal = stripMatchingPrefix(rawLine, DATA_MODEL_PREFIXES)
+    if (modelVal !== null) {
+      dataModelText = modelVal || null
       cursor = lineEnd
       continue
     }
-    if (rawLine === TRAILING_PROMPT_LINE || rawLine.startsWith('请根据上述交互结果继续处理')) {
+    if (TRAILING_PROMPT_PREFIXES.some((prefix) => rawLine.startsWith(prefix))) {
       cursor = lineEnd
       break
     }

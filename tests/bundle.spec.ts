@@ -118,13 +118,25 @@ describe('Spike 1 & Dynamic Chunk Architecture: DSH bundle purity & <500 kB gate
     }
   })
 
-  it(
-    'loads lib/index.js cleanly in Node ESM and registers tools, skill, and RPC commands',
+    it(
+    'loads lib/index.js cleanly in Node ESM, validates runtime Config schema, and registers tools, skill, and RPC commands',
     async () => {
+      const { resolveConfig, ValidationError } = await import('@deepseek-ai/cordis')
       const libHref = new URL('../lib/index.js', import.meta.url).href
       const hostMod = (await import(libHref)) as typeof import('../src/index.ts')
       expect(hostMod.name).toBe('dsh-genui-a2ui')
       expect(typeof hostMod.apply).toBe('function')
+      expect(hostMod.Config).toBeDefined()
+      expect(resolveConfig(hostMod as never, undefined)).toEqual({})
+      expect(
+        resolveConfig(hostMod as never, { defaultEnabled: false, stateFile: null }),
+      ).toEqual({
+        defaultEnabled: false,
+        stateFile: null,
+      })
+      expect(() => resolveConfig(hostMod as never, { defaultEnabled: 'nope' })).toThrow(
+        ValidationError,
+      )
 
       const registeredTools: string[] = []
       const registeredCommands: string[] = []

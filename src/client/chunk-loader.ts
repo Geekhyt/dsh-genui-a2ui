@@ -13,6 +13,7 @@
 import type * as EchartsChunk from './chunks/echarts-chunk.ts'
 import type * as MermaidChunk from './chunks/mermaid-chunk.ts'
 import type * as RuntimeChunk from './chunks/runtime-chunk.ts'
+import { isPluginStylesMounted } from './style-lifecycle.ts'
 
 declare const __DSH_BUNDLED_CLIENT__: boolean | undefined
 declare const require: ((id: string) => unknown) & {
@@ -37,7 +38,10 @@ export function getLoadedRuntimeChunk(): RuntimeChunkModule | null {
 }
 
 export function loadRuntimeChunk(): Promise<RuntimeChunkModule> {
-  if (runtimeModuleSync !== null) return Promise.resolve(runtimeModuleSync)
+  if (runtimeModuleSync !== null) {
+    if (isPluginStylesMounted()) runtimeModuleSync.ensureA2uiRuntimeStyles()
+    return Promise.resolve(runtimeModuleSync)
+  }
   if (runtimePromise === null) {
     const rawPromise =
       typeof __DSH_BUNDLED_CLIENT__ !== 'undefined' && __DSH_BUNDLED_CLIENT__
@@ -46,6 +50,7 @@ export function loadRuntimeChunk(): Promise<RuntimeChunkModule> {
     runtimePromise = rawPromise.then(
       (mod) => {
         runtimeModuleSync = mod
+        if (isPluginStylesMounted()) mod.ensureA2uiRuntimeStyles()
         return mod
       },
       (err) => {

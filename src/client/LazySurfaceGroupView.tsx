@@ -9,6 +9,7 @@ import {
   loadRuntimeChunk,
   type RuntimeChunkModule,
 } from './chunk-loader.ts'
+import { useShellMessages } from './i18n.ts'
 import type { StreamingExpressSession, StreamingCompileSnapshot } from './streaming.ts'
 import type { SurfaceGroupViewProps } from './SurfaceView.tsx'
 import css from './SurfaceView.module.css'
@@ -57,10 +58,11 @@ export function useLazyStreamingExpress(
 }
 
 export const LazySurfaceGroupView = memo(function LazySurfaceGroupView(props: SurfaceGroupViewProps) {
+  const msg = useShellMessages()
   const runtime = useRuntimeChunk(true)
   if (runtime === null) {
     return (
-      <div className={css.skeletonWrap} aria-busy="true" aria-label="正在加载界面引擎…">
+      <div className={css.skeletonWrap} role="status" aria-busy="true" aria-label={msg.loadingRuntime}>
         <div className={css.skeletonBlock} />
       </div>
     )

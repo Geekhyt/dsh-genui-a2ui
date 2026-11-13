@@ -20,3 +20,29 @@
 | `tslib` | 0BSD | TypeScript runtime helpers |
 
 All bundled runtime dependencies are distributed under permissive open-source licenses (`MIT`, `Apache-2.0`, `BSD-3-Clause`, `BSD-2-Clause`, `ISC`, `0BSD`, and dual-licensed `MPL-2.0 OR Apache-2.0` elected under `Apache-2.0`). Their respective copyright notices and license terms remain with their original authors.
+
+## Required Apache-2.0 Attribution Notices
+
+### Apache ECharts (`echarts`)
+
+```text
+Apache ECharts
+Copyright 2017-2026 The Apache Software Foundation
+
+This product includes software developed at
+The Apache Software Foundation (https://www.apache.org/).
+```
+
+### Google A2UI (`@a2ui/agent`, `@a2ui/react`, `@a2ui/web_core`, `@a2ui/markdown-it`)
+
+```text
+Copyright 2024-2026 Google LLC
+Licensed under the Apache License, Version 2.0 (https://www.apache.org/licenses/LICENSE-2.0).
+```
+
+### Adobe React Spectrum / React Aria (`react-aria-components`, `react-aria`, `react-stately`, `@internationalized/*`)
+
+```text
+Copyright 2020-2026 Adobe. All rights reserved.
+Licensed under the Apache License, Version 2.0 (https://www.apache.org/licenses/LICENSE-2.0).
+```

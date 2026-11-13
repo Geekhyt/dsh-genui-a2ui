@@ -16,13 +16,16 @@ To keep the plugin fast, safe, and 100% aligned with both **Google A2UI 1.0** an
 3. **Cold-Boot Budget (`< 500 kB` Hard Gate, `< 60 kB` Target)**:
    - Keep heavy visualization libraries (`echarts`, `mermaid`, `@a2ui/react`, `@tanstack/react-table`) inside lazy chunks (`src/client/chunks/*`), never imported eagerly from `src/client/index.ts`.
 
-## Local Development Workflow
+## Local Development Workflow (macOS, Linux, & Windows)
+
+Requires Node.js LTS (`26.x` recommended; `^22.18.0 || >=24.11.0` supported).
 
 ```bash
 # 1. Install dependencies from lockfile
 npm ci
 
-# 2. Typecheck, build all 5 targets, and run the 45-test suite
+# 2. Lint, typecheck, build all 5 targets, and run the test suite
+npm run lint
 npm run typecheck
 npm run build
 npm test
@@ -37,6 +40,7 @@ node scripts/dev-env.mjs serve
 
 ## Pull Request Checklist
 
+- [ ] `npm run lint` passes with 0 errors.
 - [ ] `npm run typecheck` passes with 0 errors.
 - [ ] `npm run build` succeeds and keeps `lib/client.js` well below the cold-boot budget.
 - [ ] `npm test` passes (`tests/*.spec.ts`), including tests covering any new component, formula, or prompt rule.

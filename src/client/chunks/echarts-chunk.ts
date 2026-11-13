@@ -31,6 +31,7 @@ import {
 } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import type { ChartKind } from '../../shared/catalog-schema.ts'
+import { resolveClientLocale, RUNTIME_MESSAGES } from '../../shared/i18n.ts'
 
 echarts.use([
   BarChart,
@@ -430,8 +431,9 @@ export function buildChartOption(props: ChartOptionInput, dark: boolean): echart
       treeData = rows.map(mapNode)
     } else if (groupField) {
       const groups = new Map<string, { name: string; value: number }[]>()
+      const otherLabel = RUNTIME_MESSAGES[resolveClientLocale()].chartOtherGroup
       for (const r of rows) {
-        const g = sanitizeChartLabel(r[groupField] ?? '其他')
+        const g = sanitizeChartLabel(r[groupField] ?? otherLabel)
         const list = groups.get(g) ?? []
         list.push({
           name: sanitizeChartLabel(r[nameField] ?? r.name ?? r.label),
@@ -626,7 +628,9 @@ export function buildChartOption(props: ChartOptionInput, dark: boolean): echart
       },
       series: [
         {
-          name: sanitizeChartLabel(props.title ?? '分布'),
+          name: sanitizeChartLabel(
+            props.title ?? RUNTIME_MESSAGES[resolveClientLocale()].chartBoxplotDefault,
+          ),
           type: 'boxplot',
           itemStyle: {
             color: dark ? 'rgba(96, 165, 250, 0.22)' : 'rgba(37, 99, 235, 0.14)',
@@ -669,7 +673,9 @@ export function buildChartOption(props: ChartOptionInput, dark: boolean): echart
       },
       series: [
         {
-          name: sanitizeChartLabel(props.title ?? '行情'),
+          name: sanitizeChartLabel(
+            props.title ?? RUNTIME_MESSAGES[resolveClientLocale()].chartCandlestickDefault,
+          ),
           type: 'candlestick',
           itemStyle: {
             color: theme.success,

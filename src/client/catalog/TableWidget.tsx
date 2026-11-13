@@ -23,6 +23,8 @@ import {
   type SortingState,
 } from '@tanstack/react-table'
 import type { ActionDispatchOptions } from '@a2ui/web_core/v1_0'
+import type { RuntimeUiMessages } from '../../shared/i18n.ts'
+import { useRuntimeMessages } from '../i18n.ts'
 import { DshButton, DshInput, DshSearchIcon } from '../ui/primitives.tsx'
 import css from './Catalog.module.css'
 
@@ -67,9 +69,9 @@ function normalizeRows(rows: unknown): RowRecord[] {
   )
 }
 
-function formatCellValue(value: unknown): string {
+function formatCellValue(value: unknown, msg: RuntimeUiMessages): string {
   if (value === null || value === undefined) return '—'
-  if (typeof value === 'boolean') return value ? '是' : '否'
+  if (typeof value === 'boolean') return value ? msg.boolYes : msg.boolNo
   if (typeof value === 'object') return JSON.stringify(value)
   return String(value)
 }
@@ -83,6 +85,7 @@ export const TableWidget = memo(function TableWidget({
   action,
   weight,
 }: TableWidgetProps) {
+  const msg = useRuntimeMessages()
   const data = useMemo(() => normalizeRows(rawRows), [rawRows])
   const [sorting, setSorting] = useState<SortingState>([])
   const [globalFilter, setGlobalFilter] = useState('')
@@ -108,11 +111,11 @@ export const TableWidget = memo(function TableWidget({
             enableSorting: col.sortable !== false,
             sortFn: isNumeric ? 'basic' : 'alphanumeric',
             meta: { align, isNumeric },
-            cell: (info) => formatCellValue(info.getValue()),
+            cell: (info) => formatCellValue(info.getValue(), msg),
           })
         }),
       ),
-    [inferredCols, data],
+    [inferredCols, data, msg],
   )
 
   const table = useTable({
@@ -126,7 +129,7 @@ export const TableWidget = memo(function TableWidget({
       const q = String(filterValue ?? '').trim().toLowerCase()
       if (q === '') return true
       return Object.values(row.original).some((val) =>
-        formatCellValue(val).toLowerCase().includes(q),
+        formatCellValue(val, msg).toLowerCase().includes(q),
       )
     },
     initialState: {
@@ -153,8 +156,8 @@ export const TableWidget = memo(function TableWidget({
                   setGlobalFilter(e.target.value)
                   table.setPageIndex(0)
                 }}
-                placeholder="搜索表格内容…"
-                aria-label="搜索表格内容"
+                placeholder={msg.tableSearchPlaceholder}
+                aria-label={msg.tableSearchAria}
               />
             </div>
           ) : null}
@@ -189,7 +192,7 @@ export const TableWidget = memo(function TableWidget({
             {table.getRowModel().rows.length === 0 ? (
               <tr>
                 <td className={css.emptyCell} colSpan={Math.max(1, columns.length)}>
-                  暂无匹配数据
+                  {msg.tableEmpty}
                 </td>
               </tr>
             ) : (
@@ -200,8 +203,8 @@ export const TableWidget = memo(function TableWidget({
                   const firstKey = inferredCols[0]?.key
                   const label =
                     firstKey !== undefined
-                      ? formatCellValue(row.original[firstKey])
-                      : `第 ${row.index + 1} 行`
+                      ? formatCellValue(row.original[firstKey], msg)
+                      : msg.tableRowFallback(row.index + 1)
                   void action({
                     metadata: {
                       extensions: {
@@ -255,9 +258,7 @@ export const TableWidget = memo(function TableWidget({
 
       {pageCount > 1 ? (
         <div className={css.pagination}>
-          <span>
-            共 {totalFiltered} 条 · 第 {pageIndex + 1} / {pageCount} 页
-          </span>
+          <span>{msg.tablePaginationSummary(totalFiltered, pageIndex + 1, pageCount)}</span>
           <div className={css.pageButtons}>
             <DshButton
               variant="outline"
@@ -265,7 +266,7 @@ export const TableWidget = memo(function TableWidget({
               disabled={!table.getCanPreviousPage()}
               onClick={() => table.previousPage()}
             >
-              上一页
+              {msg.tablePrevPage}
             </DshButton>
             <DshButton
               variant="outline"
@@ -273,7 +274,7 @@ export const TableWidget = memo(function TableWidget({
               disabled={!table.getCanNextPage()}
               onClick={() => table.nextPage()}
             >
-              下一页
+              {msg.tableNextPage}
             </DshButton>
           </div>
         </div>

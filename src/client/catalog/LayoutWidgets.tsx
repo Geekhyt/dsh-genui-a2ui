@@ -13,6 +13,7 @@ import {
   TabsApi,
 } from '@a2ui/web_core/v1_0'
 import { DshTextApi } from '../../shared/catalog-schema.ts'
+import { useRuntimeMessages } from '../i18n.ts'
 import {
   DshMarkdown,
   DshModal,
@@ -160,6 +161,7 @@ export const DshTabsImpl = defineComponent<{
   tabs?: readonly { readonly title?: unknown; readonly child?: ChildRef }[]
   weight?: number
 }>(TabsApi, function DshTabs({ props, buildChild }) {
+  const msg = useRuntimeMessages()
   const tabs = props.tabs ?? []
   const baseId = useId()
   const [activeIdx, setActiveIdx] = useState(0)
@@ -169,7 +171,7 @@ export const DshTabsImpl = defineComponent<{
 
   const items = tabs.map((tab, idx) => ({
     value: String(idx),
-    label: String(tab.title ?? `标签 ${idx + 1}`),
+    label: String(tab.title ?? msg.tabFallbackTitle(idx + 1)),
     id: `${baseId}-tab-${idx}`,
     panelId: `${baseId}-panel-${idx}`,
   })) as unknown as readonly [SegmentedTab<string>, ...SegmentedTab<string>[]]
@@ -181,7 +183,7 @@ export const DshTabsImpl = defineComponent<{
         items={items}
         value={String(safeIdx)}
         onChange={(v) => setActiveIdx(Number(v) || 0)}
-        label="视图切换"
+        label={msg.tabsAriaLabel}
         size="sm"
       />
       <div
@@ -201,6 +203,7 @@ export const DshModalImpl = defineComponent<{
   content?: ChildRef
   weight?: number
 }>(ModalApi, function DshModalComponent({ props, buildChild }) {
+  const msg = useRuntimeMessages()
   const [open, setOpen] = useState(false)
   return (
     <div style={weightStyle(props.weight)} data-a2ui-modal-root="">
@@ -213,7 +216,7 @@ export const DshModalImpl = defineComponent<{
       >
         {renderChildRef(buildChild, props.trigger)}
       </div>
-      <DshModal open={open} onClose={() => setOpen(false)} title="详情" closeLabel="关闭">
+      <DshModal open={open} onClose={() => setOpen(false)} title={msg.modalTitle} closeLabel={msg.modalClose}>
         {renderChildRef(buildChild, props.content)}
       </DshModal>
     </div>

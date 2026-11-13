@@ -23,34 +23,45 @@ import {
   type ReactNode,
 } from 'react'
 import { createPortal } from 'react-dom'
+import { SHELL_MESSAGES, type UiLocale } from '../../shared/i18n.ts'
+import { useShellMessages, useUiLocale } from '../i18n.ts'
 
 export type { ButtonVariant, JsonTreeLabels, MarkdownLabels, MenuItem, SegmentedTab, TagTone }
 
-export const DEFAULT_JSON_TREE_LABELS: JsonTreeLabels = {
-  copyValue: '复制值',
-  copyJson: '复制 JSON',
-  copyPath: '复制路径',
-  copyPrettyJson: '复制格式化 JSON',
-  copyCompactJson: '复制紧凑 JSON',
-  copied: '已复制',
-  copyFailed: '复制失败',
-  collapseNode: '折叠节点',
-  expandNode: '展开节点',
-  copyButtonTitle: (action: string) => `${action}（更多选项）`,
+export function getJsonTreeLabels(locale: UiLocale): JsonTreeLabels {
+  const msg = SHELL_MESSAGES[locale]
+  return {
+    copyValue: msg.copyValue,
+    copyJson: msg.copyJson,
+    copyPath: msg.copyPath,
+    copyPrettyJson: msg.copyPrettyJson,
+    copyCompactJson: msg.copyCompactJson,
+    copied: msg.copied,
+    copyFailed: msg.copyFailed,
+    collapseNode: msg.collapseNode,
+    expandNode: msg.expandNode,
+    copyButtonTitle: msg.moreCopyOptions,
+  }
 }
 
-export const DEFAULT_MARKDOWN_LABELS: MarkdownLabels = {
-  code: {
-    copyLabel: '复制',
-    copiedLabel: '已复制',
-    toolbarLabels: {
-      codeLabel: '代码',
-      wrapLabel: '自动换行',
-      unwrapLabel: '取消换行',
+export function getMarkdownLabels(locale: UiLocale): MarkdownLabels {
+  const msg = SHELL_MESSAGES[locale]
+  return {
+    code: {
+      copyLabel: msg.copy,
+      copiedLabel: msg.copied,
+      toolbarLabels: {
+        codeLabel: msg.codeLabel,
+        wrapLabel: msg.wrapLabel,
+        unwrapLabel: msg.unwrapLabel,
+      },
     },
-  },
-  footnotes: '脚注',
+    footnotes: msg.footnotes,
+  }
 }
+
+export const DEFAULT_JSON_TREE_LABELS: JsonTreeLabels = getJsonTreeLabels('zh')
+export const DEFAULT_MARKDOWN_LABELS: MarkdownLabels = getMarkdownLabels('zh')
 
 function hasComponent(candidate: unknown): boolean {
   return typeof candidate === 'function' || (typeof candidate === 'object' && candidate !== null)
@@ -318,13 +329,15 @@ export function DshTooltip(props: {
 }
 
 export function DshMarkdown(props: { text: string; variant?: 'body' | 'compact'; streaming?: boolean }) {
+  const locale = useUiLocale()
   if (hasComponent(raw.MarkdownText)) {
     return (
       <HostPrimitives.MarkdownText
         text={props.text}
         variant={props.variant ?? 'compact'}
         streaming={props.streaming}
-        labels={DEFAULT_MARKDOWN_LABELS}
+        omitHtml={true}
+        labels={getMarkdownLabels(locale)}
       />
     )
   }
@@ -332,15 +345,17 @@ export function DshMarkdown(props: { text: string; variant?: 'body' | 'compact';
 }
 
 export function DshCodeBlock(props: { code: string; lang?: string; lineNumbers?: boolean }) {
+  const locale = useUiLocale()
+  const mdLabels = getMarkdownLabels(locale)
   if (hasComponent(raw.CodeBlock)) {
     return (
       <HostPrimitives.CodeBlock
         code={props.code}
         lang={props.lang}
         lineNumbers={props.lineNumbers}
-        copyLabel="复制"
-        copiedLabel="已复制"
-        toolbarLabels={DEFAULT_MARKDOWN_LABELS.code.toolbarLabels}
+        copyLabel={mdLabels.code.copyLabel}
+        copiedLabel={mdLabels.code.copiedLabel}
+        toolbarLabels={mdLabels.code.toolbarLabels}
       />
     )
   }
@@ -357,8 +372,9 @@ function FallbackJsonNode(props: {
   depth: number
   expandedDepth: number
   copyable: boolean
+  copyLabel: string
 }) {
-  const { name, value, depth, expandedDepth, copyable } = props
+  const { name, value, depth, expandedDepth, copyable, copyLabel } = props
   const [open, setOpen] = useState(depth < expandedDepth)
   const [copied, setCopied] = useState(false)
 
@@ -400,7 +416,7 @@ function FallbackJsonNode(props: {
               padding: '0 4px',
             }}
           >
-            {copied ? '✓' : '复制'}
+            {copied ? '✓' : copyLabel}
           </button>
         ) : null}
       </div>
@@ -449,6 +465,7 @@ function FallbackJsonNode(props: {
               depth={depth + 1}
               expandedDepth={expandedDepth}
               copyable={copyable}
+              copyLabel={copyLabel}
             />
           ))}
           <div style={{ paddingLeft: depth * 14, color: 'var(--dsw-alias-label-tertiary, rgba(128,128,128,0.85))' }}>
@@ -467,6 +484,8 @@ export function DshJsonTree(props: {
   copyable?: boolean | undefined
   className?: string | undefined
 }) {
+  const locale = useUiLocale()
+  const msg = useShellMessages()
   const expandedDepth = props.expandedDepth ?? 2
   const copyable = props.copyable ?? true
   if (hasComponent(raw.JsonTree) && typeof props.data === 'object' && props.data !== null) {
@@ -477,7 +496,7 @@ export function DshJsonTree(props: {
         copyable={copyable}
         expandTopLevel={expandedDepth >= 1}
         collapsedStringLines={6}
-        labels={DEFAULT_JSON_TREE_LABELS}
+        labels={getJsonTreeLabels(locale)}
         className={props.className}
       />
     )
@@ -489,6 +508,7 @@ export function DshJsonTree(props: {
         depth={0}
         expandedDepth={expandedDepth}
         copyable={copyable}
+        copyLabel={msg.copy}
       />
     </div>
   )

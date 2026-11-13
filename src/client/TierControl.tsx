@@ -8,6 +8,7 @@
  * Syncs with the Host via `session.command('/a2ui on|off')` (`recordInput: false`).
  */
 import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useShellMessages } from './i18n.ts'
 import { getA2uiEnabled, setA2uiEnabled, subscribeA2uiEnabled } from './persistence.ts'
 import type { ChatExternalStore } from './ToolView.tsx'
 import { resolveLatestA2uiCommandState } from './turn-surfaces.ts'
@@ -77,9 +78,8 @@ export const A2uiTierControl = memo(function A2uiTierControl({
       })
   }, [enabled, sessionId, syncHostEnabled])
 
-  const tooltip = enabled
-    ? 'A2UI 生成式界面：已开启（点击关闭）'
-    : 'A2UI 生成式界面：已关闭（点击开启）'
+  const msg = useShellMessages()
+  const tooltip = enabled ? msg.toggleOnTooltip : msg.toggleOffTooltip
 
   const triggerClass = [css.trigger, enabled ? css.triggerOn : css.triggerOff]
     .filter(Boolean)

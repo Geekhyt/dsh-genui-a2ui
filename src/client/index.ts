@@ -39,6 +39,7 @@ import {
 import type { SurfaceActionCallback } from './SurfaceView.tsx'
 import { getLoadedRuntimeChunk } from './chunk-loader.ts'
 import { setFallbackDefaultEnabled } from './persistence.ts'
+import { mountPluginCssSheets, unmountPluginCssSheets } from './style-lifecycle.ts'
 import { A2uiTierControl } from './TierControl.tsx'
 import { A2uiToolView, type ChatExternalStore } from './ToolView.tsx'
 import { A2uiTurnTailView } from './TurnTailView.tsx'
@@ -194,8 +195,13 @@ export function apply(ctx: Context, config: ClientConfig = {}): void {
   const getSidebarRight = () => sidebarRightSvc
 
   ctx.effect(
-    () => () => {
-      getLoadedRuntimeChunk()?.cleanupA2uiRuntimeStyles()
+    () => {
+      mountPluginCssSheets('dsh-genui-a2ui')
+      getLoadedRuntimeChunk()?.ensureA2uiRuntimeStyles()
+      return () => {
+        getLoadedRuntimeChunk()?.cleanupA2uiRuntimeStyles()
+        unmountPluginCssSheets('dsh-genui-a2ui')
+      }
     },
     'dsh-genui-a2ui: styles',
   )

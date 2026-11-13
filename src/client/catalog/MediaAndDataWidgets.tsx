@@ -20,6 +20,7 @@ import {
   TableApi,
 } from '../../shared/catalog-schema.ts'
 import { parseFileTarget } from '../file-opener.tsx'
+import { useRuntimeMessages } from '../i18n.ts'
 import { DshCodeBlock, DshTag, type TagTone } from '../ui/primitives.tsx'
 import css from './Catalog.module.css'
 import { EChartsWidget, type ChartKind } from './EChartsWidget.tsx'
@@ -194,6 +195,7 @@ export const DshProgressImpl = defineComponent<{
   tone?: 'brand' | 'success' | 'warning' | 'danger'
   weight?: number
 }>(ProgressApi, function DshProgress({ props }) {
+  const msg = useRuntimeMessages()
   const max = typeof props.max === 'number' && props.max > 0 ? props.max : 100
   const raw = Number(props.value ?? 0)
   const val = Number.isFinite(raw) ? Math.min(max, Math.max(0, raw)) : 0
@@ -207,7 +209,7 @@ export const DshProgressImpl = defineComponent<{
         minValue={0}
         maxValue={max}
         value={val}
-        aria-label={label || '进度'}
+        aria-label={label || msg.progressAria}
       >
         <div className={css.progressHeader}>
           <span>{label}</span>

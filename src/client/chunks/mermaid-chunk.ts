@@ -7,6 +7,7 @@
  * `themeVariables`, measures labels in an off-screen container, and verifies
  * the output SVG via `assertSafeSvg`.
  */
+import DOMPurify from 'dompurify'
 import mermaid from 'mermaid'
 import {
   ALLOWED_MERMAID_KINDS,
@@ -139,8 +140,16 @@ async function renderIntoOffscreen(id: string, source: string): Promise<string> 
   document.body?.appendChild(container)
   try {
     const { svg } = await mermaid.render(id, source, container)
-    assertSafeSvg(svg)
-    return svg
+    const cleanSvg =
+      typeof DOMPurify?.sanitize === 'function'
+        ? DOMPurify.sanitize(svg, {
+            ADD_TAGS: ['foreignObject', 'foreignobject'],
+            ADD_ATTR: ['dominant-baseline'],
+            HTML_INTEGRATION_POINTS: { foreignobject: true },
+          })
+        : svg
+    assertSafeSvg(cleanSvg)
+    return cleanSvg
   } finally {
     container.remove()
   }

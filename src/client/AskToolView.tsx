@@ -18,6 +18,7 @@ import type { ActionPayload } from '@a2ui/web_core/v1_0'
 import type { AskAnswerInput } from '../shared/wire-types.ts'
 import dockCss from './DockView.module.css'
 import type { WorkspaceFileOpener } from './file-opener.tsx'
+import { useShellMessages } from './i18n.ts'
 import { LazySurfaceGroupView, useLazyStreamingExpress } from './LazySurfaceGroupView.tsx'
 import css from './SurfaceView.module.css'
 import type { ChatExternalStore, ToolViewOwnerProps } from './ToolView.tsx'
@@ -46,6 +47,7 @@ export const A2uiAskDockView = memo(function A2uiAskDockView({
   openWorkspaceFile,
   submitAskAnswer,
 }: A2uiAskDockViewProps) {
+  const msg = useShellMessages()
   const [submittingCallId, setSubmittingCallId] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
 
@@ -102,16 +104,16 @@ export const A2uiAskDockView = memo(function A2uiAskDockView({
         (ok) => {
           if (!ok) {
             setSubmittingCallId(null)
-            setSubmitError('提交未成功，请重试')
+            setSubmitError(msg.askSubmitRetry)
           }
         },
         (err: unknown) => {
           setSubmittingCallId(null)
-          setSubmitError(err instanceof Error ? err.message : '提交失败')
+          setSubmitError(err instanceof Error ? err.message : msg.askSubmitFailed)
         },
       )
     },
-    [activeCallId, submitAskAnswer, submitting],
+    [activeCallId, msg, submitAskAnswer, submitting],
   )
 
   const handleSkip = useCallback(() => {
@@ -122,20 +124,20 @@ export const A2uiAskDockView = memo(function A2uiAskDockView({
       (ok) => {
         if (!ok) {
           setSubmittingCallId(null)
-          setSubmitError('跳过失败，请重试')
+          setSubmitError(msg.askSkipRetry)
         }
       },
       (err: unknown) => {
         setSubmittingCallId(null)
-        setSubmitError(err instanceof Error ? err.message : '跳过失败')
+        setSubmitError(err instanceof Error ? err.message : msg.askSkipFailed)
       },
     )
-  }, [activeCallId, submitAskAnswer, submitting])
+  }, [activeCallId, msg, submitAskAnswer, submitting])
 
   if (activeAsk === null) return null
 
   const waiting = activeAsk.phase === 'start'
-  const title = activeAsk.title ?? 'A2UI 交互提问'
+  const title = activeAsk.title ?? msg.askDefaultTitle
 
   return (
     <section
@@ -152,7 +154,7 @@ export const A2uiAskDockView = memo(function A2uiAskDockView({
           </span>
           <span className={dockCss.title}>{title}</span>
           <span className={css.badgeAccent} data-a2ui-ask-waiting="">
-            {!waiting ? '正在生成提问…' : submitting ? '正在提交…' : '等待您的输入'}
+            {!waiting ? msg.askGenerating : submitting ? msg.askSubmitting : msg.askWaitingInput}
           </span>
         </div>
         {waiting ? (
@@ -164,7 +166,7 @@ export const A2uiAskDockView = memo(function A2uiAskDockView({
               onClick={handleSkip}
               data-a2ui-ask-skip=""
             >
-              跳过
+              {msg.askSkip}
             </DshButton>
           </div>
         ) : null}
@@ -177,7 +179,7 @@ export const A2uiAskDockView = memo(function A2uiAskDockView({
           variant="bare"
           streaming={!waiting}
           readOnly={!waiting || submitting}
-          readOnlyLabel={submitting ? '正在提交…' : '正在生成提问…'}
+          readOnlyLabel={submitting ? msg.askSubmitting : msg.askGenerating}
           onAction={handleSurfaceAction}
           openWorkspaceFile={openWorkspaceFile}
         />
@@ -197,6 +199,7 @@ export const A2uiAskToolView = memo(function A2uiAskToolView({
   block,
   inspect,
 }: A2uiAskToolViewProps) {
+  const msg = useShellMessages()
   const [expanded, setExpanded] = useState(false)
 
   const argTitle = block.args?.text('title')?.trim() || undefined
@@ -207,7 +210,7 @@ export const A2uiAskToolView = memo(function A2uiAskToolView({
     [phase, block.isError, block.meta],
   )
 
-  const title = settledMeta?.title ?? argTitle ?? 'A2UI 交互提问'
+  const title = settledMeta?.title ?? argTitle ?? msg.askDefaultTitle
 
   // 1. Error / interrupted state
   if (phase === 'result' && block.isError) {
@@ -220,7 +223,7 @@ export const A2uiAskToolView = memo(function A2uiAskToolView({
       <div data-tool="a2ui_ask" data-state={stopped ? 'stopped' : 'error'}>
         <DshDisclosureRow
           icon={<DshAppsIcon size={14} />}
-          title="A2UI 提问"
+          title={msg.askRowTitle}
           running={false}
           open={expanded && hasReason}
           expandable={hasReason}
@@ -229,7 +232,7 @@ export const A2uiAskToolView = memo(function A2uiAskToolView({
           onToggle={() => setExpanded((v) => !v)}
           collapsedContent={
             <span className={css.rowSummary}>
-              <span>{stopped ? '已中断' : '校验未通过（重试中）'}</span>
+              <span>{stopped ? msg.interrupted : msg.validationRetry}</span>
               {argTitle ? <span className={css.rowTitle}>{argTitle}</span> : null}
             </span>
           }
@@ -237,7 +240,7 @@ export const A2uiAskToolView = memo(function A2uiAskToolView({
           <pre className={css.reason}>{reason}</pre>
           {inspect ? (
             <button type="button" className={css.inspectBtn} onClick={inspect}>
-              查看调用详情
+              {msg.inspectCall}
             </button>
           ) : null}
         </DshDisclosureRow>
@@ -252,14 +255,14 @@ export const A2uiAskToolView = memo(function A2uiAskToolView({
       <div data-tool="a2ui_ask" data-state="active-in-dock">
         <DshDisclosureRow
           icon={<DshAppsIcon size={14} />}
-          title="A2UI 提问"
+          title={msg.askRowTitle}
           running={true}
           open={false}
           expandable={false}
           onToggle={() => {}}
           collapsedContent={
             <span className={css.rowSummary}>
-              <span>{waiting ? '等待底部交互栏提交' : '正在生成提问表单'}</span>
+              <span>{waiting ? msg.askWaitingDock : msg.askGeneratingForm}</span>
               <span className={css.rowTitle}>{title}</span>
             </span>
           }
@@ -271,10 +274,10 @@ export const A2uiAskToolView = memo(function A2uiAskToolView({
   // 3. Settled (`phase === 'result'`): compact summary row, expandable to inspect read-only snapshot
   const statusLabel =
     settledMeta?.status === 'skipped'
-      ? '已跳过'
+      ? msg.askSkipped
       : settledMeta?.status === 'timed_out'
-        ? '等待超时'
-        : `已提交 · ${settledMeta?.userMessage ?? settledMeta?.action ?? '确认'}`
+        ? msg.askTimedOut
+        : msg.askSubmittedWith(settledMeta?.userMessage ?? settledMeta?.action ?? msg.askDefaultAction)
 
   const settledMessages = settledMeta?.messages ?? []
   const settledVisibleIds = settledMeta ? new Set(settledMeta.surfaceIds) : undefined
@@ -284,7 +287,7 @@ export const A2uiAskToolView = memo(function A2uiAskToolView({
     <div data-tool="a2ui_ask" data-state={settledMeta?.status ?? 'answered'}>
       <DshDisclosureRow
         icon={<DshAppsIcon size={14} />}
-        title="A2UI 提问"
+        title={msg.askRowTitle}
         running={false}
         open={expanded && canExpand}
         expandable={canExpand}
@@ -312,7 +315,7 @@ export const A2uiAskToolView = memo(function A2uiAskToolView({
         ) : null}
         {inspect ? (
           <button type="button" className={css.inspectBtn} onClick={inspect}>
-            查看调用详情
+            {msg.inspectCall}
           </button>
         ) : null}
       </DshDisclosureRow>

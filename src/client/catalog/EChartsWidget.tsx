@@ -10,6 +10,7 @@ import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import type { ActionDispatchOptions } from '@a2ui/web_core/v1_0'
 import type { ChartKind } from '../../shared/catalog-schema.ts'
 import { loadEchartsChunk, type EchartsChunkModule } from '../chunk-loader.ts'
+import { useRuntimeMessages } from '../i18n.ts'
 import { useDarkTheme } from '../theme.ts'
 import css from './Catalog.module.css'
 
@@ -38,6 +39,7 @@ function sanitizeInlineText(input: unknown): string {
 
 export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps) {
   const dark = useDarkTheme()
+  const msg = useRuntimeMessages()
   const [chunk, setChunk] = useState<EchartsChunkModule | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const hostRef = useRef<HTMLDivElement | null>(null)
@@ -66,14 +68,14 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
       },
       (err: unknown) => {
         if (!cancelled) {
-          setLoadError(err instanceof Error ? err.message : '图表引擎加载失败')
+          setLoadError(err instanceof Error ? err.message : msg.chartLoadFailed)
         }
       },
     )
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [msg.chartLoadFailed])
 
   const option = useMemo(() => {
     if (!chunk) return null
@@ -159,8 +161,9 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
             <div
               className={css.lazySkeleton}
               style={{ height }}
+              role="status"
               aria-busy="true"
-              aria-label="正在加载图表引擎…"
+              aria-label={msg.chartLoading}
             />
           ) : null}
           <div

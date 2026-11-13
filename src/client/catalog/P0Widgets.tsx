@@ -5,7 +5,7 @@
  * - `Callout`: Semantic alert banner (`info` | `success` | `warning` | `danger`) + optional nested `child`
  * - `KeyValue`: Structured attribute grid (accepts array or plain map + 1-click value copy)
  */
-import { Fragment, useMemo, useState, type CSSProperties, type FC, type ReactNode } from 'react'
+import { useMemo, useState, type CSSProperties, type FC, type ReactNode } from 'react'
 import {
   createComponentImplementation,
   type ReactA2uiComponentProps,
@@ -19,6 +19,7 @@ import {
   StepsApi,
 } from '../../shared/catalog-schema.ts'
 import { parseFileTarget } from '../file-opener.tsx'
+import { useRuntimeMessages, useUiLocale } from '../i18n.ts'
 import { DshChevronDownIcon, DshChevronUpIcon, DshMarkdown, DshTag } from '../ui/primitives.tsx'
 import { FileOpenChip } from './FileOpenChip.tsx'
 import {
@@ -69,6 +70,7 @@ export const DshDiffViewImpl = defineComponent<{
   line?: unknown
   weight?: number
 }>(DiffViewApi, function DshDiffView({ props }) {
+  const msg = useRuntimeMessages()
   const beforeStr = props.before === undefined || props.before === null ? '' : String(props.before)
   const afterStr = props.after === undefined || props.after === null ? '' : String(props.after)
   const [mode, setMode] = useState<'unified' | 'split'>(props.mode === 'split' ? 'split' : 'unified')
@@ -81,7 +83,7 @@ export const DshDiffViewImpl = defineComponent<{
   )
 
   const hasFileLink = parseFileTarget(props.filePath, props.line) !== null
-  const title = props.title ? String(props.title) : hasFileLink ? '' : '变更对比'
+  const title = props.title ? String(props.title) : hasFileLink ? '' : msg.diffDefaultTitle
 
   const handleCopyAfter = () => {
     copyToClipboardSafe(afterStr)
@@ -100,14 +102,14 @@ export const DshDiffViewImpl = defineComponent<{
           <span className={css.diffStatDel}>-{diff.removed}</span>
         </div>
         <div className={css.diffActions}>
-          <div className={css.diffModeSwitch} role="group" aria-label="对比视图模式">
+          <div className={css.diffModeSwitch} role="group" aria-label={msg.diffModeGroup}>
             <button
               type="button"
               className={css.diffModeBtn}
               data-active={mode === 'unified' ? 'true' : 'false'}
               onClick={() => setMode('unified')}
             >
-              行内
+              {msg.diffUnified}
             </button>
             <button
               type="button"
@@ -115,18 +117,18 @@ export const DshDiffViewImpl = defineComponent<{
               data-active={mode === 'split' ? 'true' : 'false'}
               onClick={() => setMode('split')}
             >
-              双栏
+              {msg.diffSplit}
             </button>
           </div>
           <button type="button" className={css.diffCopyBtn} onClick={handleCopyAfter}>
-            {copied ? '已复制 ✓' : '复制新内容'}
+            {copied ? msg.copiedCheck : msg.diffCopyAfter}
           </button>
         </div>
       </div>
 
       <div className={css.diffScroll}>
         {diff.ops.length === 0 ? (
-          <div className={css.emptyCell}>（空内容）</div>
+          <div className={css.emptyCell}>{msg.diffEmpty}</div>
         ) : mode === 'unified' ? (
           <table className={css.diffTable}>
             <tbody>
@@ -178,9 +180,10 @@ export const DshStepsImpl = defineComponent<{
   title?: unknown
   weight?: number
 }>(StepsApi, function DshSteps({ props }) {
+  const locale = useUiLocale()
   const steps = useMemo(
-    () => normalizeStepItems(props.items, props.current),
-    [props.items, props.current],
+    () => normalizeStepItems(props.items, props.current, locale),
+    [props.items, props.current, locale],
   )
   const dir = props.direction === 'horizontal' ? 'horizontal' : 'vertical'
   const headerTitle = props.title ? String(props.title) : ''
@@ -282,7 +285,7 @@ export const DshCalloutImpl = defineComponent<{
         {hasBody && (!props.collapsible || expanded) ? (
           <div className={css.calloutBody}>
             {message.trim() !== '' ? <DshMarkdown text={message} variant="compact" /> : null}
-            {props.child ? <Fragment>{renderChildRef(buildChild, props.child)}</Fragment> : null}
+            {props.child ? renderChildRef(buildChild, props.child) : null}
           </div>
         ) : null}
       </div>
@@ -299,6 +302,7 @@ export const DshKeyValueImpl = defineComponent<{
   copyable?: boolean
   weight?: number
 }>(KeyValueApi, function DshKeyValue({ props }) {
+  const msg = useRuntimeMessages()
   const entries = useMemo(
     () => normalizeKeyValueItems(props.items, Boolean(props.copyable)),
     [props.items, props.copyable],
@@ -335,9 +339,9 @@ export const DshKeyValueImpl = defineComponent<{
                   type="button"
                   className={css.kvCopyBtn}
                   onClick={() => handleCopy(idx, entry.value)}
-                  title="复制此项"
+                  title={msg.kvCopyItemTitle}
                 >
-                  {copiedIdx === idx ? '已复制' : '复制'}
+                  {copiedIdx === idx ? msg.copied : msg.copy}
                 </button>
               ) : null}
             </dd>

@@ -11,20 +11,35 @@ permissions:
 
 jobs:
   verify:
-    name: Typecheck, Build & Vitest
-    runs-on: ubuntu-latest
+    name: Verify (${{ matrix.os }}, Node ${{ matrix.node }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            node: 26
+          - os: windows-latest
+            node: 26
+          - os: ubuntu-latest
+            node: 24
+          - os: ubuntu-latest
+            node: 22
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Setup Node.js 24
+      - name: Setup Node.js ${{ matrix.node }} LTS
         uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version: ${{ matrix.node }}
           cache: npm
 
       - name: Install dependencies from lockfile
         run: npm ci
+
+      - name: Lint
+        run: npm run lint
 
       - name: Typecheck
         run: npm run typecheck

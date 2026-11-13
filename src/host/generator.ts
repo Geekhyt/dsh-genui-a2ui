@@ -68,7 +68,7 @@ class ToolChannelFormatFactory implements InferenceFormatFactory {
   }
 }
 
-const PLURALIZE_VERBOSE_BLOCK = /• pluralize\([^\n]*\n(?:  - [^\n]*\n)+/
+const PLURALIZE_VERBOSE_BLOCK = /• pluralize\([^\n]*\n(?: {2}- [^\n]*\n)+/
 
 const COMPACT_PLURALIZE = [
   '• pluralize(value, other, one?, zero?)',

@@ -3,12 +3,14 @@
  * `Code` and `DiffView` when `filePath` is explicitly declared in A2UI props.
  */
 import { parseFileTarget, useFileOpener } from '../file-opener.tsx'
+import { useRuntimeMessages } from '../i18n.ts'
 import css from './Catalog.module.css'
 
 export function FileOpenChip(props: {
   readonly filePath: unknown
   readonly line?: unknown
 }) {
+  const msg = useRuntimeMessages()
   const openFile = useFileOpener()
   const target = parseFileTarget(props.filePath, props.line)
   if (!target) return null
@@ -21,7 +23,7 @@ export function FileOpenChip(props: {
         type="button"
         className={css.fileOpenBtn}
         onClick={() => openFile(target.path, target.line)}
-        title={`在右侧栏打开 ${label}`}
+        title={msg.openInSidebar(label)}
         data-a2ui-file-link={target.path}
       >
         <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">

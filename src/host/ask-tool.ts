@@ -10,6 +10,7 @@
  */
 import { A2uiError, type AgentToRendererMessage } from '@a2ui/agent'
 import { A2UI_LIMITS } from '../shared/catalog-schema.ts'
+import { HOST_MESSAGES, resolveHostLocale } from '../shared/i18n.ts'
 import type { AskAnswerInput, AskMeta } from '../shared/wire-types.ts'
 import { ASK_TOOL, type SurfaceSessions } from './generator.ts'
 import { isSubagentCall, sessionIdOf, surfaceIdsOf, type ToolExec } from './render-tool.ts'
@@ -404,11 +405,18 @@ export function createAskTool(sessions: SurfaceSessions, asks: PendingAskRegistr
     },
     presentCall(args: unknown) {
       const { title } = readAskArgs(args)
-      return { card: 'generic', title: title ?? 'A2UI 交互提问', kind: 'other' }
+      return {
+        card: 'generic',
+        title: title ?? HOST_MESSAGES[resolveHostLocale()].askDefaultTitle,
+        kind: 'other',
+      }
     },
     presentResult(args: unknown) {
       const { title } = readAskArgs(args)
-      return { card: 'generic', title: title ?? 'A2UI 交互提问' }
+      return {
+        card: 'generic',
+        title: title ?? HOST_MESSAGES[resolveHostLocale()].askDefaultTitle,
+      }
     },
   }
 }

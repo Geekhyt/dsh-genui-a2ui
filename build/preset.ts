@@ -17,8 +17,9 @@
  */
 import { readFile, utimes } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
+import { dirname, isAbsolute, resolve } from 'node:path'
 import { builtinModules, createRequire } from 'node:module'
+import { fileURLToPath } from 'node:url'
 import type { UserConfig } from 'tsdown'
 import { transform } from 'lightningcss'
 import { PLATFORM_MODULES } from './web-platform.ts'
@@ -283,9 +284,12 @@ function clientConfig(id: string): UserConfig {
 }
 
 function resolveCssFile(specifier: string, importer: string | undefined): string | undefined {
-  if (specifier.startsWith('.') || specifier.startsWith('/')) {
+  if (specifier.startsWith('.') || isAbsolute(specifier)) {
     if (importer === undefined) return specifier
-    return new URL(specifier, `file://${importer}`).pathname
+    const cleanImporter = importer.startsWith('file://')
+      ? fileURLToPath(importer)
+      : (importer.split('?')[0] ?? importer)
+    return resolve(dirname(cleanImporter), specifier)
   }
   try {
     return createRequire(importer !== undefined && existsSync(importer) ? importer : import.meta.url).resolve(specifier)
@@ -322,11 +326,16 @@ function cssInlinePlugin(id: string) {
       })
       const classMap: Record<string, string> = {}
       for (const [local, exp] of Object.entries(exports ?? {}).sort(([a], [b]) => (a < b ? -1 : 1))) classMap[local] = exp.name
-      const tagId = `${id}/${file.split('/').slice(-2).join('/')}`
+      const normalizedFile = file.replace(/\\/g, '/')
+      const tagId = `${id}/${normalizedFile.split('/').slice(-2).join('/')}`
+      const regKey = `__dshPluginCss__:${id}`
       return [
         `const css = ${JSON.stringify(code.toString())};`,
         `const tagId = ${JSON.stringify(tagId)};`,
-        "if (typeof document !== 'undefined' && document.querySelector('style[data-plugin-css=' + JSON.stringify(tagId) + ']') === null) {",
+        `const regKey = ${JSON.stringify(regKey)};`,
+        'const reg = globalThis[regKey] || (globalThis[regKey] = { mounted: true, sheets: new Map() });',
+        'reg.sheets.set(tagId, css);',
+        "if (reg.mounted && typeof document !== 'undefined' && document.querySelector('style[data-plugin-css=' + JSON.stringify(tagId) + ']') === null) {",
         "  const tag = document.createElement('style');",
         `  tag.dataset.plugin = ${JSON.stringify(id)};`,
         '  tag.dataset.pluginCss = tagId;',

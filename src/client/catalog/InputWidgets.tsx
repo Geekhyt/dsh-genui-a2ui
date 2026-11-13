@@ -21,6 +21,7 @@ import {
   TextFieldApi,
   type ActionDispatchOptions,
 } from '@a2ui/web_core/v1_0'
+import { useRuntimeMessages } from '../i18n.ts'
 import {
   DshButton,
   DshCheckbox,
@@ -170,6 +171,7 @@ export const DshChoicePickerImpl = defineComponent<{
   validationErrors?: readonly string[]
   weight?: number
 }>(ChoicePickerApi, function DshChoicePicker({ props }) {
+  const msg = useRuntimeMessages()
   const [query, setQuery] = useState('')
   const selected = useMemo(
     () => (Array.isArray(props.value) ? props.value.map(String) : []),
@@ -213,8 +215,8 @@ export const DshChoicePickerImpl = defineComponent<{
           icon={<DshSearchIcon size={14} />}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="筛选选项…"
-          aria-label="筛选选项"
+          placeholder={msg.filterPlaceholder}
+          aria-label={msg.filterAriaLabel}
         />
       ) : null}
 
@@ -233,7 +235,7 @@ export const DshChoicePickerImpl = defineComponent<{
       ) : isSingle ? (
         <AriaRadioGroup
           className={css.radioList}
-          aria-label={label || '单选列表'}
+          aria-label={label || msg.radioGroupAria}
           value={selected[0] ?? ''}
           onChange={(val) => props.setValue?.([val])}
         >
@@ -271,6 +273,7 @@ export const DshSliderImpl = defineComponent<{
   validationErrors?: readonly string[]
   weight?: number
 }>(SliderApi, function DshSlider({ props }) {
+  const msg = useRuntimeMessages()
   const min = typeof props.min === 'number' && Number.isFinite(props.min) ? props.min : 0
   const rawMax = typeof props.max === 'number' && Number.isFinite(props.max) ? props.max : 100
   const max = rawMax > min ? rawMax : min + 1
@@ -292,7 +295,7 @@ export const DshSliderImpl = defineComponent<{
         maxValue={max}
         step={step}
         value={value}
-        aria-label={label || '数值滑块'}
+        aria-label={label || msg.sliderAria}
         onChange={(next) => {
           const raw = Array.isArray(next) ? (next[0] ?? min) : next
           const cleaned = Number.isFinite(raw) ? Number(raw.toFixed(6)) : min

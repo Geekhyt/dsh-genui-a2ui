@@ -447,7 +447,7 @@ function evalBuiltinCall(fn: string, args: readonly number[]): number {
   const a1 = args[1] ?? 0
   switch (fn) {
     case 'pow':
-      return Math.pow(a0, a1)
+      return a0 ** a1
     case 'sqrt':
       return a0 <= 0 ? 0 : Math.sqrt(a0)
     case 'exp':
@@ -490,7 +490,7 @@ function evalBuiltinCall(fn: string, args: readonly number[]): number {
       const pv = args[2] ?? 0
       if (nper <= 0) return 0
       if (Math.abs(rate) < 1e-12) return pv / nper
-      const factor = Math.pow(1 + rate, nper)
+      const factor = (1 + rate) ** nper
       const denom = factor - 1
       return denom === 0 ? 0 : (pv * rate * factor) / denom
     }
@@ -553,7 +553,7 @@ function evalAst(node: ExprNode, vars: Record<string, unknown>): number {
           out = r === 0 ? 0 : l % r
           break
         case '^':
-          out = Math.pow(l, r)
+          out = l ** r
           break
         case '==':
           out = l === r ? 1 : 0

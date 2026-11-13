@@ -1416,16 +1416,88 @@
 }
 
 .mermaidSvgWrap {
-  display: flex;
-  justify-content: center;
-  align-items: center;
   width: 100%;
-  overflow-x: auto;
+  overflow: auto;
 }
 
-.mermaidSvgWrap svg {
+.mermaidSvgStage {
+  width: fit-content;
+  min-width: 100%;
+  margin: 0 auto;
+}
+
+.mermaidSvgStage svg {
+  display: block;
+  margin: 0 auto;
   max-width: 100%;
   height: auto;
+}
+
+.mermaidSvgStage[data-zoomed='true'] svg {
+  max-width: none;
+}
+
+.mermaidZoomBtn,
+.mermaidZoomReadout {
+  border: none;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary, inherit);
+  font-size: 11.5px;
+  line-height: 1.4;
+  padding: 2px 7px;
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+
+.mermaidZoomReadout {
+  min-width: 44px;
+  border-left: 1px solid var(--dsw-alias-border-l1, rgba(128, 128, 128, 0.16));
+  border-right: 1px solid var(--dsw-alias-border-l1, rgba(128, 128, 128, 0.16));
+}
+
+.mermaidZoomBtn:hover:not(:disabled),
+.mermaidZoomReadout:hover {
+  background: var(--dsw-alias-interactive-bg-hover, rgba(128, 128, 128, 0.12));
+  color: var(--dsw-alias-label-primary, inherit);
+}
+
+.mermaidZoomBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.mermaidFullscreenMask {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: var(--dsw-alias-bg-mask-1, rgba(0, 0, 0, 0.56));
+  backdrop-filter: blur(2px);
+}
+
+.mermaidFullscreenCard {
+  width: min(94vw, 1440px);
+  height: min(88vh, 920px);
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--dsw-radius-lg, 14px);
+  border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.28));
+  background: var(--dsw-alias-bg-base, var(--dsw-alias-bg-layer-1, #18191e));
+  color: var(--dsw-alias-label-primary, inherit);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.36);
+  overflow: hidden;
+}
+
+.mermaidFullscreenBody {
+  flex: 1;
+  min-height: 0;
+  padding: 18px 22px;
+  overflow: auto;
+  display: flex;
+  align-items: safe center;
 }
 
 .mermaidCaption {

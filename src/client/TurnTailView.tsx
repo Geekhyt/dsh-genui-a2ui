@@ -9,6 +9,7 @@
  */
 import { memo, useCallback, useMemo, useSyncExternalStore } from 'react'
 import type { WorkspaceFileOpener } from './file-opener.tsx'
+import { useShellMessages } from './i18n.ts'
 import { LazySurfaceGroupView } from './LazySurfaceGroupView.tsx'
 import type { SurfaceActionCallback } from './SurfaceView.tsx'
 import type { ChatExternalStore } from './ToolView.tsx'
@@ -35,6 +36,7 @@ export const A2uiTurnTailView = memo(function A2uiTurnTailView({
   sendAction,
   openWorkspaceFile,
 }: TurnTailViewProps) {
+  const msg = useShellMessages()
   const subscribe = useCallback(
     (listener: () => void) => (chatStore ? chatStore.subscribe(listener) : NOOP_SUBSCRIBE()),
     [chatStore],
@@ -58,7 +60,7 @@ export const A2uiTurnTailView = memo(function A2uiTurnTailView({
         sessionId={sessionId}
         streaming={false}
         readOnly={batch.superseded}
-        readOnlyLabel="历史快照（只读）"
+        readOnlyLabel={msg.readOnlySnapshot}
         onAction={sendAction}
         openWorkspaceFile={openWorkspaceFile}
       />

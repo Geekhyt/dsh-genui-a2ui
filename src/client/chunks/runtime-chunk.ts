@@ -10,13 +10,19 @@ import { injectStyles, removeStyles } from '@a2ui/react/styles'
 let stylesInstalled = false
 
 export function ensureA2uiRuntimeStyles(): void {
-  if (stylesInstalled || typeof document === 'undefined') return
+  if (typeof document === 'undefined') return
+  const domHasStructuralStyles = document.getElementById('a2ui-structural-styles') !== null
+  if (stylesInstalled && domHasStructuralStyles) return
   stylesInstalled = true
   try {
     injectBasicCatalogStyles(document)
+  } catch {
+    // Non-browser test environments without CSSStyleSheet / adoptedStyleSheets fall back gracefully.
+  }
+  try {
     injectStyles()
   } catch {
-    // Non-browser test environments without adoptedStyleSheets fall back gracefully.
+    // Ignore head injection errors in non-DOM contexts.
   }
 }
 

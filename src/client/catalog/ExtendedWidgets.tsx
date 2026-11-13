@@ -5,7 +5,8 @@
  * - `FileTree`: Workspace directory & change-impact tree with DSH right-sidebar file jump
  * - `Mermaid`: Lazy-loaded Mermaid diagram renderer (`securityLevel: "strict"` + `assertSafeSvg`)
  */
-import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type WheelEvent } from 'react'
+import { createPortal } from 'react-dom'
 import type { ActionDispatchOptions } from '@a2ui/web_core/v1_0'
 import {
   AccordionApi,
@@ -15,6 +16,7 @@ import {
 } from '../../shared/catalog-schema.ts'
 import { loadMermaidChunk } from '../chunk-loader.ts'
 import { useFileOpener } from '../file-opener.tsx'
+import { useRuntimeMessages } from '../i18n.ts'
 import { useDarkTheme } from '../theme.ts'
 import {
   DshChevronDownIcon,
@@ -58,6 +60,7 @@ export const DshAccordionImpl = defineComponent<{
   multiple?: boolean
   weight?: number
 }>(AccordionApi, function DshAccordion({ props, buildChild }) {
+  const msg = useRuntimeMessages()
   const items = props.items ?? []
   const multiple = Boolean(props.multiple)
   const baseId = useId()
@@ -65,7 +68,7 @@ export const DshAccordionImpl = defineComponent<{
   const [openSet, setOpenSet] = useState<ReadonlySet<number>>(() => {
     const initial = new Set<number>()
     items.forEach((item, idx) => {
-      if (Boolean(item.open)) initial.add(idx)
+      if (item.open) initial.add(idx)
     })
     if (!multiple && initial.size > 1) {
       const first = [...initial][0]!
@@ -94,7 +97,10 @@ export const DshAccordionImpl = defineComponent<{
         const isOpen = openSet.has(idx)
         const headerId = `${baseId}-acc-hdr-${idx}`
         const panelId = `${baseId}-acc-pnl-${idx}`
-        const title = item.title !== undefined && item.title !== null ? String(item.title) : `分组 ${idx + 1}`
+        const title =
+          item.title !== undefined && item.title !== null
+            ? String(item.title)
+            : msg.accordionFallbackTitle(idx + 1)
         const subtitle =
           item.subtitle !== undefined && item.subtitle !== null && String(item.subtitle) !== ''
             ? String(item.subtitle)
@@ -151,6 +157,7 @@ export const DshJsonTreeImpl = defineComponent<{
   copyable?: boolean
   weight?: number
 }>(JsonTreeApi, function DshJsonTreeWidget({ props }) {
+  const msg = useRuntimeMessages()
   const title = props.title !== undefined && props.title !== null ? String(props.title) : ''
   const expandedDepth =
     typeof props.expandedDepth === 'number' && props.expandedDepth >= 0 && props.expandedDepth <= 8
@@ -173,10 +180,10 @@ export const DshJsonTreeImpl = defineComponent<{
     <div className={css.jsonTreeCard} style={weightStyle(props.weight, 220)} data-a2ui-jsontree="">
       {title || copyable ? (
         <div className={css.jsonTreeHeader}>
-          <span className={css.jsonTreeTitle}>{title || 'JSON 结构'}</span>
+          <span className={css.jsonTreeTitle}>{title || msg.jsonTreeDefaultTitle}</span>
           {copyable ? (
             <button type="button" className={css.diffCopyBtn} onClick={handleCopyAll}>
-              {copiedAll ? '已复制 ✓' : '复制 JSON'}
+              {copiedAll ? msg.copiedCheck : msg.copyJson}
             </button>
           ) : null}
         </div>
@@ -184,7 +191,7 @@ export const DshJsonTreeImpl = defineComponent<{
       <div className={css.jsonTreeBody}>
         <DshJsonTree
           data={props.data ?? null}
-          label={title || 'JSON 数据树'}
+          label={title || msg.jsonTreeAriaLabel}
           expandedDepth={expandedDepth}
           copyable={copyable}
         />
@@ -312,6 +319,7 @@ export const DshFileTreeImpl = defineComponent<{
   action?: ((options?: ActionDispatchOptions) => Promise<void>) | undefined
   weight?: number
 }>(FileTreeApi, function DshFileTree({ props }) {
+  const msg = useRuntimeMessages()
   const openFile = useFileOpener()
   const tree = useMemo(() => buildFileTree(props.items), [props.items])
   const title = props.title !== undefined && props.title !== null ? String(props.title) : ''
@@ -352,14 +360,14 @@ export const DshFileTreeImpl = defineComponent<{
     <div className={css.fileTreeCard} style={weightStyle(props.weight, 220)} data-a2ui-filetree="">
       {title || totalFiles > 0 ? (
         <div className={css.fileTreeHeader}>
-          <span className={css.fileTreeTitle}>{title || '工作区文件'}</span>
-          <span className={css.fileTreeCount}>{totalFiles} 个文件</span>
+          <span className={css.fileTreeTitle}>{title || msg.fileTreeDefaultTitle}</span>
+          <span className={css.fileTreeCount}>{msg.fileTreeCount(totalFiles)}</span>
         </div>
       ) : null}
       {tree.length === 0 ? (
-        <div className={css.emptyCell}>（暂无文件条目）</div>
+        <div className={css.emptyCell}>{msg.fileTreeEmpty}</div>
       ) : (
-        <ul className={css.fileTreeRoot} role="tree" aria-label={title || '文件目录树'}>
+        <ul className={css.fileTreeRoot} role="tree" aria-label={title || msg.fileTreeAriaLabel}>
           {tree.map((node) => (
             <FileTreeBranch
               key={node.path}
@@ -378,22 +386,36 @@ export const DshFileTreeImpl = defineComponent<{
 
 /* ─────────────────────────── 4. Mermaid ─────────────────────────── */
 
-export const DshMermaidImpl = defineComponent<{
+export const MERMAID_ZOOM_MIN = 50
+export const MERMAID_ZOOM_MAX = 250
+export const MERMAID_ZOOM_STEP = 25
+
+export function clampMermaidZoom(next: number): number {
+  return Math.max(MERMAID_ZOOM_MIN, Math.min(MERMAID_ZOOM_MAX, next))
+}
+
+export interface MermaidWidgetProps {
   code?: unknown
   title?: unknown
   caption?: unknown
   weight?: number
-}>(MermaidApi, function DshMermaid({ props }) {
+}
+
+export function DshMermaidView({ props }: { props: MermaidWidgetProps }) {
   const dark = useDarkTheme()
+  const msg = useRuntimeMessages()
   const code = props.code === undefined || props.code === null ? '' : String(props.code).trim()
   const title = props.title !== undefined && props.title !== null ? String(props.title) : ''
   const caption = props.caption !== undefined && props.caption !== null ? String(props.caption) : ''
+  const displayTitle = title || msg.mermaidDefaultTitle
 
   const [viewMode, setViewMode] = useState<'diagram' | 'source'>('diagram')
   const [svg, setSvg] = useState<string | null>(null)
   const [rendering, setRendering] = useState<boolean>(code !== '')
   const [renderError, setRenderError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [zoomPct, setZoomPct] = useState(100)
+  const [fullscreen, setFullscreen] = useState(false)
   const hostRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
@@ -418,7 +440,7 @@ export const DshMermaidImpl = defineComponent<{
           },
           (err: unknown) => {
             if (!cancelled) {
-              setRenderError(err instanceof Error ? err.message : '流程图解析未完成')
+              setRenderError(err instanceof Error ? err.message : msg.mermaidParseIncomplete)
               setRendering(false)
             }
           },
@@ -429,7 +451,19 @@ export const DshMermaidImpl = defineComponent<{
       cancelled = true
       clearTimeout(timer)
     }
-  }, [code, dark])
+  }, [code, dark, msg.mermaidParseIncomplete])
+
+  useEffect(() => {
+    if (!fullscreen || typeof window === 'undefined') return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation()
+        setFullscreen(false)
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [fullscreen])
 
   const handleCopy = () => {
     copyToClipboardSafe(code)
@@ -437,66 +471,166 @@ export const DshMermaidImpl = defineComponent<{
     setTimeout(() => setCopied(false), 1300)
   }
 
-  const showSourceFallback = viewMode === 'source' || (svg === null && renderError !== null)
+  const handleZoomOut = useCallback(() => {
+    setZoomPct((z) => clampMermaidZoom(z - MERMAID_ZOOM_STEP))
+  }, [])
 
-  return (
-    <div
-      ref={hostRef}
-      className={css.mermaidCard}
-      style={weightStyle(props.weight, 240)}
-      data-a2ui-mermaid=""
-    >
-      <div className={css.mermaidToolbar}>
-        <span className={css.mermaidTitle}>{title || '架构与流程图'}</span>
-        <div className={css.diffActions}>
-          <div className={css.diffModeSwitch} role="group" aria-label="流程图显示切换">
+  const handleZoomIn = useCallback(() => {
+    setZoomPct((z) => clampMermaidZoom(z + MERMAID_ZOOM_STEP))
+  }, [])
+
+  const handleZoomReset = useCallback(() => {
+    setZoomPct(100)
+  }, [])
+
+  const handleWheelZoom = useCallback((e: WheelEvent<HTMLDivElement>) => {
+    if (!e.ctrlKey && !e.metaKey) return
+    e.preventDefault()
+    setZoomPct((z) => clampMermaidZoom(z + (e.deltaY < 0 ? MERMAID_ZOOM_STEP : -MERMAID_ZOOM_STEP)))
+  }, [])
+
+  const showSourceFallback = viewMode === 'source' || (svg === null && renderError !== null)
+  const canZoom = !showSourceFallback && svg !== null
+
+  const renderToolbar = (inDialog: boolean) => (
+    <div className={css.mermaidToolbar}>
+      <span className={css.mermaidTitle}>{displayTitle}</span>
+      <div className={css.diffActions}>
+        {canZoom ? (
+          <div className={css.diffModeSwitch} role="group" aria-label={msg.mermaidZoomGroup}>
             <button
               type="button"
-              className={css.diffModeBtn}
-              data-active={viewMode === 'diagram' ? 'true' : 'false'}
-              onClick={() => setViewMode('diagram')}
+              className={css.mermaidZoomBtn}
+              disabled={zoomPct <= MERMAID_ZOOM_MIN}
+              aria-label={msg.mermaidZoomOutAria}
+              title={msg.mermaidZoomOutTitle}
+              onClick={handleZoomOut}
             >
-              图形
+              −
             </button>
             <button
               type="button"
-              className={css.diffModeBtn}
-              data-active={viewMode === 'source' ? 'true' : 'false'}
-              onClick={() => setViewMode('source')}
+              className={css.mermaidZoomReadout}
+              aria-label={msg.mermaidZoomResetAria}
+              title={msg.mermaidZoomResetTitle}
+              onClick={handleZoomReset}
             >
-              源码
+              {zoomPct}%
+            </button>
+            <button
+              type="button"
+              className={css.mermaidZoomBtn}
+              disabled={zoomPct >= MERMAID_ZOOM_MAX}
+              aria-label={msg.mermaidZoomInAria}
+              title={msg.mermaidZoomInTitle}
+              onClick={handleZoomIn}
+            >
+              +
             </button>
           </div>
-          <button type="button" className={css.diffCopyBtn} onClick={handleCopy}>
-            {copied ? '已复制 ✓' : '复制'}
+        ) : null}
+        <div className={css.diffModeSwitch} role="group" aria-label={msg.mermaidViewGroup}>
+          <button
+            type="button"
+            className={css.diffModeBtn}
+            data-active={viewMode === 'diagram' ? 'true' : 'false'}
+            onClick={() => setViewMode('diagram')}
+          >
+            {msg.mermaidDiagramTab}
+          </button>
+          <button
+            type="button"
+            className={css.diffModeBtn}
+            data-active={viewMode === 'source' ? 'true' : 'false'}
+            onClick={() => setViewMode('source')}
+          >
+            {msg.mermaidSourceTab}
           </button>
         </div>
+        <button type="button" className={css.diffCopyBtn} onClick={handleCopy}>
+          {copied ? msg.copiedCheck : msg.copy}
+        </button>
+        {svg !== null || inDialog ? (
+          <button
+            type="button"
+            className={css.diffCopyBtn}
+            data-a2ui-mermaid-fullscreen-btn=""
+            aria-label={inDialog ? msg.mermaidFullscreenExitAria : msg.mermaidFullscreenEnterAria}
+            onClick={() => setFullscreen(!inDialog)}
+          >
+            {inDialog ? msg.mermaidFullscreenExit : msg.mermaidFullscreenEnter}
+          </button>
+        ) : null}
       </div>
-
-      <div className={css.mermaidBody}>
-        {code === '' ? (
-          <div className={css.emptyCell}>（空流程图）</div>
-        ) : showSourceFallback ? (
-          <DshCodeBlock code={code} lang="mermaid" />
-        ) : svg !== null ? (
-          <div
-            className={css.mermaidSvgWrap}
-            data-a2ui-mermaid-svg=""
-            // Safe: `renderMermaidDiagram` enforces `securityLevel: 'strict'`, strips `%%{init}%%`
-            // directives, and passes the rendered markup through `assertSafeSvg(svg)`.
-            dangerouslySetInnerHTML={{ __html: svg }}
-          />
-        ) : (
-          <div
-            className={css.lazySkeleton}
-            style={{ height: 180 }}
-            aria-busy={rendering}
-            aria-label="正在渲染流程图…"
-          />
-        )}
-      </div>
-
-      {caption ? <div className={css.mermaidCaption}>{caption}</div> : null}
     </div>
   )
-})
+
+  const renderDiagramBody = (inDialog: boolean) => (
+    <div
+      className={inDialog ? css.mermaidFullscreenBody : css.mermaidBody}
+      onWheel={inDialog ? handleWheelZoom : undefined}
+    >
+      {code === '' ? (
+        <div className={css.emptyCell}>{msg.mermaidEmpty}</div>
+      ) : showSourceFallback ? (
+        <DshCodeBlock code={code} lang="mermaid" />
+      ) : svg !== null ? (
+        <div className={css.mermaidSvgWrap}>
+          <div
+            className={css.mermaidSvgStage}
+            data-a2ui-mermaid-svg=""
+            data-zoomed={zoomPct !== 100 ? 'true' : 'false'}
+            style={zoomPct !== 100 ? { zoom: `${zoomPct}%` } : undefined}
+            // Safe: `renderMermaidDiagram` enforces `securityLevel: 'strict'`, strips `%%{init}%%`
+            // directives, and passes the rendered markup through `DOMPurify` + `assertSafeSvg(svg)`.
+            dangerouslySetInnerHTML={{ __html: svg }}
+          />
+        </div>
+      ) : (
+        <div
+          className={css.lazySkeleton}
+          style={{ height: 180 }}
+          role="status"
+          aria-busy={rendering}
+          aria-label={msg.mermaidRendering}
+        />
+      )}
+    </div>
+  )
+
+  return (
+    <>
+      <div
+        ref={hostRef}
+        className={css.mermaidCard}
+        style={weightStyle(props.weight, 240)}
+        data-a2ui-mermaid=""
+      >
+        {renderToolbar(false)}
+        {renderDiagramBody(false)}
+        {caption ? <div className={css.mermaidCaption}>{caption}</div> : null}
+      </div>
+      {fullscreen && typeof document !== 'undefined'
+        ? createPortal(
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label={displayTitle}
+              className={css.mermaidFullscreenMask}
+              data-a2ui-mermaid-dialog=""
+              onClick={() => setFullscreen(false)}
+            >
+              <div className={css.mermaidFullscreenCard} onClick={(e) => e.stopPropagation()}>
+                {renderToolbar(true)}
+                {renderDiagramBody(true)}
+                {caption ? <div className={css.mermaidCaption}>{caption}</div> : null}
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
+    </>
+  )
+}
+
+export const DshMermaidImpl = defineComponent<MermaidWidgetProps>(MermaidApi, DshMermaidView)

@@ -14,6 +14,7 @@ import {
   matchA2uiActionUserText,
   type ParsedA2uiActionData,
 } from './action-protocol.ts'
+import { useShellMessages } from './i18n.ts'
 import { DshCheckIcon, DshChevronDownIcon, DshChevronUpIcon } from './ui/primitives.tsx'
 import css from './ActionUserChip.module.css'
 
@@ -44,14 +45,15 @@ export const A2uiActionUserChip = memo(function A2uiActionUserChip({
   raw,
   interactive = true,
 }: A2uiActionUserChipProps) {
+  const msg = useShellMessages()
   const [expanded, setExpanded] = useState(false)
   const { surfaceId, summaryLabel, paramsText, dataModelText } = node.data
   const hasDetails = Boolean(paramsText || dataModelText)
 
   const detailContent = expanded
     ? [
-        paramsText ? `动作参数：\n${prettyJsonOrRaw(paramsText)}` : null,
-        dataModelText ? `界面状态：\n${prettyJsonOrRaw(dataModelText)}` : null,
+        paramsText ? `${msg.chipParamsHeading}\n${prettyJsonOrRaw(paramsText)}` : null,
+        dataModelText ? `${msg.chipStateHeading}\n${prettyJsonOrRaw(dataModelText)}` : null,
       ]
         .filter(Boolean)
         .join('\n\n')
@@ -63,7 +65,7 @@ export const A2uiActionUserChip = memo(function A2uiActionUserChip({
         <span className={css.iconBadge} aria-hidden="true">
           <DshCheckIcon size={11} />
         </span>
-        <span className={css.label}>已提交交互：{summaryLabel}</span>
+        <span className={css.label}>{msg.chipSubmitted(summaryLabel)}</span>
         {surfaceId ? <span className={css.surfaceTag}>{surfaceId}</span> : null}
         {interactive && hasDetails ? (
           <button
@@ -75,7 +77,7 @@ export const A2uiActionUserChip = memo(function A2uiActionUserChip({
               setExpanded((v) => !v)
             }}
           >
-            <span>{expanded ? '收起数据' : '查看提交数据'}</span>
+            <span>{expanded ? msg.chipHidePayload : msg.chipShowPayload}</span>
             {expanded ? <DshChevronUpIcon size={12} /> : <DshChevronDownIcon size={12} />}
           </button>
         ) : null}

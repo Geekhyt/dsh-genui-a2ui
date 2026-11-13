@@ -12,6 +12,7 @@
 import { memo, useCallback, useMemo, useState, useSyncExternalStore } from 'react'
 import { normalizePlacement } from '../shared/constants.ts'
 import { parseFileTarget, type WorkspaceFileOpener } from './file-opener.tsx'
+import { useShellMessages } from './i18n.ts'
 import { LazySurfaceGroupView, useLazyStreamingExpress } from './LazySurfaceGroupView.tsx'
 import type { SurfaceActionCallback } from './SurfaceView.tsx'
 import {
@@ -112,6 +113,7 @@ export const A2uiToolView = memo(function A2uiToolView({
     callId,
   )
 
+  const msg = useShellMessages()
   const title = settledMeta?.title ?? argTitle ?? 'A2UI'
 
   // 1. Error / interrupted state -> compact DisclosureRow with diagnostics
@@ -134,7 +136,7 @@ export const A2uiToolView = memo(function A2uiToolView({
           onToggle={() => setExpanded((v) => !v)}
           collapsedContent={
             <span className={css.rowSummary}>
-              <span>{stopped ? '已中断' : '校验未通过（重试中）'}</span>
+              <span>{stopped ? msg.interrupted : msg.validationRetry}</span>
               {argTitle ? <span className={css.rowTitle}>{argTitle}</span> : null}
             </span>
           }
@@ -142,7 +144,7 @@ export const A2uiToolView = memo(function A2uiToolView({
           <pre className={css.reason}>{reason}</pre>
           {inspect ? (
             <button type="button" className={css.inspectBtn} onClick={inspect}>
-              查看调用详情
+              {msg.inspectCall}
             </button>
           ) : null}
         </DshDisclosureRow>
@@ -167,7 +169,7 @@ export const A2uiToolView = memo(function A2uiToolView({
           onToggle={() => setExpanded((v) => !v)}
           collapsedContent={
             <span className={css.rowSummary}>
-              <span>已固定至底部工作台</span>
+              <span>{msg.pinnedToDock}</span>
               <span className={css.rowTitle}>{title}</span>
             </span>
           }
@@ -175,7 +177,7 @@ export const A2uiToolView = memo(function A2uiToolView({
           <pre className={css.reason}>{argUi}</pre>
           {inspect ? (
             <button type="button" className={css.inspectBtn} onClick={inspect}>
-              查看调用详情
+              {msg.inspectCall}
             </button>
           ) : null}
         </DshDisclosureRow>
@@ -190,7 +192,7 @@ export const A2uiToolView = memo(function A2uiToolView({
       <div data-tool="a2ui_render" data-placement="inline" data-state="inline-settled">
         <DshDisclosureRow
           icon={<DshAppsIcon size={14} />}
-          title="A2UI 内嵌卡片"
+          title={msg.inlineCardTitle}
           running={false}
           open={inlineOpen}
           expandable={true}
@@ -199,7 +201,7 @@ export const A2uiToolView = memo(function A2uiToolView({
           onToggle={() => setInlineOpen((v) => !v)}
           collapsedContent={
             <span className={css.rowSummary}>
-              <span>内嵌界面</span>
+              <span>{msg.inlineSurface}</span>
               <span className={css.rowTitle}>{title}</span>
             </span>
           }
@@ -266,7 +268,7 @@ export const A2uiToolView = memo(function A2uiToolView({
         onToggle={() => setExpanded((v) => !v)}
         collapsedContent={
           <span className={css.rowSummary}>
-            <span>已渲染</span>
+            <span>{msg.rendered}</span>
             <span className={css.rowTitle}>{title}</span>
           </span>
         }
@@ -274,7 +276,7 @@ export const A2uiToolView = memo(function A2uiToolView({
         <pre className={css.reason}>{argUi}</pre>
         {inspect ? (
           <button type="button" className={css.inspectBtn} onClick={inspect}>
-            查看调用详情
+            {msg.inspectCall}
           </button>
         ) : null}
       </DshDisclosureRow>

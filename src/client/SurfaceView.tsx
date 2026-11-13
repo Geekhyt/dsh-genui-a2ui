@@ -24,6 +24,7 @@ import { DSH_CLIENT_CATALOGS } from './catalog/index.ts'
 import { enrichActionWithSelection, formatActionMessage } from './action-protocol.ts'
 import { ErrorBoundary } from './ErrorBoundary.tsx'
 import { FileOpenContext, type WorkspaceFileOpener } from './file-opener.tsx'
+import { useRuntimeMessages } from './i18n.ts'
 import {
   computeMessagesFingerprint,
   loadSurfaceDraft,
@@ -277,6 +278,7 @@ export const SurfaceGroupView = memo(function SurfaceGroupView({
     [readOnly],
   )
 
+  const msg = useRuntimeMessages()
   const themeClass = dark ? 'a2ui-dark' : 'a2ui-light'
   const cardClasses = [
     css.card,
@@ -302,10 +304,10 @@ export const SurfaceGroupView = memo(function SurfaceGroupView({
         <header className={css.header}>
           <span className={css.title}>{title ?? 'A2UI'}</span>
           <span className={css.headerRight}>
-            {streaming ? <span className={css.badge}>生成中…</span> : null}
+            {streaming ? <span className={css.badge}>{msg.generating}</span> : null}
             {!streaming && readOnly ? (
               <span className={css.badge} data-a2ui-readonly-badge="">
-                {readOnlyLabel ?? '历史快照（只读）'}
+                {readOnlyLabel ?? msg.readOnlySnapshot}
               </span>
             ) : null}
             {headerRight}
@@ -327,14 +329,14 @@ export const SurfaceGroupView = memo(function SurfaceGroupView({
                     <span className={css.skeletonBlock} />
                   </div>
                   <div className={css.skeletonChart} />
-                  <span className={css.skeletonHint}>正在构建交互界面…</span>
+                  <span className={css.skeletonHint}>{msg.buildingSurface}</span>
                 </div>
               ) : (
-                <div className={css.skeleton}>暂无可显示界面</div>
+                <div className={css.skeleton}>{msg.emptySurface}</div>
               )
             ) : (
               shown.map((surface) => (
-                <ErrorBoundary key={surface.id} label={`Surface "${surface.id}" 渲染失败`}>
+                <ErrorBoundary key={surface.id} label={msg.surfaceRenderFailed(surface.id)}>
                   <A2uiSurface surface={surface} />
                 </ErrorBoundary>
               ))

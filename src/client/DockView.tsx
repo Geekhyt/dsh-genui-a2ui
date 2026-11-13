@@ -14,6 +14,7 @@ import {
   setDockCollapsed,
   subscribeDockUi,
 } from './persistence.ts'
+import { useShellMessages } from './i18n.ts'
 import { LazySurfaceGroupView } from './LazySurfaceGroupView.tsx'
 import type { SurfaceActionCallback } from './SurfaceView.tsx'
 import type { WorkspaceFileOpener } from './file-opener.tsx'
@@ -37,6 +38,7 @@ export const A2uiDockView = memo(function A2uiDockView({
   sendAction,
   openWorkspaceFile,
 }: A2uiDockViewProps) {
+  const msg = useShellMessages()
   const subscribeChat = useCallback(
     (listener: () => void) => (chatStore ? chatStore.subscribe(listener) : NOOP_SUBSCRIBE()),
     [chatStore],
@@ -53,7 +55,7 @@ export const A2uiDockView = memo(function A2uiDockView({
   if (uiState.dismissedSeq >= batch.latestSeq) return null
 
   const collapsed = uiState.collapsed
-  const title = batch.title ?? 'A2UI 常驻工作台'
+  const title = batch.title ?? msg.dockDefaultTitle
 
   const toggleCollapsed = () => {
     if (sessionId) setDockCollapsed(sessionId, !collapsed)
@@ -82,14 +84,14 @@ export const A2uiDockView = memo(function A2uiDockView({
             <DshAppsIcon size={14} />
           </span>
           <span className={css.title}>{title}</span>
-          <span className={css.tag}>常驻工作台</span>
+          <span className={css.tag}>{msg.dockTag}</span>
         </button>
         <div className={css.actions}>
           <button
             type="button"
             className={css.iconBtn}
-            aria-label={collapsed ? '展开工作台' : '收起工作台'}
-            title={collapsed ? '展开工作台' : '收起工作台'}
+            aria-label={collapsed ? msg.dockExpand : msg.dockCollapse}
+            title={collapsed ? msg.dockExpand : msg.dockCollapse}
             onClick={toggleCollapsed}
           >
             {collapsed ? <DshChevronUpIcon size={14} /> : <DshChevronDownIcon size={14} />}
@@ -97,8 +99,8 @@ export const A2uiDockView = memo(function A2uiDockView({
           <button
             type="button"
             className={css.iconBtn}
-            aria-label="关闭常驻工作台"
-            title="关闭常驻工作台（后续更新时将重新显示）"
+            aria-label={msg.dockClose}
+            title={msg.dockCloseHint}
             onClick={handleDismiss}
             data-a2ui-dock-dismiss=""
           >

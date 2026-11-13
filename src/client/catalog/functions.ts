@@ -160,7 +160,7 @@ export function computeIncludes(items: unknown, value: unknown): boolean {
 }
 
 export function computeCond(condition: unknown, truthy: unknown, falsy: unknown): unknown {
-  return Boolean(condition) ? truthy : falsy
+  return condition ? truthy : falsy
 }
 
 export const SafeOpenUrlImplementation = createFunctionImplementation(OpenUrlApi, (args) => {

@@ -435,10 +435,15 @@ export function resolveLatestA2uiCommandState(
           readonly outcome?: { readonly kind?: unknown; readonly text?: unknown } | null
         }
       | undefined
-    if (!data || data.name !== 'a2ui') continue
+    if (data?.name !== 'a2ui') continue
     if (data.outcome?.kind !== 'success' || typeof data.outcome.text !== 'string') continue
     const text = data.outcome.text
-    const enabled = text.includes('已开启') ? true : text.includes('已关闭') ? false : null
+    const enabled =
+      text.includes('已开启') || /\benabled\b/i.test(text)
+        ? true
+        : text.includes('已关闭') || /\bdisabled\b/i.test(text)
+          ? false
+          : null
     if (enabled === null) continue
     const seq = typeof data.seq === 'number' ? data.seq : node.anchorSeq
     if (latest === null || seq >= latest.seq) {

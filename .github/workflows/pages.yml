@@ -1,0 +1,47 @@
+name: Deploy Component Handbook to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/dsh-genui-a2ui-component-library.html'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Publish Interactive Component Handbook
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Assemble static site
+        run: |
+          mkdir -p _site
+          cp docs/dsh-genui-a2ui-component-library.html _site/index.html
+          cp docs/dsh-genui-a2ui-component-library.html _site/dsh-genui-a2ui-component-library.html
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
