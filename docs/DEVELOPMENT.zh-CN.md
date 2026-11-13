@@ -89,9 +89,9 @@ flowchart TB
 | :--- | :--- | :--- | :--- |
 | `lib/client.js` | **`53.3 kB`** | **`15.0 kB`** | 首屏冷启动轻量壳：注册 UI Slots、双语自适应与胶囊开关（构建与单测双重强制 `< 500 kB` 硬门禁）。 |
 | `lib/client.runtime.js` | `1.05 MB` | ~`289 kB` | 仅当对话中真正挂载 A2UI 卡片时才加载（含 `@a2ui/react`、32 组件目录、TanStack Table）。 |
-| `lib/client.echarts.js` | `782.0 kB` | `258.7 kB` | 仅当卡片使用 `Chart` 组件时按需加载 ECharts 6（按需注册 14 类图表模块）。 |
+| `lib/client.echarts.js` | `782.8 kB` | `259.0 kB` | 仅当卡片使用 `Chart` 组件时按需加载 ECharts 6（按需注册 14 类图表模块）。 |
 | `lib/client.mermaid.js` | `3.51 MB` | ~`943 kB` | 仅当卡片使用 `Mermaid` 组件时按需加载 Mermaid 11（强制 `securityLevel: "strict"` + SVG 净化）。 |
-| `lib/index.js` | `689.6 kB` | `187.9 kB` | 自包含 Host ESM 产物（打包 `@a2ui/agent` 与同构 Zod 契约），用户安装时零运行时 npm 依赖。 |
+| `lib/index.js` | `689.8 kB` | `187.9 kB` | 自包含 Host ESM 产物（打包 `@a2ui/agent` 与同构 Zod 契约），用户安装时零运行时 npm 依赖。 |
 
 ---
 
@@ -210,7 +210,7 @@ npm run typecheck
 # 构建 Host ESM + 4 个 Client 分包（自动校验首屏 < 500 kB 门禁）
 npm run build
 
-# 运行全部 49 项单元、契约、提示词与分包门禁测试
+# 运行全部 50 项单元、契约、提示词与分包门禁测试
 npm test
 
 # 核验与本机 DeepSeek Harness.app 内部模块及 Slots 的契约兼容性

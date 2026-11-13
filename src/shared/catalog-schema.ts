@@ -83,22 +83,32 @@ export const ChartApi = {
         data: DynamicValueSchema.describe(
           'REF:#/$defs/DynamicValue|Array of data row objects (or `{ nodes, links }` for graph), or a $/path binding to an array in the surface data model (recommended so update=true can refresh data incrementally).',
         ),
-        title: DynamicStringSchema.describe('REF:#/$defs/DynamicString|Optional chart title.').optional(),
+        title: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional chart title.',
+        ).optional(),
         xField: z
           .string()
-          .describe('Property name for the category / X axis (or item label in pie/funnel/gauge/treemap/boxplot, source in sankey/graph, or date in candlestick).')
+          .describe(
+            'Property name for the category / X axis (or item label in pie/funnel/gauge/treemap/boxplot, source in sankey/graph, or date in candlestick).',
+          )
           .optional(),
         yField: z
           .union([z.string(), z.array(z.string()).min(1)])
-          .describe('Property name(s) for numeric series values (or Y category in heatmap); pass an array of field names for multi-series charts.')
+          .describe(
+            'Property name(s) for numeric series values (or Y category in heatmap); pass an array of field names for multi-series charts.',
+          )
           .optional(),
         seriesField: z
           .string()
-          .describe('Optional property name used to group rows into separate series (or target node in sankey/graph, parent group in treemap).')
+          .describe(
+            'Optional property name used to group rows into separate series (or target node in sankey/graph, parent group in treemap).',
+          )
           .optional(),
         sizeField: z
           .string()
-          .describe('Optional numeric property name mapped to bubble radius on scatter charts or cell intensity on heatmap charts.')
+          .describe(
+            'Optional numeric property name mapped to bubble radius on scatter charts or cell intensity on heatmap charts.',
+          )
           .optional(),
         stacked: z
           .boolean()
@@ -113,7 +123,9 @@ export const ChartApi = {
         zoom: z
           .boolean()
           .default(false)
-          .describe('When true on Cartesian charts, enables interactive mouse-wheel and slider dataZoom.')
+          .describe(
+            'When true on Cartesian charts, enables interactive mouse-wheel and slider dataZoom.',
+          )
           .optional(),
         height: z
           .number()
@@ -136,7 +148,9 @@ export const ChartApi = {
 export const TableColumnSchema = spec(
   z.object({
     key: z.string().describe('Property key on each row object.'),
-    label: DynamicStringSchema.describe('REF:#/$defs/DynamicString|Header label displayed for this column.'),
+    label: DynamicStringSchema.describe(
+      'REF:#/$defs/DynamicString|Header label displayed for this column.',
+    ),
     align: z.enum(['left', 'center', 'right']).optional(),
     sortable: z.boolean().optional(),
   }),
@@ -154,9 +168,13 @@ export const TableApi = {
         columns: z
           .array(TableColumnSchema)
           .min(1)
-          .describe('Optional explicit column definitions; inferred automatically from row keys when omitted.')
+          .describe(
+            'Optional explicit column definitions; inferred automatically from row keys when omitted.',
+          )
           .optional(),
-        title: DynamicStringSchema.describe('REF:#/$defs/DynamicString|Optional table header title.').optional(),
+        title: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional table header title.',
+        ).optional(),
         searchable: z
           .boolean()
           .default(false)
@@ -175,7 +193,9 @@ export const TableApi = {
         ).optional(),
         weight: WeightSchema.optional(),
       })
-      .describe('Sortable, filterable, paginated data table powered by TanStack Table, with optional row click drill-down action.')
+      .describe(
+        'Sortable, filterable, paginated data table powered by TanStack Table, with optional row click drill-down action.',
+      )
       .strict(),
     { mixins: [], required: ['rows'] },
   ),
@@ -191,7 +211,9 @@ export const DshTextApi = {
         ),
         variant: z
           .enum(['body', 'caption', 'h1', 'h2', 'h3', 'h4', 'h5'])
-          .describe('Typography style hint: "body" (default), "caption", or heading level "h1".."h5".')
+          .describe(
+            'Typography style hint: "body" (default), "caption", or heading level "h1".."h5".',
+          )
           .optional(),
         weight: WeightSchema.optional(),
       })
@@ -206,11 +228,15 @@ export const StatApi = {
   schema: spec(
     z
       .object({
-        label: DynamicStringSchema.describe('REF:#/$defs/DynamicString|Metric label (e.g. "月活跃用户").'),
+        label: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Metric label (e.g. "月活跃用户").',
+        ),
         value: DynamicValueSchema.describe(
           'REF:#/$defs/DynamicValue|Primary metric value (string, number, $/path, or reactive expression such as calc(...)). Trailing units like %, ms, MB, 万元 are styled automatically.',
         ),
-        delta: DynamicValueSchema.describe('REF:#/$defs/DynamicValue|Optional delta badge text or number (e.g. "+14.2%").').optional(),
+        delta: DynamicValueSchema.describe(
+          'REF:#/$defs/DynamicValue|Optional delta badge text or number (e.g. "+14.2%").',
+        ).optional(),
         trend: z
           .enum(['up', 'down', 'neutral'])
           .describe('Semantic trend direction for coloring the delta tag and sparkline.')
@@ -218,10 +244,14 @@ export const StatApi = {
         spark: DynamicValueSchema.describe(
           'REF:#/$defs/DynamicValue|Optional numeric array (or $/path array) rendered as a lightweight inline SVG trend sparkline.',
         ).optional(),
-        caption: DynamicStringSchema.describe('REF:#/$defs/DynamicString|Optional secondary note under the metric.').optional(),
+        caption: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional secondary note under the metric.',
+        ).optional(),
         weight: WeightSchema.optional(),
       })
-      .describe('Compact KPI metric card displaying a key figure, optional unit split, trend badge, inline SVG sparkline, and caption.')
+      .describe(
+        'Compact KPI metric card displaying a key figure, optional unit split, trend badge, inline SVG sparkline, and caption. Pass weight=1 when placing multiple equal-width Stat cards side-by-side in a Row.',
+      )
       .strict(),
     { mixins: [], required: ['label', 'value'] },
   ),
@@ -232,9 +262,18 @@ export const ProgressApi = {
   schema: spec(
     z
       .object({
-        value: DynamicNumberSchema.describe('REF:#/$defs/DynamicNumber|Current numeric progress value.'),
-        max: z.number().positive().default(100).describe('Maximum value (defaults to 100).').optional(),
-        label: DynamicStringSchema.describe('REF:#/$defs/DynamicString|Optional label displayed next to the percentage.').optional(),
+        value: DynamicNumberSchema.describe(
+          'REF:#/$defs/DynamicNumber|Current numeric progress value.',
+        ),
+        max: z
+          .number()
+          .positive()
+          .default(100)
+          .describe('Maximum value (defaults to 100).')
+          .optional(),
+        label: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional label displayed next to the percentage.',
+        ).optional(),
         tone: z
           .enum(['brand', 'success', 'warning', 'danger'])
           .default('brand')
@@ -272,14 +311,18 @@ export const CodeApi = {
   schema: spec(
     z
       .object({
-        code: DynamicStringSchema.describe('REF:#/$defs/DynamicString|Source code or JSON snippet to highlight.'),
+        code: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Source code or JSON snippet to highlight.',
+        ),
         language: z
           .string()
           .default('text')
           .describe('Syntax language identifier such as "typescript", "python", "json", or "bash".')
           .optional(),
         lineNumbers: z.boolean().default(false).describe('Show a line-number gutter.').optional(),
-        title: DynamicStringSchema.describe('REF:#/$defs/DynamicString|Optional header label above the code snippet.').optional(),
+        title: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional header label above the code snippet.',
+        ).optional(),
         filePath: DynamicStringSchema.describe(
           'REF:#/$defs/DynamicString|Optional workspace file path; renders a 1-click button to open the file in the DSH right sidebar.',
         ).optional(),
@@ -347,9 +390,13 @@ export const StepsApi = {
         direction: z
           .enum(['vertical', 'horizontal'])
           .default('vertical')
-          .describe('Layout orientation: "vertical" timeline (default) or compact "horizontal" stepper.')
+          .describe(
+            'Layout orientation: "vertical" timeline (default) or compact "horizontal" stepper.',
+          )
           .optional(),
-        title: DynamicStringSchema.describe('REF:#/$defs/DynamicString|Optional stepper header title.').optional(),
+        title: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional stepper header title.',
+        ).optional(),
         weight: WeightSchema.optional(),
       })
       .describe('Multi-stage execution stepper or incident/workflow timeline.')
@@ -382,7 +429,9 @@ export const CalloutApi = {
         ).optional(),
         weight: WeightSchema.optional(),
       })
-      .describe('Highlighted semantic alert banner (`info`, `success`, `warning`, `danger`) with optional nested child.')
+      .describe(
+        'Highlighted semantic alert banner (`info`, `success`, `warning`, `danger`) with optional nested child.',
+      )
       .strict(),
     { mixins: [], required: ['title'] },
   ),
@@ -396,7 +445,9 @@ export const KeyValueApi = {
         items: DynamicValueSchema.describe(
           'REF:#/$defs/DynamicValue|Array of `{ label, value, tone?, copyable?, mono? }` entries or a key-value object/$/path map.',
         ),
-        title: DynamicStringSchema.describe('REF:#/$defs/DynamicString|Optional section title.').optional(),
+        title: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional section title.',
+        ).optional(),
         columns: z
           .number()
           .int()
@@ -412,7 +463,9 @@ export const KeyValueApi = {
           .optional(),
         weight: WeightSchema.optional(),
       })
-      .describe('Structured key-value attribute grid for metadata, environment configs, HTTP headers, or specs.')
+      .describe(
+        'Structured key-value attribute grid for metadata, environment configs, HTTP headers, or specs.',
+      )
       .strict(),
     { mixins: [], required: ['items'] },
   ),
@@ -430,7 +483,9 @@ export const AccordionItemSchema = spec(
     open: DynamicBooleanSchema.describe(
       'REF:#/$defs/DynamicBoolean|Whether this section starts expanded.',
     ).optional(),
-    child: ChildSchema.describe('REF:#/$defs/Child|The ID of the child component rendered inside the panel.'),
+    child: ChildSchema.describe(
+      'REF:#/$defs/Child|The ID of the child component rendered inside the panel.',
+    ),
   }),
   { closure: 'additionalProperties' },
 )
@@ -465,9 +520,11 @@ export const JsonTreeApi = {
     z
       .object({
         data: DynamicValueSchema.describe(
-        'REF:#/$defs/DynamicValue|Structured JSON object or array (or $/path binding) to inspect.',
+          'REF:#/$defs/DynamicValue|Structured JSON object or array (or $/path binding) to inspect.',
         ),
-        title: DynamicStringSchema.describe('REF:#/$defs/DynamicString|Optional inspector header title.').optional(),
+        title: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional inspector header title.',
+        ).optional(),
         expandedDepth: z
           .number()
           .int()
@@ -499,7 +556,9 @@ export const FileTreeApi = {
         items: DynamicValueSchema.describe(
           'REF:#/$defs/DynamicValue|Array (or $/path array) of `{ path, kind?: "file" | "dir", status?: "added" | "modified" | "deleted" | "renamed", summary?, line? }` entries (or path strings).',
         ),
-        title: DynamicStringSchema.describe('REF:#/$defs/DynamicString|Optional file tree header title.').optional(),
+        title: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional file tree header title.',
+        ).optional(),
         expandedDepth: z
           .number()
           .int()
@@ -529,8 +588,12 @@ export const MermaidApi = {
         code: DynamicStringSchema.describe(
           'REF:#/$defs/DynamicString|Mermaid diagram source (`flowchart`, `graph`, `sequenceDiagram`, `stateDiagram-v2`, `classDiagram`, `erDiagram`, `gantt`, `gitGraph`, `journey`, `mindmap`, `timeline`, `pie`).',
         ),
-        title: DynamicStringSchema.describe('REF:#/$defs/DynamicString|Optional diagram card header title.').optional(),
-        caption: DynamicStringSchema.describe('REF:#/$defs/DynamicString|Optional explanatory note below the diagram.').optional(),
+        title: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional diagram card header title.',
+        ).optional(),
+        caption: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional explanatory note below the diagram.',
+        ).optional(),
         weight: WeightSchema.optional(),
       })
       .describe(
@@ -608,7 +671,8 @@ export const CopyTextApi = {
 export const SumApi = {
   name: 'sum' as const,
   returnType: 'number' as const,
-  description: 'Sums numeric values across an array or bound $/path array (optionally reading object[field]).',
+  description:
+    'Sums numeric values across an array or bound $/path array (optionally reading object[field]).',
   schema: spec(
     z.object({
       items: DynamicValueSchema.describe('Array or bound $/path array of numbers or row objects.'),
@@ -622,7 +686,8 @@ export const SumApi = {
 export const AvgApi = {
   name: 'avg' as const,
   returnType: 'number' as const,
-  description: 'Averages numeric values across an array or bound $/path array (optionally reading object[field]).',
+  description:
+    'Averages numeric values across an array or bound $/path array (optionally reading object[field]).',
   schema: spec(
     z.object({
       items: DynamicValueSchema.describe('Array or bound $/path array of numbers or row objects.'),
@@ -648,7 +713,13 @@ export const CalcApi = {
       vars: DynamicValueSchema.optional().describe(
         'Map of variable bindings `{ w: $/wan, y: $/years, r: $/rate }` resolved reactively from $/paths.',
       ),
-      decimals: z.number().int().min(0).max(8).optional().describe('Optional decimal rounding (0..8).'),
+      decimals: z
+        .number()
+        .int()
+        .min(0)
+        .max(8)
+        .optional()
+        .describe('Optional decimal rounding (0..8).'),
     }),
     { closure: 'unevaluatedProperties' },
   ),
@@ -658,7 +729,8 @@ export const CalcApi = {
 export const EqApi = {
   name: 'eq' as const,
   returnType: 'boolean' as const,
-  description: 'Returns true when `a` equals `b` (also matches single-select ChoicePicker array `["x"]` against `"x"`).',
+  description:
+    'Returns true when `a` equals `b` (also matches single-select ChoicePicker array `["x"]` against `"x"`).',
   schema: spec(
     z.object({
       a: DynamicValueSchema.describe('Left value, $/path, or ChoicePicker selection.'),
@@ -700,7 +772,8 @@ export const LtApi = {
 export const IncludesApi = {
   name: 'includes' as const,
   returnType: 'boolean' as const,
-  description: 'Returns true when array/string `items` contains `value` (ideal for multi-select ChoicePicker).',
+  description:
+    'Returns true when array/string `items` contains `value` (ideal for multi-select ChoicePicker).',
   schema: spec(
     z.object({
       items: DynamicValueSchema.describe('Array or string (e.g. ChoicePicker $/path).'),
@@ -717,7 +790,9 @@ export const CondApi = {
   description: 'Returns `truthy` when `condition` is truthy, otherwise `falsy`.',
   schema: spec(
     z.object({
-      condition: DynamicBooleanSchema.describe('Boolean condition or comparator expression (e.g. `gt($/val, 100)`).'),
+      condition: DynamicBooleanSchema.describe(
+        'Boolean condition or comparator expression (e.g. `gt($/val, 100)`).',
+      ),
       truthy: DynamicValueSchema.describe('Value returned when `condition` is true.'),
       falsy: DynamicValueSchema.describe('Value returned when `condition` is false.'),
     }),

@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
@@ -33,10 +35,8 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => ({
   IconSearchOutlineRegular: undefined,
 }))
 
-import {
-  formatActionMessage,
-  matchA2uiActionUserText,
-} from '../src/client/action-protocol.ts'
+import { MessageProcessor } from '@a2ui/web_core/v1_0'
+import { formatActionMessage, matchA2uiActionUserText } from '../src/client/action-protocol.ts'
 import {
   clampMermaidZoom,
   DshMermaidView,
@@ -44,16 +44,20 @@ import {
   MERMAID_ZOOM_MIN,
   MERMAID_ZOOM_STEP,
 } from '../src/client/catalog/ExtendedWidgets.tsx'
+import { LocaleFormatCurrencyImplementation } from '../src/client/catalog/functions.ts'
+import { dshReactCatalog } from '../src/client/catalog/index.ts'
+import { DshRowView, isHomogeneousStatRow } from '../src/client/catalog/LayoutWidgets.tsx'
+import { DshStatView } from '../src/client/catalog/MediaAndDataWidgets.tsx'
+import { TableWidget } from '../src/client/catalog/TableWidget.tsx'
 import { loadRuntimeChunk } from '../src/client/chunk-loader.ts'
+import { buildChartOption } from '../src/client/chunks/echarts-chunk.ts'
 import { apply as applyClient } from '../src/client/index.ts'
 import { assertSafeSvg } from '../src/client/mermaid-safe.ts'
-import {
-  getPluginCssRegistry,
-  isPluginStylesMounted,
-} from '../src/client/style-lifecycle.ts'
+import { getPluginCssRegistry, isPluginStylesMounted } from '../src/client/style-lifecycle.ts'
 import { resolveLatestA2uiCommandState } from '../src/client/turn-surfaces.ts'
-import { apply as applyHost, TIER_COMMAND } from '../src/index.ts'
-import { MermaidApi } from '../src/shared/catalog-schema.ts'
+import { createGenerator, SurfaceSessions } from '../src/host/generator.ts'
+import { A2UI_SYSTEM_GUIDANCE, apply as applyHost, TIER_COMMAND } from '../src/index.ts'
+import { MermaidApi, StatApi } from '../src/shared/catalog-schema.ts'
 import { setUiLocaleOverride } from '../src/shared/i18n.ts'
 
 interface FakeStyleTag {
@@ -112,7 +116,11 @@ function installFakeDom() {
     document: fakeDoc,
     addEventListener: () => {},
     removeEventListener: () => {},
-    matchMedia: () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }),
+    matchMedia: () => ({
+      matches: false,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }),
   }
   return {
     headTags,
@@ -149,7 +157,9 @@ describe('OSS Readiness: Reversible Style Lifecycle & Mermaid Viewport Ergonomic
         uiConversation: {
           events: { register: () => () => {} },
           userText: { register: () => () => {} },
-          binding: () => ({ target: () => ({ subscribe: () => () => {}, getSnapshot: () => undefined }) }),
+          binding: () => ({
+            target: () => ({ subscribe: () => () => {}, getSnapshot: () => undefined }),
+          }),
         },
         inject: () => {},
         effect(setup: () => () => void) {
@@ -343,12 +353,161 @@ describe('OSS Readiness: Reversible Style Lifecycle & Mermaid Viewport Ergonomic
     ).not.toThrow()
 
     expect(() => assertSafeSvg('<svg/onload=alert(1)></svg>')).toThrow(/sanitization/)
-    expect(() => assertSafeSvg('<svg><a href="vbscript:msgbox(1)">x</a></svg>')).toThrow(/sanitization/)
+    expect(() => assertSafeSvg('<svg><a href="vbscript:msgbox(1)">x</a></svg>')).toThrow(
+      /sanitization/,
+    )
     expect(() => assertSafeSvg('<svg><a href="&#106;avascript:alert(1)">x</a></svg>')).toThrow(
       /sanitization/,
     )
     expect(() => assertSafeSvg('<svg><a href="java&#x09;script:alert(1)">x</a></svg>')).toThrow(
       /sanitization/,
     )
+  })
+
+  it('aligns Row default stretch semantics with A2UI 1.0 and scopes balanced KPI grid wrapping strictly to homogeneous Stat rows (including <a2ui-react-*> hosts)', () => {
+    const sessions = new SurfaceSessions(createGenerator())
+    let seq = 0
+    const compileSurfaceRowCtx = (expr: string) => {
+      const mp = new MessageProcessor([dshReactCatalog])
+      mp.processMessages(sessions.compile(`kpi-test-${++seq}`, expr))
+      const surface = mp.model.getSurface('s')!
+      const rowModel = [...surface.componentsModel.entries]
+        .map(([, m]) => m)
+        .find((m) => m.type === 'Row')!
+      return {
+        componentModel: rowModel,
+        dataContext: { surface },
+      }
+    }
+
+    // 1. Homogeneous 4-Stat row (unweighted or weight=1) -> activates data-kpi-grid="true"
+    const homoCtx = compileSurfaceRowCtx(
+      'surface("s")\nroot = Card(Row([Stat("月供", "9,050"), Stat("剩余利息", "58.9", weight=1), Stat("缩短年限", "26.65"), Stat("减少月供", "13.09")]))',
+    )
+    expect(isHomogeneousStatRow(homoCtx)).toBe(true)
+
+    // 2. Proportional unequal weights (weight=2 vs weight=1) -> stays standard flex (false)
+    const unequalCtx = compileSurfaceRowCtx(
+      'surface("s")\nroot = Card(Row([Stat("主指标", "26.65", weight=2), Stat("次指标", "13.09", weight=1)]))',
+    )
+    expect(isHomogeneousStatRow(unequalCtx)).toBe(false)
+
+    // 3. Mixed non-Stat row -> stays standard flex (false)
+    const mixedCtx = compileSurfaceRowCtx(
+      'surface("s")\nroot = Card(Row([Stat("主指标", "26.65"), Badge("正常", tone="success")]))',
+    )
+    expect(isHomogeneousStatRow(mixedCtx)).toBe(false)
+
+    const rowHtml = renderToStaticMarkup(
+      createElement(DshRowView, {
+        props: { children: ['s1', 's2', 's3', 's4'] },
+        context: homoCtx,
+        buildChild: (id: string) =>
+          createElement(DshStatView, {
+            key: id,
+            props: { label: `指标 ${id}`, value: '9,050', caption: '基准对照' },
+          }),
+      }),
+    )
+
+    // Row defaults to official A2UI 1.0 align="stretch" and emits kpi-grid + child-count metadata
+    expect(rowHtml).toContain('data-a2ui-row=""')
+    expect(rowHtml).toContain('data-align="stretch"')
+    expect(rowHtml).toContain('data-child-count="4"')
+    expect(rowHtml).toContain('data-kpi-grid="true"')
+    expect(rowHtml).toContain('align-items:stretch')
+    expect(rowHtml).toContain('data-a2ui-stat=""')
+    expect(rowHtml).not.toContain('min-width:130px')
+
+    // Explicit align="start" is preserved faithfully
+    const startRowHtml = renderToStaticMarkup(
+      createElement(DshRowView, {
+        props: { children: ['s1'], align: 'start' },
+        buildChild: (id: string) =>
+          createElement(DshStatView, {
+            key: id,
+            props: { label: '单项', value: '100' },
+          }),
+      }),
+    )
+    expect(startRowHtml).toContain('data-align="start"')
+    expect(startRowHtml).toContain('align-items:flex-start')
+    expect(startRowHtml).not.toContain('data-kpi-grid')
+
+    // Prompt & schema guidance recommend standard A2UI weight=1 on equal-width peer items inside Row
+    expect(A2UI_SYSTEM_GUIDANCE).toContain('Row([Stat(..., weight=1), ...])')
+    expect(StatApi.schema.description).toContain('weight=1')
+
+    // Built runtime chunk preserves @container, data-kpi-grid, [data-child-count] narrow specificity, and >*>.statCard piercing <a2ui-react-stat>
+    const runtimeBundle = readFileSync(
+      resolve(import.meta.dirname, '../lib/client.runtime.js'),
+      'utf8',
+    )
+    expect(runtimeBundle).toContain('container-type:inline-size')
+    expect(runtimeBundle).toContain('@container')
+    expect(runtimeBundle).toContain('data-kpi-grid')
+    expect(runtimeBundle).toMatch(/data-kpi-grid=['"]?true['"]?\]\[data-child-count\]/)
+    expect(runtimeBundle).toMatch(/data-kpi-grid=['"]?true['"]?\]>\*>\.a2ui_/)
+
+    // Compact pie charts (< 400px or > 5 slices) suppress outer spider label lines and use center hover emphasis
+    const compactPie = buildChartOption(
+      {
+        kind: 'pie',
+        data: [
+          { name: '房租', value: 4000 },
+          { name: '餐饮', value: 2240 },
+          { name: '交通', value: 360 },
+        ],
+      },
+      true,
+      250,
+    ) as {
+      series: Array<{ label: { show: boolean; position: string }; labelLine: { show: boolean } }>
+    }
+    expect(compactPie.series[0]?.label.show).toBe(false)
+    expect(compactPie.series[0]?.label.position).toBe('center')
+    expect(compactPie.series[0]?.labelLine.show).toBe(false)
+
+    // Locale-aware formatCurrency formats CNY natively as ¥ in zh and CN¥ in en
+    try {
+      setUiLocaleOverride('zh')
+      const zhCny = String(
+        LocaleFormatCurrencyImplementation.execute(
+          { value: 114000, currency: 'CNY', decimals: 0 },
+          {} as never,
+        ),
+      )
+      expect(zhCny).toBe('¥114,000')
+
+      setUiLocaleOverride('en')
+      const enCny = String(
+        LocaleFormatCurrencyImplementation.execute(
+          { value: 114000, currency: 'CNY', decimals: 0 },
+          {} as never,
+        ),
+      )
+      expect(enCny).toBe('CN¥114,000')
+    } finally {
+      setUiLocaleOverride(null)
+    }
+
+    // Table keeps short CJK category columns single-line (tdNowrap) while allowing long prose columns to wrap horizontally (tdProse)
+    const tableHtml = renderToStaticMarkup(
+      createElement(TableWidget, {
+        rows: [
+          {
+            渠道: '抖音信息流',
+            类型: '内容种草',
+            曝光万: 448,
+            备注: '适合高频短视频种草拉新与爆品冷启动投放场景，需配合达人素材迭代',
+          },
+        ],
+      }),
+    )
+    expect(tableHtml).toContain('抖音信息流')
+    expect(tableHtml).toMatch(/tdNowrap[^>]*>抖音信息流/)
+    expect(tableHtml).toMatch(/tdNowrap[^>]*>内容种草/)
+    expect(tableHtml).toMatch(/tdNum[^>]*>448/)
+    expect(tableHtml).toMatch(/tdProse[^>]*>适合高频短视频/)
   })
 })

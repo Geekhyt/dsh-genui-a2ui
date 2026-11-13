@@ -40,7 +40,11 @@ const TABLE_FEATURES = tableFeatures({
   paginatedRowModel: createPaginatedRowModel(),
   filterFns: { includesString: filterFn_includesString },
   sortFns: { alphanumeric: sortFn_alphanumeric, basic: sortFn_basic },
-  columnMeta: {} as { align: 'left' | 'center' | 'right'; isNumeric: boolean },
+  columnMeta: {} as {
+    align: 'left' | 'center' | 'right'
+    isNumeric: boolean
+    wrapProse: boolean
+  },
 })
 
 const columnHelper = createColumnHelper<typeof TABLE_FEATURES, RowRecord>()
@@ -67,6 +71,14 @@ function normalizeRows(rows: unknown): RowRecord[] {
   return rows.filter(
     (r): r is RowRecord => typeof r === 'object' && r !== null && !Array.isArray(r),
   )
+}
+
+function estimateVisualUnits(text: string): number {
+  let units = 0
+  for (const ch of text) {
+    units += (ch.codePointAt(0) ?? 0) > 0xff ? 1 : 0.55
+  }
+  return units
 }
 
 function formatCellValue(value: unknown, msg: RuntimeUiMessages): string {
@@ -103,14 +115,26 @@ export const TableWidget = memo(function TableWidget({
     () =>
       columnHelper.columns(
         inferredCols.map((col) => {
-          const isNumeric = data.some((r) => typeof r[col.key] === 'number')
+          const isNumeric =
+            data.length > 0 &&
+            data.every(
+              (r) =>
+                r[col.key] === null || r[col.key] === undefined || typeof r[col.key] === 'number',
+            ) &&
+            data.some((r) => typeof r[col.key] === 'number')
+          const wrapProse =
+            !isNumeric &&
+            data.slice(0, 40).some((r) => {
+              const formatted = formatCellValue(r[col.key], msg)
+              return formatted.includes('\n') || estimateVisualUnits(formatted) > 14
+            })
           const align = col.align ?? (isNumeric ? 'right' : 'left')
           return columnHelper.accessor((row) => row[col.key], {
             id: col.key,
             header: col.label,
             enableSorting: col.sortable !== false,
             sortFn: isNumeric ? 'basic' : 'alphanumeric',
-            meta: { align, isNumeric },
+            meta: { align, isNumeric, wrapProse },
             cell: (info) => formatCellValue(info.getValue(), msg),
           })
         }),
@@ -126,7 +150,9 @@ export const TableWidget = memo(function TableWidget({
     onSortingChange: setSorting,
     onGlobalFilterChange: setGlobalFilter,
     globalFilterFn: (row, _columnId, filterValue) => {
-      const q = String(filterValue ?? '').trim().toLowerCase()
+      const q = String(filterValue ?? '')
+        .trim()
+        .toLowerCase()
       if (q === '') return true
       return Object.values(row.original).some((val) =>
         formatCellValue(val, msg).toLowerCase().includes(q),
@@ -140,7 +166,8 @@ export const TableWidget = memo(function TableWidget({
   const totalFiltered = table.getFilteredRowModel().rows.length
   const pageCount = table.getPageCount()
   const pageIndex = table.state.pagination.pageIndex
-  const weightStyle = weight !== undefined ? { flexGrow: weight, flexBasis: 0, minWidth: 240 } : undefined
+  const weightStyle =
+    weight !== undefined ? { flexGrow: weight, flexBasis: 0, minWidth: 240 } : undefined
 
   return (
     <div className={css.tableCard} style={weightStyle} data-a2ui-table="">
@@ -238,10 +265,15 @@ export const TableWidget = memo(function TableWidget({
                   >
                     {row.getAllCells().map((cell) => {
                       const meta = cell.column.columnDef.meta
+                      const cellCls = meta?.isNumeric
+                        ? `${css.td} ${css.tdNum}`
+                        : meta?.wrapProse
+                          ? `${css.td} ${css.tdProse}`
+                          : `${css.td} ${css.tdNowrap}`
                       return (
                         <td
                           key={cell.id}
-                          className={`${css.td} ${meta?.isNumeric ? css.tdNum : ''}`}
+                          className={cellCls}
                           style={{ textAlign: meta?.align ?? 'left' }}
                         >
                           <table.FlexRender cell={cell} />

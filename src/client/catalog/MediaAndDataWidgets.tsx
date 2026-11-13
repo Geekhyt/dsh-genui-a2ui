@@ -117,15 +117,19 @@ export const DshAudioPlayerImpl = defineComponent<{
   )
 })
 
-export const DshStatImpl = defineComponent<{
-  label?: unknown
-  value?: unknown
-  delta?: unknown
-  trend?: 'up' | 'down' | 'neutral'
-  caption?: unknown
-  spark?: unknown
-  weight?: number
-}>(StatApi, function DshStat({ props }) {
+export function DshStatView({
+  props,
+}: {
+  props: {
+    label?: unknown
+    value?: unknown
+    delta?: unknown
+    trend?: 'up' | 'down' | 'neutral'
+    caption?: unknown
+    spark?: unknown
+    weight?: number
+  }
+}) {
   const gradId = useId().replace(/:/g, '')
   const tone: TagTone =
     props.trend === 'up' ? 'success' : props.trend === 'down' ? 'danger' : 'neutral'
@@ -146,7 +150,12 @@ export const DshStatImpl = defineComponent<{
         : 'var(--dsw-alias-brand-primary, #4d6bfe)'
 
   return (
-    <div className={css.statCard} style={weightStyle(props.weight, 130)} data-a2ui-stat="">
+    <div
+      className={css.statCard}
+      style={weightStyle(props.weight)}
+      data-a2ui-stat=""
+      data-a2ui-weight={props.weight !== undefined ? String(props.weight) : undefined}
+    >
       <span className={css.statLabel}>{String(props.label ?? '')}</span>
       <div className={css.statValueRow}>
         <span className={css.statValue}>
@@ -186,7 +195,17 @@ export const DshStatImpl = defineComponent<{
       {props.caption ? <span className={css.statCaption}>{String(props.caption)}</span> : null}
     </div>
   )
-})
+}
+
+export const DshStatImpl = defineComponent<{
+  label?: unknown
+  value?: unknown
+  delta?: unknown
+  trend?: 'up' | 'down' | 'neutral'
+  caption?: unknown
+  spark?: unknown
+  weight?: number
+}>(StatApi, DshStatView)
 
 export const DshProgressImpl = defineComponent<{
   value?: unknown
@@ -233,7 +252,7 @@ export const DshBadgeImpl = defineComponent<{
   weight?: number
 }>(BadgeApi, function DshBadge({ props }) {
   return (
-    <span style={weightStyle(props.weight)} data-a2ui-badge="">
+    <span className={css.badgeWrap} style={weightStyle(props.weight)} data-a2ui-badge="">
       <DshTag tone={props.tone ?? 'neutral'}>{String(props.label ?? '')}</DshTag>
     </span>
   )

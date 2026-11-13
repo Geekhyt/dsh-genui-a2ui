@@ -133,11 +133,7 @@ function inferFields(
 ): { xKey: string; yKeys: string[] } {
   const sample = rows[0] ?? {}
   const keys = Object.keys(sample)
-  const xKey =
-    explicitX ??
-    keys.find((k) => typeof sample[k] === 'string') ??
-    keys[0] ??
-    'label'
+  const xKey = explicitX ?? keys.find((k) => typeof sample[k] === 'string') ?? keys[0] ?? 'label'
 
   if (typeof explicitY === 'string' && explicitY !== '') {
     return { xKey, yKeys: [explicitY] }
@@ -162,12 +158,21 @@ function quantile(sorted: readonly number[], q: number): number {
   return Number((sorted[base]! + rest * (next - sorted[base]!)).toFixed(2))
 }
 
-function extractBoxplotFive(row: Record<string, unknown>): [number, number, number, number, number] {
+function extractBoxplotFive(
+  row: Record<string, unknown>,
+): [number, number, number, number, number] {
   if (Array.isArray(row.values) && row.values.length >= 5) {
-    const nums = row.values.slice(0, 5).map(toNumber).sort((a, b) => a - b)
+    const nums = row.values
+      .slice(0, 5)
+      .map(toNumber)
+      .sort((a, b) => a - b)
     return [nums[0]!, nums[1]!, nums[2]!, nums[3]!, nums[4]!]
   }
-  const sampleArr = Array.isArray(row.samples) ? row.samples : Array.isArray(row.data) ? row.data : null
+  const sampleArr = Array.isArray(row.samples)
+    ? row.samples
+    : Array.isArray(row.data)
+      ? row.data
+      : null
   if (sampleArr && sampleArr.length > 0) {
     const sorted = sampleArr.map(toNumber).sort((a, b) => a - b)
     return [
@@ -188,7 +193,9 @@ function extractBoxplotFive(row: Record<string, unknown>): [number, number, numb
 }
 
 /** Break accidental cycles so ECharts Sankey never throws on cyclic graph edges. */
-function filterAcyclicLinks<T extends { source: string; target: string }>(links: readonly T[]): T[] {
+function filterAcyclicLinks<T extends { source: string; target: string }>(
+  links: readonly T[],
+): T[] {
   const adj = new Map<string, Set<string>>()
   const canReach = (from: string, goal: string, visited = new Set<string>()): boolean => {
     if (from === goal) return true
@@ -217,7 +224,11 @@ function filterAcyclicLinks<T extends { source: string; target: string }>(links:
   return safe
 }
 
-function buildZoomConfig(enabled: boolean | undefined, horizontal: boolean | undefined, border: string) {
+function buildZoomConfig(
+  enabled: boolean | undefined,
+  horizontal: boolean | undefined,
+  border: string,
+) {
   if (!enabled) return undefined
   return horizontal
     ? [
@@ -230,11 +241,16 @@ function buildZoomConfig(enabled: boolean | undefined, horizontal: boolean | und
       ]
 }
 
-export function buildChartOption(props: ChartOptionInput, dark: boolean): echarts.EChartsCoreOption {
+export function buildChartOption(
+  props: ChartOptionInput,
+  dark: boolean,
+  containerWidth?: number,
+): echarts.EChartsCoreOption {
   const rows = normalizeChartRows(props.data)
   const theme = resolvePalette(dark)
   const { xKey, yKeys } = inferFields(rows, props.xField, props.yField)
   const primaryY = yKeys[0] ?? 'value'
+  const isCompact = containerWidth !== undefined && containerWidth > 0 && containerWidth < 400
 
   const baseTooltip = {
     renderMode: 'richText' as const,
@@ -249,30 +265,69 @@ export function buildChartOption(props: ChartOptionInput, dark: boolean): echart
       name: sanitizeChartLabel(r[xKey] ?? r.name ?? r.label),
       value: toNumber(r[primaryY] ?? r.value),
     }))
+    const hideOuterPieLabels = isCompact || items.length > 5
     return {
       color: theme.colors,
-      tooltip: { ...baseTooltip, trigger: 'item' },
+      tooltip: {
+        ...baseTooltip,
+        trigger: 'item',
+        formatter: props.kind === 'pie' ? '{b}: {c} ({d}%)' : undefined,
+      },
       legend: {
         bottom: 0,
-        textStyle: { color: theme.textSecondary, fontSize: 11.5 },
+        itemWidth: 10,
+        itemHeight: 8,
+        itemGap: 8,
+        textStyle: { color: theme.textSecondary, fontSize: 11 },
       },
       series: [
         props.kind === 'pie'
-          ? {
-              type: 'pie',
-              radius: ['42%', '70%'],
-              center: ['50%', '45%'],
-              itemStyle: { borderRadius: 6 },
-              label: { color: theme.textSecondary, fontSize: 11.5 },
-              data: items,
-            }
+          ? hideOuterPieLabels
+            ? {
+                type: 'pie',
+                radius: ['38%', '64%'],
+                center: ['50%', '41%'],
+                itemStyle: { borderRadius: 6 },
+                label: { show: false, position: 'center' },
+                labelLine: { show: false },
+                emphasis: {
+                  scale: true,
+                  scaleSize: 4,
+                  label: {
+                    show: true,
+                    fontSize: 13,
+                    fontWeight: 600,
+                    lineHeight: 18,
+                    color: theme.textPrimary,
+                    formatter: '{b}\n{d}%',
+                  },
+                },
+                data: items,
+              }
+            : {
+                type: 'pie',
+                radius: ['38%', '62%'],
+                center: ['50%', '43%'],
+                avoidLabelOverlap: true,
+                itemStyle: { borderRadius: 6 },
+                label: {
+                  color: theme.textSecondary,
+                  fontSize: 11.5,
+                  formatter: '{b} {d}%',
+                  overflow: 'truncate',
+                  width: 92,
+                },
+                data: items,
+              }
           : {
               type: 'funnel',
               top: 12,
               bottom: 34,
-              left: '12%',
-              width: '76%',
-              label: { color: theme.textPrimary, fontSize: 11.5 },
+              left: isCompact ? '6%' : '12%',
+              width: isCompact ? '88%' : '76%',
+              label: isCompact
+                ? { position: 'inside', color: '#ffffff', fontSize: 11, overflow: 'truncate' }
+                : { color: theme.textPrimary, fontSize: 11.5 },
               data: items,
             },
       ],
@@ -292,7 +347,12 @@ export function buildChartOption(props: ChartOptionInput, dark: boolean): echart
           progress: { show: true, width: 12 },
           axisLine: { lineStyle: { width: 12, color: [[1, theme.border]] } },
           axisLabel: { color: theme.textSecondary, fontSize: 10 },
-          detail: { valueAnimation: true, fontSize: 20, color: theme.textPrimary, offsetCenter: [0, '65%'] },
+          detail: {
+            valueAnimation: true,
+            fontSize: 20,
+            color: theme.textPrimary,
+            offsetCenter: [0, '65%'],
+          },
           title: { color: theme.textSecondary, fontSize: 12, offsetCenter: [0, '90%'] },
           data: [{ value: val, name }],
         },
@@ -310,12 +370,20 @@ export function buildChartOption(props: ChartOptionInput, dark: boolean): echart
     return {
       color: theme.colors,
       tooltip: { ...baseTooltip, trigger: 'item' },
-      legend: yKeys.length > 1 ? { bottom: 0, textStyle: { color: theme.textSecondary, fontSize: 11.5 } } : undefined,
+      legend:
+        yKeys.length > 1
+          ? { bottom: 0, textStyle: { color: theme.textSecondary, fontSize: 11.5 } }
+          : undefined,
       radar: {
         center: yKeys.length > 1 ? ['50%', '45%'] : ['50%', '50%'],
-        radius: yKeys.length > 1 ? '58%' : '65%',
+        radius: isCompact ? '50%' : yKeys.length > 1 ? '58%' : '65%',
         indicator: indicator.length > 0 ? indicator : [{ name: '-', max: 100 }],
-        axisName: { color: theme.textSecondary, fontSize: 11 },
+        axisName: {
+          color: theme.textSecondary,
+          fontSize: 11,
+          overflow: 'truncate',
+          width: isCompact ? 56 : 88,
+        },
         splitLine: { lineStyle: { color: theme.border } },
         splitArea: { show: false },
       },
@@ -423,9 +491,14 @@ export function buildChartOption(props: ChartOptionInput, dark: boolean): echart
     if (rows.some((r) => Array.isArray(r.children))) {
       const mapNode = (node: Record<string, unknown>): Record<string, unknown> => ({
         name: sanitizeChartLabel(node[nameField] ?? node.name ?? node.label),
-        value: node[valField] !== undefined || node.value !== undefined ? toNumber(node[valField] ?? node.value) : undefined,
+        value:
+          node[valField] !== undefined || node.value !== undefined
+            ? toNumber(node[valField] ?? node.value)
+            : undefined,
         children: Array.isArray(node.children)
-          ? (node.children as Record<string, unknown>[]).filter((c) => c && typeof c === 'object').map(mapNode)
+          ? (node.children as Record<string, unknown>[])
+              .filter((c) => c && typeof c === 'object')
+              .map(mapNode)
           : undefined,
       })
       treeData = rows.map(mapNode)
@@ -493,7 +566,11 @@ export function buildChartOption(props: ChartOptionInput, dark: boolean): echart
       }
       return Math.max(acc, width)
     }, 0)
-    const rightPadding = Math.min(190, Math.max(96, Math.ceil(maxRightLabelPx + 24)))
+    const maxPad =
+      containerWidth !== undefined && containerWidth > 0
+        ? Math.max(72, Math.floor(containerWidth * 0.36))
+        : 190
+    const rightPadding = Math.min(maxPad, Math.max(84, Math.ceil(maxRightLabelPx + 24)))
 
     return {
       color: theme.colors,
@@ -509,7 +586,12 @@ export function buildChartOption(props: ChartOptionInput, dark: boolean): echart
           nodeGap: 10,
           nodeWidth: 16,
           lineStyle: { color: 'gradient', curveness: 0.5, opacity: dark ? 0.38 : 0.3 },
-          label: { color: theme.textPrimary, fontSize: 11.5 },
+          label: {
+            color: theme.textPrimary,
+            fontSize: 11.5,
+            overflow: 'truncate',
+            width: Math.max(48, rightPadding - 14),
+          },
           data: nodeNames.map((name) => ({ name })),
           links,
         },
@@ -534,7 +616,10 @@ export function buildChartOption(props: ChartOptionInput, dark: boolean): echart
           id: sanitizeChartLabel(n.id ?? n.name),
           name: sanitizeChartLabel(n.name ?? n.id),
           symbolSize: n.size ? Math.min(54, Math.max(18, toNumber(n.size))) : 30,
-          category: n.group !== undefined || n.category !== undefined ? sanitizeChartLabel(n.group ?? n.category) : undefined,
+          category:
+            n.group !== undefined || n.category !== undefined
+              ? sanitizeChartLabel(n.group ?? n.category)
+              : undefined,
         }))
       links = Array.isArray(rawObj.links ?? rawObj.edges)
         ? ((rawObj.links ?? rawObj.edges) as Record<string, unknown>[])
@@ -542,7 +627,14 @@ export function buildChartOption(props: ChartOptionInput, dark: boolean): echart
             .map((e) => ({
               source: sanitizeChartLabel(e.source ?? e.from),
               target: sanitizeChartLabel(e.target ?? e.to),
-              label: e.label ? { show: true, formatter: sanitizeChartLabel(e.label), fontSize: 10, color: theme.textSecondary } : undefined,
+              label: e.label
+                ? {
+                    show: true,
+                    formatter: sanitizeChartLabel(e.label),
+                    fontSize: 10,
+                    color: theme.textSecondary,
+                  }
+                : undefined,
             }))
         : []
     } else {
@@ -565,7 +657,12 @@ export function buildChartOption(props: ChartOptionInput, dark: boolean): echart
             source: s,
             target: t,
             label: r.label
-              ? { show: true, formatter: sanitizeChartLabel(r.label), fontSize: 10, color: theme.textSecondary }
+              ? {
+                  show: true,
+                  formatter: sanitizeChartLabel(r.label),
+                  fontSize: 10,
+                  color: theme.textSecondary,
+                }
               : undefined,
           })
         }
@@ -573,7 +670,9 @@ export function buildChartOption(props: ChartOptionInput, dark: boolean): echart
     }
 
     const categories = [
-      ...new Set(nodes.map((n) => n.category).filter((c): c is string => typeof c === 'string' && c !== '')),
+      ...new Set(
+        nodes.map((n) => n.category).filter((c): c is string => typeof c === 'string' && c !== ''),
+      ),
     ].map((name) => ({ name }))
 
     return {
@@ -581,7 +680,11 @@ export function buildChartOption(props: ChartOptionInput, dark: boolean): echart
       tooltip: { ...baseTooltip, trigger: 'item' },
       legend:
         categories.length > 1
-          ? { bottom: 0, data: categories.map((c) => c.name), textStyle: { color: theme.textSecondary, fontSize: 11 } }
+          ? {
+              bottom: 0,
+              data: categories.map((c) => c.name),
+              textStyle: { color: theme.textSecondary, fontSize: 11 },
+            }
           : undefined,
       series: [
         {
@@ -597,7 +700,10 @@ export function buildChartOption(props: ChartOptionInput, dark: boolean): echart
           categories: categories.length > 0 ? categories : undefined,
           data: nodes.map((n) => ({
             ...n,
-            category: typeof n.category === 'string' ? categories.findIndex((c) => c.name === n.category) : undefined,
+            category:
+              typeof n.category === 'string'
+                ? categories.findIndex((c) => c.name === n.category)
+                : undefined,
           })),
           links,
         },
@@ -619,7 +725,7 @@ export function buildChartOption(props: ChartOptionInput, dark: boolean): echart
         type: 'category',
         data: categories,
         axisLine: { lineStyle: { color: theme.border } },
-        axisLabel: { color: theme.textSecondary, fontSize: 11 },
+        axisLabel: { color: theme.textSecondary, fontSize: 11, hideOverlap: true },
       },
       yAxis: {
         type: 'value',
@@ -646,7 +752,9 @@ export function buildChartOption(props: ChartOptionInput, dark: boolean): echart
   /* ── 10: Candlestick (ECharts order: [open, close, lowest, highest]) ── */
   if (props.kind === 'candlestick') {
     const dateField = props.xField ?? 'date'
-    const categories = rows.map((r) => sanitizeChartLabel(r[dateField] ?? r[xKey] ?? r.time ?? r.name))
+    const categories = rows.map((r) =>
+      sanitizeChartLabel(r[dateField] ?? r[xKey] ?? r.time ?? r.name),
+    )
     const ohlc = rows.map((r) => {
       const open = toNumber(r.open ?? r.o ?? r.start)
       const close = toNumber(r.close ?? r.c ?? r.end ?? open)
@@ -663,7 +771,7 @@ export function buildChartOption(props: ChartOptionInput, dark: boolean): echart
         type: 'category',
         data: categories,
         axisLine: { lineStyle: { color: theme.border } },
-        axisLabel: { color: theme.textSecondary, fontSize: 11 },
+        axisLabel: { color: theme.textSecondary, fontSize: 11, hideOverlap: true },
       },
       yAxis: {
         type: 'value',
@@ -705,12 +813,12 @@ export function buildChartOption(props: ChartOptionInput, dark: boolean): echart
     return {
       color: theme.colors,
       tooltip: { ...baseTooltip, trigger: 'item' },
-      grid: { top: 18, right: 18, bottom: props.zoom ? 40 : 28, left: 46 },
+      grid: { top: 18, right: 18, bottom: props.zoom ? 38 : 16, left: 12, containLabel: true },
       dataZoom: zoomCfg,
       xAxis: {
         type: numericX ? 'value' : 'category',
         data: numericX ? undefined : rows.map((r) => sanitizeChartLabel(r[xKey])),
-        axisLabel: { color: theme.textSecondary, fontSize: 11 },
+        axisLabel: { color: theme.textSecondary, fontSize: 11, hideOverlap: true },
         splitLine: { lineStyle: { color: theme.border } },
       },
       yAxis: {
@@ -721,7 +829,8 @@ export function buildChartOption(props: ChartOptionInput, dark: boolean): echart
       series: yKeys.map((k) => ({
         name: sanitizeChartLabel(k),
         type: 'scatter',
-        symbolSize: (_val: unknown, params?: { dataIndex?: number }) => computeRadius(params?.dataIndex ?? 0),
+        symbolSize: (_val: unknown, params?: { dataIndex?: number }) =>
+          computeRadius(params?.dataIndex ?? 0),
         itemStyle: sizeKey ? { opacity: 0.78 } : undefined,
         data: numericX
           ? rows.map((r) =>
@@ -780,7 +889,7 @@ export function buildChartOption(props: ChartOptionInput, dark: boolean): echart
     data: categories,
     inverse: isHorizontal ? true : undefined,
     axisLine: { lineStyle: { color: theme.border } },
-    axisLabel: { color: theme.textSecondary, fontSize: 11 },
+    axisLabel: { color: theme.textSecondary, fontSize: 11, hideOverlap: true },
   }
   const valueAxis = {
     type: 'value' as const,
@@ -793,7 +902,10 @@ export function buildChartOption(props: ChartOptionInput, dark: boolean): echart
     color: theme.colors,
     tooltip: { ...baseTooltip, trigger: 'axis' },
     legend: showLegend
-      ? { bottom: props.zoom && !isHorizontal ? 24 : 0, textStyle: { color: theme.textSecondary, fontSize: 11.5 } }
+      ? {
+          bottom: props.zoom && !isHorizontal ? 24 : 0,
+          textStyle: { color: theme.textSecondary, fontSize: 11.5 },
+        }
       : undefined,
     dataZoom: zoomCfg,
     grid: {

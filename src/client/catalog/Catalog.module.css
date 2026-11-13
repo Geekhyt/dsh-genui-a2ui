@@ -9,15 +9,98 @@
 }
 
 .row > .card,
+.row > * > .card,
 .row > .statCard,
+.row > * > .statCard,
 .row > .chartCard,
+.row > * > .chartCard,
 .row > .tableCard,
+.row > * > .tableCard,
 .row > .jsonTreeCard,
+.row > * > .jsonTreeCard,
 .row > .fileTreeCard,
+.row > * > .fileTreeCard,
 .row > .mermaidCard,
-.row > .kvCard {
-  align-self: stretch;
+.row > * > .mermaidCard,
+.row > .kvCard,
+.row > * > .kvCard {
   box-sizing: border-box;
+}
+
+.row > .chartCard,
+.row > * > .chartCard,
+.row > .tableCard,
+.row > * > .tableCard {
+  flex: 1 1 220px;
+}
+
+/* Keep inline controls centered when Row uses default A2UI 1.0 align="stretch" (piercing <a2ui-react-*> display:contents hosts). */
+.row[data-align="stretch"] > .badgeWrap,
+.row[data-align="stretch"] > * > .badgeWrap,
+.row[data-align="stretch"] > .icon,
+.row[data-align="stretch"] > * > .icon,
+.row[data-align="stretch"] > button,
+.row[data-align="stretch"] > * > button {
+  align-self: center;
+}
+
+/*
+ * A2UI-compliant responsive KPI strip adaptation:
+ * Activated strictly when DshRow detects >=2 homogeneous Stat children in SurfaceModel
+ * with no custom unequal weights (e.g. weight=2 vs weight=1). Pierces @a2ui/react's
+ * <a2ui-react-stat style="display: contents"> host element so grid items stretch cleanly.
+ */
+.row[data-kpi-grid="true"] {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.row[data-kpi-grid="true"][data-child-count="2"] {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.row[data-kpi-grid="true"][data-child-count="3"] {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.row[data-kpi-grid="true"][data-child-count="4"] {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.row[data-kpi-grid="true"][data-child-count="6"] {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.row[data-kpi-grid="true"] > .statCard,
+.row[data-kpi-grid="true"] > * > .statCard {
+  min-width: 0;
+  width: 100%;
+  height: 100%;
+  align-self: stretch;
+}
+
+@container (max-width: 680px) {
+  .row[data-kpi-grid="true"][data-child-count="4"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container (max-width: 480px) {
+  .row[data-kpi-grid="true"][data-child-count="3"] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .row[data-kpi-grid="true"][data-child-count="6"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container (max-width: 360px) {
+  .row[data-kpi-grid="true"],
+  .row[data-kpi-grid="true"][data-child-count] {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .column {
@@ -25,6 +108,13 @@
   flex-direction: column;
   gap: 12px;
   min-width: 0;
+}
+
+.column > .card,
+.column > * > .card,
+.card[data-a2ui-weighted="true"],
+.column[data-a2ui-weighted="true"] {
+  container-type: inline-size;
 }
 
 .listVertical {
@@ -84,6 +174,12 @@
   align-items: center;
   justify-content: center;
   color: var(--dsw-alias-label-secondary, currentColor);
+  flex-shrink: 0;
+}
+
+.badgeWrap {
+  display: inline-flex;
+  align-items: center;
   flex-shrink: 0;
 }
 
@@ -213,7 +309,7 @@
 }
 
 .radioItem[data-selected] .radioDot::after {
-  content: '';
+  content: "";
   width: 7px;
   height: 7px;
   border-radius: 999px;
@@ -250,7 +346,7 @@
 }
 
 .sliderTrack::before {
-  content: '';
+  content: "";
   position: absolute;
   top: 50%;
   left: 0;
@@ -325,15 +421,15 @@
   background: var(--dsw-alias-brand-primary, #3b82f6);
 }
 
-.progressFill[data-tone='success'] {
+.progressFill[data-tone="success"] {
   background: var(--dsw-alias-state-success-primary, #10b981);
 }
 
-.progressFill[data-tone='warning'] {
+.progressFill[data-tone="warning"] {
   background: var(--dsw-alias-state-warn-primary, #f59e0b);
 }
 
-.progressFill[data-tone='danger'] {
+.progressFill[data-tone="danger"] {
   background: var(--dsw-alias-state-error-primary, #ef4444);
 }
 
@@ -347,6 +443,7 @@
 
 .tabPanel {
   min-width: 0;
+  container-type: inline-size;
 }
 
 .modalTrigger {
@@ -363,6 +460,7 @@
   border: 1px solid var(--dsw-alias-border-l1, rgba(128, 128, 128, 0.18));
   background: var(--dsw-alias-bg-layer-1, rgba(128, 128, 128, 0.03));
   min-width: 130px;
+  overflow: hidden;
   box-sizing: border-box;
 }
 
@@ -380,13 +478,18 @@
   justify-content: space-between;
   gap: 6px;
   flex-wrap: wrap;
+  min-width: 0;
 }
 
 .statValue {
-  font-size: 19px;
+  font-size: 18px;
   font-weight: 650;
   line-height: 1.2;
+  letter-spacing: -0.01em;
   white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-variant-numeric: tabular-nums;
   color: var(--dsw-alias-label-primary, inherit);
 }
@@ -395,6 +498,7 @@
   font-size: 11.5px;
   color: var(--dsw-alias-label-tertiary, rgba(128, 128, 128, 0.78));
   margin-top: auto;
+  overflow-wrap: anywhere;
 }
 
 /* TanStack Table */
@@ -464,6 +568,18 @@
   padding: 8px 12px;
   color: var(--dsw-alias-label-primary, inherit);
   border-bottom: 1px solid var(--dsw-alias-border-l1, rgba(128, 128, 128, 0.12));
+  vertical-align: middle;
+}
+
+.tdNowrap {
+  white-space: nowrap;
+}
+
+.tdProse {
+  min-width: 180px;
+  max-width: 340px;
+  white-space: normal;
+  overflow-wrap: break-word;
 }
 
 .table tbody tr:last-child .td {
@@ -475,6 +591,7 @@
 }
 
 .tdNum {
+  white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
 
@@ -608,7 +725,7 @@
   cursor: pointer;
 }
 
-.diffModeBtn[data-active='true'] {
+.diffModeBtn[data-active="true"] {
   background: var(--dsw-alias-interactive-bg-hover, rgba(128, 128, 128, 0.16));
   color: var(--dsw-alias-label-primary, inherit);
   font-weight: 600;
@@ -643,11 +760,11 @@
   line-height: 1.55;
 }
 
-.diffRow[data-kind='add'] {
+.diffRow[data-kind="add"] {
   background: rgba(16, 185, 129, 0.12);
 }
 
-.diffRow[data-kind='remove'] {
+.diffRow[data-kind="remove"] {
   background: rgba(239, 68, 68, 0.12);
 }
 
@@ -662,18 +779,18 @@
   font-variant-numeric: tabular-nums;
 }
 
-.diffGutter[data-kind='add'],
-.diffSplitCell[data-kind='add'] {
+.diffGutter[data-kind="add"],
+.diffSplitCell[data-kind="add"] {
   background: rgba(16, 185, 129, 0.12);
 }
 
-.diffGutter[data-kind='remove'],
-.diffSplitCell[data-kind='remove'] {
+.diffGutter[data-kind="remove"],
+.diffSplitCell[data-kind="remove"] {
   background: rgba(239, 68, 68, 0.12);
 }
 
-.diffGutter[data-kind='empty'],
-.diffSplitCell[data-kind='empty'] {
+.diffGutter[data-kind="empty"],
+.diffSplitCell[data-kind="empty"] {
   background: rgba(128, 128, 128, 0.04);
 }
 
@@ -772,19 +889,19 @@
   background: var(--dsw-alias-bg-base, transparent);
 }
 
-.stepDot[data-status='done'] {
+.stepDot[data-status="done"] {
   border-color: var(--dsw-alias-status-success, #10b981);
   background: color-mix(in srgb, var(--dsw-alias-status-success, #10b981) 16%, transparent);
   color: var(--dsw-alias-status-success, #10b981);
 }
 
-.stepDot[data-status='active'] {
+.stepDot[data-status="active"] {
   border-color: var(--dsw-alias-brand-primary, #4d6bfe);
   background: var(--dsw-alias-brand-primary, #4d6bfe);
   color: var(--dsw-alias-label-primary-inverted, #ffffff);
 }
 
-.stepDot[data-status='error'] {
+.stepDot[data-status="error"] {
   border-color: var(--dsw-alias-status-danger, #ef4444);
   background: color-mix(in srgb, var(--dsw-alias-status-danger, #ef4444) 16%, transparent);
   color: var(--dsw-alias-status-danger, #ef4444);
@@ -830,7 +947,7 @@
   color: var(--dsw-alias-label-primary, inherit);
 }
 
-.stepItem[data-status='pending'] .stepItemTitle {
+.stepItem[data-status="pending"] .stepItemTitle {
   font-weight: 500;
   color: var(--dsw-alias-label-secondary, inherit);
 }
@@ -864,22 +981,22 @@
   min-width: 0;
 }
 
-.callout[data-tone='info'] {
+.callout[data-tone="info"] {
   border-left-color: var(--dsw-alias-brand-primary, #4d6bfe);
   background: color-mix(in srgb, var(--dsw-alias-brand-primary, #4d6bfe) 7%, transparent);
 }
 
-.callout[data-tone='success'] {
+.callout[data-tone="success"] {
   border-left-color: var(--dsw-alias-status-success, #10b981);
   background: color-mix(in srgb, var(--dsw-alias-status-success, #10b981) 8%, transparent);
 }
 
-.callout[data-tone='warning'] {
+.callout[data-tone="warning"] {
   border-left-color: var(--dsw-alias-status-warning, #f59e0b);
   background: color-mix(in srgb, var(--dsw-alias-status-warning, #f59e0b) 9%, transparent);
 }
 
-.callout[data-tone='danger'] {
+.callout[data-tone="danger"] {
   border-left-color: var(--dsw-alias-status-danger, #ef4444);
   background: color-mix(in srgb, var(--dsw-alias-status-danger, #ef4444) 9%, transparent);
 }
@@ -891,15 +1008,15 @@
   color: var(--dsw-alias-brand-primary, #4d6bfe);
 }
 
-.callout[data-tone='success'] .calloutIcon {
+.callout[data-tone="success"] .calloutIcon {
   color: var(--dsw-alias-status-success, #10b981);
 }
 
-.callout[data-tone='warning'] .calloutIcon {
+.callout[data-tone="warning"] .calloutIcon {
   color: var(--dsw-alias-status-warning, #f59e0b);
 }
 
-.callout[data-tone='danger'] .calloutIcon {
+.callout[data-tone="danger"] .calloutIcon {
   color: var(--dsw-alias-status-danger, #ef4444);
 }
 
@@ -959,6 +1076,7 @@
 .kvGrid {
   margin: 0;
   display: grid;
+  grid-template-columns: repeat(var(--kv-cols, 2), minmax(0, 1fr));
   gap: 1px;
   border: 1px solid var(--dsw-alias-border-l1, rgba(128, 128, 128, 0.18));
   border-radius: var(--dsw-radius-md, 10px);
@@ -966,7 +1084,18 @@
   overflow: hidden;
 }
 
+@container (max-width: 220px) {
+  .kvGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .kvCell {
+    grid-column: span 1;
+  }
+}
+
 .kvCell {
+  grid-column: span var(--kv-span, 1);
   padding: 9px 12px;
   background: var(--dsw-alias-bg-layer-1, var(--dsw-alias-bg-base, #ffffff));
   display: flex;
@@ -1123,7 +1252,9 @@
   font-size: 11.5px;
   line-height: 1.4;
   cursor: pointer;
-  transition: background-color 120ms ease, border-color 120ms ease;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease;
 }
 
 .fileOpenBtn:hover {
@@ -1358,7 +1489,7 @@
   white-space: nowrap;
 }
 
-.fileTreeName[data-deleted='true'] {
+.fileTreeName[data-deleted="true"] {
   text-decoration: line-through;
   opacity: 0.65;
 }
@@ -1433,7 +1564,7 @@
   height: auto;
 }
 
-.mermaidSvgStage[data-zoomed='true'] svg {
+.mermaidSvgStage[data-zoomed="true"] svg {
   max-width: none;
 }
 

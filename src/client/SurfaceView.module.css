@@ -15,10 +15,18 @@
   --a2ui-color-input: var(--dsw-alias-bg-base, #ffffff);
   --a2ui-color-on-input: var(--dsw-alias-label-primary, #1f2329);
   --a2ui-font-family-title: var(--dsw-font-family, inherit);
-  --a2ui-font-family-monospace: var(--dsw-font-family-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  --a2ui-font-family-monospace: var(
+    --dsw-font-family-mono,
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace
+  );
   --a2ui-font-size: var(--dsh-content-font-size, 14px);
 
   box-sizing: border-box;
+  width: 100%;
+  container-type: inline-size;
   border: 0.5px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.1));
   border-radius: var(--dsw-radius-lg, 12px);
   background: var(--dsw-alias-bg-layer-1, #f7f8fa);

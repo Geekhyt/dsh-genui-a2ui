@@ -14,12 +14,7 @@ import {
 } from '@a2ui/web_core/v1_0'
 import { DshTextApi } from '../../shared/catalog-schema.ts'
 import { useRuntimeMessages } from '../i18n.ts'
-import {
-  DshMarkdown,
-  DshModal,
-  DshSegmentedTabs,
-  type SegmentedTab,
-} from '../ui/primitives.tsx'
+import { DshMarkdown, DshModal, DshSegmentedTabs, type SegmentedTab } from '../ui/primitives.tsx'
 import css from './Catalog.module.css'
 import {
   ALIGN_MAP,
@@ -74,31 +69,92 @@ export const DshCardImpl = defineComponent<{
   weight?: number
 }>(CardApi, function DshCard({ props, buildChild }) {
   return (
-    <div className={css.card} style={weightStyle(props.weight)} data-a2ui-card="">
+    <div
+      className={css.card}
+      style={weightStyle(props.weight)}
+      data-a2ui-card=""
+      data-a2ui-weighted={props.weight !== undefined ? 'true' : undefined}
+    >
       {renderChildRef(buildChild, props.child)}
     </div>
   )
 })
+
+export function isHomogeneousStatRow(context: unknown): boolean {
+  const ctx = context as
+    | {
+        componentModel?: { properties?: Record<string, unknown> }
+        dataContext?: {
+          surface?: {
+            componentsModel?: {
+              get(id: string): { type?: string; properties?: Record<string, unknown> } | undefined
+            }
+          }
+        }
+      }
+    | undefined
+  const rawChildren = ctx?.componentModel?.properties?.children
+  const componentsModel = ctx?.dataContext?.surface?.componentsModel
+  if (!Array.isArray(rawChildren) || rawChildren.length < 2 || !componentsModel) {
+    return false
+  }
+  for (const ref of rawChildren) {
+    const childId =
+      typeof ref === 'string'
+        ? ref
+        : typeof ref === 'object' && ref !== null && 'componentId' in ref
+          ? String((ref as { componentId: unknown }).componentId)
+          : undefined
+    if (!childId) return false
+    const child = componentsModel.get(childId)
+    if (child?.type !== 'Stat') return false
+    const w = child.properties?.weight
+    if (w !== undefined && w !== 1) return false
+  }
+  return true
+}
+
+export function DshRowView({
+  props,
+  buildChild,
+  context,
+}: {
+  props: {
+    children?: unknown
+    justify?: string
+    align?: string
+    weight?: number
+  }
+  buildChild: (id: string, basePath?: string) => import('react').ReactNode
+  context?: unknown
+}) {
+  const childCount = Array.isArray(props.children) ? String(props.children.length) : undefined
+  const resolvedAlign = props.align ?? 'stretch'
+  const kpiGrid = isHomogeneousStatRow(context)
+  return (
+    <div
+      className={css.row}
+      data-a2ui-row=""
+      data-align={resolvedAlign}
+      data-child-count={childCount}
+      data-kpi-grid={kpiGrid ? 'true' : undefined}
+      style={{
+        ...weightStyle(props.weight),
+        justifyContent: JUSTIFY_MAP[props.justify ?? 'start'] ?? 'flex-start',
+        alignItems: ALIGN_MAP[resolvedAlign] ?? 'stretch',
+      }}
+    >
+      {renderChildList(buildChild, props.children)}
+    </div>
+  )
+}
 
 export const DshRowImpl = defineComponent<{
   children?: unknown
   justify?: string
   align?: string
   weight?: number
-}>(RowApi, function DshRow({ props, buildChild }) {
-  return (
-    <div
-      className={css.row}
-      style={{
-        ...weightStyle(props.weight),
-        justifyContent: JUSTIFY_MAP[props.justify ?? 'start'] ?? 'flex-start',
-        alignItems: ALIGN_MAP[props.align ?? 'center'] ?? 'center',
-      }}
-    >
-      {renderChildList(buildChild, props.children)}
-    </div>
-  )
-})
+}>(RowApi, DshRowView)
 
 export const DshColumnImpl = defineComponent<{
   children?: unknown
@@ -109,6 +165,8 @@ export const DshColumnImpl = defineComponent<{
   return (
     <div
       className={css.column}
+      data-a2ui-column=""
+      data-a2ui-weighted={props.weight !== undefined ? 'true' : undefined}
       style={{
         ...weightStyle(props.weight),
         justifyContent: JUSTIFY_MAP[props.justify ?? 'start'] ?? 'flex-start',
@@ -216,7 +274,12 @@ export const DshModalImpl = defineComponent<{
       >
         {renderChildRef(buildChild, props.trigger)}
       </div>
-      <DshModal open={open} onClose={() => setOpen(false)} title={msg.modalTitle} closeLabel={msg.modalClose}>
+      <DshModal
+        open={open}
+        onClose={() => setOpen(false)}
+        title={msg.modalTitle}
+        closeLabel={msg.modalClose}
+      >
         {renderChildRef(buildChild, props.content)}
       </DshModal>
     </div>

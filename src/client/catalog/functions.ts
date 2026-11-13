@@ -12,11 +12,18 @@
 import {
   A2uiExpressionError,
   BASIC_FUNCTIONS,
+  FormatCurrencyApi,
+  FormatDateApi,
+  FormatNumberApi,
   OpenUrlApi,
+  createFormatCurrencyImplementation,
+  createFormatDateImplementation,
+  createFormatNumberImplementation,
   createFunctionImplementation,
   type FunctionImplementation,
 } from '@a2ui/web_core/v1_0'
 import { evaluateCalcExpression } from '../../shared/calc-engine.ts'
+import { resolveClientLocale } from '../../shared/i18n.ts'
 import {
   AvgApi,
   CalcApi,
@@ -56,8 +63,9 @@ export function parseSafeExternalUrl(rawInput: unknown): string {
 export function executeSafeOpenUrl(rawInput: unknown): void {
   const href = parseSafeExternalUrl(rawInput)
   if (typeof window === 'undefined' || typeof window.open !== 'function') return
-  const activation = (globalThis.navigator as { userActivation?: { isActive?: boolean } } | undefined)
-    ?.userActivation
+  const activation = (
+    globalThis.navigator as { userActivation?: { isActive?: boolean } } | undefined
+  )?.userActivation
   if (activation !== undefined && activation.isActive === false) {
     throw new A2uiExpressionError('openUrl blocked: requires direct user gesture', 'openUrl')
   }
@@ -206,10 +214,52 @@ export const CondImplementation = createFunctionImplementation(CondApi, (args) =
   computeCond(args.condition, args.truthy, args.falsy),
 )
 
-const FILTERED_BASIC_FUNCTIONS = BASIC_FUNCTIONS.filter((fn) => fn.name !== 'openUrl')
+const fmtNumberZh = createFormatNumberImplementation('zh-CN')
+const fmtNumberEn = createFormatNumberImplementation('en-US')
+export const LocaleFormatNumberImplementation = createFunctionImplementation(
+  FormatNumberApi,
+  (args, context, abortSignal) =>
+    (resolveClientLocale() === 'zh' ? fmtNumberZh : fmtNumberEn).execute(
+      args,
+      context,
+      abortSignal,
+    ) as string,
+)
+
+const fmtCurrencyZh = createFormatCurrencyImplementation('zh-CN')
+const fmtCurrencyEn = createFormatCurrencyImplementation('en-US')
+export const LocaleFormatCurrencyImplementation = createFunctionImplementation(
+  FormatCurrencyApi,
+  (args, context, abortSignal) =>
+    (resolveClientLocale() === 'zh' ? fmtCurrencyZh : fmtCurrencyEn).execute(
+      args,
+      context,
+      abortSignal,
+    ) as string,
+)
+
+const fmtDateZh = createFormatDateImplementation('zh-CN')
+const fmtDateEn = createFormatDateImplementation('en-US')
+export const LocaleFormatDateImplementation = createFunctionImplementation(
+  FormatDateApi,
+  (args, context, abortSignal) =>
+    (resolveClientLocale() === 'zh' ? fmtDateZh : fmtDateEn).execute(
+      args,
+      context,
+      abortSignal,
+    ) as string,
+)
+
+const OVERRIDDEN_BASIC_NAMES = new Set(['openUrl', 'formatNumber', 'formatCurrency', 'formatDate'])
+const FILTERED_BASIC_FUNCTIONS = BASIC_FUNCTIONS.filter(
+  (fn) => !OVERRIDDEN_BASIC_NAMES.has(fn.name),
+)
 
 export const SAFE_BASIC_FUNCTIONS: FunctionImplList = [
   ...FILTERED_BASIC_FUNCTIONS,
+  LocaleFormatNumberImplementation,
+  LocaleFormatCurrencyImplementation,
+  LocaleFormatDateImplementation,
   SafeOpenUrlImplementation,
 ]
 

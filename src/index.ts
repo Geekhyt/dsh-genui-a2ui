@@ -44,7 +44,9 @@ export const Config = z
       .string()
       .nullable()
       .optional()
-      .describe('Optional JSON file path to persist /a2ui on|off across Host restarts (null disables)'),
+      .describe(
+        'Optional JSON file path to persist /a2ui on|off across Host restarts (null disables)',
+      ),
   })
   .default({})
 
@@ -91,7 +93,10 @@ export function writePersistedEnabled(stateFile: string | null, enabled: boolean
 }
 
 interface ToolsService {
-  register(definition: unknown, options?: { when?: (ctx: { agent?: ToolExec['agent'] }) => boolean }): () => void
+  register(
+    definition: unknown,
+    options?: { when?: (ctx: { agent?: ToolExec['agent'] }) => boolean },
+  ): () => void
   get?(name: string, scope?: unknown, toolSet?: unknown): unknown
 }
 interface PromptAssembleContext {
@@ -156,13 +161,13 @@ export const A2UI_SYSTEM_GUIDANCE = [
   '  - Use `placement="dock"` to pin a live multi-step tracker above the input across turns (refresh in place via `surface("id", update=true)`).',
   '- **In-chat modality first**: Unless the user explicitly asks to create, save, or export a standalone `.html` file or web project on disk, **always** render calculators, simulators, dashboards, and visual cards directly in chat via `a2ui_render` — never pivot to writing single-file HTML pages or running headless browser screenshots.',
   '- **Stay in concise Markdown (do NOT call `a2ui_render`)** for: single-fact lookups (one number/date/yes-no), pure conceptual/mechanism explanations ("why/how X works"), casual chat, prose writing/translation, or single-snippet code edits.',
-  '- **After `a2ui_render` succeeds**: keep your Markdown reply to a brief 1–3 sentence takeaway; never restate the card\'s numbers or table rows in prose.',
+  "- **After `a2ui_render` succeeds**: keep your Markdown reply to a brief 1–3 sentence takeaway; never restate the card's numbers or table rows in prose.",
   '- **Honesty & provenance**: without live tool/web data, present only established reference averages or illustrative figures and state the basis visibly inside the UI (e.g. `caption` or `Callout`); never fabricate live readings or claim unperformed actions.',
   '',
   '## Fast-Path A2UI Express Micro-Grammar (1-step `a2ui_render` — no skill load needed for cards or calculators)',
   'Pass raw A2UI Express in `ui` (NO `<a2ui>` tags, NO markdown fences). Start with `surface("snake_id")` (`surface("snake_id", update=true)` to update in place) and assign one entry component to `root`:',
   '- **State vs Reactive Formulas**: store mutable literal state in `$/paths` (`$/wan = 100`, `$/years = 30`, `$/mode = ["benxi"]`); assign reusable reactive formulas to **local variables WITHOUT `$/`** (`v = { w: $/wan, y: $/years, r: $/rate }`, `pmt = calc("pmt(r/1200, y*12, w*10000)", v, decimals=2)`) — NEVER assign `fn(...)` to a `$/path`. Local reactive expressions update `Stat`, `Progress`, `KeyValue` maps/arrays, and `Chart` data arrays (`[{ k: "本金", v: $/wan }, { k: "利息", v: interestWan }]`) live at 0ms!',
-  '- Layout: `Card(child)` | `Column([c1, c2, ...])` | `Row([c1, c2, ...], justify?="spaceBetween"|"start"|"end"|"center", align?="center"|"stretch")` | `Tabs([{ title: "Tab", child: c1 }, ...])` | `Accordion([{ title: "分组", subtitle?, badge?, open?=false, child: c1 }, ...], multiple?=false)` | `Divider()` — set `weight=1` ONLY on direct children of `Row` or `Column`.',
+  '- Layout: `Card(child)` | `Column([c1, c2, ...])` | `Row([c1, c2, ...], justify?="spaceBetween"|"start"|"end"|"center", align?="stretch"|"center"|"start"|"end")` | `Tabs([{ title: "Tab", child: c1 }, ...])` | `Accordion([{ title: "分组", subtitle?, badge?, open?=false, child: c1 }, ...], multiple?=false)` | `Divider()` — pass `weight=1` on equal-width peer cards/controls inside `Row([Stat(..., weight=1), ...])`; set `weight` ONLY on direct children of `Row` or `Column`.',
   '- Controls: `Slider(label, min, max, $/val, steps?)` (`min`/`max`/`steps` static numbers; `steps` = `(max - min) / stepSize`, e.g. `min=2.5, max=6.0, steps=70` for `0.05` step) | `ChoicePicker(label="...", options=[{ value: "id", label: "名称" }, ...], value=$/selectedList, variant="mutuallyExclusive"|"multipleSelection", displayStyle="chips"|"checkbox")`',
   '- Text, Metrics & Trees: `Text(text, variant?="body"|"caption"|"h1".."h5")` | `Badge(label, tone?="neutral"|"info"|"success"|"warning"|"danger")` | `Stat(label, value, delta?, trend?="up"|"down"|"neutral", caption?, spark?)` (`spark`: numeric array `[10, 14, 13, 19]`) | `KeyValue(items, title?, columns?=2, copyable?=false)` (`items`: `{ "键": valOrExpr }` or `[{ label, value, tone? }]`) | `JsonTree(data, title?, expandedDepth?=2, copyable?=true)` | `FileTree(items, title?, expandedDepth?=2, action?)` (`items`: `[{ path: "src/index.ts", status?: "added"|"modified"|"deleted"|"renamed", line?: 42, summary?: "..." }]`)',
   '- Charts, Diagrams & Workflows: `Chart(kind, data, title?, xField?, yField?, seriesField?, sizeField?, stacked?=false, horizontal?=false, zoom?=false, height?=240, action?)` (`kind`: `"bar"|"line"|"area"|"pie"|"scatter"|"radar"|"funnel"|"gauge"|"heatmap"|"treemap"|"sankey"|"boxplot"|"graph"|"candlestick"`; `heatmap`: `[{ x, y, value }]`; `sankey`/`graph`: `[{ source, target, value }]`; `boxplot`: `[{ name, values: [...] }]`; `candlestick`: `[{ date, open, close, low, high }]`) | `Mermaid(code, title?, caption?)` (`flowchart TD`/`LR`, `sequenceDiagram`, `stateDiagram-v2`, `classDiagram`, `erDiagram` — quote labels with parens/CJK punctuation like `A["网关 (Gateway)"]`) | `Table(rows, columns?, title?, searchable?=false, pageSize?=10, action?)` (`action=Event("drill_down")`) | `Steps(items, current?, direction?="vertical"|"horizontal", title?)` | `DiffView(before, after, title?, language?, mode?="unified"|"split", filePath?, line?)` | `Callout(title, message?, tone?="info"|"success"|"warning"|"danger", collapsible?=false, child?)` | `Progress(value, max?=100, label?, tone?="brand"|"success"|"warning"|"danger")` | `Code(code, language?="text", lineNumbers?=false, title?, filePath?, line?)` (`filePath` opens file in DSH right sidebar)',
@@ -295,7 +300,11 @@ export function apply(ctx: Context, config: Config = {}): void {
           text: ({ scope, toolSet }) => {
             const agent = scope as ToolExec['agent'] | undefined
             if (!isEnabledForStep({ agent })) return ''
-            if (tools && typeof tools.get === 'function' && tools.get(RENDER_TOOL, scope, toolSet) === undefined) {
+            if (
+              tools &&
+              typeof tools.get === 'function' &&
+              tools.get(RENDER_TOOL, scope, toolSet) === undefined
+            ) {
               return ''
             }
             return A2UI_SYSTEM_GUIDANCE
@@ -390,9 +399,12 @@ export function apply(ctx: Context, config: Config = {}): void {
     )
   })
 
-  ctx.on('session/disposed' as never, ((session: { id: unknown }) => {
-    const sid = String(session.id)
-    sessions.forget(sid)
-    asks.forgetSession(sid)
-  }) as never)
+  ctx.on(
+    'session/disposed' as never,
+    ((session: { id: unknown }) => {
+      const sid = String(session.id)
+      sessions.forget(sid)
+      asks.forgetSession(sid)
+    }) as never,
+  )
 }

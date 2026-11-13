@@ -42,6 +42,7 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
   const msg = useRuntimeMessages()
   const [chunk, setChunk] = useState<EchartsChunkModule | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [containerWidth, setContainerWidth] = useState<number | undefined>(undefined)
   const hostRef = useRef<HTMLDivElement | null>(null)
   const chartRef = useRef<ReturnType<EchartsChunkModule['initChartInstance']> | null>(null)
   const actionRef = useRef(props.action)
@@ -79,8 +80,8 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
 
   const option = useMemo(() => {
     if (!chunk) return null
-    return chunk.buildChartOption(props, dark)
-  }, [chunk, props, dark])
+    return chunk.buildChartOption(props, dark, containerWidth)
+  }, [chunk, props, dark, containerWidth])
 
   const height = Math.min(640, Math.max(140, props.height ?? 260))
 
@@ -88,6 +89,8 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
     if (!chunk) return
     const el = hostRef.current
     if (!el) return
+    const initialW = Math.round(el.clientWidth)
+    if (initialW > 0) setContainerWidth(initialW)
     const instance = chunk.initChartInstance(el)
     chartRef.current = instance
 
@@ -127,6 +130,15 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
     const ro =
       typeof ResizeObserver !== 'undefined'
         ? new ResizeObserver(() => {
+            const nextW = Math.round(el.clientWidth)
+            if (nextW > 0) {
+              setContainerWidth((prev) => {
+                if (prev === undefined) return nextW
+                const crossedCompact = prev < 400 !== nextW < 400
+                if (crossedCompact || Math.abs(nextW - prev) >= 16) return nextW
+                return prev
+              })
+            }
             instance.resize()
           })
         : null

@@ -89,9 +89,9 @@ flowchart TB
 | :--- | :--- | :--- | :--- |
 | `lib/client.js` | **`53.3 kB`** | **`15.0 kB`** | Cold-boot shell: registers UI Slots, bilingual chrome, and composer pill (enforced by `< 500 kB` build & test gate). |
 | `lib/client.runtime.js` | `1.05 MB` | ~`289 kB` | Loaded on first A2UI surface mount (`@a2ui/react`, 32-component catalog, TanStack Table, React Aria). |
-| `lib/client.echarts.js` | `782.0 kB` | `258.7 kB` | Loaded only when a surface renders `Chart` (ECharts 6 modular registration for 14 chart kinds). |
+| `lib/client.echarts.js` | `782.8 kB` | `259.0 kB` | Loaded only when a surface renders `Chart` (ECharts 6 modular registration for 14 chart kinds). |
 | `lib/client.mermaid.js` | `3.51 MB` | ~`943 kB` | Loaded only when a surface renders `Mermaid` (Mermaid 11 under `securityLevel: "strict"` + SVG sanitizer). |
-| `lib/index.js` | `689.6 kB` | `187.9 kB` | Self-contained Host ESM bundle (`@a2ui/agent` + Zod catalog) — ships with zero runtime `dependencies`. |
+| `lib/index.js` | `689.8 kB` | `187.9 kB` | Self-contained Host ESM bundle (`@a2ui/agent` + Zod catalog) — ships with zero runtime `dependencies`. |
 
 ---
 
@@ -210,7 +210,7 @@ npm run typecheck
 # Build Host ESM + 4 Client CJS chunks (enforces cold-boot size gate)
 npm run build
 
-# Run all 49 Vitest unit, governance, prompt, and bundle tests
+# Run all 50 Vitest unit, governance, prompt, and bundle tests
 npm test
 
 # Verify compatibility against installed DeepSeek Harness.app platform exports & slots
