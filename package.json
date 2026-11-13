@@ -33,6 +33,7 @@
     "assets",
     "docs/DEVELOPMENT.md",
     "docs/DEVELOPMENT.zh-CN.md",
+    "docs/dsh-genui-a2ui-component-library.html",
     "locale/*.json",
     "README.md",
     "README.en.md",

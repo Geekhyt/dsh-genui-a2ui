@@ -1,6 +1,6 @@
 # dsh-genui-a2ui
 
-[简体中文](./README.md) | **English** | [Interactive component handbook](https://geekhyt.github.io/dsh-genui-a2ui/) | [Developer and architecture guide](./docs/DEVELOPMENT.md)
+[简体中文](./README.md) | **English** | [Offline component handbook](./docs/dsh-genui-a2ui-component-library.html) | [Developer and architecture guide](./docs/DEVELOPMENT.md)
 
 **Don't just chat. Let AI speak in interfaces.**
 
@@ -82,6 +82,6 @@ Includes 32 native UI components, 14 interactive chart types, and full Mermaid d
 ## Documentation and license
 
 - [Developer and architecture guide (English)](./docs/DEVELOPMENT.md) | [开发与架构文档（简体中文）](./docs/DEVELOPMENT.zh-CN.md)
-- [Interactive component handbook](https://geekhyt.github.io/dsh-genui-a2ui/) (offline file: [docs/dsh-genui-a2ui-component-library.html](./docs/dsh-genui-a2ui-component-library.html))
+- [Interactive component handbook (offline single-file HTML, download and open in browser)](./docs/dsh-genui-a2ui-component-library.html)
 - [Contributing guide](./CONTRIBUTING.md) | [Security policy](./SECURITY.md) | [Changelog](./CHANGELOG.md)
 - Released under the [MIT License](./LICENSE). See [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) for third-party open-source notices.

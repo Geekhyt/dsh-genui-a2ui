@@ -1,6 +1,6 @@
 # dsh-genui-a2ui
 
-**简体中文** | [English](./README.en.md) | [交互式组件手册](https://geekhyt.github.io/dsh-genui-a2ui/) | [开发与架构文档](./docs/DEVELOPMENT.zh-CN.md)
+**简体中文** | [English](./README.en.md) | [离线组件手册](./docs/dsh-genui-a2ui-component-library.html) | [开发与架构文档](./docs/DEVELOPMENT.zh-CN.md)
 
 **别只靠文字聊天，让 AI 直接用界面与你沟通。**
 
@@ -82,6 +82,6 @@ dsh plugin --profile desktop add dsh-genui-a2ui
 ## 文档与许可
 
 - [开发与架构文档（简体中文）](./docs/DEVELOPMENT.zh-CN.md) | [Developer and architecture guide (English)](./docs/DEVELOPMENT.md)
-- [交互式组件手册](https://geekhyt.github.io/dsh-genui-a2ui/)（离线版见 [docs/dsh-genui-a2ui-component-library.html](./docs/dsh-genui-a2ui-component-library.html)）
+- [交互式组件手册（离线单文件 HTML，下载后用浏览器直接打开）](./docs/dsh-genui-a2ui-component-library.html)
 - [贡献指南](./CONTRIBUTING.md) | [安全策略](./SECURITY.md) | [更新日志](./CHANGELOG.md)
 - 基于 [MIT License](./LICENSE) 开源，第三方开源依赖声明见 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md)。
