@@ -1,0 +1,121 @@
+{
+  "name": "dsh-genui-a2ui",
+  "version": "0.1.0",
+  "description": "Turn DeepSeek Harness conversations into interactive dashboards, 14 chart types, Mermaid diagrams, instant what-if calculators, code diff review gates, and live task trackers.",
+  "license": "MIT",
+  "author": "Geekhyt",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Geekhyt/dsh-genui-a2ui.git"
+  },
+  "homepage": "https://github.com/Geekhyt/dsh-genui-a2ui#readme",
+  "bugs": {
+    "url": "https://github.com/Geekhyt/dsh-genui-a2ui/issues"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "icon": "./assets/icon.svg",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./icon": "./assets/icon.svg",
+    "./locale/*.json": "./locale/*.json",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/client.js",
+    "lib/client.runtime.js",
+    "lib/client.echarts.js",
+    "lib/client.mermaid.js",
+    "cordis.patch.yml",
+    "assets",
+    "docs/DEVELOPMENT.md",
+    "docs/DEVELOPMENT.zh-CN.md",
+    "locale/*.json",
+    "README.md",
+    "README.zh-CN.md",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md"
+  ],
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "dsh",
+    "genui",
+    "a2ui",
+    "generative-ui",
+    "agent-ui",
+    "echarts",
+    "mermaid"
+  ],
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "NODE_OPTIONS='--experimental-strip-types --no-warnings' tsdown --config-loader native",
+    "prepack": "npm run build",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "check:host-api": "node scripts/check-host-api.mjs",
+    "dev:env": "node scripts/dev-env.mjs",
+    "dev:mock": "node scripts/mock-llm.mjs"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-api-session-controller",
+        "@deepseek-ai/dsh-client-ui-tool",
+        "@deepseek-ai/dsh-client-ui-chat",
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-slots",
+        "@deepseek-ai/dsh-client-ui-primitives",
+        "@deepseek-ai/dsh-client-ui-sidebar-right"
+      ],
+      "platform": "web"
+    }
+  },
+  "overrides": {
+    "@a2ui/markdown-it": {
+      "@a2ui/web_core": "$@a2ui/web_core"
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh": ">=0.2.0-0",
+    "react": "^18.2.0 || ^19.0.0",
+    "react-dom": "^18.2.0 || ^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/dsh": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@a2ui/agent": "0.1.0",
+    "@a2ui/react": "0.15.0",
+    "@a2ui/web_core": "0.15.0",
+    "@deepseek-ai/cordis": "^4.1.0",
+    "@tanstack/react-table": "^9.3.1",
+    "@types/node": "^22.20.5",
+    "@types/react": "~18.3.1",
+    "@types/react-dom": "~18.3.1",
+    "echarts": "^6.1.0",
+    "lightningcss": "^1.32.0",
+    "mermaid": "^11.13.0",
+    "react": "18.3.1",
+    "react-aria-components": "^1.22.1",
+    "react-dom": "18.3.1",
+    "tsdown": "0.22.14",
+    "typescript": "^5.9.3",
+    "vitest": "4.1.10",
+    "zod": "^3.25.76"
+  }
+}

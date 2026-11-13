@@ -1,0 +1,18 @@
+# Overlay patch for isolated local verification (`DSH_HOME=.dsh-dev`).
+# Routes default model traffic to `scripts/mock-llm.mjs` without touching `~/.dsh`.
+- id: llm-pi-ai
+  config:
+    providers:
+      mock-a2ui:
+        displayName: Mock A2UI
+        apiKeyEnv: MOCK_A2UI_API_KEY
+        api: openai-completions
+        baseURL: http://127.0.0.1:18991/v1
+        models:
+          - id: mock-a2ui-1
+            name: Mock A2UI 1.0
+            contextWindow: 128000
+- id: agent-default-model
+  config:
+    provider: mock-a2ui
+    model: mock-a2ui-1

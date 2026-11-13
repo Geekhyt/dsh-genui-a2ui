@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "dsh-genui-a2ui",
+    "description": "让 DeepSeek Harness 直接在对话中生成交互式数据看板、14 种动态图表、Mermaid 架构图、实时参数测算器、双栏代码对比审批单与常驻任务进度台。",
+    "detail": "README.zh-CN.md"
+  }
+}

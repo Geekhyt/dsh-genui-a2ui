@@ -1,0 +1,6 @@
+# dsh-genui-a2ui bundle for DeepSeek Harness.
+# Install: dsh plugin --profile desktop add dsh-genui-a2ui
+- insert:
+    - id: a2ui
+      name: dsh-genui-a2ui
+      config: {}

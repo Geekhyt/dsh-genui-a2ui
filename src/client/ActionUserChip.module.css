@@ -1,0 +1,84 @@
+.wrapper {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  max-width: 100%;
+  vertical-align: middle;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--dsw-radius-md, 8px);
+  background: color-mix(in srgb, var(--dsw-alias-brand-primary, #4d6bfe) 11%, var(--dsw-alias-bg-layer-2, transparent));
+  border: 0.5px solid color-mix(in srgb, var(--dsw-alias-brand-primary, #4d6bfe) 32%, var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.25)));
+  color: var(--dsw-alias-label-primary, inherit);
+  font-size: 13px;
+  line-height: 20px;
+  max-width: 100%;
+}
+
+.iconBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--dsw-alias-brand-primary, #4d6bfe);
+  color: var(--dsw-alias-label-primary-inverted, #ffffff);
+  flex: none;
+}
+
+.label {
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary, inherit);
+}
+
+.surfaceTag {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: var(--dsw-radius-sm, 4px);
+  background: var(--dsw-alias-interactive-bg-hover, rgba(128, 128, 128, 0.12));
+  color: var(--dsw-alias-label-secondary, inherit);
+  font-family: var(--dsw-font-family-mono, ui-monospace, monospace);
+}
+
+.toggleBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px 6px;
+  border: none;
+  border-radius: var(--dsw-radius-sm, 4px);
+  background: transparent;
+  color: var(--dsw-alias-link, var(--dsw-alias-brand-primary, #4d6bfe));
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.toggleBtn:hover {
+  background: var(--dsw-alias-interactive-bg-hover, rgba(128, 128, 128, 0.1));
+}
+
+.detailPane {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 520px;
+  padding: 8px 10px;
+  border-radius: var(--dsw-radius-md, 8px);
+  background: var(--dsw-alias-bg-layer-1, rgba(0, 0, 0, 0.04));
+  border: 0.5px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.2));
+  color: var(--dsw-alias-label-secondary, inherit);
+  font-family: var(--dsw-font-family-mono, ui-monospace, monospace);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

@@ -1,0 +1,101 @@
+.root {
+  box-sizing: border-box;
+  width: calc(
+    100% - var(--dsh-composer-side-clearance, 16px) * 2 - var(--dsh-composer-dock-inset, 8px) * 4
+  );
+  max-width: calc(var(--dsh-composer-card-max-width, 800px) - var(--dsh-composer-dock-inset, 8px) * 4);
+  --dsw-elevation-stroke-color: var(--dsw-alias-border-l1, rgba(128, 128, 128, 0.22));
+  border-radius: var(--dsw-radius-lg, 12px);
+  background: var(--dsw-specific-menu, var(--dsw-alias-bg-layer-1, #f7f8fa));
+  backdrop-filter: var(--dsw-menu-backdrop-filter, none);
+  box-shadow: var(--dsw-elevation-panel, 0 4px 16px rgba(0, 0, 0, 0.08));
+  border: 0.5px solid var(--dsw-alias-border-l1, rgba(128, 128, 128, 0.18));
+  flex: none;
+  margin: 0 auto 6px;
+  overflow: hidden;
+  font-family: var(--dsw-font-family, inherit);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px 6px 12px;
+  min-height: 34px;
+}
+
+.toggleBtn {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--dsw-alias-label-primary, inherit);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.leadIcon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--dsw-alias-brand-primary, #4d6bfe);
+  flex: none;
+}
+
+.title {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 20px;
+  color: var(--dsw-alias-label-primary, inherit);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tag {
+  flex: none;
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: var(--dsw-radius-sm, 4px);
+  background: color-mix(in srgb, var(--dsw-alias-brand-primary, #4d6bfe) 12%, transparent);
+  color: var(--dsw-alias-brand-primary, #4d6bfe);
+}
+
+.actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+
+.iconBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: var(--dsw-radius-sm, 6px);
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary, #8f959e);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.iconBtn:hover {
+  background: var(--dsw-alias-interactive-bg-hover, rgba(128, 128, 128, 0.12));
+  color: var(--dsw-alias-label-primary, inherit);
+}
+
+.body {
+  padding: 2px 14px 12px;
+  max-height: 300px;
+  overflow-y: auto;
+  border-top: 0.5px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.14));
+}

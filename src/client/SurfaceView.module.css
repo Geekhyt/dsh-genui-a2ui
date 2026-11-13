@@ -1,0 +1,191 @@
+.card {
+  /* Map A2UI v1.0 CSS custom properties onto DSH `--dsw-*` design tokens */
+  --a2ui-color-background: var(--dsw-alias-bg-base, #ffffff);
+  --a2ui-color-on-background: var(--dsw-alias-label-primary, #1f2329);
+  --a2ui-color-surface: var(--dsw-alias-bg-layer-1, #f7f8fa);
+  --a2ui-color-on-surface: var(--dsw-alias-label-primary, #1f2329);
+  --a2ui-color-primary: var(--dsw-alias-brand-primary, #4d6bfe);
+  --a2ui-color-on-primary: var(--dsw-alias-label-primary-inverted, #ffffff);
+  --a2ui-color-secondary: var(--dsw-alias-interactive-bg-hover, rgba(0, 0, 0, 0.05));
+  --a2ui-color-on-secondary: var(--dsw-alias-label-primary, #1f2329);
+  --a2ui-color-border: var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.1));
+  --a2ui-border-radius: var(--dsw-radius-md, 8px);
+  --a2ui-border-width: 0.5px;
+  --a2ui-border: 0.5px solid var(--a2ui-color-border);
+  --a2ui-color-input: var(--dsw-alias-bg-base, #ffffff);
+  --a2ui-color-on-input: var(--dsw-alias-label-primary, #1f2329);
+  --a2ui-font-family-title: var(--dsw-font-family, inherit);
+  --a2ui-font-family-monospace: var(--dsw-font-family-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  --a2ui-font-size: var(--dsh-content-font-size, 14px);
+
+  box-sizing: border-box;
+  border: 0.5px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.1));
+  border-radius: var(--dsw-radius-lg, 12px);
+  background: var(--dsw-alias-bg-layer-1, #f7f8fa);
+  color: var(--dsw-alias-label-primary, #1f2329);
+  font-family: var(--dsw-font-family, inherit);
+  font-size: var(--dsh-content-font-size, 14px);
+  line-height: 1.55;
+  margin: 8px 0;
+  padding: 14px 16px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.bare {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  margin: 0;
+  padding: 4px 0 2px;
+}
+
+.cardReadOnly {
+  border-style: dashed;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--dsw-alias-label-tertiary, #8f959e);
+}
+
+.headerRight {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+.title {
+  font-weight: 500;
+  color: var(--dsw-alias-label-secondary, #646a73);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.badge {
+  flex: none;
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: var(--dsw-radius-sm, 4px);
+  background: var(--dsw-alias-interactive-bg-hover, rgba(0, 0, 0, 0.05));
+  color: var(--dsw-alias-label-tertiary, #8f959e);
+}
+
+.badgeAccent {
+  flex: none;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: var(--dsw-radius-sm, 4px);
+  background: color-mix(in srgb, var(--dsw-alias-brand-primary, #4d6bfe) 14%, transparent);
+  color: var(--dsw-alias-brand-primary, #4d6bfe);
+}
+
+.surfaceStack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.surfaceStackReadOnly {
+  opacity: 0.76;
+  pointer-events: none;
+  user-select: text;
+}
+
+.skeleton {
+  color: var(--dsw-alias-label-tertiary, #8f959e);
+  font-size: 12px;
+  padding: 6px 0;
+}
+
+@keyframes a2uiShimmer {
+  0% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 0.85;
+  }
+  100% {
+    opacity: 0.45;
+  }
+}
+
+.skeletonWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px 0 2px;
+}
+
+.skeletonKpiRow {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.skeletonBlock {
+  height: 52px;
+  border-radius: var(--dsw-radius-md, 8px);
+  background: var(--dsw-alias-interactive-bg-hover, rgba(128, 128, 128, 0.1));
+  animation: a2uiShimmer 1.4s ease-in-out infinite;
+}
+
+.skeletonChart {
+  height: 112px;
+  border-radius: var(--dsw-radius-md, 8px);
+  background: var(--dsw-alias-interactive-bg-hover, rgba(128, 128, 128, 0.08));
+  animation: a2uiShimmer 1.4s ease-in-out 0.18s infinite;
+}
+
+.skeletonHint {
+  color: var(--dsw-alias-label-tertiary, #8f959e);
+  font-size: 11.5px;
+}
+
+.rowSummary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 8px;
+  min-width: 0;
+  font-size: 12px;
+  color: inherit;
+}
+
+.rowTitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reason {
+  margin: 8px 0 4px;
+  padding: 10px 12px;
+  border-radius: var(--dsw-radius-md, 8px);
+  background: var(--dsw-alias-bg-layer-1, rgba(0, 0, 0, 0.03));
+  color: var(--dsw-alias-label-secondary, #646a73);
+  font-family: var(--dsw-font-family-mono, ui-monospace, monospace);
+  font-size: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.inspectBtn {
+  background: none;
+  border: none;
+  padding: 2px 0;
+  font: inherit;
+  font-size: 12px;
+  color: var(--dsw-alias-link, #4d6bfe);
+  cursor: pointer;
+}
