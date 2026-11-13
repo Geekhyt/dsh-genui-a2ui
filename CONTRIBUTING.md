@@ -19,10 +19,10 @@ To keep the plugin fast, safe, and 100% aligned with both **Google A2UI 1.0** an
 ## Local Development Workflow
 
 ```bash
-# 1. Install dependencies
-npm install
+# 1. Install dependencies from lockfile
+npm ci
 
-# 2. Typecheck, build all 5 targets, and run the 43-test suite
+# 2. Typecheck, build all 5 targets, and run the 45-test suite
 npm run typecheck
 npm run build
 npm test
@@ -40,4 +40,4 @@ node scripts/dev-env.mjs serve
 - [ ] `npm run typecheck` passes with 0 errors.
 - [ ] `npm run build` succeeds and keeps `lib/client.js` well below the cold-boot budget.
 - [ ] `npm test` passes (`tests/*.spec.ts`), including tests covering any new component, formula, or prompt rule.
-- [ ] Both `README.md` and `README.zh-CN.md` reflect user-visible catalog or command changes.
+- [ ] Both `README.md` (Chinese) and `README.en.md` (English) reflect user-visible catalog or command changes.

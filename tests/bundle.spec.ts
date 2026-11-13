@@ -172,4 +172,24 @@ describe('Spike 1 & Dynamic Chunk Architecture: DSH bundle purity & <500 kB gate
     },
     15_000,
   )
+
+  it('keeps every locale/*.json detail markdown present on disk and listed in package.json files', () => {
+    const rootDir = resolve(import.meta.dirname, '..')
+    const localeDir = join(rootDir, 'locale')
+    const pkg = JSON.parse(readFileSync(PKG_PATH, 'utf8')) as { files: string[] }
+    const localeFiles = readdirSync(localeDir).filter((f) => f.endsWith('.json'))
+    expect(localeFiles.length).toBeGreaterThanOrEqual(3)
+
+    for (const localeFile of localeFiles) {
+      const parsed = JSON.parse(readFileSync(join(localeDir, localeFile), 'utf8')) as {
+        meta?: { title?: string; description?: string; detail?: string }
+      }
+      expect(parsed.meta?.title).toBe('dsh-genui-a2ui')
+      expect(parsed.meta?.description?.length).toBeGreaterThan(20)
+      const detail = parsed.meta?.detail
+      expect(typeof detail).toBe('string')
+      expect(existsSync(join(rootDir, detail!))).toBe(true)
+      expect(pkg.files).toContain(detail)
+    }
+  })
 })

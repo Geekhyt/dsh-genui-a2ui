@@ -1,0 +1,31 @@
+name: Bug 反馈 / Bug Report
+description: 反馈渲染异常、编译报错或宿主兼容性问题 / Report a rendering, compiler, or DSH compatibility issue
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: 问题描述 / What happened?
+      description: 简要说明实际表现与预期表现的差异。
+      placeholder: 例如：在深色主题下某组件文字对比度异常，或某段 Express 源码触发了意外报错。
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: 最小复现步骤或 Express 片段 / Minimal Reproduction
+      description: 附上触发问题的提示词或最小 A2UI Express 代码片段（注意脱敏）。
+      render: text
+    validations:
+      required: false
+
+  - type: input
+    id: env
+    attributes:
+      label: 运行环境 / Environment
+      description: DeepSeek Harness 版本、插件版本与操作系统。
+      placeholder: "DeepSeek Harness v0.2.2, dsh-genui-a2ui v0.1.0, macOS 15"
+    validations:
+      required: true

@@ -1,6 +1,6 @@
 # 开发与技术架构文档（`dsh-genui-a2ui`）
 
-[English](./DEVELOPMENT.md) | **简体中文** | [返回产品主页 README](../README.zh-CN.md)
+[English](./DEVELOPMENT.md) | **简体中文** | [返回产品主页 README](../README.md)
 
 本文档面向插件开发者、架构评审者与社区贡献者，详细介绍 `dsh-genui-a2ui` 的三阶段运行机制、**Google A2UI 1.0** 协议落地规范、**DeepSeek Harness（DSH）** 零 Hack 官方扩展点映射、四分包体积预算、**32 组件 Express DSL 语法契约**以及本地调试测试流程。
 
@@ -36,7 +36,8 @@
 | 架构分层 | 使用的 DSH 官方公开扩展接口 | 在 `dsh-genui-a2ui` 中的职责 |
 | :--- | :--- | :--- |
 | **Host 服务层** | Cordis `tools`、`skills`、`commands`、`systemPrompt` | 注册 `a2ui_render`、`a2ui_ask`、`skill("a2ui")`、`/a2ui`、`/a2ui-answer` 与系统提示词引导。 |
-| **Client 槽位层** | `tool-call-renderer`、`chat-TurnFooter`、`conversation-QuestionDock`、`chat-InputHeader` | 挂载步骤内嵌卡片、回合主视图、常驻底部工作台、回合内阻塞审批台以及输入框顶部胶囊开关。 |
+| **Client 槽位层** | `tool.call.toolview`、`conversation.chat.turnTail`、`conversation.input.dock`、`conversation.input.left`、`conversation.user.text.node` | 挂载步骤内流式卡片、回合尾部主视图、常驻底部工作台、回合内阻塞确认台、输入框左侧胶囊开关及动作回执芯片。 |
+| **会话投影服务** | `uiConversation.events.register`、`uiConversation.userText.register` | 将已完成的 `a2ui_render` 投影为支持历史回放与会话分叉的回合索引状态，并美化 `[a2ui-action]` 用户消息。 |
 | **共享 UI 原语** | `@deepseek-ai/dsh-client-ui-primitives` | 直接复用宿主原生 `JsonTree`、按钮原语与 `--dsw-*` 语义样式变量。 |
 | **右侧边栏联动** | `@deepseek-ai/dsh-client-ui-sidebar-right` | 在 `FileTree`、`DiffView`、`Code` 中调用 `sidebarRight.openResource` 打开真实文件并定位行号。 |
 | **客户端按需分包** | `window.__ModuleLoader__.load({ id: "dsh-genui-a2ui", entry })` | 按需动态加载界面运行时、ECharts 图表引擎与 Mermaid 引擎。 |
@@ -45,11 +46,11 @@
 
 | 构建产物 | 原始体积 | Gzip 体积 | 职责与加载触发时机 |
 | :--- | :--- | :--- | :--- |
-| `lib/client.js` | **`45.7 kB`** | **`12.5 kB`** | 首屏冷启动轻量壳：仅注册 UI Slots 与顶部开关胶囊（构建与单测双重强制 `< 500 kB` 硬门禁）。 |
+| `lib/client.js` | **`45.9 kB`** | **`12.6 kB`** | 首屏冷启动轻量壳：仅注册 UI Slots 与顶部开关胶囊（构建与单测双重强制 `< 500 kB` 硬门禁）。 |
 | `lib/client.runtime.js` | `1.03 MB` | ~`310 kB` | 仅当对话中真正挂载 A2UI 卡片时才加载（含 `@a2ui/react`、32 组件目录、TanStack Table）。 |
 | `lib/client.echarts.js` | `777.6 kB` | `256.5 kB` | 仅当卡片使用 `Chart` 组件时按需加载 ECharts 6（按需注册 14 类图表模块）。 |
 | `lib/client.mermaid.js` | `3.12 MB` | ~`940 kB` | 仅当卡片使用 `Mermaid` 组件时按需加载 Mermaid 11（强制 `securityLevel: "strict"` + SVG 净化）。 |
-| `lib/index.js` | `687.1 kB` | `186.9 kB` | 自包含 Host ESM 产物（打包 `@a2ui/agent` 与同构 Zod 契约），用户安装时零运行时 npm 依赖。 |
+| `lib/index.js` | `688.8 kB` | `187.4 kB` | 自包含 Host ESM 产物（打包 `@a2ui/agent` 与同构 Zod 契约），用户安装时零运行时 npm 依赖。 |
 
 ---
 
@@ -59,10 +60,10 @@
 
 | 模式 | 调用方式 | DSH 官方 UI Slot | 生命周期与交互机制 |
 | :--- | :--- | :--- | :--- |
-| **Spotlight（默认）** | `a2ui_render({ ui, placement: "answer" })` | `chat-TurnFooter` | 挂载于回合尾部；最新回合可交互，被后续回合更新后自动转为只读历史快照。 |
-| **Inline** | `a2ui_render({ ui, placement: "inline" })` | `tool-call-renderer` | 紧凑嵌入在工具步骤行内部。 |
-| **Persistent Dock** | `a2ui_render({ ui, placement: "dock" })` | `conversation-QuestionDock` | 常驻固定于输入框上方，跨轮次通过 `surface("id", update=true)` 原地刷新。 |
-| **Blocking Ask** | `a2ui_ask({ ui, title })` | `conversation-QuestionDock` | 挂起当前工具调用直至用户提交或跳过，通过内部命令 `/a2ui-answer` 在同一回合内恢复执行。 |
+| **Spotlight（默认）** | `a2ui_render({ ui, placement: "answer" })` | `conversation.chat.turnTail` | 挂载于回合尾部；最新回合可交互，被后续回合更新后自动转为只读历史快照。 |
+| **Inline** | `a2ui_render({ ui, placement: "inline" })` | `tool.call.toolview` | 紧凑嵌入在工具步骤行内部（生成期间在步骤行内 60fps 流式渐进上屏）。 |
+| **Persistent Dock** | `a2ui_render({ ui, placement: "dock" })` | `conversation.input.dock` | 常驻固定于输入框上方，跨轮次通过 `surface("id", update=true)` 原地刷新。 |
+| **Blocking Ask** | `a2ui_ask({ ui, title })` | `conversation.input.dock` + `tool.call.toolview` | 挂起当前工具调用直至用户提交或跳过，通过内部命令 `/a2ui-answer` 在同一回合内恢复执行。 |
 
 ### Host 边界安全阈值（`A2UI_LIMITS`）
 
@@ -168,7 +169,7 @@ npm run typecheck
 # 构建 Host ESM + 4 个 Client 分包（自动校验首屏 < 500 kB 门禁）
 npm run build
 
-# 运行全部 43 项单元、契约、提示词与分包门禁测试
+# 运行全部 45 项单元、契约、提示词与分包门禁测试
 npm test
 
 # 核验与本机 DeepSeek Harness.app 内部模块及 Slots 的契约兼容性
@@ -186,8 +187,8 @@ node scripts/dev-env.mjs serve
 
 - `src/index.ts` —— Host 端 Cordis 插件入口（注册工具、Skill、命令与系统提示词切片）
 - `src/host/` —— `a2ui_render`、`a2ui_ask`、`SurfaceSessions` 编译器与自愈诊断逻辑
-- `src/shared/` —— 前后端同构 `dshSchemaCatalog`、`calc` 公式解析器与常量定义
-- `src/client/index.ts` —— `45.7 kB` 首屏冷启动轻量壳与输入框胶囊开关
+- `src/shared/` —— 前后端同构 `dshSchemaCatalog`、跨端协议类型 `wire-types.ts`、`calc` 公式解析器与常量定义
+- `src/client/index.ts` —— `45.9 kB` 首屏冷启动轻量壳与输入框胶囊开关
 - `src/client/chunks/` —— 按需加载分包入口（`runtime-chunk.ts`、`echarts-chunk.ts`、`mermaid-chunk.ts`）
 - `src/client/catalog/` —— 32 个 Light-DOM 原生组件与 23 个客户端函数的具体实现
 - `build/` —— `tsdown` 五目标构建预设与 DSH 宿主模块外部化配置

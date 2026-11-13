@@ -1,0 +1,21 @@
+name: 功能建议 / Feature Request
+description: 提议新的受控组件、图表类型或交互能力 / Propose a new catalog component, chart kind, or workflow
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 使用场景 / Use Case
+      description: 你希望在 DeepSeek Harness 对话中解决什么交互或可视化需求？
+      placeholder: 例如：希望在 Table 组件中支持导出 CSV 按钮。
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 期望的组件签名或交互行为 / Proposed Design
+      description: 如果已有初步的 A2UI Express 参数设想，欢迎直接写在这里。
+    validations:
+      required: false

@@ -1,0 +1,25 @@
+# 安全策略 / Security Policy
+
+## 支持版本 / Supported Versions
+
+| Version | Supported |
+| :--- | :--- |
+| `0.1.x` | Yes |
+
+## 安全边界设计 / Security Model
+
+`dsh-genui-a2ui` 在协议层与实现层内置多层安全隔离，确保大模型输出不会导致任意代码执行或敏感数据泄漏：
+
+1. **纯数据声明（Data, Not Code）**：遵循 Google A2UI 1.0 规范，前后端之间仅传输结构化 JSON 消息，不渲染模型生成的原始 HTML，不挂载外部 `iframe`，也不执行 `eval` 或 `new Function`。
+2. **同构白名单校验（`dshSchemaCatalog`）**：仅允许实例化通过 Zod 严格校验的 32 种受控组件与 23 个客户端函数，未知组件名与非法参数会在编译期与渲染期双重拦截。
+3. **资源上限与公式静态审计（`A2UI_LIMITS`）**：单次调用限制字符数（`64,000`）、Surface 数量（`8`）、单 Surface 节点数（`250`）与数据模型体积（`256 KB`）；`calc()` 采用自定义递归下降解析器并限制最大 AST 深度（`36`）与节点数（`128`）。
+4. **URL 协议白名单与 Mermaid 严格沙箱**：`Image`、`AudioPlayer`、`Video` 与 `openUrl` 严格过滤 `javascript:`、`vbscript:`、`file:` 等危险协议；`Mermaid` 强制运行于 `securityLevel: "strict"` 并对生成的 SVG 进行二次节点与属性净化。
+5. **敏感字段过滤**：本地表单草稿缓存与回传快照会自动剔除匹配密码、密钥、Token 等敏感命名模式的字段。
+
+## 报告安全漏洞 / Reporting a Vulnerability
+
+请勿在公开 Issue 中披露未修复的安全漏洞。请直接通过 GitHub 私密安全通告提交报告：
+
+https://github.com/Geekhyt/dsh-genui-a2ui/security/advisories/new
+
+请在报告中附上复现最小 A2UI Express 片段、DeepSeek Harness 版本与操作系统信息。我们会在收到报告后尽快确认并推进修复。

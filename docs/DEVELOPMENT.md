@@ -1,6 +1,6 @@
 # Developer & Architecture Guide (`dsh-genui-a2ui`)
 
-**English** | [简体中文](./DEVELOPMENT.zh-CN.md) | [Back to Product README](../README.md)
+**English** | [简体中文](./DEVELOPMENT.zh-CN.md) | [Back to Product README](../README.en.md)
 
 This document covers the technical architecture, **Google A2UI 1.0** protocol compliance, **DeepSeek Harness (DSH)** official extension seams, bundle code-splitting budgets, complete **A2UI Express DSL** contracts, and local verification workflows for `dsh-genui-a2ui`.
 
@@ -36,7 +36,8 @@ This document covers the technical architecture, **Google A2UI 1.0** protocol co
 | Layer | Official DSH Extension Seam | Usage in `dsh-genui-a2ui` |
 | :--- | :--- | :--- |
 | **Host Services** | Cordis `tools`, `skills`, `commands`, `systemPrompt` | Registers `a2ui_render`, `a2ui_ask`, `skill("a2ui")`, `/a2ui`, `/a2ui-answer`, and `tool:a2ui` prompt guidance. |
-| **Client UI Slots** | `tool-call-renderer`, `chat-TurnFooter`, `conversation-QuestionDock`, `chat-InputHeader` | Renders inline step cards, spotlight deliverables, persistent docks, blocking approval wizards, and the composer toggle pill. |
+| **Client UI Slots** | `tool.call.toolview`, `conversation.chat.turnTail`, `conversation.input.dock`, `conversation.input.left`, `conversation.user.text.node` | Renders inline streaming cards, turn-tail spotlight deliverables, persistent docks, blocking approval wizards, the composer toggle pill, and `[a2ui-action]` receipt chips. |
+| **Conversation Projections** | `uiConversation.events.register`, `uiConversation.userText.register` | Projects settled `a2ui_render` surfaces into replay-safe, fork-safe turn metadata and formats `[a2ui-action]` user messages. |
 | **Shared UI Primitives** | `@deepseek-ai/dsh-client-ui-primitives` | Reuses host `JsonTree`, button primitives, and `--dsw-*` semantic design tokens. |
 | **Workspace Sidebar** | `@deepseek-ai/dsh-client-ui-sidebar-right` | Calls `sidebarRight.openResource` from `FileTree`, `DiffView`, and `Code` to jump directly to workspace files and 1-based line numbers. |
 | **Client Code Splitting** | `window.__ModuleLoader__.load({ id: "dsh-genui-a2ui", entry })` | Loads heavy runtime, ECharts, and Mermaid chunks strictly on demand. |
@@ -45,11 +46,11 @@ This document covers the technical architecture, **Google A2UI 1.0** protocol co
 
 | Bundle Target | Raw Size | Gzip Size | Role & Load Trigger |
 | :--- | :--- | :--- | :--- |
-| `lib/client.js` | **`45.7 kB`** | **`12.5 kB`** | Cold-boot shell: registers UI Slots and composer pill (enforced by `< 500 kB` build & test gate). |
+| `lib/client.js` | **`45.9 kB`** | **`12.6 kB`** | Cold-boot shell: registers UI Slots and composer pill (enforced by `< 500 kB` build & test gate). |
 | `lib/client.runtime.js` | `1.03 MB` | ~`310 kB` | Loaded on first A2UI surface mount (`@a2ui/react`, 32-component catalog, TanStack Table, React Aria). |
 | `lib/client.echarts.js` | `777.6 kB` | `256.5 kB` | Loaded only when a surface renders `Chart` (ECharts 6 modular registration for 14 chart kinds). |
 | `lib/client.mermaid.js` | `3.12 MB` | ~`940 kB` | Loaded only when a surface renders `Mermaid` (Mermaid 11 under `securityLevel: "strict"` + SVG sanitizer). |
-| `lib/index.js` | `687.1 kB` | `186.9 kB` | Self-contained Host ESM bundle (`@a2ui/agent` + Zod catalog) — ships with zero runtime `dependencies`. |
+| `lib/index.js` | `688.8 kB` | `187.4 kB` | Self-contained Host ESM bundle (`@a2ui/agent` + Zod catalog) — ships with zero runtime `dependencies`. |
 
 ---
 
@@ -59,10 +60,10 @@ This document covers the technical architecture, **Google A2UI 1.0** protocol co
 
 | Placement | Invocation | DSH UI Slot | Lifecycle |
 | :--- | :--- | :--- | :--- |
-| **Spotlight** *(default)* | `a2ui_render({ ui, placement: "answer" })` | `chat-TurnFooter` | Rendered at turn tail; interactive on latest turn, snapshotted read-only when superseded in later turns. |
-| **Inline** | `a2ui_render({ ui, placement: "inline" })` | `tool-call-renderer` | Compact summary embedded inside the tool call step row. |
-| **Persistent Dock** | `a2ui_render({ ui, placement: "dock" })` | `conversation-QuestionDock` | Pinned above the chat input across turns; updated in place via `surface("id", update=true)`. |
-| **Blocking Ask** | `a2ui_ask({ ui, title })` | `conversation-QuestionDock` | Suspends the active tool call inside the current turn until settled via `/a2ui-answer` (`answered` or `skipped`). |
+| **Spotlight** *(default)* | `a2ui_render({ ui, placement: "answer" })` | `conversation.chat.turnTail` | Rendered at turn tail; interactive on latest turn, snapshotted read-only when superseded in later turns. |
+| **Inline** | `a2ui_render({ ui, placement: "inline" })` | `tool.call.toolview` | Compact summary embedded inside the tool call step row (streams progressively at 60fps while generating). |
+| **Persistent Dock** | `a2ui_render({ ui, placement: "dock" })` | `conversation.input.dock` | Pinned above the chat input across turns; updated in place via `surface("id", update=true)`. |
+| **Blocking Ask** | `a2ui_ask({ ui, title })` | `conversation.input.dock` + `tool.call.toolview` | Suspends the active tool call inside the current turn until settled via `/a2ui-answer` (`answered` or `skipped`). |
 
 ### Host Safety Caps (`A2UI_LIMITS`)
 
@@ -168,7 +169,7 @@ npm run typecheck
 # Build Host ESM + 4 Client CJS chunks (enforces cold-boot size gate)
 npm run build
 
-# Run all 43 Vitest unit, governance, prompt, and bundle tests
+# Run all 45 Vitest unit, governance, prompt, and bundle tests
 npm test
 
 # Verify compatibility against installed DeepSeek Harness.app platform exports & slots
@@ -186,8 +187,8 @@ node scripts/dev-env.mjs serve
 
 - `src/index.ts` — Host Cordis plugin entry (`tools`, `skills`, `commands`, `systemPrompt`)
 - `src/host/` — `a2ui_render`, `a2ui_ask`, `SurfaceSessions` compiler & self-repair engine
-- `src/shared/` — Isomorphic `dshSchemaCatalog`, `calc` parser/evaluator, and shared constants
-- `src/client/index.ts` — `45.7 kB` cold-boot UI slot shell & composer toggle pill
+- `src/shared/` — Isomorphic `dshSchemaCatalog`, Host/Client `wire-types.ts`, `calc` parser/evaluator, and shared constants
+- `src/client/index.ts` — `45.9 kB` cold-boot UI slot shell & composer toggle pill
 - `src/client/chunks/` — On-demand entrypoints (`runtime-chunk.ts`, `echarts-chunk.ts`, `mermaid-chunk.ts`)
 - `src/client/catalog/` — Light-DOM React implementations of all 32 components & 23 functions
 - `build/` — `tsdown` 5-target build preset & DSH web platform externalizer

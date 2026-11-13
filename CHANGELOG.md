@@ -16,6 +16,6 @@ All notable changes to `dsh-genui-a2ui` are documented in this file.
   - Strict-sandbox `Mermaid` renderer with SVG sanitization, zoom/fullscreen toolbar, and Diagram/Source toggle.
 - **Zero-Hack Workspace Integration & 4-Chunk Lazy Architecture**:
   - One-click workspace source jump into DSH's native right sidebar (`sidebarRight.openResource`) from `FileTree`, `DiffView`, and `Code`.
-  - 4-chunk client code-splitting via `window.__ModuleLoader__`: `45.7 kB` (`12.5 kB` gzip) cold-boot `lib/client.js`, loading `client.runtime.js`, `client.echarts.js`, and `client.mermaid.js` strictly on demand.
+  - 4-chunk client code-splitting via `window.__ModuleLoader__`: `45.9 kB` (`12.6 kB` gzip) cold-boot `lib/client.js`, loading `client.runtime.js`, `client.echarts.js`, and `client.mermaid.js` strictly on demand.
 - **23 Client-Side Reactive & Validation Functions**:
   - `0ms` statically validated `calc(expr, vars, decimals)` algebraic evaluator, `cond`, `eq`, `gt`, `lt`, `includes`, `sum`, `avg`, `copyText`, and 14 A2UI 1.0 standard formatting & validation functions.

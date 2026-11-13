@@ -1,85 +1,87 @@
 # dsh-genui-a2ui
 
-**English** | [简体中文](./README.zh-CN.md) | [Interactive component handbook](./docs/dsh-genui-a2ui-component-library.html) | [Developer and architecture guide](./docs/DEVELOPMENT.md)
+**简体中文** | [English](./README.en.md) | [交互式组件手册](https://geekhyt.github.io/dsh-genui-a2ui/) | [开发与架构文档](./docs/DEVELOPMENT.zh-CN.md)
 
-**Don't just chat. Let AI speak in interfaces.**
+**别只靠文字聊天，让 AI 直接用界面与你沟通。**
 
-`dsh-genui-a2ui` brings Google's open A2UI (Agent to User Interface) standard to DeepSeek Harness. Simple questions still get fast text replies. When plain text falls short, AI renders clickable, draggable, filterable native UI directly inside your chat.
+`dsh-genui-a2ui` 将 Google 开源的 A2UI（Agent to User Interface）标准带入 DeepSeek Harness。简单问题依然用文字快回；遇到数据对比、测算推演、代码审阅或复杂流程时，AI 会在对话里直接生成可点击、可拖动、可筛选的原生交互界面。
 
-## Quick start
+## 快速开始
 
-Install the plugin in DeepSeek Harness Desktop:
+在终端运行以下命令安装插件：
 
 ```bash
 dsh plugin --profile desktop add dsh-genui-a2ui
 ```
 
-Restart DeepSeek Harness Desktop and ask questions as usual. Click **A2UI** above the input box or type `/a2ui off` anytime to switch back to plain text.
+如果是从源码仓库本地体验，克隆后运行 `npm ci && npm run build`，再执行 `dsh plugin --profile desktop add link:./dsh-genui-a2ui` 即可。
 
-## See it in action
+重启 DeepSeek Harness 桌面端即可生效。像平时一样用自然语言提问，点击输入框上方的 **A2UI** 按钮或输入 `/a2ui off` 可随时切回纯文字模式。
 
-### Diagnose multi-stage conversion flows and health scores
+## 场景预览
 
-Equal-height KPI cards with sparklines pair with a four-stage Sankey flow and a five-axis radar chart in one view. Switch tabs to inspect regional revenue bars or filter channel ROI rows.
+### 一屏看清多阶转化流向与多维健康度
 
-![Full-funnel conversion flow and radar diagnostic dashboard](assets/screenshots/hero-executive-dashboard.png)
+顶栏指标卡自动等高对齐并附带趋势微图。下方同屏组合四阶全链路桑基流向图与五维健康度雷达对比图，点击标签页还可切换区域柱状图与可检索明细表。
 
-### Monitor live store operations and stock alerts
+![全链路转化流向与五维健康度诊断大盘](assets/screenshots/hero-executive-dashboard.png)
 
-Track daily chain revenue, order volume, and peak-hour fulfillment in real time. Combine stacked channel area curves, store-by-hour order heatmaps, and searchable inventory warning tables on one screen.
+### 连锁门店实时经营与库存预警
 
-![Multi-store live operations and inventory dashboard](assets/screenshots/store-operations-dashboard.png)
+汇总多门店今日实收、单量与高峰出杯准时率。同屏联动分时段全渠道面积图、门店客流热力矩阵与可搜索排序的原料库存预警表，异常门店一眼定位。
 
-### Model costs and returns with live sliders
+![连锁门店今日实时经营仪表盘](assets/screenshots/store-operations-dashboard.png)
 
-Drag sliders or switch tiers to test budget, rate, or traffic assumptions right in chat. Totals, margins, and charts recalculate locally in 0 ms without spending extra tokens.
+### 拖动滑块实时推演成本与回报
 
-![Live parameter calculator with sliders and bar chart](assets/screenshots/zero-latency-simulator.png)
+调整预算、利率或流量假设时，不必反复发消息等待重算。直接在对话内拖动滑块或切换档位，账单金额、预算水位与对比图表会在本地 0 ms 即时更新，不额外消耗 Token。
 
-### Review diffs before approving critical actions
+![实时联动的参数测算器](assets/screenshots/zero-latency-simulator.png)
 
-Pause high-impact changes with a review card above the chat input. Inspect the split code diff, select a rollout scope, and confirm before execution continues.
+### 关键操作前先核对差异再放行
 
-![Split code diff and approval gate](assets/screenshots/human-in-the-loop-ask.png)
+执行重要配置修改或高影响动作前，输入框上方会弹出确认卡片。核对双栏代码差异、选择生效范围并勾选确认后，任务才会继续执行。
 
-### Map layered system architecture to live source files
+![双栏代码对比与确认面板](assets/screenshots/human-in-the-loop-ask.png)
 
-Render multi-layer Mermaid architecture diagrams alongside a workspace file tree and JSON inspector. Click any file node to open that exact line inside the right sidebar.
+### 分层系统架构图与右侧源码联动
 
-![Layered architecture diagram linked to right sidebar source view](assets/screenshots/codebase-explorer-sidebar.png)
+多层级 Mermaid 系统架构图、工作区文件树与配置树同屏呈现。点击左侧任意文件节点，右侧边栏会直接打开真实工作区文件并跳到对应行号。
 
-### Pin live task progress above the chat input
+![分层系统架构图与右侧边栏源码联动](assets/screenshots/codebase-explorer-sidebar.png)
 
-Keep multi-stage pipelines anchored at the bottom of the window. Stages and completion rates update in place while you scroll through earlier messages.
+### 多步骤任务常驻底部实时跟进
 
-![Persistent multi-stage task progress dock](assets/screenshots/persistent-dock-pipeline.png)
+运行长耗时检查或多阶段流水线时，进度条固定在输入框上方原地刷新。向上翻看历史消息时，也能随时掌握当前阶段与整体完成度。
 
-## Why A2UI
+![底部常驻的多阶段任务进度栏](assets/screenshots/persistent-dock-pipeline.png)
 
-- **Safe by design**: Built on Google's A2UI 1.0 specification, models output declarative JSON only and never execute untrusted HTML or scripts.
-- **Native look and feel**: Every surface renders with DeepSeek Harness UI primitives, adapting automatically to light mode, dark mode, and community themes.
-- **Zero host patches, fast startup**: Built on official plugin APIs with a 12.5 KB gzipped core; chart and diagram engines load only on demand.
+## 为什么选择 A2UI
 
-## Component catalog
+- **纯数据声明，安全流式渲染**：遵循 Google A2UI 1.0 规范，模型只输出结构化 JSON 描述，不注入外部 HTML 或执行未知脚本，支持边生成边上屏。
+- **原生组件绘制，自动跟随主题**：界面由 DeepSeek Harness 原生设计体系渲染，自动适配浅色模式、深色模式与社区皮肤。
+- **官方接口实现，按需加载更轻快**：基于官方插件接口构建，无任何宿主魔改；首屏核心包仅 12.6 KB（gzip），图表与流程图引擎仅在实际展示时按需加载。
 
-Includes 32 native UI components, 14 interactive chart types, and full Mermaid diagram support:
+## 组件与图表目录
 
-| Category | Components | Purpose |
+内置 32 种原生交互组件、14 类动态图表与 Mermaid 流程图：
+
+| 分类 | 组件 | 用途 |
 | :--- | :--- | :--- |
-| **Layout containers** | `Card`, `Row`, `Column`, `Tabs`, `Accordion`, `List`, `Modal`, `Divider` | Multi-column dashboards, tabbed views, collapsible panels, and modal details |
-| **Metrics and status** | `Stat`, `KeyValue`, `Steps`, `Progress` | KPI cards with deltas and sparklines, spec grids, step timelines, and progress bars |
-| **Charts and tables** | `Chart`, `Mermaid`, `Table` | 14 interactive chart types, architecture diagrams, and searchable, sortable, paginated tables |
-| **Code and workspace** | `Code`, `DiffView`, `FileTree`, `JsonTree` | Highlighted code, unified or split diffs, clickable workspace file trees, and JSON inspectors |
-| **Form controls** | `Button`, `Slider`, `ChoicePicker`, `TextField`, `CheckBox`, `DateTimeInput` | Sliders, single or multi-select chips, validated inputs, date pickers, and action buttons |
-| **Typography and alerts** | `Text`, `Callout`, `Badge`, `Icon` | Rich text, color-coded callouts, status badges, and semantic icons |
-| **Media** | `Image`, `AudioPlayer`, `Video` | Inline image previews, audio players, and video playback |
+| **布局容器** | `Card`、`Row`、`Column`、`Tabs`、`Accordion`、`List`、`Modal`、`Divider` | 多栏看板、标签页切换、折叠面板与弹窗详情 |
+| **指标与状态** | `Stat`、`KeyValue`、`Steps`、`Progress` | 带涨跌与微图的指标卡、参数表、步骤条与进度条 |
+| **图表与表格** | `Chart`、`Mermaid`、`Table` | 14 类动态图表、架构时序图，以及可搜索、排序、分页的数据表 |
+| **研发与工作区** | `Code`、`DiffView`、`FileTree`、`JsonTree` | 语法高亮代码、单双栏差异对比、联动右侧边栏的文件树与 JSON 树 |
+| **表单交互** | `Button`、`Slider`、`ChoicePicker`、`TextField`、`CheckBox`、`DateTimeInput` | 滑块、单选多选组、校验输入框、日期时间选择与动作按钮 |
+| **排版与提示** | `Text`、`Callout`、`Badge`、`Icon` | 文本排版、四色提示框、状态标签与语义图标 |
+| **多媒体** | `Image`、`AudioPlayer`、`Video` | 对话内图片预览与音视频播放 |
 
-- **14 interactive charts (`Chart`)**: Vertical and horizontal ranking bars (`bar`), `line`, `area`, donut and pie (`pie`), bubble and `scatter`, `radar`, `funnel`, `gauge`, `heatmap`, `treemap`, `sankey`, `boxplot`, network (`graph`), and `candlestick`.
-- **Architecture and flow diagrams (`Mermaid`)**: Flowcharts, sequence diagrams, state machines, class diagrams, ER diagrams, Gantt charts, Git graphs, and mindmaps with zoom, fullscreen view, and source toggle.
+- **14 类动态图表（`Chart`）**：柱状与横向排行图（`bar`）、折线图（`line`）、面积图（`area`）、饼图与环图（`pie`）、散点与气泡图（`scatter`）、雷达图（`radar`）、漏斗图（`funnel`）、仪表盘（`gauge`）、热力图（`heatmap`）、矩形树图（`treemap`）、桑基图（`sankey`）、箱线图（`boxplot`）、关系网络图（`graph`）、K 线图（`candlestick`）。
+- **结构与流程图（`Mermaid`）**：流程图、时序图、状态机图、类图、ER 图、甘特图、Git 分支图与思维导图，支持缩放、全屏查看与源码切换。
 
-## Documentation and license
+## 文档与许可
 
-- [Developer and architecture guide (English)](./docs/DEVELOPMENT.md) | [开发与架构文档（简体中文）](./docs/DEVELOPMENT.zh-CN.md)
-- [Interactive component handbook](./docs/dsh-genui-a2ui-component-library.html)
-- [Contributing guide](./CONTRIBUTING.md) | [Changelog](./CHANGELOG.md)
-- Released under the [MIT License](./LICENSE). See [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) for third-party open-source notices.
+- [开发与架构文档（简体中文）](./docs/DEVELOPMENT.zh-CN.md) | [Developer and architecture guide (English)](./docs/DEVELOPMENT.md)
+- [交互式组件手册](https://geekhyt.github.io/dsh-genui-a2ui/)（离线版见 [docs/dsh-genui-a2ui-component-library.html](./docs/dsh-genui-a2ui-component-library.html)）
+- [贡献指南](./CONTRIBUTING.md) | [安全策略](./SECURITY.md) | [更新日志](./CHANGELOG.md)
+- 基于 [MIT License](./LICENSE) 开源，第三方开源依赖声明见 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md)。
