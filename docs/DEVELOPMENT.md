@@ -210,7 +210,7 @@ npm run typecheck
 # Build Host ESM + 4 Client CJS chunks (enforces cold-boot size gate)
 npm run build
 
-# Run all 45 Vitest unit, governance, prompt, and bundle tests
+# Run all 49 Vitest unit, governance, prompt, and bundle tests
 npm test
 
 # Verify compatibility against installed DeepSeek Harness.app platform exports & slots
@@ -234,3 +234,4 @@ node scripts/dev-env.mjs serve
 - `src/client/catalog/` — Light-DOM React implementations of all 32 components & 23 functions
 - `build/` — `tsdown` 5-target build preset & DSH web platform externalizer
 - `scripts/` — Host API contract verifier (`check-host-api.mjs`) and isolated mock dev server (`dev-env.mjs`, `mock-llm.mjs`)
+- `docs/dsh-genui-a2ui-component-library.html` — Self-contained offline single-file HTML component reference for local developer lookup

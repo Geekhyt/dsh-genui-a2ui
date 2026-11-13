@@ -1,6 +1,6 @@
 # dsh-genui-a2ui
 
-**简体中文** | [English](./README.en.md) | [在线组件手册](https://geekhyt.github.io/dsh-genui-a2ui/) | [开发与架构文档](./docs/DEVELOPMENT.zh-CN.md)
+**简体中文** | [English](./README.en.md) | [开发与架构文档](./docs/DEVELOPMENT.zh-CN.md)
 
 [![CI](https://github.com/Geekhyt/dsh-genui-a2ui/actions/workflows/ci.yml/badge.svg)](https://github.com/Geekhyt/dsh-genui-a2ui/actions/workflows/ci.yml) [![npm version](https://img.shields.io/npm/v/dsh-genui-a2ui.svg)](https://www.npmjs.com/package/dsh-genui-a2ui) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE) [![Protocol: A2UI 1.0](https://img.shields.io/badge/Protocol-A2UI%201.0-10b981.svg)](https://github.com/google/A2UI) [![DSH: >= 0.2.0](https://img.shields.io/badge/DeepSeek%20Harness-%3E%3D%200.2.0-4f46e5.svg)](./package.json)
 
@@ -102,6 +102,5 @@ dsh plugin --profile desktop add dsh-genui-a2ui
 ## 文档与许可
 
 - [开发与架构文档（简体中文）](./docs/DEVELOPMENT.zh-CN.md) | [Developer and architecture guide (English)](./docs/DEVELOPMENT.md)
-- [交互式组件手册（在线浏览）](https://geekhyt.github.io/dsh-genui-a2ui/) | [离线单文件 HTML](./docs/dsh-genui-a2ui-component-library.html)
 - [贡献指南](./CONTRIBUTING.md) | [行为准则](./CODE_OF_CONDUCT.md) | [安全策略](./SECURITY.md) | [更新日志](./CHANGELOG.md)
 - 基于 [MIT License](./LICENSE) 开源，第三方开源依赖声明见 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md)。

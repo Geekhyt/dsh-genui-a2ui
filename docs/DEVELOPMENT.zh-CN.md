@@ -210,7 +210,7 @@ npm run typecheck
 # 构建 Host ESM + 4 个 Client 分包（自动校验首屏 < 500 kB 门禁）
 npm run build
 
-# 运行全部 45 项单元、契约、提示词与分包门禁测试
+# 运行全部 49 项单元、契约、提示词与分包门禁测试
 npm test
 
 # 核验与本机 DeepSeek Harness.app 内部模块及 Slots 的契约兼容性
@@ -234,3 +234,4 @@ node scripts/dev-env.mjs serve
 - `src/client/catalog/` —— 32 个 Light-DOM 原生组件与 23 个客户端函数的具体实现
 - `build/` —— `tsdown` 五目标构建预设与 DSH 宿主模块外部化配置
 - `scripts/` —— Host API 契约核验脚本（`check-host-api.mjs`）与隔离演示环境（`dev-env.mjs`、`mock-llm.mjs`）
+- `docs/dsh-genui-a2ui-component-library.html` —— 供开发者本地离线查阅的 32 组件交互式单文件参考手册（直接在浏览器打开即可）
