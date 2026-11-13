@@ -1,6 +1,6 @@
 # Contributing to `dsh-genui-a2ui`
 
-Thank you for helping improve `dsh-genui-a2ui`! For a deep dive into the three-stage pipeline, A2UI 1.0 protocol mapping, 4-chunk bundle architecture, and full 32-component Express DSL contracts, read [docs/DEVELOPMENT.md](./docs/DEVELOPMENT.md) ([简体中文](./docs/DEVELOPMENT.zh-CN.md)) first.
+Thank you for helping improve `dsh-genui-a2ui`! By participating in this project, you agree to abide by our [Code of Conduct](./CODE_OF_CONDUCT.md). For a deep dive into the three-stage pipeline, A2UI 1.0 protocol mapping, 4-chunk bundle architecture, and full 32-component Express DSL contracts, read [docs/DEVELOPMENT.md](./docs/DEVELOPMENT.md) ([简体中文](./docs/DEVELOPMENT.zh-CN.md)) first.
 
 To keep the plugin fast, safe, and 100% aligned with both **Google A2UI 1.0** and **DeepSeek Harness (DSH)** official plugin APIs, please follow the architectural guardrails below.
 

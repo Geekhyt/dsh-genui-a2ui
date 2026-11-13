@@ -2,6 +2,8 @@
 
 **简体中文** | [English](./README.en.md) | [离线组件手册](./docs/dsh-genui-a2ui-component-library.html) | [开发与架构文档](./docs/DEVELOPMENT.zh-CN.md)
 
+[![CI](https://github.com/Geekhyt/dsh-genui-a2ui/actions/workflows/ci.yml/badge.svg)](https://github.com/Geekhyt/dsh-genui-a2ui/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE) [![Protocol: A2UI 1.0](https://img.shields.io/badge/Protocol-A2UI%201.0-10b981.svg)](https://github.com/google/A2UI) [![DSH: >= 0.2.0](https://img.shields.io/badge/DeepSeek%20Harness-%3E%3D%200.2.0-4f46e5.svg)](./package.json)
+
 **别只靠文字聊天，让 AI 直接用界面与你沟通。**
 
 `dsh-genui-a2ui` 将 Google 开源的 A2UI（Agent to User Interface）标准带入 DeepSeek Harness。简单问题依然用文字快回；遇到数据对比、测算推演、代码审阅或复杂流程时，AI 会在对话里直接生成可点击、可拖动、可筛选的原生交互界面。
@@ -14,9 +16,21 @@
 dsh plugin --profile desktop add dsh-genui-a2ui
 ```
 
-如果是从源码仓库本地体验，克隆后运行 `npm ci && npm run build`，再执行 `dsh plugin --profile desktop add link:./dsh-genui-a2ui` 即可。
+如果是从源码仓库本地体验，克隆后运行 `npm ci && npm run build`，再执行 `dsh plugin --profile desktop add link:./dsh-genui-a2ui` 即可。后续升级版本执行 `dsh plugin --profile desktop add dsh-genui-a2ui@latest`，卸载可执行 `dsh plugin --profile desktop remove dsh-genui-a2ui`。
 
 重启 DeepSeek Harness 桌面端即可生效。像平时一样用自然语言提问，点击输入框上方的 **A2UI** 按钮或输入 `/a2ui off` 可随时切回纯文字模式。
+
+<details>
+<summary><strong>点击展开 6 个可直接复制试跑的提示词示例</strong></summary>
+
+1. **转化漏斗与健康度大盘**：`帮我做一份季度业务增长与全链路转化诊断看板，包含四个带趋势微图的核心指标卡，下方同屏放一张四阶桑基流向图和一张五维健康度雷达对比图，再用标签页放区域增长柱状图和可搜索的渠道明细表。`
+2. **连锁门店实时经营看板**：`模拟一份连锁咖啡品牌今日实时经营仪表盘，顶部展示今日实收、总单量、高峰出杯准时率和缺货预警数，下方联动分时段全渠道面积图、各门店分时段单量热力图，以及可搜索排序的原料库存预警表。`
+3. **零延迟参数测算器**：`做一个 SaaS 与推理成本实时测算器，让我能用滑块调节日活规模、单次推理单价和缓存命中率，并用单选切换套餐档位，本地实时算出月度总成本、毛利率和成本结构对比柱状图。`
+4. **代码差异核对与确认单**：`假设你要把线上网关的灰度权重从 5% 调到 20% 并新增超时熔断参数，请先弹出交互确认卡片展示双栏配置差异、生效集群单选和自动回滚勾选框，等我确认后再继续。`
+5. **当前工作区架构图与源码联动**：`梳理当前工作区项目的核心模块分层，画一张多层 Mermaid 架构图，并附上关键源码文件树和核心配置树，方便我点击直接在右侧打开对应文件。`
+6. **底部常驻多阶段进度栏**：`把一个包含类型检查、分包构建、契约核验、回归测试和打包审计五步的发布流水线进度条固定在输入框上方，展示各阶段状态与整体完成百分比。`
+
+</details>
 
 ## 场景预览
 
@@ -83,5 +97,5 @@ dsh plugin --profile desktop add dsh-genui-a2ui
 
 - [开发与架构文档（简体中文）](./docs/DEVELOPMENT.zh-CN.md) | [Developer and architecture guide (English)](./docs/DEVELOPMENT.md)
 - [交互式组件手册（离线单文件 HTML，下载后用浏览器直接打开）](./docs/dsh-genui-a2ui-component-library.html)
-- [贡献指南](./CONTRIBUTING.md) | [安全策略](./SECURITY.md) | [更新日志](./CHANGELOG.md)
+- [贡献指南](./CONTRIBUTING.md) | [行为准则](./CODE_OF_CONDUCT.md) | [安全策略](./SECURITY.md) | [更新日志](./CHANGELOG.md)
 - 基于 [MIT License](./LICENSE) 开源，第三方开源依赖声明见 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md)。

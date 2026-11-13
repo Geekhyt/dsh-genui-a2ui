@@ -7,9 +7,29 @@
  * export, and client UI slot name `dsh-genui-a2ui` relies on is present in the host.
  */
 import { existsSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 
-const ASAR_PATH =
-  process.env.DSH_ASAR_PATH ?? '/Applications/DeepSeek Harness.app/Contents/Resources/app.asar'
+function resolveAsarPath() {
+  if (process.env.DSH_ASAR_PATH) return process.env.DSH_ASAR_PATH
+  const candidates = [
+    '/Applications/DeepSeek Harness.app/Contents/Resources/app.asar',
+    process.env.LOCALAPPDATA
+      ? join(process.env.LOCALAPPDATA, 'Programs', 'DeepSeek Harness', 'resources', 'app.asar')
+      : '',
+    process.env.PROGRAMFILES
+      ? join(process.env.PROGRAMFILES, 'DeepSeek Harness', 'resources', 'app.asar')
+      : '',
+    '/opt/DeepSeek Harness/resources/app.asar',
+    '/usr/lib/deepseek-harness/resources/app.asar',
+  ].filter(Boolean)
+
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) return candidate
+  }
+  return candidates[0]
+}
+
+const ASAR_PATH = resolveAsarPath()
 
 const REQUIRED_PLATFORM_MODULES = [
   'react',
@@ -50,7 +70,7 @@ const REQUIRED_SLOTS = [
 ]
 
 if (!existsSync(ASAR_PATH)) {
-  console.log(`[check-host-api] Skipped: ${ASAR_PATH} not present on this machine.`)
+  console.log(`[check-host-api] Skipped: DeepSeek Harness app.asar not present on this machine (${ASAR_PATH}).`)
   process.exit(0)
 }
 

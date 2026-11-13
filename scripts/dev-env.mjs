@@ -7,15 +7,35 @@
  *   node scripts/dev-env.mjs serve   — start mock LLM + `dsh web` on 127.0.0.1:18992
  */
 import { spawn, spawnSync } from 'node:child_process'
-import { mkdirSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { existsSync, mkdirSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join, resolve } from 'node:path'
 import { startMockLlmServer } from './mock-llm.mjs'
 
 const ROOT = resolve(import.meta.dirname, '..')
 const DSH_HOME = resolve(ROOT, '.dsh-dev')
-const DSH_BIN = process.env.DSH_BIN ?? '/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh'
 const WEB_PORT = Number(process.env.DSH_DEV_PORT ?? 18992)
 const MOCK_PORT = Number(process.env.MOCK_LLM_PORT ?? 18991)
+
+function resolveDshBin() {
+  if (process.env.DSH_BIN) return process.env.DSH_BIN
+  const candidates = [
+    '/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh',
+    join(homedir(), '.dsh', 'bin', process.platform === 'win32' ? 'dsh.cmd' : 'dsh'),
+    process.env.LOCALAPPDATA
+      ? join(process.env.LOCALAPPDATA, 'Programs', 'DeepSeek Harness', 'resources', 'runtime', 'cli', 'bin', 'dsh.cmd')
+      : '',
+    '/opt/DeepSeek Harness/resources/runtime/cli/bin/dsh',
+  ].filter(Boolean)
+
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) return candidate
+  }
+  return 'dsh'
+}
+
+const DSH_BIN = resolveDshBin()
+const USE_WIN_SHELL = process.platform === 'win32' && (DSH_BIN === 'dsh' || DSH_BIN.endsWith('.cmd'))
 
 const baseEnv = {
   ...process.env,
@@ -29,6 +49,7 @@ function runSync(args) {
     cwd: ROOT,
     env: baseEnv,
     stdio: 'inherit',
+    shell: USE_WIN_SHELL,
   })
   if (res.status !== 0) {
     process.exit(res.status ?? 1)
@@ -46,6 +67,7 @@ if (cmd === 'setup') {
     cwd: ROOT,
     env: baseEnv,
     encoding: 'utf8',
+    shell: USE_WIN_SHELL,
   })
   if (check.status !== 0) {
     console.error(check.stderr)
@@ -76,6 +98,7 @@ if (cmd === 'setup') {
       cwd: ROOT,
       env: baseEnv,
       stdio: 'inherit',
+      shell: USE_WIN_SHELL,
     },
   )
   const shutdown = () => {

@@ -2,6 +2,8 @@
 
 [简体中文](./README.md) | **English** | [Offline component handbook](./docs/dsh-genui-a2ui-component-library.html) | [Developer and architecture guide](./docs/DEVELOPMENT.md)
 
+[![CI](https://github.com/Geekhyt/dsh-genui-a2ui/actions/workflows/ci.yml/badge.svg)](https://github.com/Geekhyt/dsh-genui-a2ui/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE) [![Protocol: A2UI 1.0](https://img.shields.io/badge/Protocol-A2UI%201.0-10b981.svg)](https://github.com/google/A2UI) [![DSH: >= 0.2.0](https://img.shields.io/badge/DeepSeek%20Harness-%3E%3D%200.2.0-4f46e5.svg)](./package.json)
+
 **Don't just chat. Let AI speak in interfaces.**
 
 `dsh-genui-a2ui` brings Google's open A2UI (Agent to User Interface) standard to DeepSeek Harness. Simple questions still get fast text replies. When plain text falls short, AI renders clickable, draggable, filterable native UI directly inside your chat.
@@ -14,9 +16,21 @@ Install the plugin in DeepSeek Harness Desktop:
 dsh plugin --profile desktop add dsh-genui-a2ui
 ```
 
-To install from a local clone instead, run `npm ci && npm run build` and then `dsh plugin --profile desktop add link:./dsh-genui-a2ui`.
+To install from a local clone instead, run `npm ci && npm run build` and then `dsh plugin --profile desktop add link:./dsh-genui-a2ui`. To upgrade later, run `dsh plugin --profile desktop add dsh-genui-a2ui@latest`; to uninstall, run `dsh plugin --profile desktop remove dsh-genui-a2ui`.
 
 Restart DeepSeek Harness Desktop and ask questions as usual. Click **A2UI** above the input box or type `/a2ui off` anytime to switch back to plain text.
+
+<details>
+<summary><strong>Click to expand 6 ready-to-run example prompts</strong></summary>
+
+1. **Executive conversion and health dashboard**: `Build a quarterly growth and conversion diagnostic dashboard with four KPI cards with sparklines on top, a four-stage Sankey flow paired with a five-axis health radar chart side by side, plus tabs for regional growth bars and a searchable channel ROI table.`
+2. **Live multi-store operations dashboard**: `Create a live chain coffee store operations dashboard showing daily revenue, total orders, peak fulfillment rate, and stock alerts, paired with hourly channel area curves, a store-by-hour order heatmap, and a searchable inventory warning table.`
+3. **Zero-latency cost and margin simulator**: `Build an interactive AI inference cost and margin calculator where I can drag sliders for daily active users, cost per call, and cache hit rate, switch pricing tiers, and see monthly spend, gross margin, and a cost breakdown bar chart update live.`
+4. **Code diff approval gate**: `Suppose you are updating our production gateway canary weight from 5% to 20% and adding a circuit-breaker timeout. Pause with a review card showing the split config diff, target cluster selector, and auto-rollback checkbox for my confirmation before proceeding.`
+5. **Workspace architecture diagram and source explorer**: `Analyze the architecture of this workspace, render a layered Mermaid diagram alongside a clickable file tree and config JSON inspector so I can open any file directly in the right sidebar.`
+6. **Persistent bottom task tracker**: `Pin a five-stage release verification tracker above the chat input showing step status and overall completion percentage across typecheck, bundle build, host API check, test suite, and tarball audit.`
+
+</details>
 
 ## See it in action
 
@@ -83,5 +97,5 @@ Includes 32 native UI components, 14 interactive chart types, and full Mermaid d
 
 - [Developer and architecture guide (English)](./docs/DEVELOPMENT.md) | [开发与架构文档（简体中文）](./docs/DEVELOPMENT.zh-CN.md)
 - [Interactive component handbook (offline single-file HTML, download and open in browser)](./docs/dsh-genui-a2ui-component-library.html)
-- [Contributing guide](./CONTRIBUTING.md) | [Security policy](./SECURITY.md) | [Changelog](./CHANGELOG.md)
+- [Contributing guide](./CONTRIBUTING.md) | [Code of conduct](./CODE_OF_CONDUCT.md) | [Security policy](./SECURITY.md) | [Changelog](./CHANGELOG.md)
 - Released under the [MIT License](./LICENSE). See [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) for third-party open-source notices.

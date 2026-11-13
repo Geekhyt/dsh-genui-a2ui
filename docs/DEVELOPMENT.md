@@ -14,6 +14,47 @@ This document covers the technical architecture, **Google A2UI 1.0** protocol co
 2. **Host Validation & Self-Repair (`@a2ui/agent` + Zod)** — `SurfaceSessions` compiles A2UI Express against the isomorphic `dshSchemaCatalog` (`src/shared/catalog-schema.ts`), enforces payload/depth/formula safety caps (`A2UI_LIMITS`), and returns pinpoint line diagnostics on invalid tags or props so the model can self-repair within the same turn (up to `2` retries).
 3. **Client Streaming & Native Light-DOM Rendering (`@a2ui/react`)** — In the browser, `StreamingExpressSession` progressively parses partial tool-call arguments at 60fps while chunks arrive, then switches to authoritative Host-compiled A2UI JSON messages (`createSurface`, `updateComponents`, `updateDataModel`) once tool execution completes.
 
+```mermaid
+flowchart TB
+  subgraph S1["Stage 1 · Agent Emission"]
+    P["System Prompt Section tool:a2ui (order 9200)"]
+    SK["On-Demand skill(a2ui) Full Grammar"]
+    LLM["LLM Emits Declarative A2UI Express"]
+    P --> LLM
+    SK -.-> LLM
+  end
+
+  subgraph S2["Stage 2 · Host Compiler & Safety Gate (lib/index.js)"]
+    COMP["SurfaceSessions Compiler (@a2ui/agent)"]
+    ZOD["Isomorphic dshSchemaCatalog + A2UI_LIMITS + Static calc AST Check"]
+    REPAIR["Line-Exact Diagnostic Self-Repair (up to 2 retries/turn)"]
+    WIRE["Authoritative A2UI 1.0 JSON Messages (createSurface / updateComponents / updateDataModel)"]
+    COMP --> ZOD
+    ZOD -->|"Validation error"| REPAIR
+    REPAIR -->|"In-turn self-heal"| LLM
+    ZOD -->|"Valid"| WIRE
+  end
+
+  subgraph S3["Stage 3 · Client 4-Chunk Runtime & Native Light-DOM Slots"]
+    SHELL["Cold-Boot Shell lib/client.js (45.9 kB)"]
+    RT["Lazy Runtime client.runtime.js (32 Components + StreamingExpressSession)"]
+    EC["Lazy Chart Engine client.echarts.js (14 ECharts 6 Kinds)"]
+    MM["Lazy Diagram Engine client.mermaid.js (Strict Sandbox Mermaid 11)"]
+    SLOTS["Official DSH UI Slots (turnTail / toolview / input.dock / input.left)"]
+    SIDE["Right Sidebar File Jump sidebarRight.openResource"]
+    SHELL -->|"First surface mount"| RT
+    RT -.->|"On Chart"| EC
+    RT -.->|"On Mermaid"| MM
+    RT --> SLOTS
+    SLOTS --> SIDE
+  end
+
+  LLM -->|"Streaming tool args (60fps progressive UI)"| RT
+  LLM -->|"a2ui_render / a2ui_ask"| COMP
+  WIRE -->|"Turn-indexed projection"| RT
+  SLOTS -->|"[a2ui-action] or /a2ui-answer"| LLM
+```
+
 ---
 
 ## 2. Six Pillars of Google A2UI 1.0 Compliance

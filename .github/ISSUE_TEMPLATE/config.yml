@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 安全漏洞私密上报 / Report a Security Vulnerability
+    url: https://github.com/Geekhyt/dsh-genui-a2ui/security/advisories/new
+    about: 请通过私密安全通告报告潜在的 XSS、沙箱绕过或信息泄漏问题，切勿提交公开 Issue。
+  - name: 开发与技术架构文档 / Developer & Architecture Guide
+    url: https://github.com/Geekhyt/dsh-genui-a2ui/blob/main/docs/DEVELOPMENT.zh-CN.md
+    about: 查阅 32 组件 A2UI Express 语法契约、四分包体积门禁与本地调试指南。

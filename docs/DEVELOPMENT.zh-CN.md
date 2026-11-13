@@ -14,6 +14,47 @@
 2. **Host 编译校验与回合内自愈（`@a2ui/agent` + Zod）** —— `SurfaceSessions` 基于前后端同构契约 `dshSchemaCatalog`（`src/shared/catalog-schema.ts`）编译 Express 源码，执行安全阈值门禁（`A2UI_LIMITS`）与 `calc()` 静态 AST 校验；一旦遇到幻觉标签或参数错误，立即向模型返回精确诊断驱动同一回合自动修复（上限 `2` 次重试）。
 3. **客户端 60fps 流式解析与原生 Light-DOM 渲染（`@a2ui/react`）** —— 工具参数流式生成期间，`StreamingExpressSession` 在浏览器端逐行增量解析实现 60fps 渐进上屏；工具执行完毕后无缝切换至 Host 编译产出的权威 A2UI 标准 JSON 消息（`createSurface`、`updateComponents`、`updateDataModel`）。
 
+```mermaid
+flowchart TB
+  subgraph S1["阶段 1 · Agent 声明层"]
+    P["系统提示词切片 tool:a2ui (order 9200)"]
+    SK["按需加载 skill(a2ui) 完整语法手册"]
+    LLM["大模型决策与输出 A2UI Express"]
+    P --> LLM
+    SK -.-> LLM
+  end
+
+  subgraph S2["阶段 2 · Host 编译与安全门禁 (lib/index.js)"]
+    COMP["SurfaceSessions 编译器 (@a2ui/agent)"]
+    ZOD["同构契约 dshSchemaCatalog + A2UI_LIMITS + calc AST 静态审计"]
+    REPAIR["精确行号诊断自愈 (同回合最多重试 2 次)"]
+    WIRE["权威 A2UI 1.0 JSON 消息流 (createSurface / updateComponents / updateDataModel)"]
+    COMP --> ZOD
+    ZOD -->|"校验未通过"| REPAIR
+    REPAIR -->|"驱动模型自动修正"| LLM
+    ZOD -->|"校验通过"| WIRE
+  end
+
+  subgraph S3["阶段 3 · Client 四分包懒加载与原生 Light-DOM 槽位"]
+    SHELL["冷启动轻量壳 lib/client.js (45.9 kB)"]
+    RT["按需核心包 client.runtime.js (32 组件 + StreamingExpressSession)"]
+    EC["按需图表包 client.echarts.js (14 类 ECharts 6)"]
+    MM["按需架构图包 client.mermaid.js (Mermaid 11 严格沙箱)"]
+    SLOTS["DSH 官方槽位 (turnTail / toolview / input.dock / input.left)"]
+    SIDE["右侧边栏源码直达 sidebarRight.openResource"]
+    SHELL -->|"首次渲染卡片"| RT
+    RT -.->|"遇到 Chart"| EC
+    RT -.->|"遇到 Mermaid"| MM
+    RT --> SLOTS
+    SLOTS --> SIDE
+  end
+
+  LLM -->|"工具流式增量参数 (60fps 渐进上屏)"| RT
+  LLM -->|"调用 a2ui_render / a2ui_ask"| COMP
+  WIRE -->|"固化回合投影与跨轮次状态"| RT
+  SLOTS -->|"按钮动作 [a2ui-action] 或 /a2ui-answer"| LLM
+```
+
 ---
 
 ## 2. Google A2UI 1.0 六大核心原则的工程实现
