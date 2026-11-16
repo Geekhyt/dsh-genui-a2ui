@@ -2,7 +2,7 @@
  * Layout & typography A2UI 1.0 components (`Text`, `Card`, `Row`, `Column`,
  * `List`, `Divider`, `Tabs`, `Modal`).
  */
-import { useContext, useId, useState } from 'react'
+import { useCallback, useContext, useEffect, useId, useState, type ReactNode } from 'react'
 import {
   CardApi,
   ColumnApi,
@@ -20,6 +20,8 @@ import {
   ALIGN_MAP,
   InsideButtonContext,
   JUSTIFY_MAP,
+  ModalCloseContext,
+  SurfaceReadOnlyContext,
   defineComponent,
   renderChildList,
   renderChildRef,
@@ -256,32 +258,67 @@ export const DshTabsImpl = defineComponent<{
   )
 })
 
-export const DshModalImpl = defineComponent<{
-  trigger?: ChildRef
-  content?: ChildRef
-  weight?: number
-}>(ModalApi, function DshModalComponent({ props, buildChild }) {
+export function DshModalView({
+  props,
+  buildChild,
+}: {
+  props: {
+    trigger?: ChildRef
+    content?: ChildRef
+    weight?: number
+  }
+  buildChild: (id: string, basePath?: string) => ReactNode
+}) {
   const msg = useRuntimeMessages()
+  const readOnly = useContext(SurfaceReadOnlyContext)
   const [open, setOpen] = useState(false)
+
+  useEffect(() => {
+    if (readOnly) {
+      setOpen(false)
+    }
+  }, [readOnly])
+
+  const closeModal = useCallback(() => {
+    setOpen(false)
+  }, [])
+
   return (
-    <div style={weightStyle(props.weight)} data-a2ui-modal-root="">
+    <div
+      style={weightStyle(props.weight)}
+      data-a2ui-modal-root=""
+      data-readonly={readOnly ? 'true' : undefined}
+    >
       <div
         className={css.modalTrigger}
+        aria-disabled={readOnly || undefined}
         onClickCapture={(e) => {
           e.stopPropagation()
+          if (readOnly) {
+            e.preventDefault()
+            return
+          }
           setOpen(true)
         }}
       >
         {renderChildRef(buildChild, props.trigger)}
       </div>
       <DshModal
-        open={open}
-        onClose={() => setOpen(false)}
+        open={open && !readOnly}
+        onClose={closeModal}
         title={msg.modalTitle}
         closeLabel={msg.modalClose}
       >
-        {renderChildRef(buildChild, props.content)}
+        <ModalCloseContext.Provider value={closeModal}>
+          {renderChildRef(buildChild, props.content)}
+        </ModalCloseContext.Provider>
       </DshModal>
     </div>
   )
-})
+}
+
+export const DshModalImpl = defineComponent<{
+  trigger?: ChildRef
+  content?: ChildRef
+  weight?: number
+}>(ModalApi, DshModalView)

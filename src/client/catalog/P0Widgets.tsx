@@ -40,7 +40,7 @@ function defineComponent<Props>(
 
 function weightStyle(weight: number | undefined, minWidth = 0): CSSProperties | undefined {
   if (weight === undefined) return undefined
-  return { flexGrow: weight, flexBasis: 0, minWidth }
+  return { flexGrow: weight, flexBasis: 'var(--a2ui-flex-basis, 0px)', minWidth }
 }
 
 function renderChildRef(

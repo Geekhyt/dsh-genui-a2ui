@@ -43,6 +43,8 @@ import {
   MERMAID_ZOOM_MAX,
   MERMAID_ZOOM_MIN,
   MERMAID_ZOOM_STEP,
+  scaleMermaidZoomByWheel,
+  stepMermaidZoom,
 } from '../src/client/catalog/ExtendedWidgets.tsx'
 import { LocaleFormatCurrencyImplementation } from '../src/client/catalog/functions.ts'
 import { dshReactCatalog } from '../src/client/catalog/index.ts'
@@ -52,7 +54,7 @@ import { TableWidget } from '../src/client/catalog/TableWidget.tsx'
 import { loadRuntimeChunk } from '../src/client/chunk-loader.ts'
 import { buildChartOption } from '../src/client/chunks/echarts-chunk.ts'
 import { apply as applyClient } from '../src/client/index.ts'
-import { assertSafeSvg } from '../src/client/mermaid-safe.ts'
+import { assertSafeSvg, prepareMermaidSvg } from '../src/client/mermaid-safe.ts'
 import { getPluginCssRegistry, isPluginStylesMounted } from '../src/client/style-lifecycle.ts'
 import { resolveLatestA2uiCommandState } from '../src/client/turn-surfaces.ts'
 import { createGenerator, SurfaceSessions } from '../src/host/generator.ts'
@@ -206,12 +208,45 @@ describe('OSS Readiness: Reversible Style Lifecycle & Mermaid Viewport Ergonomic
     const schemaKeys = Object.keys(MermaidApi.schema.shape).sort()
     expect(schemaKeys).toEqual(['caption', 'code', 'title', 'weight'])
 
-    expect(MERMAID_ZOOM_MIN).toBe(50)
-    expect(MERMAID_ZOOM_MAX).toBe(250)
+    expect(MERMAID_ZOOM_MIN).toBe(10)
+    expect(MERMAID_ZOOM_MAX).toBe(2000)
     expect(MERMAID_ZOOM_STEP).toBe(25)
-    expect(clampMermaidZoom(10)).toBe(50)
+    expect(clampMermaidZoom(2)).toBe(10)
     expect(clampMermaidZoom(125)).toBe(125)
-    expect(clampMermaidZoom(999)).toBe(250)
+    expect(clampMermaidZoom(9999)).toBe(2000)
+
+    // Multiplicative zoom steps smoothly from 10% -> 2000% and snaps cleanly onto 100%
+    expect(stepMermaidZoom(85, 1)).toBe(100)
+    expect(stepMermaidZoom(120, -1)).toBe(100)
+    expect(stepMermaidZoom(100, 1)).toBe(125)
+    let cur = MERMAID_ZOOM_MIN
+    for (let i = 0; i < 40 && cur < MERMAID_ZOOM_MAX; i++) {
+      const next = stepMermaidZoom(cur, 1)
+      expect(next).toBeGreaterThan(cur)
+      cur = next
+    }
+    expect(cur).toBe(MERMAID_ZOOM_MAX)
+
+    // Smooth exponential wheel / pinch zoom
+    expect(scaleMermaidZoomByWheel(100, -100)).toBeGreaterThan(120)
+    expect(scaleMermaidZoomByWheel(100, 100)).toBeLessThan(85)
+    expect(scaleMermaidZoomByWheel(1800, -500)).toBe(2000)
+
+    // Intrinsic SVG vector normalization strips Mermaid's inline max-width lock
+    const prepared = prepareMermaidSvg(
+      '<svg id="m1" width="100%" style="max-width: 3240.5px; background: transparent;" viewBox="-8 -8 3240.5 820.25"><g/></svg>',
+    )
+    expect(prepared.width).toBe(3240.5)
+    expect(prepared.height).toBe(820.25)
+    expect(prepared.markup).not.toContain('max-width')
+    expect(prepared.markup).not.toContain('width="100%"')
+    expect(prepared.markup).toContain('width="3240.5" height="820.25"')
+    assertSafeSvg(prepared.markup)
+
+    const fallbackPrepared = prepareMermaidSvg('<svg width="640" height="360"><g/></svg>')
+    expect(fallbackPrepared.width).toBe(640)
+    expect(fallbackPrepared.height).toBe(360)
+    expect(fallbackPrepared.markup).toContain('viewBox="0 0 640 360"')
 
     const html = renderToStaticMarkup(
       createElement(DshMermaidView, {

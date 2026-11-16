@@ -27,6 +27,7 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
   export const IconChevronDownOutlineRegular: (props: IconProps) => JSX.Element
   export const IconChevronUpOutlineRegular: (props: IconProps) => JSX.Element
   export const IconCheckOutlineRegular: (props: IconProps) => JSX.Element
+  export const IconWarningOutlineRegular: (props: IconProps) => JSX.Element
 
   export type ButtonVariant = 'primary' | 'ghost' | 'outline' | 'toolbar'
 
@@ -119,6 +120,22 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
     contentClassName?: string
     backdropBlur?: boolean
   }): ReactPortal | null
+
+  export interface ToastAction {
+    readonly prefix?: ReactNode
+    readonly label: string
+    readonly onClick: () => void
+  }
+
+  export function Toast(props: {
+    text: string
+    icon?: ReactNode
+    tone?: 'success' | undefined
+    anchor?: HTMLElement | null | undefined
+    holdMs?: number | undefined
+    actions?: readonly ToastAction[] | undefined
+    onDone: () => void
+  }): ReactPortal
 
   export function Tooltip(props: {
     label: string | (() => string)

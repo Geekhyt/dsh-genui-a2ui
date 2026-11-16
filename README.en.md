@@ -80,7 +80,7 @@ Keep multi-stage pipelines anchored at the bottom of the window. Stages and comp
 
 - **Safe by design**: Built on Google's A2UI 1.0 specification, models output declarative JSON only and never execute untrusted HTML or scripts.
 - **Native look and feel**: Every surface renders with DeepSeek Harness UI primitives, adapting automatically to light mode, dark mode, and community themes.
-- **Zero host patches, fast startup**: Built on official plugin APIs with a 15.0 KB gzipped core; chart and diagram engines load only on demand.
+- **Zero host patches, fast startup**: Built on official plugin APIs with a 16.1 KB gzipped core; chart and diagram engines load only on demand.
 
 ## Component catalog
 
@@ -97,7 +97,7 @@ Includes 32 native UI components, 14 interactive chart types, and full Mermaid d
 | **Media** | `Image`, `AudioPlayer`, `Video` | Inline image previews, audio players, and video playback |
 
 - **14 interactive charts (`Chart`)**: Vertical and horizontal ranking bars (`bar`), `line`, `area`, donut and pie (`pie`), bubble and `scatter`, `radar`, `funnel`, `gauge`, `heatmap`, `treemap`, `sankey`, `boxplot`, network (`graph`), and `candlestick`.
-- **Architecture and flow diagrams (`Mermaid`)**: Flowcharts, sequence diagrams, state machines, class diagrams, ER diagrams, Gantt charts, Git graphs, and mindmaps with zoom, fullscreen view, and source toggle.
+- **Architecture and flow diagrams (`Mermaid`)**: Flowcharts, sequence diagrams, state machines, class diagrams, ER diagrams, Gantt charts, Git graphs, and mindmaps with `10%–2000%` lossless vector zoom, pointer-anchored wheel zoom, drag-to-pan, fit-to-viewport, fullscreen view, and source toggle.
 
 ## Documentation and license
 

@@ -34,6 +34,7 @@ import {
 import { TableWidget, type TableColumnInput } from './TableWidget.tsx'
 import {
   InsideButtonContext,
+  SurfaceReadOnlyContext,
   defineComponent,
   isSafeMediaUrl,
   weightStyle,
@@ -315,6 +316,7 @@ export const DshChartImpl = defineComponent<{
   action?: ((options?: ActionDispatchOptions) => Promise<void>) | undefined
   weight?: number
 }>(ChartApi, function DshChart({ props }) {
+  const readOnly = useContext(SurfaceReadOnlyContext)
   return (
     <EChartsWidget
       kind={props.kind}
@@ -328,7 +330,7 @@ export const DshChartImpl = defineComponent<{
       horizontal={props.horizontal}
       zoom={props.zoom}
       height={props.height}
-      action={props.action}
+      action={readOnly ? undefined : props.action}
       weight={props.weight}
     />
   )
@@ -343,6 +345,7 @@ export const DshTableImpl = defineComponent<{
   action?: ((options?: ActionDispatchOptions) => Promise<void>) | undefined
   weight?: number
 }>(TableApi, function DshTable({ props }) {
+  const readOnly = useContext(SurfaceReadOnlyContext)
   return (
     <TableWidget
       rows={props.rows}
@@ -350,7 +353,7 @@ export const DshTableImpl = defineComponent<{
       title={props.title ? String(props.title) : undefined}
       searchable={props.searchable}
       pageSize={props.pageSize}
-      action={props.action}
+      action={readOnly ? undefined : props.action}
       weight={props.weight}
     />
   )

@@ -112,7 +112,7 @@ export interface HostUiMessages {
 
 export const HOST_MESSAGES: Record<UiLocale, HostUiMessages> = {
   zh: {
-    tierCommandDesc: '开关 A2UI 生成式界面（on / off，不传参直接切换）',
+    tierCommandDesc: '开关或查看 A2UI 生成式界面状态（on / off / status，不传参直接切换）',
     enabledStatus: 'A2UI 生成式界面已开启',
     disabledStatus: 'A2UI 生成式界面已关闭',
     invalidTierArg: (arg) => `无效参数 "${arg}"，可选值：on | off | status（或不传参直接切换）`,
@@ -123,7 +123,7 @@ export const HOST_MESSAGES: Record<UiLocale, HostUiMessages> = {
     askDefaultTitle: 'A2UI 交互提问',
   },
   en: {
-    tierCommandDesc: 'Toggle A2UI generative UI (on / off, or omit args to toggle)',
+    tierCommandDesc: 'Toggle or check A2UI generative UI status (on / off / status, or omit args to toggle)',
     enabledStatus: 'A2UI generative UI enabled',
     disabledStatus: 'A2UI generative UI disabled',
     invalidTierArg: (arg) => `Invalid argument "${arg}". Expected: on | off | status (or omit to toggle)`,
@@ -361,6 +361,9 @@ export interface RuntimeUiMessages {
   readonly mermaidZoomResetTitle: string
   readonly mermaidZoomInAria: string
   readonly mermaidZoomInTitle: string
+  readonly mermaidZoomFit: string
+  readonly mermaidZoomFitAria: string
+  readonly mermaidZoomFitTitle: string
   readonly mermaidViewGroup: string
   readonly mermaidDiagramTab: string
   readonly mermaidSourceTab: string
@@ -428,10 +431,13 @@ export const RUNTIME_MESSAGES: Record<UiLocale, RuntimeUiMessages> = {
     mermaidZoomGroup: '流程图缩放控制',
     mermaidZoomOutAria: '缩小流程图',
     mermaidZoomOutTitle: '缩小',
-    mermaidZoomResetAria: '重置缩放比例',
-    mermaidZoomResetTitle: '重置为 100%',
+    mermaidZoomResetAria: '重置为 100% 原始尺寸',
+    mermaidZoomResetTitle: '重置为 100% 原始尺寸',
     mermaidZoomInAria: '放大流程图',
     mermaidZoomInTitle: '放大',
+    mermaidZoomFit: '自适应',
+    mermaidZoomFitAria: '自适应窗口大小',
+    mermaidZoomFitTitle: '自适应窗口大小（双击画布可快速缩放，按住拖拽可平移）',
     mermaidViewGroup: '流程图显示切换',
     mermaidDiagramTab: '图形',
     mermaidSourceTab: '源码',
@@ -497,10 +503,13 @@ export const RUNTIME_MESSAGES: Record<UiLocale, RuntimeUiMessages> = {
     mermaidZoomGroup: 'Diagram zoom controls',
     mermaidZoomOutAria: 'Zoom out diagram',
     mermaidZoomOutTitle: 'Zoom out',
-    mermaidZoomResetAria: 'Reset zoom',
-    mermaidZoomResetTitle: 'Reset to 100%',
+    mermaidZoomResetAria: 'Reset to 100% actual size',
+    mermaidZoomResetTitle: 'Reset to 100% actual size',
     mermaidZoomInAria: 'Zoom in diagram',
     mermaidZoomInTitle: 'Zoom in',
+    mermaidZoomFit: 'Fit',
+    mermaidZoomFitAria: 'Fit diagram to viewport',
+    mermaidZoomFitTitle: 'Fit to viewport (double-click canvas to toggle zoom, drag to pan)',
     mermaidViewGroup: 'Diagram view mode',
     mermaidDiagramTab: 'Diagram',
     mermaidSourceTab: 'Source',

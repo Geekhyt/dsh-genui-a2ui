@@ -3,11 +3,11 @@
  *
  * - registers the `tool:a2ui` system-prompt section (answer-topology trigger rule
  *   + 1-step Fast-Path Express micro-grammar; emits 0 tokens when A2UI is OFF);
- * - registers the `a2ui` skill (full 32-component Express grammar, form inputs,
- *   validation checks, and reactive functions), loaded on demand for complex UIs;
+ * - registers the `a2ui` skill dynamically (full 32-component Express grammar, form
+ *   inputs, validation checks, and reactive functions; unregistered when A2UI is OFF);
  * - registers the `a2ui_render` tool (`answer` | `inline` | `dock` placements);
  * - registers the `a2ui_ask` blocking interactive question/form tool;
- * - registers `/a2ui` (`on` | `off` | toggle switch) and `/a2ui-answer`
+ * - registers `/a2ui` (`on` | `off` | `status` | toggle switch) and `/a2ui-answer`
  *   (in-turn settlement RPC for `a2ui_ask`, `recordInput: false`).
  * @module dsh-genui-a2ui
  */
@@ -111,8 +111,52 @@ interface SystemPromptService {
     readonly text: string | ((context: PromptAssembleContext) => string)
   }): () => void
 }
+interface SkillLookupContext {
+  readonly cwd?: string | undefined
+  readonly signal?: AbortSignal | undefined
+  readonly scope?: unknown
+}
+interface SkillInvocationPolicy {
+  readonly modelInvocable: boolean
+  readonly userInvocable: boolean
+}
+interface SkillCandidate {
+  readonly name: string
+  readonly description: string
+  readonly invocation: SkillInvocationPolicy
+  readonly source: 'bundled'
+  readonly provider: string
+  readonly rank: number
+  readonly locator: string
+}
+interface SkillDefinition {
+  readonly name: string
+  readonly description: string
+  readonly invocation: SkillInvocationPolicy
+  readonly source: 'bundled'
+  readonly provider: string
+  readonly content: string
+}
+interface SkillProviderControl {
+  readonly signal: AbortSignal
+  readonly invalidate: () => void
+}
+interface SkillProvider {
+  readonly name: string
+  readonly list: (options: SkillLookupContext) => Promise<readonly SkillCandidate[]>
+  readonly get: (
+    candidate: SkillCandidate,
+    options: SkillLookupContext,
+  ) => Promise<SkillDefinition | undefined>
+}
 interface SkillsService {
-  register(skill: unknown): () => void
+  registerProvider?(create: (control: SkillProviderControl) => SkillProvider): () => void
+  register(skill: {
+    readonly name: string
+    readonly description: string
+    readonly content: string
+    readonly source: 'bundled'
+  }): () => void
 }
 interface CommandInvocation {
   readonly agent?: ToolExec['agent']
@@ -170,7 +214,7 @@ export const A2UI_SYSTEM_GUIDANCE = [
   '- Layout: `Card(child)` | `Column([c1, c2, ...])` | `Row([c1, c2, ...], justify?="spaceBetween"|"start"|"end"|"center", align?="stretch"|"center"|"start"|"end")` | `Tabs([{ title: "Tab", child: c1 }, ...])` | `Accordion([{ title: "分组", subtitle?, badge?, open?=false, child: c1 }, ...], multiple?=false)` | `Divider()` — pass `weight=1` on equal-width peer cards/controls inside `Row([Stat(..., weight=1), ...])`; set `weight` ONLY on direct children of `Row` or `Column`.',
   '- Controls: `Slider(label, min, max, $/val, steps?)` (`min`/`max`/`steps` static numbers; `steps` = `(max - min) / stepSize`, e.g. `min=2.5, max=6.0, steps=70` for `0.05` step) | `ChoicePicker(label="...", options=[{ value: "id", label: "名称" }, ...], value=$/selectedList, variant="mutuallyExclusive"|"multipleSelection", displayStyle="chips"|"checkbox")`',
   '- Text, Metrics & Trees: `Text(text, variant?="body"|"caption"|"h1".."h5")` | `Badge(label, tone?="neutral"|"info"|"success"|"warning"|"danger")` | `Stat(label, value, delta?, trend?="up"|"down"|"neutral", caption?, spark?)` (`spark`: numeric array `[10, 14, 13, 19]`) | `KeyValue(items, title?, columns?=2, copyable?=false)` (`items`: `{ "键": valOrExpr }` or `[{ label, value, tone? }]`) | `JsonTree(data, title?, expandedDepth?=2, copyable?=true)` | `FileTree(items, title?, expandedDepth?=2, action?)` (`items`: `[{ path: "src/index.ts", status?: "added"|"modified"|"deleted"|"renamed", line?: 42, summary?: "..." }]`)',
-  '- Charts, Diagrams & Workflows: `Chart(kind, data, title?, xField?, yField?, seriesField?, sizeField?, stacked?=false, horizontal?=false, zoom?=false, height?=240, action?)` (`kind`: `"bar"|"line"|"area"|"pie"|"scatter"|"radar"|"funnel"|"gauge"|"heatmap"|"treemap"|"sankey"|"boxplot"|"graph"|"candlestick"`; `heatmap`: `[{ x, y, value }]`; `sankey`/`graph`: `[{ source, target, value }]`; `boxplot`: `[{ name, values: [...] }]`; `candlestick`: `[{ date, open, close, low, high }]`) | `Mermaid(code, title?, caption?)` (`flowchart TD`/`LR`, `sequenceDiagram`, `stateDiagram-v2`, `classDiagram`, `erDiagram` — quote labels with parens/CJK punctuation like `A["网关 (Gateway)"]`) | `Table(rows, columns?, title?, searchable?=false, pageSize?=10, action?)` (`action=Event("drill_down")`) | `Steps(items, current?, direction?="vertical"|"horizontal", title?)` | `DiffView(before, after, title?, language?, mode?="unified"|"split", filePath?, line?)` | `Callout(title, message?, tone?="info"|"success"|"warning"|"danger", collapsible?=false, child?)` | `Progress(value, max?=100, label?, tone?="brand"|"success"|"warning"|"danger")` | `Code(code, language?="text", lineNumbers?=false, title?, filePath?, line?)` (`filePath` opens file in DSH right sidebar)',
+  '- Charts, Diagrams & Workflows: `Chart(kind, data, title?, xField?, yField?, seriesField?, sizeField?, stacked?=false, horizontal?=false, zoom?=false, height?=240, action?)` (`kind`: `"bar"|"line"|"area"|"pie"|"scatter"|"radar"|"funnel"|"gauge"|"heatmap"|"treemap"|"sankey"|"boxplot"|"graph"|"candlestick"`; `heatmap`: `[{ x, y, value }]`; `sankey`/`graph`: `[{ source, target, value }]`; `boxplot`: `[{ name, values: [...] }]`; `candlestick`: `[{ date, open, close, low, high }]`) | `Mermaid(code, title?, caption?)` (`flowchart TD`/`LR`, `sequenceDiagram`, `stateDiagram-v2`, `classDiagram`, `erDiagram` — quote labels with parens/CJK punctuation like `A["网关 (Gateway)"]`) | `Table(rows, columns?, title?, searchable?=false, pageSize?=10, action?)` (`action=Event("drill_down")`; cells render plain text/numbers/booleans only — use `"🟢 正常"`/`"🟡 预警"`/`"🔴 异常"` for status columns, NEVER nest `Badge`/`Button` inside `rows`) | `Steps(items, current?, direction?="vertical"|"horizontal", title?)` | `DiffView(before, after, title?, language?, mode?="unified"|"split", filePath?, line?)` | `Callout(title, message?, tone?="info"|"success"|"warning"|"danger", collapsible?=false, child?)` | `Progress(value, max?=100, label?, tone?="brand"|"success"|"warning"|"danger")` | `Code(code, language?="text", lineNumbers?=false, title?, filePath?, line?)` (`filePath` opens file in DSH right sidebar)',
   '- **0-Latency Formula & UI Branching** (Thin UI, Thick Agent: keep client reactivity strictly to closed-form scalar/fixed-item math; delegate multi-row schedules or external simulations to Agent actions via `Event(...)` + `surface("id", update=true)`):',
   '  - Formula Gateway (statically validated): `calc("w * 10000 * (r/1200) * (1 + r/1200)^(y*12) / ((1 + r/1200)^(y*12) - 1)", { w: $/wan, y: $/years, r: $/rate }, decimals=2)` — supports `+ - * / ^ % ( ) ? : == != < <= > >= && ||` plus `pow, sqrt, exp, log, ln, log10, abs, min, max, clamp, round, floor, ceil, pmt(ratePerPeriod, nper, pv)`.',
   '  - Branching, Aggregates & Formatting: `cond(condExpr, truthy, falsy)`, `eq(a, b)` (matches `ChoicePicker` `["x"]` with `"x"`), `gt(a, b)`, `lt(a, b)`, `includes(items, val)`, `not(b)`, `and([b1, b2])`, `or([b1, b2])`, `sum(items, field?)`, `avg(items, field?)`, `formatNumber(v, decimals?, grouping?)`, `formatCurrency(v, currency, decimals?, grouping?)`',
@@ -225,6 +269,21 @@ export const GOLDEN_ASK_EXAMPLE = [
   ']))',
 ].join('\n')
 
+export const GOLDEN_VALIDATED_FORM_EXAMPLE = [
+  'surface("quota_apply")',
+  '$/service = ""',
+  '$/ownerEmail = ""',
+  '$/qps = 500',
+  '$/agreed = false',
+  'root = Card(Column([',
+  '  TextField("服务标识", $/service, placeholder="例如 order-gateway", ?required("请输入服务标识"), ?regex("^[a-z0-9-]{3,32}$", "仅限 3-32 位小写字母、数字或连字符")),',
+  '  TextField("负责人邮箱", $/ownerEmail, placeholder="name@example.com", ?required("请输入负责人邮箱"), ?email("邮箱格式不正确")),',
+  '  Slider("申请峰值 QPS", 100, 5000, $/qps, steps=49, ?numeric(200, 3000, "自助审批范围为 200–3000 QPS")),',
+  '  CheckBox("我已完成压测并确认回滚预案", $/agreed, ?required("提交前请勾选确认项")),',
+  '  Row([Button(Text("提交配额申请"), variant="primary", action=Event("submit_quota", { service: $/service, ownerEmail: $/ownerEmail, qps: $/qps }), ?required($/service, "请填写服务标识"), ?regex($/service, "^[a-z0-9-]{3,32}$", "服务标识格式有误"), ?email($/ownerEmail, "请填写有效邮箱"), ?numeric($/qps, 200, 3000, "QPS 超出自助审批范围"), ?required($/agreed, "请勾选确认项"))], justify="end")',
+  ']))',
+].join('\n')
+
 /** Guidance prepended to the generated grammar. */
 export const SKILL_PREAMBLE = `# Interactive UI with A2UI (Full Grammar & Interactive Controls)
 
@@ -235,8 +294,10 @@ Trigger by **answer & deliverable topology**, even when the user asks a brief qu
 - \`a2ui_ask\`: composite in-turn form/review wizard (\`Slider\`, \`ChoicePicker\`, \`CheckBox\`, \`TextField\`, \`DateTimeInput\`, or \`DiffView\`/\`Callout\` approval with \`Button(..., action=Event(...))\`) when you MUST pause the current turn for structured user input. For a single simple 2-option text question, prefer the lightweight built-in \`ask_user_question\` tool instead.
 
 Modality & safety rules:
+- **Availability guard (\`/a2ui off\`)**: If \`a2ui_render\` and \`a2ui_ask\` are absent from your current tool declarations, A2UI is disabled for this turn — reply directly in concise Markdown and NEVER run shell commands, inspect processes/bundles, or query plugin settings to investigate why the tools are unavailable.
 - Unless the user explicitly asks to create or export a standalone \`.html\` file or web project on disk, always deliver calculators, simulators, and dashboards directly inside chat via \`a2ui_render\` — never escape to single-file HTML pages or headless browser screenshots.
 - Store mutable literal inputs in \`$/paths\` and assign reactive formulas to local variables WITHOUT \`$/\` (\`pmt = calc("pmt(r/1200, y*12, p)", { p: $/p, r: $/r, y: $/y }, decimals=2)\`); never assign \`fn(...)\` to a \`$/path\`.
+- **\`Table\` cells are plain scalar text only**: \`Table\` cells render strings, numbers, and booleans — NEVER pass nested A2UI components (\`Badge\`, \`Button\`, \`Icon\`) inside \`Table\` \`rows\` (objects stringify as JSON). For status columns inside \`Table\`, use status text or emoji prefixes such as \`"🟢 正常"\` / \`"🟡 预警"\` / \`"🔴 异常"\`; if semantic \`DshTag\` badges are needed for key-value pairs, use \`KeyValue([{ label: "状态", value: "健康", tone: "success" }])\`, or use \`List\` + \`Row\` + \`Badge\` for component rows.
 - Uphold **Thin UI, Thick Agent**: use \`calc\` for closed-form scalar/KPI reactivity; delegate iterative schedules or external queries to Agent actions via \`Event(...)\` + \`surface("id", update=true)\`.
 - Single-fact answers, plain conceptual/mechanism explanations, casual chat, prose writing/translation, or single-snippet code edits — reply directly in concise Markdown.
 - Data without live tool/web backing must state its reference basis visibly inside the UI (e.g. historical average or sample data); never fabricate live readings.
@@ -244,9 +305,21 @@ Modality & safety rules:
 - Never ask for passwords, API keys, or other secrets in a UI.
 - Keep your reply text short; do not restate the UI in prose.
 
+## Client Validation Rules (\`?check\`)
+
+Attach zero-latency validation rules to \`TextField\`, \`CheckBox\`, \`ChoicePicker\`, \`Slider\`, \`DateTimeInput\`, and \`Button\` by passing \`?rule(...)\` arguments directly in the component call (append an optional custom error message string as the last argument):
+1. **On bound input controls** (bound \`value = $/path\` is injected automatically as the first argument; errors stay hidden on initial render and appear after blur or submit attempt):
+   - \`?required("必填提示")\` — non-empty string, \`true\` checkbox, or non-empty selection array
+   - \`?email("请输入有效邮箱")\` — valid email format
+   - \`?regex("^[a-z0-9-]{3,32}$", "格式提示")\` — regular expression match
+   - \`?length(min, max, "长度提示")\` — string length bounds (e.g. \`?length(2, 20, "需 2–20 个字符")\`)
+   - \`?numeric(min, max, "范围提示")\` — numeric bounds (e.g. \`?numeric(1, 100, "需在 1–100 之间")\`)
+2. **On \`Button\` (submit gate)**: \`Button\` has no \`value\` property, so pass the target \`$/path\` explicitly as the **first** argument to disable \`Button\` until valid:
+   - \`Button(Text("提交"), variant="primary", action=Event("submit", { name: $/name, email: $/email }), ?required($/name, "请填写姓名"), ?email($/email, "请填写有效邮箱"))\`
+
 ## Canonical Composition Examples
 
-Example 1 — Reactive Dashboard + Chart + Searchable Table (\`a2ui_render\`):
+Example 1 — Reactive Dashboard + Chart + Searchable Plain-Text Table (\`a2ui_render\`):
 \`\`\`
 ${GOLDEN_DASHBOARD_EXAMPLE}
 \`\`\`
@@ -259,6 +332,11 @@ ${GOLDEN_CALCULATOR_EXAMPLE}
 Example 3 — Config Diff Review + Blocking Confirmation (\`a2ui_ask\`):
 \`\`\`
 ${GOLDEN_ASK_EXAMPLE}
+\`\`\`
+
+Example 4 — Form with \`?check\` Validation Rules & Gated Submit Button (\`a2ui_render\` / \`a2ui_ask\`):
+\`\`\`
+${GOLDEN_VALIDATED_FORM_EXAMPLE}
 \`\`\`
 
 `
@@ -314,18 +392,99 @@ export function apply(ctx: Context, config: Config = {}): void {
     )
   })
 
+  const BUNDLED_SKILL_RANK = 600
+  const SKILL_INVOCATION: SkillInvocationPolicy = {
+    modelInvocable: true,
+    userInvocable: true,
+  }
+  const skillCandidate: SkillCandidate = {
+    name: SKILL_NAME,
+    description: SKILL_DESCRIPTION,
+    invocation: SKILL_INVOCATION,
+    source: 'bundled',
+    provider: name,
+    rank: BUNDLED_SKILL_RANK,
+    locator: SKILL_NAME,
+  }
+  const skillDefinition: SkillDefinition = {
+    name: SKILL_NAME,
+    description: SKILL_DESCRIPTION,
+    invocation: SKILL_INVOCATION,
+    source: 'bundled',
+    provider: name,
+    content: skillContent,
+  }
+  const isEnabledForSkillLookup = (options?: SkillLookupContext): boolean => {
+    if (options?.scope !== undefined) {
+      return isEnabledForStep({ agent: options.scope as ToolExec['agent'] })
+    }
+    return sessions.isEnabled('default')
+  }
+
+  let syncSkillCatalog: () => void = () => {}
+
   ctx.inject(['skills'], (skillCtx) => {
     const skills = (skillCtx as unknown as { skills: SkillsService }).skills
-    skillCtx.effect(
-      () =>
-        skills.register({
-          name: SKILL_NAME,
-          description: SKILL_DESCRIPTION,
-          content: skillContent,
-          source: 'bundled',
-        }),
-      'dsh-genui-a2ui: a2ui skill',
-    )
+    if (typeof skills.registerProvider === 'function') {
+      skillCtx.effect(() => {
+        let invalidate: (() => void) | undefined
+        const dispose = skills.registerProvider!((control) => {
+          invalidate = control.invalidate
+          return {
+            name,
+            list(options) {
+              return Promise.resolve(isEnabledForSkillLookup(options) ? [skillCandidate] : [])
+            },
+            get(candidate, options) {
+              if (candidate.name !== SKILL_NAME || !isEnabledForSkillLookup(options)) {
+                control.invalidate()
+                return Promise.resolve(undefined)
+              }
+              return Promise.resolve(skillDefinition)
+            },
+          }
+        })
+        syncSkillCatalog = () => {
+          invalidate?.()
+        }
+        return () => {
+          syncSkillCatalog = () => {}
+          invalidate = undefined
+          dispose()
+        }
+      }, 'dsh-genui-a2ui: a2ui skill provider')
+      return
+    }
+
+    skillCtx.effect(() => {
+      let disposeRegistered: (() => void) | undefined
+      const syncFallback = () => {
+        if (sessions.isEnabled('default')) {
+          if (disposeRegistered === undefined) {
+            disposeRegistered = skills.register({
+              name: SKILL_NAME,
+              description: SKILL_DESCRIPTION,
+              content: skillContent,
+              source: 'bundled',
+            })
+          }
+        } else if (disposeRegistered !== undefined) {
+          const prev = disposeRegistered
+          disposeRegistered = undefined
+          prev()
+        }
+      }
+      syncFallback()
+      syncSkillCatalog = syncFallback
+      return () => {
+        syncSkillCatalog = () => {}
+        if (disposeRegistered !== undefined) {
+          const prev = disposeRegistered
+          disposeRegistered = undefined
+          prev()
+        }
+      }
+    }, 'dsh-genui-a2ui: a2ui skill')
   })
 
   ctx.inject(['commands'], (cmdCtx) => {
@@ -335,7 +494,7 @@ export function apply(ctx: Context, config: Config = {}): void {
         commands.register({
           name: TIER_COMMAND,
           description: HOST_MESSAGES[resolveHostLocale()].tierCommandDesc,
-          input: { hint: 'on | off' },
+          input: { hint: 'on | off | status' },
           recordInput: false,
           handler({ agent, rawInput }) {
             const msg = HOST_MESSAGES[resolveHostLocale()]
@@ -359,6 +518,7 @@ export function apply(ctx: Context, config: Config = {}): void {
             }
             sessions.setEnabled(sid, next)
             sessions.setDefaultEnabled(next)
+            syncSkillCatalog()
             writePersistedEnabled(stateFile, next)
             return {
               kind: 'success',
@@ -405,6 +565,7 @@ export function apply(ctx: Context, config: Config = {}): void {
       const sid = String(session.id)
       sessions.forget(sid)
       asks.forgetSession(sid)
+      syncSkillCatalog()
     }) as never,
   )
 }

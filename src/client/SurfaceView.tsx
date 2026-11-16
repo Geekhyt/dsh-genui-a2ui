@@ -21,6 +21,11 @@ import {
 } from '@a2ui/web_core/v1_0'
 import type { AgentToRendererMessage } from '@a2ui/agent'
 import { DSH_CLIENT_CATALOGS } from './catalog/index.ts'
+import {
+  SurfaceReadOnlyContext,
+  SurfaceValidationContext,
+  type SurfaceValidationContextValue,
+} from './catalog/widget-helpers.tsx'
 import { enrichActionWithSelection, formatActionMessage } from './action-protocol.ts'
 import { ErrorBoundary } from './ErrorBoundary.tsx'
 import { FileOpenContext, type WorkspaceFileOpener } from './file-opener.tsx'
@@ -131,11 +136,24 @@ export const SurfaceGroupView = memo(function SurfaceGroupView({
   streamingRef.current = streaming
 
   const [surfaces, setSurfaces] = useState<SurfaceModel<ReactCatalogComponent>[]>([])
+  const [submitAttempted, setSubmitAttempted] = useState(false)
   const stackDomRef = useRef<HTMLDivElement | null>(null)
   const appliedCountRef = useRef(0)
   const appliedPrefixRef = useRef<readonly AgentToRendererMessage[]>([])
   const mutatingModelRef = useRef(false)
   const lastActionAtRef = useRef(0)
+
+  const markSubmitAttempted = useCallback(() => {
+    setSubmitAttempted(true)
+  }, [])
+
+  const validationContext = useMemo<SurfaceValidationContextValue>(
+    () => ({
+      submitAttempted,
+      markSubmitAttempted,
+    }),
+    [submitAttempted, markSubmitAttempted],
+  )
 
   const fingerprint = useMemo(
     () => (streaming || !sessionId ? '' : computeMessagesFingerprint(messages)),
@@ -200,6 +218,7 @@ export const SurfaceGroupView = memo(function SurfaceGroupView({
           } as unknown as ProcessableMessage)
         }
         appliedCountRef.current = 0
+        setSubmitAttempted(false)
       }
 
       const slice = messages.slice(appliedCountRef.current)
@@ -278,6 +297,12 @@ export const SurfaceGroupView = memo(function SurfaceGroupView({
     [readOnly],
   )
 
+  useEffect(() => {
+    if (stackDomRef.current !== null) {
+      ;(stackDomRef.current as HTMLDivElement & { inert?: boolean }).inert = Boolean(readOnly)
+    }
+  }, [readOnly])
+
   const msg = useRuntimeMessages()
   const themeClass = dark ? 'a2ui-dark' : 'a2ui-light'
   const cardClasses = [
@@ -314,36 +339,40 @@ export const SurfaceGroupView = memo(function SurfaceGroupView({
           </span>
         </header>
       ) : null}
-      <FileOpenContext.Provider value={streaming || readOnly ? undefined : openWorkspaceFile}>
-        <MarkdownComponentContext.Provider value={HostMarkdown}>
-          <div
-            ref={setStackInertRef}
-            className={`${css.surfaceStack}${readOnly ? ` ${css.surfaceStackReadOnly}` : ''}`}
-          >
-            {shown.length === 0 ? (
-              streaming ? (
-                <div className={css.skeletonWrap} data-a2ui-skeleton="" aria-live="polite">
-                  <div className={css.skeletonKpiRow}>
-                    <span className={css.skeletonBlock} />
-                    <span className={css.skeletonBlock} />
-                    <span className={css.skeletonBlock} />
-                  </div>
-                  <div className={css.skeletonChart} />
-                  <span className={css.skeletonHint}>{msg.buildingSurface}</span>
-                </div>
-              ) : (
-                <div className={css.skeleton}>{msg.emptySurface}</div>
-              )
-            ) : (
-              shown.map((surface) => (
-                <ErrorBoundary key={surface.id} label={msg.surfaceRenderFailed(surface.id)}>
-                  <A2uiSurface surface={surface} />
-                </ErrorBoundary>
-              ))
-            )}
-          </div>
-        </MarkdownComponentContext.Provider>
-      </FileOpenContext.Provider>
+      <SurfaceReadOnlyContext.Provider value={Boolean(readOnly)}>
+        <SurfaceValidationContext.Provider value={validationContext}>
+          <FileOpenContext.Provider value={streaming || readOnly ? undefined : openWorkspaceFile}>
+            <MarkdownComponentContext.Provider value={HostMarkdown}>
+              <div
+                ref={setStackInertRef}
+                className={`${css.surfaceStack}${readOnly ? ` ${css.surfaceStackReadOnly}` : ''}`}
+              >
+                {shown.length === 0 ? (
+                  streaming ? (
+                    <div className={css.skeletonWrap} data-a2ui-skeleton="" aria-live="polite">
+                      <div className={css.skeletonKpiRow}>
+                        <span className={css.skeletonBlock} />
+                        <span className={css.skeletonBlock} />
+                        <span className={css.skeletonBlock} />
+                      </div>
+                      <div className={css.skeletonChart} />
+                      <span className={css.skeletonHint}>{msg.buildingSurface}</span>
+                    </div>
+                  ) : (
+                    <div className={css.skeleton}>{msg.emptySurface}</div>
+                  )
+                ) : (
+                  shown.map((surface) => (
+                    <ErrorBoundary key={surface.id} label={msg.surfaceRenderFailed(surface.id)}>
+                      <A2uiSurface surface={surface} />
+                    </ErrorBoundary>
+                  ))
+                )}
+              </div>
+            </MarkdownComponentContext.Provider>
+          </FileOpenContext.Provider>
+        </SurfaceValidationContext.Provider>
+      </SurfaceReadOnlyContext.Provider>
     </section>
   )
 })

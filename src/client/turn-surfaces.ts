@@ -203,15 +203,33 @@ export const a2uiSurfaceNodeDefinition = {
 
 /** Minimal shape of DSH's Chat target snapshot we inspect. */
 export interface ChatTargetSnapshot {
+  readonly order?: readonly string[]
   readonly nodes: {
-    values(): readonly {
+    get?(key: string): { readonly kind: string } | undefined
+    values(): Iterable<{
       readonly kind: string
       readonly id?: string
       readonly anchorSeq: number
       readonly location?: { readonly turn?: { readonly turn?: number; readonly status?: string } }
       readonly data: unknown
-    }[]
+    }>
   }
+}
+
+/**
+ * Mirrors `@deepseek-ai/dsh-client-ui-chat` `chatViewDefinition.isActive`:
+ * `ChatView` (and its `GenericCommandCard` rows) stays unmounted while a session
+ * is blank or contains only `command` log nodes.
+ */
+export function isChatTimelineActive(snapshot: ChatTargetSnapshot | undefined): boolean {
+  if (snapshot === undefined) return false
+  if (Array.isArray(snapshot.order) && typeof snapshot.nodes.get === 'function') {
+    return snapshot.order.some((key) => snapshot.nodes.get!(key)?.kind !== 'command')
+  }
+  for (const node of snapshot.nodes.values()) {
+    if (node.kind !== 'command') return true
+  }
+  return false
 }
 
 /** Whether the turn owning a given `callId` has already closed (`turn/end` arrived). */
@@ -420,6 +438,13 @@ export function resolveDockBatch(snapshot: ChatTargetSnapshot | undefined): Dock
   return batch
 }
 
+/** Parse whether a localized `/a2ui` command outcome text indicates ON or OFF. */
+export function parseA2uiEnabledFromStatusText(text: string): boolean | null {
+  if (text.includes('已开启') || /\benabled\b/i.test(text)) return true
+  if (text.includes('已关闭') || /\bdisabled\b/i.test(text)) return false
+  return null
+}
+
 /** Detect the latest settled `/a2ui` slash-command outcome in the chat stream for UI pill sync. */
 export function resolveLatestA2uiCommandState(
   snapshot: ChatTargetSnapshot | undefined,
@@ -437,13 +462,7 @@ export function resolveLatestA2uiCommandState(
       | undefined
     if (data?.name !== 'a2ui') continue
     if (data.outcome?.kind !== 'success' || typeof data.outcome.text !== 'string') continue
-    const text = data.outcome.text
-    const enabled =
-      text.includes('已开启') || /\benabled\b/i.test(text)
-        ? true
-        : text.includes('已关闭') || /\bdisabled\b/i.test(text)
-          ? false
-          : null
+    const enabled = parseA2uiEnabledFromStatusText(data.outcome.text)
     if (enabled === null) continue
     const seq = typeof data.seq === 'number' ? data.seq : node.anchorSeq
     if (latest === null || seq >= latest.seq) {

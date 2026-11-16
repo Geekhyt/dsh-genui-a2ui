@@ -163,7 +163,7 @@ export const TableApi = {
     z
       .object({
         rows: DynamicValueSchema.describe(
-          'REF:#/$defs/DynamicValue|Array of row objects, or a $/path binding to an array in the surface data model.',
+          'REF:#/$defs/DynamicValue|Array of row objects, or a $/path binding to an array in the surface data model. Cell values MUST be plain scalar primitives (strings, numbers, booleans — e.g. `"🟢 正常"` / `"🟡 预警"` / `"🔴 异常"` for status columns); nested A2UI components such as Badge or Button are NOT supported inside Table cells.',
         ),
         columns: z
           .array(TableColumnSchema)
@@ -194,7 +194,7 @@ export const TableApi = {
         weight: WeightSchema.optional(),
       })
       .describe(
-        'Sortable, filterable, paginated data table powered by TanStack Table, with optional row click drill-down action.',
+        'Sortable, filterable, paginated data table powered by TanStack Table, with optional row click drill-down action. Renders plain text/scalar cells only (no nested Badge/Button components; use status text or emoji prefixes for status columns, or List + Row + Badge when component rows are needed).',
       )
       .strict(),
     { mixins: [], required: ['rows'] },

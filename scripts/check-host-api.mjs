@@ -55,6 +55,7 @@ const REQUIRED_PRIMITIVE_EXPORTS = [
   'Tag',
   'Modal',
   'Menu',
+  'Toast',
   'Tooltip',
   'CodeBlock',
   'JsonTree',
@@ -62,6 +63,7 @@ const REQUIRED_PRIMITIVE_EXPORTS = [
   'MarkdownText',
   'IconAppsAddOutlineRegular',
   'IconSearchOutlineRegular',
+  'IconWarningOutlineRegular',
 ]
 
 const REQUIRED_SLOTS = [

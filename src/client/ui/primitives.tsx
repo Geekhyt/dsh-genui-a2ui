@@ -16,6 +16,8 @@ import type {
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import {
   forwardRef,
+  useEffect,
+  useRef,
   useState,
   type ButtonHTMLAttributes,
   type InputHTMLAttributes,
@@ -557,6 +559,114 @@ export function DshCheckIcon({ size = 13 }: { size?: number }) {
       <path d="M3.2 8.4L6.4 11.6L12.8 4.8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   )
+}
+
+export function DshWarningIcon({ size = 15 }: { size?: number }) {
+  if (hasComponent(raw.IconWarningOutlineRegular)) {
+    return <HostPrimitives.IconWarningOutlineRegular size={size} />
+  }
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path
+        d="M8 2.4L14 13H2L8 2.4Z"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinejoin="round"
+      />
+      <path d="M8 6.4V9.4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+      <circle cx="8" cy="11.2" r="0.7" fill="currentColor" />
+    </svg>
+  )
+}
+
+function FallbackToast(props: {
+  text: string
+  tone?: 'success' | undefined
+  icon?: ReactNode
+  holdMs?: number | undefined
+  onDone: () => void
+}) {
+  const onDoneRef = useRef(props.onDone)
+  useEffect(() => {
+    onDoneRef.current = props.onDone
+  }, [props.onDone])
+
+  useEffect(() => {
+    const holdMs = props.holdMs ?? 3000
+    const timer = setTimeout(() => {
+      onDoneRef.current()
+    }, holdMs + 1000)
+    return () => {
+      clearTimeout(timer)
+    }
+  }, [props.holdMs])
+
+  if (typeof document === 'undefined') {
+    return (
+      <span role="status" data-a2ui-toast={props.tone ?? 'default'}>
+        {props.text}
+      </span>
+    )
+  }
+
+  return createPortal(
+    <div
+      role="alert"
+      data-a2ui-toast={props.tone ?? 'default'}
+      style={{
+        position: 'fixed',
+        top: 40,
+        left: '50%',
+        transform: 'translateX(-50%)',
+        zIndex: 1100,
+        pointerEvents: 'none',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        maxWidth: 'min(640px, calc(100vw - 48px))',
+        padding: '12px 16px',
+        borderRadius: 'var(--dsw-radius-lg, 12px)',
+        background: 'var(--dsw-alias-toast-bg, var(--dsw-alias-bg-layer-2, #1f2329))',
+        color: 'var(--dsw-alias-toast-label, var(--dsw-alias-label-primary, #ffffff))',
+        fontSize: 14,
+        lineHeight: '22px',
+        boxShadow: 'var(--dsw-shadow-lv3, 0 8px 24px rgba(0,0,0,0.24))',
+      }}
+    >
+      {props.tone === 'success' ? (
+        <span style={{ display: 'grid', placeItems: 'center', color: 'var(--dsw-alias-state-success-primary, #10b981)' }} aria-hidden="true">
+          <DshCheckIcon size={15} />
+        </span>
+      ) : props.icon !== undefined ? (
+        <span style={{ display: 'grid', placeItems: 'center', color: 'var(--dsw-alias-state-warn-label, #f59e0b)' }} aria-hidden="true">
+          {props.icon}
+        </span>
+      ) : null}
+      <span>{props.text}</span>
+    </div>,
+    document.body,
+  )
+}
+
+export function DshToast(props: {
+  text: string
+  tone?: 'success' | undefined
+  icon?: ReactNode
+  holdMs?: number | undefined
+  onDone: () => void
+}) {
+  if (hasComponent(raw.Toast)) {
+    return (
+      <HostPrimitives.Toast
+        text={props.text}
+        tone={props.tone}
+        icon={props.icon}
+        holdMs={props.holdMs}
+        onDone={props.onDone}
+      />
+    )
+  }
+  return <FallbackToast {...props} />
 }
 
 export function DshMenu(props: {

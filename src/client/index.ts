@@ -38,12 +38,21 @@ import {
 } from './file-opener.tsx'
 import type { SurfaceActionCallback } from './SurfaceView.tsx'
 import { getLoadedRuntimeChunk } from './chunk-loader.ts'
-import { setFallbackDefaultEnabled } from './persistence.ts'
+import {
+  getA2uiEnabled,
+  publishCommandNotice,
+  setA2uiEnabled,
+  setFallbackDefaultEnabled,
+} from './persistence.ts'
 import { mountPluginCssSheets, unmountPluginCssSheets } from './style-lifecycle.ts'
 import { A2uiTierControl } from './TierControl.tsx'
 import { A2uiToolView, type ChatExternalStore } from './ToolView.tsx'
 import { A2uiTurnTailView } from './TurnTailView.tsx'
-import { a2uiSurfaceNodeDefinition } from './turn-surfaces.ts'
+import {
+  a2uiSurfaceNodeDefinition,
+  isChatTimelineActive,
+  parseA2uiEnabledFromStatusText,
+} from './turn-surfaces.ts'
 
 export const inject = ['slots', 'sessions', 'uiConversation']
 
@@ -331,6 +340,34 @@ export function apply(ctx: Context, config: ClientConfig = {}): void {
       }),
     'dsh-genui-a2ui: dock (ask + workspace)',
   )
+
+  if (typeof (ctx as { on?: unknown }).on === 'function') {
+    ctx.on(
+      'command/executed' as never,
+      ((
+        sessionId: string,
+        commandName: string,
+        result: { readonly kind?: string; readonly text?: string } | undefined,
+      ) => {
+        if (commandName !== TIER_COMMAND) return
+        const text = typeof result?.text === 'string' ? result.text.trim() : ''
+        if (text === '') return
+        if (result?.kind === 'success') {
+          const parsedEnabled = parseA2uiEnabledFromStatusText(text)
+          if (parsedEnabled !== null && getA2uiEnabled(sessionId) !== parsedEnabled) {
+            setA2uiEnabled(sessionId, parsedEnabled)
+          }
+        }
+        const snapshot = resolveChatStore(host, sessionId)?.getSnapshot()
+        if (isChatTimelineActive(snapshot)) return
+        publishCommandNotice(
+          sessionId,
+          result?.kind === 'error' ? 'error' : 'success',
+          text,
+        )
+      }) as never,
+    )
+  }
 
   ctx.effect(
     () =>

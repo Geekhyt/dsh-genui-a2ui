@@ -2,7 +2,7 @@
  * Action & form input A2UI 1.0 components (`Button`, `TextField`, `CheckBox`,
  * `ChoicePicker`, `Slider`, `DateTimeInput`).
  */
-import { useId, useMemo, useState } from 'react'
+import { useContext, useId, useMemo, useState, type ReactNode } from 'react'
 import {
   Label as AriaLabel,
   Radio as AriaRadio,
@@ -34,20 +34,33 @@ import {
 import css from './Catalog.module.css'
 import {
   InsideButtonContext,
+  ModalCloseContext,
+  SurfaceReadOnlyContext,
+  SurfaceValidationContext,
   defineComponent,
   renderChildRef,
   weightStyle,
   type ChildRef,
 } from './widget-helpers.tsx'
 
-export const DshButtonImpl = defineComponent<{
-  child?: ChildRef
-  variant?: 'default' | 'primary' | 'borderless'
-  action?: ((options?: ActionDispatchOptions) => Promise<void>) | undefined
-  isValid?: boolean
-  validationErrors?: readonly string[]
-  weight?: number
-}>(ButtonApi, function DshButtonComponent({ props, buildChild }) {
+export function DshButtonView({
+  props,
+  buildChild,
+}: {
+  props: {
+    child?: ChildRef
+    variant?: 'default' | 'primary' | 'borderless'
+    action?: ((options?: ActionDispatchOptions) => Promise<void>) | undefined
+    isValid?: boolean
+    validationErrors?: readonly string[]
+    weight?: number
+  }
+  buildChild: (id: string, basePath?: string) => ReactNode
+}) {
+  const readOnly = useContext(SurfaceReadOnlyContext)
+  const closeModal = useContext(ModalCloseContext)
+  const { markSubmitAttempted } = useContext(SurfaceValidationContext)
+
   const variant: ButtonVariant =
     props.variant === 'primary'
       ? 'primary'
@@ -56,17 +69,26 @@ export const DshButtonImpl = defineComponent<{
         : 'outline'
 
   const invalid = props.isValid === false
-  const disabled = invalid || typeof props.action !== 'function'
-  const errLabel = invalid ? (props.validationErrors ?? []).join('；') : ''
+  const disabled = readOnly || invalid || typeof props.action !== 'function'
+  const errLabel = !readOnly && invalid ? (props.validationErrors ?? []).join('；') : ''
+  const needsInvalidGateWrap = !readOnly && invalid
 
   const btn = (
     <DshButton
       variant={variant}
       disabled={disabled}
-      style={weightStyle(props.weight)}
+      style={
+        needsInvalidGateWrap
+          ? props.weight !== undefined
+            ? { width: '100%' }
+            : undefined
+          : weightStyle(props.weight)
+      }
       onClick={() => {
         if (!disabled && props.action) {
+          markSubmitAttempted()
           void props.action()
+          closeModal?.()
         }
       }}
     >
@@ -76,24 +98,54 @@ export const DshButtonImpl = defineComponent<{
     </DshButton>
   )
 
-  return errLabel ? <DshTooltip label={errLabel}>{btn}</DshTooltip> : btn
-})
+  if (needsInvalidGateWrap) {
+    const wrapped = (
+      <span
+        style={{ display: 'inline-flex', ...weightStyle(props.weight) }}
+        onClickCapture={() => markSubmitAttempted()}
+      >
+        {btn}
+      </span>
+    )
+    return errLabel ? <DshTooltip label={errLabel}>{wrapped}</DshTooltip> : wrapped
+  }
 
-export const DshTextFieldImpl = defineComponent<{
-  label?: unknown
-  value?: unknown
-  setValue?: (next: string) => void
-  placeholder?: unknown
-  variant?: 'shortText' | 'longText' | 'number' | 'obscured'
+  return errLabel ? <DshTooltip label={errLabel}>{btn}</DshTooltip> : btn
+}
+
+export const DshButtonImpl = defineComponent<{
+  child?: ChildRef
+  variant?: 'default' | 'primary' | 'borderless'
+  action?: ((options?: ActionDispatchOptions) => Promise<void>) | undefined
   isValid?: boolean
   validationErrors?: readonly string[]
   weight?: number
-}>(TextFieldApi, function DshTextField({ props }) {
+}>(ButtonApi, DshButtonView)
+
+export function DshTextFieldView({
+  props,
+}: {
+  props: {
+    label?: unknown
+    value?: unknown
+    setValue?: (next: string) => void
+    placeholder?: unknown
+    variant?: 'shortText' | 'longText' | 'number' | 'obscured'
+    isValid?: boolean
+    validationErrors?: readonly string[]
+    weight?: number
+  }
+}) {
   const fieldId = useId()
+  const readOnly = useContext(SurfaceReadOnlyContext)
+  const { submitAttempted } = useContext(SurfaceValidationContext)
+  const [touched, setTouched] = useState(false)
+
   const label = props.label ? String(props.label) : ''
   const val = props.value === undefined || props.value === null ? '' : String(props.value)
   const placeholder = props.placeholder ? String(props.placeholder) : undefined
-  const err = props.isValid === false ? props.validationErrors?.[0] : undefined
+  const showError = !readOnly && (touched || submitAttempted) && props.isValid === false
+  const err = showError ? props.validationErrors?.[0] : undefined
 
   const inputType =
     props.variant === 'number'
@@ -122,7 +174,12 @@ export const DshTextFieldImpl = defineComponent<{
           className={css.textarea}
           value={val}
           placeholder={placeholder}
-          onChange={(e) => props.setValue?.(e.target.value)}
+          disabled={readOnly}
+          aria-invalid={showError || undefined}
+          onBlur={() => setTouched(true)}
+          onChange={(e) => {
+            if (!readOnly) props.setValue?.(e.target.value)
+          }}
         />
       ) : (
         <DshInput
@@ -131,12 +188,63 @@ export const DshTextFieldImpl = defineComponent<{
           autoComplete="off"
           value={val}
           placeholder={placeholder}
-          onChange={(e) => props.setValue?.(e.target.value)}
+          disabled={readOnly}
+          aria-invalid={showError || undefined}
+          onBlur={() => setTouched(true)}
+          onChange={(e) => {
+            if (!readOnly) props.setValue?.(e.target.value)
+          }}
         />
       )}
     </div>
   )
-})
+}
+
+export const DshTextFieldImpl = defineComponent<{
+  label?: unknown
+  value?: unknown
+  setValue?: (next: string) => void
+  placeholder?: unknown
+  variant?: 'shortText' | 'longText' | 'number' | 'obscured'
+  isValid?: boolean
+  validationErrors?: readonly string[]
+  weight?: number
+}>(TextFieldApi, DshTextFieldView)
+
+export function DshCheckBoxView({
+  props,
+}: {
+  props: {
+    label?: unknown
+    value?: unknown
+    setValue?: (next: boolean) => void
+    isValid?: boolean
+    validationErrors?: readonly string[]
+    weight?: number
+  }
+}) {
+  const readOnly = useContext(SurfaceReadOnlyContext)
+  const { submitAttempted } = useContext(SurfaceValidationContext)
+  const [touched, setTouched] = useState(false)
+  const showError = !readOnly && (touched || submitAttempted) && props.isValid === false
+  const err = showError ? props.validationErrors?.[0] : undefined
+
+  return (
+    <div className={`${css.field} ${css.checkboxField}`} style={weightStyle(props.weight, 140)}>
+      <DshCheckbox
+        checked={Boolean(props.value)}
+        disabled={readOnly}
+        onChange={(next) => {
+          if (readOnly) return
+          setTouched(true)
+          props.setValue?.(next)
+        }}
+        label={String(props.label ?? '')}
+      />
+      {err ? <span className={css.errorText}>{err}</span> : null}
+    </div>
+  )
+}
 
 export const DshCheckBoxImpl = defineComponent<{
   label?: unknown
@@ -145,19 +253,7 @@ export const DshCheckBoxImpl = defineComponent<{
   isValid?: boolean
   validationErrors?: readonly string[]
   weight?: number
-}>(CheckBoxApi, function DshCheckBoxComponent({ props }) {
-  const err = props.isValid === false ? props.validationErrors?.[0] : undefined
-  return (
-    <div className={css.field} style={weightStyle(props.weight)}>
-      <DshCheckbox
-        checked={Boolean(props.value)}
-        onChange={(next) => props.setValue?.(next)}
-        label={String(props.label ?? '')}
-      />
-      {err ? <span className={css.errorText}>{err}</span> : null}
-    </div>
-  )
-})
+}>(CheckBoxApi, DshCheckBoxView)
 
 export const DshChoicePickerImpl = defineComponent<{
   label?: unknown
@@ -172,6 +268,9 @@ export const DshChoicePickerImpl = defineComponent<{
   weight?: number
 }>(ChoicePickerApi, function DshChoicePicker({ props }) {
   const msg = useRuntimeMessages()
+  const readOnly = useContext(SurfaceReadOnlyContext)
+  const { submitAttempted } = useContext(SurfaceValidationContext)
+  const [touched, setTouched] = useState(false)
   const [query, setQuery] = useState('')
   const selected = useMemo(
     () => (Array.isArray(props.value) ? props.value.map(String) : []),
@@ -189,10 +288,13 @@ export const DshChoicePickerImpl = defineComponent<{
   }, [options, props.filterable, query])
 
   const isSingle = props.variant === 'mutuallyExclusive'
-  const err = props.isValid === false ? props.validationErrors?.[0] : undefined
+  const showError = !readOnly && (touched || submitAttempted) && props.isValid === false
+  const err = showError ? props.validationErrors?.[0] : undefined
   const label = props.label ? String(props.label) : ''
 
   const toggleOption = (val: string) => {
+    if (readOnly) return
+    setTouched(true)
     if (isSingle) {
       props.setValue?.([val])
       return
@@ -214,6 +316,7 @@ export const DshChoicePickerImpl = defineComponent<{
         <DshInput
           icon={<DshSearchIcon size={14} />}
           value={query}
+          disabled={readOnly}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={msg.filterPlaceholder}
           aria-label={msg.filterAriaLabel}
@@ -226,6 +329,7 @@ export const DshChoicePickerImpl = defineComponent<{
             <DshPill
               key={opt.value}
               active={selected.includes(opt.value)}
+              disabled={readOnly}
               onClick={() => toggleOption(opt.value)}
             >
               {String(opt.label ?? opt.value)}
@@ -237,7 +341,12 @@ export const DshChoicePickerImpl = defineComponent<{
           className={css.radioList}
           aria-label={label || msg.radioGroupAria}
           value={selected[0] ?? ''}
-          onChange={(val) => props.setValue?.([val])}
+          isDisabled={readOnly}
+          onChange={(val) => {
+            if (readOnly) return
+            setTouched(true)
+            props.setValue?.([val])
+          }}
         >
           {filtered.map((opt) => (
             <AriaRadio key={opt.value} value={opt.value} className={css.radioItem}>
@@ -252,6 +361,7 @@ export const DshChoicePickerImpl = defineComponent<{
             <DshCheckbox
               key={opt.value}
               checked={selected.includes(opt.value)}
+              disabled={readOnly}
               onChange={() => toggleOption(opt.value)}
               label={String(opt.label ?? opt.value)}
             />
@@ -274,6 +384,9 @@ export const DshSliderImpl = defineComponent<{
   weight?: number
 }>(SliderApi, function DshSlider({ props }) {
   const msg = useRuntimeMessages()
+  const readOnly = useContext(SurfaceReadOnlyContext)
+  const { submitAttempted } = useContext(SurfaceValidationContext)
+  const [touched, setTouched] = useState(false)
   const min = typeof props.min === 'number' && Number.isFinite(props.min) ? props.min : 0
   const rawMax = typeof props.max === 'number' && Number.isFinite(props.max) ? props.max : 100
   const max = rawMax > min ? rawMax : min + 1
@@ -285,7 +398,8 @@ export const DshSliderImpl = defineComponent<{
   const value = Number.isFinite(rawVal) ? Math.min(max, Math.max(min, rawVal)) : min
   const pct = ((value - min) / (max - min)) * 100
   const label = props.label ? String(props.label) : ''
-  const err = props.isValid === false ? props.validationErrors?.[0] : undefined
+  const showError = !readOnly && (touched || submitAttempted) && props.isValid === false
+  const err = showError ? props.validationErrors?.[0] : undefined
 
   return (
     <div style={weightStyle(props.weight, 160)}>
@@ -295,8 +409,11 @@ export const DshSliderImpl = defineComponent<{
         maxValue={max}
         step={step}
         value={value}
+        isDisabled={readOnly}
         aria-label={label || msg.sliderAria}
         onChange={(next) => {
+          if (readOnly) return
+          setTouched(true)
           const raw = Array.isArray(next) ? (next[0] ?? min) : next
           const cleaned = Number.isFinite(raw) ? Number(raw.toFixed(6)) : min
           props.setValue?.(cleaned)
@@ -329,6 +446,9 @@ export const DshDateTimeInputImpl = defineComponent<{
   weight?: number
 }>(DateTimeInputApi, function DshDateTimeInput({ props }) {
   const inputId = useId()
+  const readOnly = useContext(SurfaceReadOnlyContext)
+  const { submitAttempted } = useContext(SurfaceValidationContext)
+  const [touched, setTouched] = useState(false)
   const enableDate = props.enableDate !== false
   const enableTime = Boolean(props.enableTime)
   const type = enableDate && enableTime ? 'datetime-local' : enableTime ? 'time' : 'date'
@@ -340,7 +460,8 @@ export const DshDateTimeInputImpl = defineComponent<{
         ? rawVal.slice(0, 10)
         : rawVal.slice(0, 5)
   const label = props.label ? String(props.label) : ''
-  const err = props.isValid === false ? props.validationErrors?.[0] : undefined
+  const showError = !readOnly && (touched || submitAttempted) && props.isValid === false
+  const err = showError ? props.validationErrors?.[0] : undefined
 
   return (
     <div className={css.field} style={weightStyle(props.weight, 150)}>
@@ -362,9 +483,16 @@ export const DshDateTimeInputImpl = defineComponent<{
           type={type}
           className={css.dateInput}
           value={normalizedVal}
+          disabled={readOnly}
+          aria-invalid={showError || undefined}
           min={typeof props.min === 'string' ? props.min : undefined}
           max={typeof props.max === 'string' ? props.max : undefined}
-          onChange={(e) => props.setValue?.(e.target.value)}
+          onBlur={() => setTouched(true)}
+          onChange={(e) => {
+            if (readOnly) return
+            setTouched(true)
+            props.setValue?.(e.target.value)
+          }}
         />
       </div>
     </div>

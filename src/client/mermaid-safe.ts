@@ -187,3 +187,73 @@ export function repairMermaidSource(code: string): string {
     .replace(/\uE002(\d+)\uE003/g, (whole, idx: string) => pipeSpans[Number(idx)] ?? whole)
     .replace(/\uE000(\d+)\uE001/g, (whole, idx: string) => spans[Number(idx)] ?? whole)
 }
+
+export interface PreparedMermaidSvg {
+  readonly markup: string
+  readonly width: number
+  readonly height: number
+}
+
+/**
+ * Extract intrinsic vector dimensions from a rendered Mermaid `<svg>` and strip
+ * Mermaid's inline `style="max-width: ...px"` / percentage width lock so explicit
+ * vector zoom (`10%` – `2000%`) and viewport-fit scaling render crisply at any ratio.
+ */
+export function prepareMermaidSvg(rawSvg: string): PreparedMermaidSvg {
+  const openTagMatch = /<svg\b[^>]*>/i.exec(rawSvg)
+  if (!openTagMatch) {
+    return { markup: rawSvg, width: 800, height: 480 }
+  }
+  const openTag = openTagMatch[0]
+
+  let width = 0
+  let height = 0
+  const vbMatch =
+    /\bviewBox\s*=\s*["']\s*[+-]?\d*\.?\d+(?:e[+-]?\d+)?[\s,]+\s*[+-]?\d*\.?\d+(?:e[+-]?\d+)?[\s,]+\s*([+-]?\d*\.?\d+(?:e[+-]?\d+)?)[\s,]+\s*([+-]?\d*\.?\d+(?:e[+-]?\d+)?)\s*["']/i.exec(
+      openTag,
+    )
+  if (vbMatch) {
+    width = Number.parseFloat(vbMatch[1]!)
+    height = Number.parseFloat(vbMatch[2]!)
+  }
+
+  if (!(width > 0)) {
+    const maxWMatch = /max-width\s*:\s*([0-9.]+)\s*px/i.exec(openTag)
+    const wAttrMatch = /\bwidth\s*=\s*["']\s*([0-9.]+)(?:px)?\s*["']/i.exec(openTag)
+    width = maxWMatch
+      ? Number.parseFloat(maxWMatch[1]!)
+      : wAttrMatch
+        ? Number.parseFloat(wAttrMatch[1]!)
+        : 800
+  }
+  if (!(height > 0)) {
+    const hAttrMatch = /\bheight\s*=\s*["']\s*([0-9.]+)(?:px)?\s*["']/i.exec(openTag)
+    height = hAttrMatch ? Number.parseFloat(hAttrMatch[1]!) : Math.round(width * 0.6)
+  }
+
+  const safeW = Math.max(1, Math.round(width * 100) / 100)
+  const safeH = Math.max(1, Math.round(height * 100) / 100)
+
+  let nextOpenTag = openTag
+    .replace(/\bstyle\s*=\s*(["'])([\s\S]*?)\1/i, (_full, quote: string, cssText: string) => {
+      const cleanedCss = cssText
+        .split(';')
+        .map((part) => part.trim())
+        .filter((part) => part !== '' && !/^max-width\s*:/i.test(part))
+        .join('; ')
+      return cleanedCss ? `style=${quote}${cleanedCss}${quote}` : ''
+    })
+    .replace(/\s+\b(?:width|height)\s*=\s*["'][^"']*["']/gi, '')
+
+  if (!vbMatch) {
+    nextOpenTag = nextOpenTag.replace(/^<svg\b/i, `<svg viewBox="0 0 ${safeW} ${safeH}"`)
+  }
+  nextOpenTag = nextOpenTag.replace(/^<svg\b/i, `<svg width="${safeW}" height="${safeH}"`)
+
+  const markup =
+    rawSvg.slice(0, openTagMatch.index) +
+    nextOpenTag +
+    rawSvg.slice(openTagMatch.index + openTag.length)
+
+  return { markup, width: safeW, height: safeH }
+}

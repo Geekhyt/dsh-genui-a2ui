@@ -1,6 +1,7 @@
 /* DSH-native A2UI 1.0 component styles — exclusively consuming --dsw-* tokens. */
 
 .row {
+  --a2ui-flex-basis: 0px;
   display: flex;
   flex-direction: row;
   flex-wrap: wrap;
@@ -104,6 +105,7 @@
 }
 
 .column {
+  --a2ui-flex-basis: auto;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -201,6 +203,18 @@
   flex-direction: column;
   gap: 6px;
   min-width: 0;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+.checkboxField {
+  align-items: flex-start;
+  min-width: min(100%, 140px);
+}
+
+.checkboxField label {
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .fieldHeader {
@@ -279,6 +293,7 @@
 .radioList {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: 6px;
 }
 
@@ -970,6 +985,10 @@
 /* ─────────────────────────── P0: Callout ─────────────────────────── */
 
 .callout {
+  position: relative;
+  box-sizing: border-box;
+  flex-shrink: 0;
+  overflow: hidden;
   display: flex;
   align-items: flex-start;
   gap: 10px;
@@ -1033,12 +1052,15 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  min-width: 0;
 }
 
 .calloutTitle {
   font-size: 13px;
   font-weight: 600;
   color: var(--dsw-alias-label-primary, inherit);
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .calloutToggle {
@@ -1543,17 +1565,29 @@
 .mermaidBody {
   padding: 12px 14px;
   overflow-x: auto;
+  overflow-y: hidden;
   min-height: 90px;
 }
 
-.mermaidSvgWrap {
-  width: 100%;
+.mermaidBody[data-zoomed="true"] {
+  display: flex;
+  max-height: min(72vh, 640px);
   overflow: auto;
 }
 
+.mermaidBody[data-pannable="true"],
+.mermaidFullscreenBody[data-pannable="true"] {
+  cursor: grab;
+}
+
+.mermaidBody[data-dragging="true"],
+.mermaidFullscreenBody[data-dragging="true"] {
+  cursor: grabbing;
+  user-select: none;
+}
+
 .mermaidSvgStage {
-  width: fit-content;
-  min-width: 100%;
+  width: 100%;
   margin: 0 auto;
 }
 
@@ -1564,12 +1598,41 @@
   height: auto;
 }
 
-.mermaidSvgStage[data-zoomed="true"] svg {
+.mermaidFullscreenBody > .mermaidSvgStage {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mermaidFullscreenBody > .mermaidSvgStage svg {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+}
+
+.mermaidSvgStage[data-zoomed="true"],
+.mermaidFullscreenBody > .mermaidSvgStage[data-zoomed="true"] {
+  width: fit-content;
+  height: fit-content;
+  margin: auto;
+  flex-shrink: 0;
+  display: block;
+}
+
+.mermaidSvgStage[data-zoomed="true"] svg,
+.mermaidFullscreenBody > .mermaidSvgStage[data-zoomed="true"] svg {
+  width: var(--mermaid-zoom-w);
+  height: var(--mermaid-zoom-h);
   max-width: none;
+  max-height: none;
 }
 
 .mermaidZoomBtn,
-.mermaidZoomReadout {
+.mermaidZoomReadout,
+.mermaidZoomFitBtn {
   border: none;
   background: transparent;
   color: var(--dsw-alias-label-secondary, inherit);
@@ -1581,13 +1644,24 @@
 }
 
 .mermaidZoomReadout {
-  min-width: 44px;
+  min-width: 48px;
   border-left: 1px solid var(--dsw-alias-border-l1, rgba(128, 128, 128, 0.16));
   border-right: 1px solid var(--dsw-alias-border-l1, rgba(128, 128, 128, 0.16));
 }
 
+.mermaidZoomFitBtn {
+  border-left: 1px solid var(--dsw-alias-border-l1, rgba(128, 128, 128, 0.16));
+}
+
+.mermaidZoomFitBtn[data-active="true"] {
+  background: var(--dsw-alias-interactive-bg-hover, rgba(128, 128, 128, 0.16));
+  color: var(--dsw-alias-label-primary, inherit);
+  font-weight: 600;
+}
+
 .mermaidZoomBtn:hover:not(:disabled),
-.mermaidZoomReadout:hover {
+.mermaidZoomReadout:hover,
+.mermaidZoomFitBtn:hover {
   background: var(--dsw-alias-interactive-bg-hover, rgba(128, 128, 128, 0.12));
   color: var(--dsw-alias-label-primary, inherit);
 }
@@ -1604,14 +1678,16 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px;
+  padding: 16px;
   background: var(--dsw-alias-bg-mask-1, rgba(0, 0, 0, 0.56));
   backdrop-filter: blur(2px);
 }
 
 .mermaidFullscreenCard {
-  width: min(94vw, 1440px);
-  height: min(88vh, 920px);
+  width: 96vw;
+  height: 94vh;
+  max-width: 96vw;
+  max-height: 94vh;
   display: flex;
   flex-direction: column;
   border-radius: var(--dsw-radius-lg, 14px);
@@ -1628,7 +1704,6 @@
   padding: 18px 22px;
   overflow: auto;
   display: flex;
-  align-items: safe center;
 }
 
 .mermaidCaption {

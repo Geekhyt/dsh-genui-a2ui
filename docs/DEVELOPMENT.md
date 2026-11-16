@@ -36,7 +36,7 @@ flowchart TB
   end
 
   subgraph S3["Stage 3 · Client 4-Chunk Runtime & Native Light-DOM Slots"]
-    SHELL["Cold-Boot Shell lib/client.js (53.3 kB)"]
+    SHELL["Cold-Boot Shell lib/client.js (57.0 kB)"]
     RT["Lazy Runtime client.runtime.js (32 Components + StreamingExpressSession)"]
     EC["Lazy Chart Engine client.echarts.js (14 ECharts 6 Kinds)"]
     MM["Lazy Diagram Engine client.mermaid.js (Strict Sandbox Mermaid 11)"]
@@ -87,11 +87,11 @@ flowchart TB
 
 | Bundle Target | Raw Size | Gzip Size | Role & Load Trigger |
 | :--- | :--- | :--- | :--- |
-| `lib/client.js` | **`53.3 kB`** | **`15.0 kB`** | Cold-boot shell: registers UI Slots, bilingual chrome, and composer pill (enforced by `< 500 kB` build & test gate). |
-| `lib/client.runtime.js` | `1.05 MB` | ~`289 kB` | Loaded on first A2UI surface mount (`@a2ui/react`, 32-component catalog, TanStack Table, React Aria). |
-| `lib/client.echarts.js` | `782.8 kB` | `259.0 kB` | Loaded only when a surface renders `Chart` (ECharts 6 modular registration for 14 chart kinds). |
+| `lib/client.js` | **`57.0 kB`** | **`16.1 kB`** | Cold-boot shell: registers UI Slots, bilingual chrome, empty-session toast feedback, and composer pill (enforced by `< 500 kB` build & test gate). |
+| `lib/client.runtime.js` | `1.06 MB` | ~`293 kB` | Loaded on first A2UI surface mount (`@a2ui/react`, 32-component catalog, TanStack Table, React Aria). |
+| `lib/client.echarts.js` | `783.1 kB` | `259.1 kB` | Loaded only when a surface renders `Chart` (ECharts 6 modular registration for 14 chart kinds). |
 | `lib/client.mermaid.js` | `3.51 MB` | ~`943 kB` | Loaded only when a surface renders `Mermaid` (Mermaid 11 under `securityLevel: "strict"` + SVG sanitizer). |
-| `lib/index.js` | `689.8 kB` | `187.9 kB` | Self-contained Host ESM bundle (`@a2ui/agent` + Zod catalog) — ships with zero runtime `dependencies`. |
+| `lib/index.js` | `694.7 kB` | `189.9 kB` | Self-contained Host ESM bundle (`@a2ui/agent` + Zod catalog) — ships with zero runtime `dependencies`. |
 
 ---
 
@@ -229,7 +229,7 @@ node scripts/dev-env.mjs serve
 - `src/index.ts` — Host Cordis plugin entry (`tools`, `skills`, `commands`, `systemPrompt`)
 - `src/host/` — `a2ui_render`, `a2ui_ask`, `SurfaceSessions` compiler & self-repair engine
 - `src/shared/` — Isomorphic `dshSchemaCatalog`, Host/Client `wire-types.ts`, `calc` parser/evaluator, and shared constants
-- `src/client/index.ts` — `53.3 kB` cold-boot UI slot shell & composer toggle pill
+- `src/client/index.ts` — `57.0 kB` cold-boot UI slot shell & composer toggle pill
 - `src/client/chunks/` — On-demand entrypoints (`runtime-chunk.ts`, `echarts-chunk.ts`, `mermaid-chunk.ts`)
 - `src/client/catalog/` — Light-DOM React implementations of all 32 components & 23 functions
 - `build/` — `tsdown` 5-target build preset & DSH web platform externalizer

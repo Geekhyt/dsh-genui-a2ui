@@ -16,7 +16,7 @@
 ## Toggle and slash commands
 
 - Click the **A2UI** button below the chat input box anytime to switch between generative UI mode and plain text mode.
-- Slash commands: type `/a2ui off` to pause UI generation (zero system prompt overhead), or `/a2ui on` to re-enable it.
+- Slash commands: type `/a2ui off` to pause UI generation (removes tools, prompt section, and skill catalog entry for zero system prompt overhead), `/a2ui on` to re-enable it, or `/a2ui status` to check the current state.
 
 ## Built-in 32 native components and chart catalog
 
@@ -31,5 +31,5 @@
 | **Media** | `Image`, `AudioPlayer`, `Video` | Inline image previews, audio players, and video playback |
 
 - **14 interactive charts (`Chart`)**: Vertical and horizontal ranking bars (`bar`), `line`, `area`, donut and pie (`pie`), bubble and `scatter`, `radar`, `funnel`, `gauge`, `heatmap`, `treemap`, `sankey`, `boxplot`, network (`graph`), and `candlestick`.
-- **Architecture and flow diagrams (`Mermaid`)**: Flowcharts, sequence diagrams, state machines, class diagrams, ER diagrams, Gantt charts, Git graphs, and mindmaps with zoom, fullscreen view, and source toggle.
+- **Architecture and flow diagrams (`Mermaid`)**: Flowcharts, sequence diagrams, state machines, class diagrams, ER diagrams, Gantt charts, Git graphs, and mindmaps with `10%–2000%` lossless vector zoom, drag-to-pan, fullscreen view, and source toggle.
 - **Repository and full documentation**: [github.com/Geekhyt/dsh-genui-a2ui](https://github.com/Geekhyt/dsh-genui-a2ui)

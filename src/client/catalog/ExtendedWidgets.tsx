@@ -5,7 +5,18 @@
  * - `FileTree`: Workspace directory & change-impact tree with DSH right-sidebar file jump
  * - `Mermaid`: Lazy-loaded Mermaid diagram renderer (`securityLevel: "strict"` + `assertSafeSvg`)
  */
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type WheelEvent } from 'react'
+import {
+  useCallback,
+  useContext,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type MouseEvent as ReactMouseEvent,
+} from 'react'
 import { createPortal } from 'react-dom'
 import type { ActionDispatchOptions } from '@a2ui/web_core/v1_0'
 import {
@@ -17,6 +28,7 @@ import {
 import { loadMermaidChunk } from '../chunk-loader.ts'
 import { useFileOpener } from '../file-opener.tsx'
 import { useRuntimeMessages } from '../i18n.ts'
+import { prepareMermaidSvg } from '../mermaid-safe.ts'
 import { useDarkTheme } from '../theme.ts'
 import {
   DshChevronDownIcon,
@@ -33,6 +45,7 @@ import {
   type FileTreeNode,
 } from './stat-file-helpers.ts'
 import {
+  SurfaceReadOnlyContext,
   defineComponent,
   renderChildRef,
   weightStyle,
@@ -320,6 +333,7 @@ export const DshFileTreeImpl = defineComponent<{
   weight?: number
 }>(FileTreeApi, function DshFileTree({ props }) {
   const msg = useRuntimeMessages()
+  const readOnly = useContext(SurfaceReadOnlyContext)
   const openFile = useFileOpener()
   const tree = useMemo(() => buildFileTree(props.items), [props.items])
   const title = props.title !== undefined && props.title !== null ? String(props.title) : ''
@@ -328,14 +342,16 @@ export const DshFileTreeImpl = defineComponent<{
       ? Math.trunc(props.expandedDepth)
       : 2
 
-  const interactive = Boolean(openFile || props.action)
+  const activeAction = readOnly ? undefined : props.action
+  const interactive = Boolean(openFile || activeAction)
 
   const handleSelectFile = (node: FileTreeNode) => {
+    if (readOnly) return
     if (openFile && node.status !== 'deleted') {
       openFile(node.path, node.line)
     }
-    if (props.action) {
-      void props.action({
+    if (activeAction) {
+      void activeAction({
         metadata: {
           extensions: {
             dshSelection: {
@@ -386,12 +402,49 @@ export const DshFileTreeImpl = defineComponent<{
 
 /* ─────────────────────────── 4. Mermaid ─────────────────────────── */
 
-export const MERMAID_ZOOM_MIN = 50
-export const MERMAID_ZOOM_MAX = 250
+export const MERMAID_ZOOM_MIN = 10
+export const MERMAID_ZOOM_MAX = 2000
 export const MERMAID_ZOOM_STEP = 25
+export const MERMAID_ZOOM_FACTOR = 1.25
+
+const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect
 
 export function clampMermaidZoom(next: number): number {
-  return Math.max(MERMAID_ZOOM_MIN, Math.min(MERMAID_ZOOM_MAX, next))
+  if (!Number.isFinite(next)) return 100
+  return Math.max(MERMAID_ZOOM_MIN, Math.min(MERMAID_ZOOM_MAX, Math.round(next)))
+}
+
+export function stepMermaidZoom(current: number, direction: 1 | -1): number {
+  const base = clampMermaidZoom(current)
+  if (direction > 0) {
+    const raw = base * MERMAID_ZOOM_FACTOR
+    const stepped = Math.max(base + 5, Math.round(raw / 5) * 5)
+    if (base < 100 && stepped > 100) return 100
+    return clampMermaidZoom(stepped)
+  }
+  const raw = base / MERMAID_ZOOM_FACTOR
+  const stepped = Math.min(base - 5, Math.round(raw / 5) * 5)
+  if (base > 100 && stepped < 100) return 100
+  return clampMermaidZoom(stepped)
+}
+
+export function scaleMermaidZoomByWheel(current: number, deltaY: number, deltaMode = 0): number {
+  const base = clampMermaidZoom(current)
+  if (!Number.isFinite(deltaY) || deltaY === 0) return base
+  const unitScale = deltaMode === 1 ? 16 : deltaMode === 2 ? 100 : 1
+  const clampedDelta = Math.max(-160, Math.min(160, deltaY * unitScale))
+  const raw = base * Math.exp(-clampedDelta * 0.0028)
+  const next =
+    clampedDelta < 0 ? Math.max(base + 1, Math.round(raw)) : Math.min(base - 1, Math.round(raw))
+  return clampMermaidZoom(next)
+}
+
+interface PendingZoomAnchor {
+  readonly inDialog: boolean
+  readonly relX: number
+  readonly relY: number
+  readonly cursorInVpX: number
+  readonly cursorInVpY: number
 }
 
 export interface MermaidWidgetProps {
@@ -404,6 +457,7 @@ export interface MermaidWidgetProps {
 export function DshMermaidView({ props }: { props: MermaidWidgetProps }) {
   const dark = useDarkTheme()
   const msg = useRuntimeMessages()
+  const readOnly = useContext(SurfaceReadOnlyContext)
   const code = props.code === undefined || props.code === null ? '' : String(props.code).trim()
   const title = props.title !== undefined && props.title !== null ? String(props.title) : ''
   const caption = props.caption !== undefined && props.caption !== null ? String(props.caption) : ''
@@ -414,9 +468,51 @@ export function DshMermaidView({ props }: { props: MermaidWidgetProps }) {
   const [rendering, setRendering] = useState<boolean>(code !== '')
   const [renderError, setRenderError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
-  const [zoomPct, setZoomPct] = useState(100)
+  const [inlineZoomMode, setInlineZoomMode] = useState<'fit' | 'manual'>('fit')
+  const [inlineManualPct, setInlineManualPct] = useState(100)
+  const [inlineFitPct, setInlineFitPct] = useState(100)
+  const [inlinePannable, setInlinePannable] = useState(false)
+  const [dialogZoomMode, setDialogZoomMode] = useState<'fit' | 'manual'>('fit')
+  const [dialogManualPct, setDialogManualPct] = useState(100)
+  const [dialogFitPct, setDialogFitPct] = useState(100)
+  const [dialogPannable, setDialogPannable] = useState(false)
   const [fullscreen, setFullscreen] = useState(false)
+  const [isDragging, setIsDragging] = useState(false)
+
   const hostRef = useRef<HTMLDivElement | null>(null)
+  const inlineViewportRef = useRef<HTMLDivElement | null>(null)
+  const inlineStageRef = useRef<HTMLDivElement | null>(null)
+  const dialogViewportRef = useRef<HTMLDivElement | null>(null)
+  const dialogStageRef = useRef<HTMLDivElement | null>(null)
+  const pendingAnchorRef = useRef<PendingZoomAnchor | null>(null)
+  const dragCleanupRef = useRef<(() => void) | null>(null)
+
+  const preparedSvg = useMemo(() => (svg !== null ? prepareMermaidSvg(svg) : null), [svg])
+  const inlineEffectivePct = inlineZoomMode === 'manual' ? inlineManualPct : inlineFitPct
+  const dialogEffectivePct = dialogZoomMode === 'manual' ? dialogManualPct : dialogFitPct
+
+  const zoomStateRef = useRef({
+    inlineZoomMode,
+    inlineManualPct,
+    inlineFitPct,
+    inlineEffectivePct,
+    dialogZoomMode,
+    dialogManualPct,
+    dialogFitPct,
+    dialogEffectivePct,
+    fullscreen,
+  })
+  zoomStateRef.current = {
+    inlineZoomMode,
+    inlineManualPct,
+    inlineFitPct,
+    inlineEffectivePct,
+    dialogZoomMode,
+    dialogManualPct,
+    dialogFitPct,
+    dialogEffectivePct,
+    fullscreen,
+  }
 
   useEffect(() => {
     if (code === '') {
@@ -454,6 +550,18 @@ export function DshMermaidView({ props }: { props: MermaidWidgetProps }) {
   }, [code, dark, msg.mermaidParseIncomplete])
 
   useEffect(() => {
+    if (readOnly) {
+      setFullscreen(false)
+    }
+  }, [readOnly])
+
+  useEffect(() => {
+    return () => {
+      dragCleanupRef.current?.()
+    }
+  }, [])
+
+  useEffect(() => {
     if (!fullscreen || typeof window === 'undefined') return
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -465,138 +573,403 @@ export function DshMermaidView({ props }: { props: MermaidWidgetProps }) {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [fullscreen])
 
+  const syncSurfaceMetrics = useCallback(
+    (inDialog: boolean) => {
+      const viewport = inDialog ? dialogViewportRef.current : inlineViewportRef.current
+      const stage = inDialog ? dialogStageRef.current : inlineStageRef.current
+      const setPannable = inDialog ? setDialogPannable : setInlinePannable
+      const setFit = inDialog ? setDialogFitPct : setInlineFitPct
+      const curMode = inDialog
+        ? zoomStateRef.current.dialogZoomMode
+        : zoomStateRef.current.inlineZoomMode
+      if (!viewport || !stage || !preparedSvg) {
+        setPannable(false)
+        return
+      }
+      if (curMode === 'fit') {
+        const svgEl = stage.querySelector('svg')
+        const renderedWidth = svgEl ? svgEl.getBoundingClientRect().width : 0
+        if (renderedWidth > 0 && preparedSvg.width > 0) {
+          setFit(clampMermaidZoom((renderedWidth / preparedSvg.width) * 100))
+        }
+      }
+      const overflows =
+        viewport.scrollWidth > viewport.clientWidth + 2 ||
+        viewport.scrollHeight > viewport.clientHeight + 2
+      setPannable(overflows)
+    },
+    [preparedSvg],
+  )
+
+  useIsomorphicLayoutEffect(() => {
+    const anchor = pendingAnchorRef.current
+    if (anchor && (!anchor.inDialog || fullscreen)) {
+      const viewport = anchor.inDialog ? dialogViewportRef.current : inlineViewportRef.current
+      const stage = anchor.inDialog ? dialogStageRef.current : inlineStageRef.current
+      const targetEl = stage?.querySelector('svg') ?? stage
+      if (viewport && targetEl) {
+        const vpRect = viewport.getBoundingClientRect()
+        const targetRect = targetEl.getBoundingClientRect()
+        const currentInVpX = targetRect.left - vpRect.left + anchor.relX * targetRect.width
+        const currentInVpY = targetRect.top - vpRect.top + anchor.relY * targetRect.height
+        viewport.scrollLeft += currentInVpX - anchor.cursorInVpX
+        viewport.scrollTop += currentInVpY - anchor.cursorInVpY
+      }
+      pendingAnchorRef.current = null
+    }
+    syncSurfaceMetrics(false)
+    if (fullscreen) syncSurfaceMetrics(true)
+  }, [
+    dialogManualPct,
+    dialogZoomMode,
+    fullscreen,
+    inlineManualPct,
+    inlineZoomMode,
+    preparedSvg,
+    syncSurfaceMetrics,
+    viewMode,
+  ])
+
+  useEffect(() => {
+    if (typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(() => {
+      syncSurfaceMetrics(false)
+      if (zoomStateRef.current.fullscreen) syncSurfaceMetrics(true)
+    })
+    if (inlineViewportRef.current) ro.observe(inlineViewportRef.current)
+    if (fullscreen && dialogViewportRef.current) ro.observe(dialogViewportRef.current)
+    return () => ro.disconnect()
+  }, [fullscreen, preparedSvg, syncSurfaceMetrics, viewMode])
+
+  const applyZoomAtPoint = useCallback(
+    (nextPct: number, inDialog: boolean, clientX?: number, clientY?: number) => {
+      const clamped = clampMermaidZoom(nextPct)
+      const viewport = inDialog ? dialogViewportRef.current : inlineViewportRef.current
+      const stage = inDialog ? dialogStageRef.current : inlineStageRef.current
+      const targetEl = stage?.querySelector('svg') ?? stage
+      if (viewport && targetEl) {
+        const vpRect = viewport.getBoundingClientRect()
+        const targetRect = targetEl.getBoundingClientRect()
+        const px = clientX ?? vpRect.left + viewport.clientWidth / 2
+        const py = clientY ?? vpRect.top + viewport.clientHeight / 2
+        const relX =
+          targetRect.width > 0
+            ? Math.max(0, Math.min(1, (px - targetRect.left) / targetRect.width))
+            : 0.5
+        const relY =
+          targetRect.height > 0
+            ? Math.max(0, Math.min(1, (py - targetRect.top) / targetRect.height))
+            : 0.5
+        pendingAnchorRef.current = {
+          inDialog,
+          relX,
+          relY,
+          cursorInVpX: px - vpRect.left,
+          cursorInVpY: py - vpRect.top,
+        }
+      }
+      if (inDialog) {
+        setDialogZoomMode('manual')
+        setDialogManualPct(clamped)
+      } else {
+        setInlineZoomMode('manual')
+        setInlineManualPct(clamped)
+      }
+    },
+    [],
+  )
+
+  const showSourceFallback = viewMode === 'source' || (preparedSvg === null && renderError !== null)
+  const canZoom = !showSourceFallback && preparedSvg !== null
+
+  useEffect(() => {
+    if (!canZoom) return
+    const bindWheel = (viewport: HTMLDivElement | null, inDialog: boolean) => {
+      if (!viewport) return () => {}
+      const onWheel = (e: globalThis.WheelEvent) => {
+        // Inline card: require Ctrl/Cmd (or trackpad pinch) so chat timeline scroll is never hijacked.
+        // Fullscreen viewer: wheel zooms directly at pointer (drag pans the canvas).
+        if (!inDialog && !e.ctrlKey && !e.metaKey) return
+        e.preventDefault()
+        e.stopPropagation()
+        const cur = inDialog
+          ? zoomStateRef.current.dialogEffectivePct
+          : zoomStateRef.current.inlineEffectivePct
+        const mode = inDialog
+          ? zoomStateRef.current.dialogZoomMode
+          : zoomStateRef.current.inlineZoomMode
+        const next = scaleMermaidZoomByWheel(cur, e.deltaY, e.deltaMode)
+        if (next === cur && mode === 'manual') return
+        applyZoomAtPoint(next, inDialog, e.clientX, e.clientY)
+      }
+      viewport.addEventListener('wheel', onWheel, { passive: false })
+      return () => viewport.removeEventListener('wheel', onWheel)
+    }
+
+    const cleanInline = bindWheel(inlineViewportRef.current, false)
+    const cleanDialog = fullscreen ? bindWheel(dialogViewportRef.current, true) : () => {}
+    return () => {
+      cleanInline()
+      cleanDialog()
+    }
+  }, [applyZoomAtPoint, canZoom, fullscreen])
+
   const handleCopy = () => {
     copyToClipboardSafe(code)
     setCopied(true)
     setTimeout(() => setCopied(false), 1300)
   }
 
-  const handleZoomOut = useCallback(() => {
-    setZoomPct((z) => clampMermaidZoom(z - MERMAID_ZOOM_STEP))
+  const handleZoomOut = useCallback(
+    (inDialog: boolean) => {
+      const cur = inDialog
+        ? zoomStateRef.current.dialogEffectivePct
+        : zoomStateRef.current.inlineEffectivePct
+      applyZoomAtPoint(stepMermaidZoom(cur, -1), inDialog)
+    },
+    [applyZoomAtPoint],
+  )
+
+  const handleZoomIn = useCallback(
+    (inDialog: boolean) => {
+      const cur = inDialog
+        ? zoomStateRef.current.dialogEffectivePct
+        : zoomStateRef.current.inlineEffectivePct
+      applyZoomAtPoint(stepMermaidZoom(cur, 1), inDialog)
+    },
+    [applyZoomAtPoint],
+  )
+
+  const handleZoomReset = useCallback(
+    (inDialog: boolean) => {
+      applyZoomAtPoint(100, inDialog)
+    },
+    [applyZoomAtPoint],
+  )
+
+  const handleZoomFit = useCallback((inDialog: boolean) => {
+    pendingAnchorRef.current = null
+    if (inDialog) {
+      setDialogZoomMode('fit')
+    } else {
+      setInlineZoomMode('fit')
+    }
   }, [])
 
-  const handleZoomIn = useCallback(() => {
-    setZoomPct((z) => clampMermaidZoom(z + MERMAID_ZOOM_STEP))
+  const handleToggleFullscreen = useCallback((nextOpen: boolean) => {
+    pendingAnchorRef.current = null
+    if (nextOpen) {
+      setDialogZoomMode('fit')
+    }
+    setFullscreen(nextOpen)
   }, [])
 
-  const handleZoomReset = useCallback(() => {
-    setZoomPct(100)
-  }, [])
+  const handleDoubleClick = useCallback(
+    (e: ReactMouseEvent<HTMLDivElement>, inDialog: boolean) => {
+      if (!canZoom) return
+      const mode = inDialog
+        ? zoomStateRef.current.dialogZoomMode
+        : zoomStateRef.current.inlineZoomMode
+      const cur = inDialog
+        ? zoomStateRef.current.dialogEffectivePct
+        : zoomStateRef.current.inlineEffectivePct
+      const fit = inDialog
+        ? zoomStateRef.current.dialogFitPct
+        : zoomStateRef.current.inlineFitPct
+      if (mode === 'fit' || cur <= Math.max(125, fit + 10)) {
+        const targetZoom = clampMermaidZoom(Math.max(200, Math.round(cur * 2.2)))
+        applyZoomAtPoint(targetZoom, inDialog, e.clientX, e.clientY)
+      } else {
+        pendingAnchorRef.current = null
+        if (inDialog) setDialogZoomMode('fit')
+        else setInlineZoomMode('fit')
+      }
+    },
+    [applyZoomAtPoint, canZoom],
+  )
 
-  const handleWheelZoom = useCallback((e: WheelEvent<HTMLDivElement>) => {
-    if (!e.ctrlKey && !e.metaKey) return
-    e.preventDefault()
-    setZoomPct((z) => clampMermaidZoom(z + (e.deltaY < 0 ? MERMAID_ZOOM_STEP : -MERMAID_ZOOM_STEP)))
-  }, [])
+  const handlePanMouseDown = useCallback(
+    (e: ReactMouseEvent<HTMLDivElement>, inDialog: boolean) => {
+      if (!canZoom || e.button !== 0 || typeof window === 'undefined') return
+      const viewport = inDialog ? dialogViewportRef.current : inlineViewportRef.current
+      if (!viewport) return
+      const overflows =
+        viewport.scrollWidth > viewport.clientWidth + 2 ||
+        viewport.scrollHeight > viewport.clientHeight + 2
+      if (!overflows) return
 
-  const showSourceFallback = viewMode === 'source' || (svg === null && renderError !== null)
-  const canZoom = !showSourceFallback && svg !== null
+      const startX = e.clientX
+      const startY = e.clientY
+      const startLeft = viewport.scrollLeft
+      const startTop = viewport.scrollTop
+      let moved = false
 
-  const renderToolbar = (inDialog: boolean) => (
-    <div className={css.mermaidToolbar}>
-      <span className={css.mermaidTitle}>{displayTitle}</span>
-      <div className={css.diffActions}>
-        {canZoom ? (
-          <div className={css.diffModeSwitch} role="group" aria-label={msg.mermaidZoomGroup}>
+      const onMove = (ev: globalThis.MouseEvent) => {
+        const dx = ev.clientX - startX
+        const dy = ev.clientY - startY
+        if (!moved && Math.hypot(dx, dy) > 3) {
+          moved = true
+          setIsDragging(true)
+        }
+        if (moved) {
+          ev.preventDefault()
+          viewport.scrollLeft = startLeft - dx
+          viewport.scrollTop = startTop - dy
+        }
+      }
+
+      const cleanup = () => {
+        window.removeEventListener('mousemove', onMove)
+        window.removeEventListener('mouseup', cleanup)
+        dragCleanupRef.current = null
+        setIsDragging(false)
+      }
+
+      dragCleanupRef.current?.()
+      dragCleanupRef.current = cleanup
+      window.addEventListener('mousemove', onMove)
+      window.addEventListener('mouseup', cleanup)
+    },
+    [canZoom],
+  )
+
+  const renderToolbar = (inDialog: boolean) => {
+    const activePct = inDialog ? dialogEffectivePct : inlineEffectivePct
+    const activeMode = inDialog ? dialogZoomMode : inlineZoomMode
+    return (
+      <div className={css.mermaidToolbar}>
+        <span className={css.mermaidTitle}>{displayTitle}</span>
+        <div className={css.diffActions}>
+          {canZoom ? (
+            <div className={css.diffModeSwitch} role="group" aria-label={msg.mermaidZoomGroup}>
+              <button
+                type="button"
+                className={css.mermaidZoomBtn}
+                disabled={activePct <= MERMAID_ZOOM_MIN}
+                aria-label={msg.mermaidZoomOutAria}
+                title={msg.mermaidZoomOutTitle}
+                onClick={() => handleZoomOut(inDialog)}
+              >
+                −
+              </button>
+              <button
+                type="button"
+                className={css.mermaidZoomReadout}
+                aria-label={msg.mermaidZoomResetAria}
+                title={msg.mermaidZoomResetTitle}
+                onClick={() => handleZoomReset(inDialog)}
+              >
+                {activePct}%
+              </button>
+              <button
+                type="button"
+                className={css.mermaidZoomBtn}
+                disabled={activePct >= MERMAID_ZOOM_MAX}
+                aria-label={msg.mermaidZoomInAria}
+                title={msg.mermaidZoomInTitle}
+                onClick={() => handleZoomIn(inDialog)}
+              >
+                +
+              </button>
+              <button
+                type="button"
+                className={css.mermaidZoomFitBtn}
+                data-active={activeMode === 'fit' ? 'true' : 'false'}
+                aria-label={msg.mermaidZoomFitAria}
+                title={msg.mermaidZoomFitTitle}
+                onClick={() => handleZoomFit(inDialog)}
+              >
+                {msg.mermaidZoomFit}
+              </button>
+            </div>
+          ) : null}
+          <div className={css.diffModeSwitch} role="group" aria-label={msg.mermaidViewGroup}>
             <button
               type="button"
-              className={css.mermaidZoomBtn}
-              disabled={zoomPct <= MERMAID_ZOOM_MIN}
-              aria-label={msg.mermaidZoomOutAria}
-              title={msg.mermaidZoomOutTitle}
-              onClick={handleZoomOut}
+              className={css.diffModeBtn}
+              data-active={viewMode === 'diagram' ? 'true' : 'false'}
+              onClick={() => setViewMode('diagram')}
             >
-              −
+              {msg.mermaidDiagramTab}
             </button>
             <button
               type="button"
-              className={css.mermaidZoomReadout}
-              aria-label={msg.mermaidZoomResetAria}
-              title={msg.mermaidZoomResetTitle}
-              onClick={handleZoomReset}
+              className={css.diffModeBtn}
+              data-active={viewMode === 'source' ? 'true' : 'false'}
+              onClick={() => setViewMode('source')}
             >
-              {zoomPct}%
-            </button>
-            <button
-              type="button"
-              className={css.mermaidZoomBtn}
-              disabled={zoomPct >= MERMAID_ZOOM_MAX}
-              aria-label={msg.mermaidZoomInAria}
-              title={msg.mermaidZoomInTitle}
-              onClick={handleZoomIn}
-            >
-              +
+              {msg.mermaidSourceTab}
             </button>
           </div>
-        ) : null}
-        <div className={css.diffModeSwitch} role="group" aria-label={msg.mermaidViewGroup}>
-          <button
-            type="button"
-            className={css.diffModeBtn}
-            data-active={viewMode === 'diagram' ? 'true' : 'false'}
-            onClick={() => setViewMode('diagram')}
-          >
-            {msg.mermaidDiagramTab}
+          <button type="button" className={css.diffCopyBtn} onClick={handleCopy}>
+            {copied ? msg.copiedCheck : msg.copy}
           </button>
-          <button
-            type="button"
-            className={css.diffModeBtn}
-            data-active={viewMode === 'source' ? 'true' : 'false'}
-            onClick={() => setViewMode('source')}
-          >
-            {msg.mermaidSourceTab}
-          </button>
+          {preparedSvg !== null || inDialog ? (
+            <button
+              type="button"
+              className={css.diffCopyBtn}
+              data-a2ui-mermaid-fullscreen-btn=""
+              aria-label={inDialog ? msg.mermaidFullscreenExitAria : msg.mermaidFullscreenEnterAria}
+              onClick={() => handleToggleFullscreen(!inDialog)}
+            >
+              {inDialog ? msg.mermaidFullscreenExit : msg.mermaidFullscreenEnter}
+            </button>
+          ) : null}
         </div>
-        <button type="button" className={css.diffCopyBtn} onClick={handleCopy}>
-          {copied ? msg.copiedCheck : msg.copy}
-        </button>
-        {svg !== null || inDialog ? (
-          <button
-            type="button"
-            className={css.diffCopyBtn}
-            data-a2ui-mermaid-fullscreen-btn=""
-            aria-label={inDialog ? msg.mermaidFullscreenExitAria : msg.mermaidFullscreenEnterAria}
-            onClick={() => setFullscreen(!inDialog)}
-          >
-            {inDialog ? msg.mermaidFullscreenExit : msg.mermaidFullscreenEnter}
-          </button>
-        ) : null}
       </div>
-    </div>
-  )
+    )
+  }
 
-  const renderDiagramBody = (inDialog: boolean) => (
-    <div
-      className={inDialog ? css.mermaidFullscreenBody : css.mermaidBody}
-      onWheel={inDialog ? handleWheelZoom : undefined}
-    >
-      {code === '' ? (
-        <div className={css.emptyCell}>{msg.mermaidEmpty}</div>
-      ) : showSourceFallback ? (
-        <DshCodeBlock code={code} lang="mermaid" />
-      ) : svg !== null ? (
-        <div className={css.mermaidSvgWrap}>
+  const renderDiagramBody = (inDialog: boolean) => {
+    const activeMode = inDialog ? dialogZoomMode : inlineZoomMode
+    const activeManualPct = inDialog ? dialogManualPct : inlineManualPct
+    const activePannable = inDialog ? dialogPannable : inlinePannable
+    const isManualZoom = activeMode === 'manual'
+    const stageZoomStyle: CSSProperties | undefined =
+      isManualZoom && preparedSvg !== null
+        ? ({
+            '--mermaid-zoom-w': `${Math.round((preparedSvg.width * activeManualPct) / 100)}px`,
+            '--mermaid-zoom-h': `${Math.round((preparedSvg.height * activeManualPct) / 100)}px`,
+          } as CSSProperties)
+        : undefined
+
+    return (
+      <div
+        ref={inDialog ? dialogViewportRef : inlineViewportRef}
+        className={inDialog ? css.mermaidFullscreenBody : css.mermaidBody}
+        data-zoomed={isManualZoom && canZoom ? 'true' : 'false'}
+        data-pannable={activePannable && canZoom ? 'true' : 'false'}
+        data-dragging={isDragging ? 'true' : 'false'}
+        onMouseDown={(e) => handlePanMouseDown(e, inDialog)}
+        onDoubleClick={(e) => handleDoubleClick(e, inDialog)}
+      >
+        {code === '' ? (
+          <div className={css.emptyCell}>{msg.mermaidEmpty}</div>
+        ) : showSourceFallback ? (
+          <DshCodeBlock code={code} lang="mermaid" />
+        ) : preparedSvg !== null ? (
           <div
+            ref={inDialog ? dialogStageRef : inlineStageRef}
             className={css.mermaidSvgStage}
             data-a2ui-mermaid-svg=""
-            data-zoomed={zoomPct !== 100 ? 'true' : 'false'}
-            style={zoomPct !== 100 ? { zoom: `${zoomPct}%` } : undefined}
+            data-zoomed={isManualZoom ? 'true' : 'false'}
+            style={stageZoomStyle}
             // Safe: `renderMermaidDiagram` enforces `securityLevel: 'strict'`, strips `%%{init}%%`
             // directives, and passes the rendered markup through `DOMPurify` + `assertSafeSvg(svg)`.
-            dangerouslySetInnerHTML={{ __html: svg }}
+            dangerouslySetInnerHTML={{ __html: preparedSvg.markup }}
           />
-        </div>
-      ) : (
-        <div
-          className={css.lazySkeleton}
-          style={{ height: 180 }}
-          role="status"
-          aria-busy={rendering}
-          aria-label={msg.mermaidRendering}
-        />
-      )}
-    </div>
-  )
+        ) : (
+          <div
+            className={css.lazySkeleton}
+            style={{ height: 180 }}
+            role="status"
+            aria-busy={rendering}
+            aria-label={msg.mermaidRendering}
+          />
+        )}
+      </div>
+    )
+  }
 
   return (
     <>

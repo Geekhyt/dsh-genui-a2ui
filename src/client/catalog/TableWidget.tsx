@@ -167,7 +167,9 @@ export const TableWidget = memo(function TableWidget({
   const pageCount = table.getPageCount()
   const pageIndex = table.state.pagination.pageIndex
   const weightStyle =
-    weight !== undefined ? { flexGrow: weight, flexBasis: 0, minWidth: 240 } : undefined
+    weight !== undefined
+      ? { flexGrow: weight, flexBasis: 'var(--a2ui-flex-basis, 0px)', minWidth: 240 }
+      : undefined
 
   return (
     <div className={css.tableCard} style={weightStyle} data-a2ui-table="">

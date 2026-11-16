@@ -65,6 +65,7 @@ export function resetPersistenceForTests(): void {
   cachedDockMap = {}
   cachedEnabledRaw = undefined
   cachedEnabledStore = { defaultEnabled: true, bySession: {} }
+  commandNoticesBySession.clear()
   try {
     if (typeof window !== 'undefined' && window.localStorage) {
       window.localStorage.removeItem(DRAFTS_STORAGE_KEY)
@@ -76,6 +77,7 @@ export function resetPersistenceForTests(): void {
   }
   notifyListeners(dockListeners)
   notifyListeners(enabledListeners)
+  notifyListeners(commandNoticeListeners)
 }
 
 /** Fast deterministic FNV-1a 32-bit hex fingerprint over compiled messages. */
@@ -385,4 +387,63 @@ export function setA2uiEnabled(sessionId: string | undefined, enabled: boolean):
   cachedEnabledStore = next
   writeStorage(ENABLED_STORAGE_KEY, serialized)
   notifyListeners(enabledListeners)
+}
+
+// ---------------------------------------------------------------------------
+// Ephemeral Blank-Session Slash-Command Feedback (`/a2ui status|on|off`)
+// ---------------------------------------------------------------------------
+
+export interface A2uiCommandNotice {
+  readonly seq: number
+  readonly kind: 'success' | 'error'
+  readonly text: string
+}
+
+const MAX_COMMAND_NOTICE_SESSIONS = 32
+const commandNoticeListeners = new Set<() => void>()
+const commandNoticesBySession = new Map<string, A2uiCommandNotice>()
+let nextCommandNoticeSeq = 0
+
+export function subscribeCommandNotice(listener: () => void): () => void {
+  commandNoticeListeners.add(listener)
+  return () => {
+    commandNoticeListeners.delete(listener)
+  }
+}
+
+export function getCommandNotice(sessionId: string | undefined): A2uiCommandNotice | null {
+  if (!sessionId) return null
+  return commandNoticesBySession.get(sessionId) ?? null
+}
+
+export function publishCommandNotice(
+  sessionId: string | undefined,
+  kind: 'success' | 'error',
+  text: string,
+): A2uiCommandNotice | null {
+  if (!sessionId || text.trim() === '') return null
+  nextCommandNoticeSeq += 1
+  const notice: A2uiCommandNotice = {
+    seq: nextCommandNoticeSeq,
+    kind,
+    text: text.trim(),
+  }
+  commandNoticesBySession.delete(sessionId)
+  commandNoticesBySession.set(sessionId, notice)
+  while (commandNoticesBySession.size > MAX_COMMAND_NOTICE_SESSIONS) {
+    const oldest = commandNoticesBySession.keys().next()
+    if (oldest.done) break
+    commandNoticesBySession.delete(oldest.value)
+  }
+  notifyListeners(commandNoticeListeners)
+  return notice
+}
+
+export function dismissCommandNotice(sessionId: string | undefined, seq?: number): void {
+  if (!sessionId) return
+  const current = commandNoticesBySession.get(sessionId)
+  if (!current) return
+  if (seq !== undefined && current.seq !== seq) return
+  commandNoticesBySession.delete(sessionId)
+  notifyListeners(commandNoticeListeners)
 }

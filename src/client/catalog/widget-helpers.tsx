@@ -23,6 +23,22 @@ export type ChildRef =
 
 export const InsideButtonContext = createContext(false)
 
+/** True when the enclosing surface is in read-only / historical snapshot mode. */
+export const SurfaceReadOnlyContext = createContext(false)
+
+/** Provided inside `DshModal` body so action buttons can close the enclosing dialog upon dispatch. */
+export const ModalCloseContext = createContext<(() => void) | null>(null)
+
+export interface SurfaceValidationContextValue {
+  readonly submitAttempted: boolean
+  readonly markSubmitAttempted: () => void
+}
+
+export const SurfaceValidationContext = createContext<SurfaceValidationContextValue>({
+  submitAttempted: false,
+  markSubmitAttempted: () => {},
+})
+
 export function defineComponent<Props>(
   api: ComponentApi,
   render: FC<ReactA2uiComponentProps<Props>>,
@@ -32,7 +48,7 @@ export function defineComponent<Props>(
 
 export function weightStyle(weight: number | undefined, minWidth = 0): CSSProperties | undefined {
   if (weight === undefined) return undefined
-  return { flexGrow: weight, flexBasis: 0, minWidth }
+  return { flexGrow: weight, flexBasis: 'var(--a2ui-flex-basis, 0px)', minWidth }
 }
 
 export function renderChildRef(
