@@ -47,59 +47,79 @@ dsh plugin --profile desktop add dsh-genui-a2ui
 
 ## 场景预览
 
+每个场景均原生跟随宿主主题自动切换深色与浅色模式（点击任意配图可查看高清原图）：
+
 ### 一屏看清多阶转化流向与多维健康度
 
 顶栏指标卡自动等高对齐并附带趋势微图。下方同屏组合四阶全链路桑基流向图与五维健康度雷达对比图，点击标签页还可切换区域柱状图与可检索明细表。
 
-![全链路转化流向与五维健康度诊断大盘](assets/screenshots/hero-executive-dashboard.png)
+| 深色模式（Dark） | 浅色模式（Light） |
+| :---: | :---: |
+| ![全链路转化流向与五维健康度诊断大盘（深色模式）](assets/screenshots/hero-executive-dashboard.png) | ![全链路转化流向与五维健康度诊断大盘（浅色模式）](assets/screenshots/hero-executive-dashboard-light.png) |
 
 ### 连锁门店实时经营与库存预警
 
 汇总多门店今日实收、单量与高峰出杯准时率。同屏联动分时段全渠道面积图、门店客流热力矩阵与可搜索排序的原料库存预警表，异常门店一眼定位。
 
-![连锁门店今日实时经营仪表盘](assets/screenshots/store-operations-dashboard.png)
+| 深色模式（Dark） | 浅色模式（Light） |
+| :---: | :---: |
+| ![连锁门店今日实时经营仪表盘（深色模式）](assets/screenshots/store-operations-dashboard.png) | ![连锁门店今日实时经营仪表盘（浅色模式）](assets/screenshots/store-operations-dashboard-light.png) |
 
 ### 多规格选型卡片组、步进容量推演与追问建议
 
 点选 GPU 机型规格卡片或点击步进数字框调节副本数，顶栏网格指标在本地 0 ms 即时重算总吞吐与包月预算；支持多选胶囊配置容灾可用区、级联树绑定目标微服务，并在底部直接点击追问建议卡片开启下一轮压测推演。
 
-![多规格选型卡片组与步进容量规划台](assets/screenshots/antd-capacity-checkcard-planner.png)
+| 深色模式（Dark） | 浅色模式（Light） |
+| :---: | :---: |
+| ![多规格选型卡片组与步进容量规划台（深色模式）](assets/screenshots/antd-capacity-checkcard-planner.png) | ![多规格选型卡片组与步进容量规划台（浅色模式）](assets/screenshots/antd-capacity-checkcard-planner-light.png) |
 
 ### 专属集群健康概览、边框规格书与可展开 ProTable
 
 一屏聚合核心生产集群概览头、悬停可查看详情的 SLA 可用性时序条与带表格边框的工单规格书。下方 ProTable 支持一键复制 Markdown、导出 CSV、自动生成数值汇总行，并可点击行首展开内联诊断详情抽屉。
 
-![专属集群健康概览与可展开 ProTable 治理台](assets/screenshots/enterprise-governance-protable.png)
+| 深色模式（Dark） | 浅色模式（Light） |
+| :---: | :---: |
+| ![专属集群健康概览与可展开 ProTable 治理台（深色模式）](assets/screenshots/enterprise-governance-protable.png) | ![专属集群健康概览与可展开 ProTable 治理台（浅色模式）](assets/screenshots/enterprise-governance-protable-light.png) |
 
 ### 微服务健康拓扑、全链路调用瀑布树与日志定位
 
 无需加载重型图形库即可秒级绘制实时健康度着色的服务依赖拓扑，同屏联动带比例耗时微条的分布式 Trace 瀑布树与结构化异常日志台，一眼锁定慢调用瓶颈并直跳工作区源码行。
 
-![微服务健康拓扑与全链路调用瀑布诊断台](assets/screenshots/sre-apm-topology-workbench.png)
+| 深色模式（Dark） | 浅色模式（Light） |
+| :---: | :---: |
+| ![微服务健康拓扑与全链路调用瀑布诊断台（深色模式）](assets/screenshots/sre-apm-topology-workbench.png) | ![微服务健康拓扑与全链路调用瀑布诊断台（浅色模式）](assets/screenshots/sre-apm-topology-workbench-light.png) |
 
 ### 拖动滑块实时推演成本与回报
 
 调整预算、利率或流量假设时，不必反复发消息等待重算。直接在对话内拖动滑块或切换档位，账单金额、预算水位与对比图表会在本地 0 ms 即时更新，不额外消耗 Token。
 
-![实时联动的参数测算器](assets/screenshots/zero-latency-simulator.png)
+| 深色模式（Dark） | 浅色模式（Light） |
+| :---: | :---: |
+| ![实时联动的参数测算器（深色模式）](assets/screenshots/zero-latency-simulator.png) | ![实时联动的参数测算器（浅色模式）](assets/screenshots/zero-latency-simulator-light.png) |
 
 ### 关键操作前先核对差异再放行
 
 执行重要配置修改或高影响动作前，输入框上方会弹出确认卡片。核对双栏代码差异、选择生效范围并勾选确认后，任务才会继续执行。
 
-![双栏代码对比与确认面板](assets/screenshots/human-in-the-loop-ask.png)
+| 深色模式（Dark） | 浅色模式（Light） |
+| :---: | :---: |
+| ![双栏代码对比与确认面板（深色模式）](assets/screenshots/human-in-the-loop-ask.png) | ![双栏代码对比与确认面板（浅色模式）](assets/screenshots/human-in-the-loop-ask-light.png) |
 
 ### 分层系统架构图与右侧源码联动
 
 多层级 Mermaid 系统架构图、工作区文件树与配置树同屏呈现。点击左侧任意文件节点，右侧边栏会直接打开真实工作区文件并跳到对应行号。
 
-![分层系统架构图与右侧边栏源码联动](assets/screenshots/codebase-explorer-sidebar.png)
+| 深色模式（Dark） | 浅色模式（Light） |
+| :---: | :---: |
+| ![分层系统架构图与右侧边栏源码联动（深色模式）](assets/screenshots/codebase-explorer-sidebar.png) | ![分层系统架构图与右侧边栏源码联动（浅色模式）](assets/screenshots/codebase-explorer-sidebar-light.png) |
 
 ### 多步骤任务常驻底部实时跟进
 
 运行长耗时检查或多阶段流水线时，进度条固定在输入框上方原地刷新。向上翻看历史消息时，也能随时掌握当前阶段与整体完成度。
 
-![底部常驻的多阶段任务进度栏](assets/screenshots/persistent-dock-pipeline.png)
+| 深色模式（Dark） | 浅色模式（Light） |
+| :---: | :---: |
+| ![底部常驻的多阶段任务进度栏（深色模式）](assets/screenshots/persistent-dock-pipeline.png) | ![底部常驻的多阶段任务进度栏（浅色模式）](assets/screenshots/persistent-dock-pipeline-light.png) |
 
 ## 为什么选择 A2UI
 

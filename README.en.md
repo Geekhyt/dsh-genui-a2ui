@@ -47,59 +47,79 @@ Once enabled, ask questions as usual. Click **A2UI** below the input box or type
 
 ## See it in action
 
+Every surface adapts natively to both dark mode and light mode (click any preview to inspect full resolution):
+
 ### Diagnose multi-stage conversion flows and health scores
 
 Equal-height KPI cards with sparklines pair with a four-stage Sankey flow and a five-axis radar chart in one view. Switch tabs to inspect regional revenue bars or filter channel ROI rows.
 
-![Full-funnel conversion flow and radar diagnostic dashboard](assets/screenshots/hero-executive-dashboard.png)
+| Dark mode | Light mode |
+| :---: | :---: |
+| ![Full-funnel conversion flow and radar diagnostic dashboard (Dark)](assets/screenshots/hero-executive-dashboard.png) | ![Full-funnel conversion flow and radar diagnostic dashboard (Light)](assets/screenshots/hero-executive-dashboard-light.png) |
 
 ### Monitor live store operations and stock alerts
 
 Track daily chain revenue, order volume, and peak-hour fulfillment in real time. Combine stacked channel area curves, store-by-hour order heatmaps, and searchable inventory warning tables on one screen.
 
-![Multi-store live operations and inventory dashboard](assets/screenshots/store-operations-dashboard.png)
+| Dark mode | Light mode |
+| :---: | :---: |
+| ![Multi-store live operations and inventory dashboard (Dark)](assets/screenshots/store-operations-dashboard.png) | ![Multi-store live operations and inventory dashboard (Light)](assets/screenshots/store-operations-dashboard-light.png) |
 
 ### Plan GPU capacity with visual check-cards, precision steppers, and follow-up prompts
 
 Switch GPU instance tiers via rich check-cards or adjust replica steppers to recalculate cluster RPS and monthly budgets locally in 0 ms. Pair multi-tag zone selectors and hierarchical service breadcrumbs with clickable next-step prompt cards at the bottom.
 
-![GPU tier check-cards, precision steppers, and follow-up prompt cards](assets/screenshots/antd-capacity-checkcard-planner.png)
+| Dark mode | Light mode |
+| :---: | :---: |
+| ![GPU tier check-cards, precision steppers, and follow-up prompt cards (Dark)](assets/screenshots/antd-capacity-checkcard-planner.png) | ![GPU tier check-cards, precision steppers, and follow-up prompt cards (Light)](assets/screenshots/antd-capacity-checkcard-planner-light.png) |
 
 ### Govern dedicated clusters with SLA strips, bordered descriptions, and expandable ProTables
 
 Combine production cluster headers, hoverable SLA uptime strips, and bordered specification tables in one view. Below, the enterprise ProTable adds one-click Markdown/CSV export, automatic numeric summary footers, and inline expandable row drawers.
 
-![Dedicated cluster SLA strip, bordered descriptions, and expandable ProTable](assets/screenshots/enterprise-governance-protable.png)
+| Dark mode | Light mode |
+| :---: | :---: |
+| ![Dedicated cluster SLA strip, bordered descriptions, and expandable ProTable (Dark)](assets/screenshots/enterprise-governance-protable.png) | ![Dedicated cluster SLA strip, bordered descriptions, and expandable ProTable (Light)](assets/screenshots/enterprise-governance-protable-light.png) |
 
 ### Triage latency spikes across service health DAGs, APM trace waterfalls, and logs
 
 Render zero-dependency health-colored service dependency DAGs alongside a distributed trace waterfall tree with proportional latency bars and an error log console linked directly to workspace source lines.
 
-![Service health topology, distributed trace waterfall tree, and log viewer](assets/screenshots/sre-apm-topology-workbench.png)
+| Dark mode | Light mode |
+| :---: | :---: |
+| ![Service health topology, distributed trace waterfall tree, and log viewer (Dark)](assets/screenshots/sre-apm-topology-workbench.png) | ![Service health topology, distributed trace waterfall tree, and log viewer (Light)](assets/screenshots/sre-apm-topology-workbench-light.png) |
 
 ### Model costs and returns with live sliders
 
 Drag sliders or switch tiers to test budget, rate, or traffic assumptions right in chat. Totals, margins, and charts recalculate locally in 0 ms without spending extra tokens.
 
-![Live parameter calculator with sliders and bar chart](assets/screenshots/zero-latency-simulator.png)
+| Dark mode | Light mode |
+| :---: | :---: |
+| ![Live parameter calculator with sliders and bar chart (Dark)](assets/screenshots/zero-latency-simulator.png) | ![Live parameter calculator with sliders and bar chart (Light)](assets/screenshots/zero-latency-simulator-light.png) |
 
 ### Review diffs before approving critical actions
 
 Pause high-impact changes with a review card above the chat input. Inspect the split code diff, select a rollout scope, and confirm before execution continues.
 
-![Split code diff and approval gate](assets/screenshots/human-in-the-loop-ask.png)
+| Dark mode | Light mode |
+| :---: | :---: |
+| ![Split code diff and approval gate (Dark)](assets/screenshots/human-in-the-loop-ask.png) | ![Split code diff and approval gate (Light)](assets/screenshots/human-in-the-loop-ask-light.png) |
 
 ### Map layered system architecture to live source files
 
 Render multi-layer Mermaid architecture diagrams alongside a workspace file tree and JSON inspector. Click any file node to open that exact line inside the right sidebar.
 
-![Layered architecture diagram linked to right sidebar source view](assets/screenshots/codebase-explorer-sidebar.png)
+| Dark mode | Light mode |
+| :---: | :---: |
+| ![Layered architecture diagram linked to right sidebar source view (Dark)](assets/screenshots/codebase-explorer-sidebar.png) | ![Layered architecture diagram linked to right sidebar source view (Light)](assets/screenshots/codebase-explorer-sidebar-light.png) |
 
 ### Pin live task progress above the chat input
 
 Keep multi-stage pipelines anchored at the bottom of the window. Stages and completion rates update in place while you scroll through earlier messages.
 
-![Persistent multi-stage task progress dock](assets/screenshots/persistent-dock-pipeline.png)
+| Dark mode | Light mode |
+| :---: | :---: |
+| ![Persistent multi-stage task progress dock (Dark)](assets/screenshots/persistent-dock-pipeline.png) | ![Persistent multi-stage task progress dock (Light)](assets/screenshots/persistent-dock-pipeline-light.png) |
 
 ## Why A2UI
 

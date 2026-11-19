@@ -305,9 +305,9 @@ export const SHOWCASE_ARCHITECTURE_UI = [
   '  protocol: "A2UI 1.0",',
   '  zeroHostHacks: true,',
   '  chunks: {',
-  '    "client.js (Cold Boot)": "53.3 KB (15.0 KB gzip)",',
-  '    "client.runtime.js": "1.05 MB (on-demand)",',
-  '    "client.echarts.js": "782 KB (14 chart kinds)",',
+  '    "client.js (Cold Boot)": "58.3 KB (16.5 KB gzip)",',
+  '    "client.runtime.js": "1.29 MB (on-demand)",',
+  '    "client.echarts.js": "790 KB (14 chart kinds)",',
   '    "client.mermaid.js": "3.51 MB (diagram-only)"',
   '  }',
   '}',
@@ -376,19 +376,19 @@ export const SHOWCASE_DOCK_PIPELINE_UI = [
   'surface("release_dock")',
   '$/stages = [',
   '  { title: "TypeScript 类型检查", status: "done", description: "0 errors" },',
-  '  { title: "四分包构建与体积门禁", status: "done", description: "53.3 kB < 500 kB" },',
-  '  { title: "Host API 契约核验", status: "done", description: "Slots & Primitives OK" },',
-  '  { title: "Vitest 49 项回归测试", status: "active", description: "执行中 (45/49)" },',
+  '  { title: "四分包构建与体积门禁", status: "done", description: "58.3 kB < 100 kB" },',
+  '  { title: "Host API 契约核验", status: "done", description: "27 Primitives OK" },',
+  '  { title: "Vitest 77 项回归测试", status: "active", description: "执行中 (74/77)" },',
   '  { title: "npm 预打包产物审计", status: "pending", description: "等待前序完成" }',
   ']',
   'root = Column([',
   '  Steps($/stages, direction="horizontal"),',
   '  Row([',
-  '    Stat("首屏 client.js", "53.3 kB", delta="15.0 kB gzip", trend="up", weight=1),',
-  '    Stat("回归测试套件", "45 / 49", delta="运行中", trend="up", weight=1),',
+  '    Stat("首屏 client.js", "58.3 kB", delta="16.5 kB gzip", trend="up", weight=1),',
+  '    Stat("回归测试套件", "74 / 77", delta="运行中", trend="up", weight=1),',
   '    Stat("零宿主 Hack 检查", "100% 通过", trend="up", weight=1)',
   '  ]),',
-  '  Progress(86, label="v0.1.0 开源发布质量流水线总进度（跨轮次常驻监控）", tone="success")',
+  '  Progress(88, label="v0.2.1 开源发布质量流水线总进度（跨轮次常驻监控）", tone="success")',
   '])',
 ].join('\n')
 
@@ -892,7 +892,7 @@ export function startMockLlmServer(port = PORT) {
         }
         if (isShowcase5) {
           await streamToolCall(res, model, 'a2ui_render', {
-            title: 'v0.1.0 开源发布质量门禁流水线',
+            title: 'v0.2.1 开源发布质量门禁流水线',
             placement: 'dock',
             ui: SHOWCASE_DOCK_PIPELINE_UI,
           })
@@ -1074,7 +1074,7 @@ export function startMockLlmServer(port = PORT) {
               : isShowcase4
                 ? '已收到您的双栏 Diff 审核放行指令，正在将分包加载降级保护补丁写入工作区。'
                 : isShowcase5
-                  ? '已将 v0.1.0 发布前自动化质量流水线挂载至会话底部常驻工作台（Dock），后续各阶段核验状态将原地实时刷新。'
+                  ? '已将 v0.2.1 发布前自动化质量流水线挂载至会话底部常驻工作台（Dock），后续各阶段核验状态将原地实时刷新。'
                   : isShowcase7
                     ? '已定位延迟突增根因：Fraud Scorer 访问 TiKV 热点分片 #19 耗时占全链路 77%，可点击下方日志直跳工作区源码。'
                     : isShowcase8
