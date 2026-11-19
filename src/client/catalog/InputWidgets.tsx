@@ -53,10 +53,12 @@ import {
   ModalCloseContext,
   SurfaceReadOnlyContext,
   SurfaceValidationContext,
+  computeClampedPopoverBox,
   defineComponent,
   renderChildRef,
   weightStyle,
   type ChildRef,
+  type ClampedPopoverBox,
 } from './widget-helpers.tsx'
 
 export function DshButtonView({
@@ -539,11 +541,7 @@ export function DshSelectView({
   const [query, setQuery] = useState('')
   const deferredQuery = useDeferredValue(query)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
-  const [popoverBox, setPopoverBox] = useState<{
-    top: number
-    left: number
-    width: number
-  } | null>(null)
+  const [popoverBox, setPopoverBox] = useState<ClampedPopoverBox | null>(null)
 
   const options = useMemo(() => normalizeSelectOptions(props.options), [props.options])
   const selectedVal = props.value === undefined || props.value === null ? '' : String(props.value)
@@ -593,14 +591,8 @@ export function DshSelectView({
     }
     if (useCustomPopover && triggerRef.current) {
       const rect = triggerRef.current.getBoundingClientRect()
-      const viewportH = typeof window !== 'undefined' ? window.innerHeight : 800
       const estHeight = Math.min(280, options.length * 40 + (searchable ? 52 : 12))
-      const placeAbove = rect.bottom + estHeight > viewportH - 12 && rect.top > estHeight
-      setPopoverBox({
-        top: placeAbove ? Math.max(8, rect.top - estHeight - 6) : rect.bottom + 4,
-        left: Math.max(8, rect.left),
-        width: Math.max(180, rect.width),
-      })
+      setPopoverBox(computeClampedPopoverBox(rect, { minWidth: 180, estHeight }))
     }
     setOpen(true)
   }
@@ -670,6 +662,7 @@ export function DshSelectView({
                       top: popoverBox.top,
                       left: popoverBox.left,
                       width: popoverBox.width,
+                      maxHeight: popoverBox.maxHeight,
                     }}
                     onClick={(e) => e.stopPropagation()}
                   >
@@ -787,26 +780,40 @@ export function DshSegmentedView({
 
   if (segOptions.length === 0) return null
 
+  const segMinW = useMemo(() => {
+    let total = 14
+    for (const opt of segOptions) {
+      let w = 34
+      for (const ch of opt.label) {
+        w += (ch.codePointAt(0) ?? 0) > 0xff ? 13.6 : 8
+      }
+      total += w
+    }
+    return Math.max(160, Math.min(440, Math.ceil(total)))
+  }, [segOptions])
+
   return (
-    <div className={css.field} style={weightStyle(props.weight, 160)} data-a2ui-segmented="">
+    <div className={css.field} style={weightStyle(props.weight, segMinW)} data-a2ui-segmented="">
       {label || err ? (
         <div className={css.fieldHeader}>
           {label ? <span className={css.label}>{label}</span> : <span />}
           {err ? <span className={css.errorText}>{err}</span> : null}
         </div>
       ) : null}
-      <DshSegmentedControl
-        id={segId}
-        value={activeVal}
-        options={segOptions}
-        label={label || msg.segmentedAria}
-        disabled={readOnly}
-        onChange={(next) => {
-          if (readOnly) return
-          setTouched(true)
-          props.setValue?.(next)
-        }}
-      />
+      <div className={css.segmentedHostWrap}>
+        <DshSegmentedControl
+          id={segId}
+          value={activeVal}
+          options={segOptions}
+          label={label || msg.segmentedAria}
+          disabled={readOnly}
+          onChange={(next) => {
+            if (readOnly) return
+            setTouched(true)
+            props.setValue?.(next)
+          }}
+        />
+      </div>
     </div>
   )
 }
@@ -856,7 +863,7 @@ export function DshSwitchView({
   }
 
   return (
-    <div className={css.switchCard} style={weightStyle(props.weight, 160)} data-a2ui-switch="">
+    <div className={css.switchCard} style={weightStyle(props.weight, 240)} data-a2ui-switch="">
       <div className={css.switchMainRow}>
         <div
           className={css.switchLabelBlock}

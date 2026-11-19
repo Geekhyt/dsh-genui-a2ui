@@ -213,6 +213,109 @@ describe('Evolution v3: 10 New A2UI 1.0 Components (42 Total)', () => {
     expect(cyclic.nodes).toHaveLength(3)
     expect(cyclic.edges).toHaveLength(3)
     expect(cyclic.edges.some((e) => e.isBackEdge)).toBe(true)
+
+    // Long CJK/ASCII edge labels in LR mode automatically widen the inter-rank gap so text is never occluded by node boxes
+    const lrWideLabel = buildServiceGraphLayout(
+      [
+        { id: 'checkout', label: 'Checkout API' },
+        { id: 'risk', label: 'Fraud Scorer · TiKV' },
+      ],
+      [{ from: 'checkout', to: 'risk', label: 'region #19 慢读超时重试', status: 'error' }],
+      'LR',
+    )
+    const n0 = lrWideLabel.nodes[0]!
+    const n1 = lrWideLabel.nodes[1]!
+    const e0 = lrWideLabel.edges[0]!
+    expect(n1.x - (n0.x + n0.width)).toBeGreaterThanOrEqual(e0.labelWidth + 24)
+
+    // Cyclic LR & TB graphs, skip-level edges (A -> B -> C + A -> C), X-crossings, and single-column TB wide labels
+    // must keep 100% of nodes & edge label pills strictly inside positive SVG bounds and collision-free.
+    const assertGraphCollisionFree = (layout: ReturnType<typeof buildServiceGraphLayout>) => {
+      for (const n of layout.nodes) {
+        expect(n.x).toBeGreaterThanOrEqual(12)
+        expect(n.y).toBeGreaterThanOrEqual(12)
+        expect(n.x + n.width).toBeLessThanOrEqual(layout.width - 12)
+        expect(n.y + n.height).toBeLessThanOrEqual(layout.height - 12)
+      }
+      const labeled = layout.edges.filter((e) => Boolean(e.label))
+      for (let i = 0; i < labeled.length; i++) {
+        const e = labeled[i]!
+        const lx1 = e.labelX - e.labelWidth / 2
+        const ly1 = e.labelY - 9
+        const lx2 = e.labelX + e.labelWidth / 2
+        const ly2 = e.labelY + 9
+        expect(lx1).toBeGreaterThanOrEqual(10)
+        expect(ly1).toBeGreaterThanOrEqual(10)
+        expect(lx2).toBeLessThanOrEqual(layout.width - 10)
+        expect(ly2).toBeLessThanOrEqual(layout.height - 10)
+        for (const n of layout.nodes) {
+          const overlapsNode = lx1 < n.x + n.width && lx2 > n.x && ly1 < n.y + n.height && ly2 > n.y
+          expect(overlapsNode).toBe(false)
+        }
+        for (let j = i + 1; j < labeled.length; j++) {
+          const other = labeled[j]!
+          const ox1 = other.labelX - other.labelWidth / 2
+          const oy1 = other.labelY - 9
+          const ox2 = other.labelX + other.labelWidth / 2
+          const oy2 = other.labelY + 9
+          const overlapsOther = lx1 < ox2 && lx2 > ox1 && ly1 < oy2 && ly2 > oy1
+          expect(overlapsOther).toBe(false)
+        }
+      }
+    }
+
+    assertGraphCollisionFree(cyclic)
+    assertGraphCollisionFree(
+      buildServiceGraphLayout(
+        [
+          { id: 'gw', label: 'API Gateway' },
+          { id: 'cache', label: 'Redis Cluster' },
+          { id: 'db', label: 'Primary TiKV' },
+        ],
+        [
+          { from: 'gw', to: 'cache', label: 'read 2ms' },
+          { from: 'cache', to: 'db', label: 'miss 18ms' },
+          { from: 'gw', to: 'db', label: '穿透降级直连 140ms', status: 'warning' },
+          { from: 'db', to: 'gw', label: '熔断回退信令', status: 'error' },
+        ],
+        'LR',
+      ),
+    )
+    assertGraphCollisionFree(
+      buildServiceGraphLayout(
+        [
+          { id: 'w1', label: 'Ingress AZ-A' },
+          { id: 'w2', label: 'Ingress AZ-B' },
+          { id: 's1', label: 'Shard-01' },
+          { id: 's2', label: 'Shard-02' },
+        ],
+        [
+          { from: 'w1', to: 's2', label: 'cross-AZ 38ms' },
+          { from: 'w2', to: 's1', label: 'cross-AZ 41ms' },
+        ],
+        'LR',
+      ),
+    )
+    assertGraphCollisionFree(
+      buildServiceGraphLayout(
+        [
+          { id: 'primary', label: 'MySQL Master' },
+          { id: 'replica', label: 'Read Replica' },
+        ],
+        [{ from: 'primary', to: 'replica', label: '跨地域半同步 binlog 复制延迟 128ms' }],
+        'TB',
+      ),
+    )
+
+    // Small MetricRing with long value + unit scales center font down to fit inside inner ring stroke
+    const smallBusyRing = computeMetricRingGeometry({
+      value: 99.95,
+      max: 100,
+      size: 64,
+      unit: '%',
+    })
+    expect(smallBusyRing.numberFontSize).toBeLessThan(13)
+    expect(smallBusyRing.numberFontSize).toBeGreaterThanOrEqual(10)
   })
 
   it('enriches outbound dshSelection metadata for Comparison, Kanban, and ServiceGraph actions', () => {

@@ -164,7 +164,10 @@ export const DshTrackerImpl = defineComponent<{
       <DshHoverCardGroup>
         <div
           className={css.trackerStrip}
-          style={{ gridTemplateColumns: `repeat(${slices.length}, minmax(3px, 1fr))` }}
+          style={{
+            gap: slices.length > 60 ? 1 : slices.length > 36 ? 2 : 3,
+            gridTemplateColumns: `repeat(${slices.length}, minmax(1.5px, 1fr))`,
+          }}
         >
           {slices.map((s) => {
             const detail = s.note || statusText(s.status)
@@ -200,13 +203,15 @@ export const DshTrackerImpl = defineComponent<{
         {activeSlice ? (
           <>
             <span className={css.trackerFooterStrong}>{activeSlice.label}</span>
-            <span>{activeSlice.note || statusText(activeSlice.status)}</span>
+            <span className={css.trackerFooterNote}>
+              {activeSlice.note || statusText(activeSlice.status)}
+            </span>
           </>
         ) : (
           <>
-            <span>{slices[0]?.label}</span>
-            <span>{msg.trackerHoverHint}</span>
-            <span>{slices[slices.length - 1]?.label}</span>
+            <span className={css.trackerFooterEdge}>{slices[0]?.label}</span>
+            <span className={css.trackerFooterHint}>{msg.trackerHoverHint}</span>
+            <span className={css.trackerFooterEdge}>{slices[slices.length - 1]?.label}</span>
           </>
         )}
       </div>
@@ -695,64 +700,93 @@ export const DshScheduleImpl = defineComponent<{
         </div>
 
         <div className={css.scheduleTrackList}>
-          {model.tracks.map((tr) => (
-            <div key={tr.id} className={css.scheduleRow}>
-              <div className={css.scheduleLabelCol} title={tr.title}>
-                <span className={css.scheduleRowTitle}>{tr.title}</span>
-                {tr.owner ? <span className={css.scheduleOwner}>{tr.owner}</span> : null}
-              </div>
-              <div className={css.scheduleLane}>
-                {model.nowPct !== undefined ? (
-                  <span
-                    className={css.scheduleNowLine}
-                    style={{ left: `${model.nowPct}%` }}
-                    aria-hidden="true"
-                  />
-                ) : null}
-                <button
-                  type="button"
-                  disabled={!canAct}
-                  className={css.scheduleBar}
-                  data-status={tr.status}
-                  data-clickable={canAct ? 'true' : 'false'}
-                  style={{ left: `${tr.leftPct}%`, width: `${tr.widthPct}%` }}
-                  title={`${tr.title}: ${tr.startLabel} – ${tr.endLabel}${tr.progress !== undefined ? ` (${tr.progress}%)` : ''}`}
-                  onClick={
-                    canAct
-                      ? () => {
-                          void props.action?.({
-                            metadata: {
-                              extensions: {
-                                dshSelection: {
-                                  source: 'schedule',
-                                  label: tr.title,
-                                  value: `${tr.startLabel} – ${tr.endLabel}`,
-                                  track: tr.raw,
-                                },
-                              },
-                            },
-                          })
-                        }
-                      : undefined
-                  }
-                >
-                  {tr.progress !== undefined && tr.progress > 0 && tr.progress < 100 ? (
+          {model.tracks.map((tr) => {
+            const barLabel = tr.note
+              ? tr.note
+              : tr.progress !== undefined
+                ? `${tr.progress}%`
+                : `${tr.startLabel}–${tr.endLabel}`
+            let estLabelPx = 16
+            for (const ch of barLabel) {
+              estLabelPx += (ch.codePointAt(0) ?? 0) > 0xff ? 11.2 : 6.4
+            }
+            const minPctForInside = Math.min(48, Math.ceil(estLabelPx / 2.8))
+            const placeOutside = tr.widthPct < minPctForInside
+            const spaceRightPct = 100 - (tr.leftPct + tr.widthPct)
+            const placeOutsideRight = spaceRightPct >= tr.leftPct
+
+            return (
+              <div key={tr.id} className={css.scheduleRow}>
+                <div className={css.scheduleLabelCol} title={tr.title}>
+                  <span className={css.scheduleRowTitle}>{tr.title}</span>
+                  {tr.owner ? <span className={css.scheduleOwner}>{tr.owner}</span> : null}
+                </div>
+                <div className={css.scheduleLane}>
+                  {model.nowPct !== undefined ? (
                     <span
-                      className={css.scheduleBarProgress}
-                      style={{ width: `${tr.progress}%` }}
+                      className={css.scheduleNowLine}
+                      style={{ left: `${model.nowPct}%` }}
+                      aria-hidden="true"
                     />
                   ) : null}
-                  <span className={css.scheduleBarText}>
-                    {tr.note
-                      ? tr.note
-                      : tr.progress !== undefined
-                        ? `${tr.progress}%`
-                        : `${tr.startLabel}–${tr.endLabel}`}
-                  </span>
-                </button>
+                  <button
+                    type="button"
+                    disabled={!canAct}
+                    className={css.scheduleBar}
+                    data-status={tr.status}
+                    data-clickable={canAct ? 'true' : 'false'}
+                    data-narrow={placeOutside ? 'true' : 'false'}
+                    style={{ left: `${tr.leftPct}%`, width: `${tr.widthPct}%` }}
+                    title={`${tr.title}: ${tr.startLabel} – ${tr.endLabel}${tr.progress !== undefined ? ` (${tr.progress}%)` : ''}${tr.note ? ` · ${tr.note}` : ''}`}
+                    onClick={
+                      canAct
+                        ? () => {
+                            void props.action?.({
+                              metadata: {
+                                extensions: {
+                                  dshSelection: {
+                                    source: 'schedule',
+                                    label: tr.title,
+                                    value: `${tr.startLabel} – ${tr.endLabel}`,
+                                    track: tr.raw,
+                                  },
+                                },
+                              },
+                            })
+                          }
+                        : undefined
+                    }
+                  >
+                    {tr.progress !== undefined && tr.progress > 0 && tr.progress < 100 ? (
+                      <span
+                        className={css.scheduleBarProgress}
+                        style={{ width: `${tr.progress}%` }}
+                      />
+                    ) : null}
+                    {!placeOutside ? <span className={css.scheduleBarText}>{barLabel}</span> : null}
+                  </button>
+                  {placeOutside ? (
+                    <span
+                      className={css.scheduleBarOutsideLabel}
+                      style={
+                        placeOutsideRight
+                          ? {
+                              left: `calc(${tr.leftPct + tr.widthPct}% + 6px)`,
+                              maxWidth: `calc(${spaceRightPct}% - 10px)`,
+                            }
+                          : {
+                              right: `calc(${100 - tr.leftPct}% + 6px)`,
+                              maxWidth: `calc(${tr.leftPct}% - 10px)`,
+                            }
+                      }
+                    >
+                      {barLabel}
+                    </span>
+                  ) : null}
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       </div>
     </div>

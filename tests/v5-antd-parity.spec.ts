@@ -56,12 +56,15 @@ import {
   DshKeyValueImpl,
   DshMultiSelectImpl,
   DshNumberInputImpl,
+  DshScheduleImpl,
   DshTableImpl,
+  DshTrackerImpl,
   DshTreeImpl,
   DshTreeSelectImpl,
 } from '../src/client/catalog/BasicWidgets.tsx'
 import { dshReactCatalog } from '../src/client/catalog/index.ts'
 import { normalizeKeyValueItems } from '../src/client/catalog/p0-helpers.ts'
+import { computeClampedPopoverBox } from '../src/client/catalog/widget-helpers.tsx'
 import {
   buildDatePresetRange,
   clampAndStepNumber,
@@ -371,5 +374,55 @@ describe('Evolution v5: Ant Design 5.x / AntD Pro / AntD X Parity (57 Components
       source: 'checkCard',
       value: 'flamegraph',
     })
+  })
+
+  it('guards Schedule narrow Gantt labels, 90-slice Tracker density, and right-edge Popover clamping', () => {
+    const renderOf = (impl: unknown) => (impl as { rawRender: never }).rawRender
+    const dummyCtx = {
+      surfaceId: 's_guard',
+      componentId: 'c_guard',
+      dataContextPath: '/',
+      buildChild: () => null,
+    }
+
+    const schedHtml = renderToStaticMarkup(
+      createElement(renderOf(DshScheduleImpl), {
+        ...dummyCtx,
+        props: {
+          title: '窄条排期测试',
+          range: ['00:00', '06:00'],
+          items: [
+            { title: '短时闪断演练', start: '00:05', end: '00:15', note: '00:05 准时注入故障' },
+            { title: '尾段收口验证', start: '05:45', end: '05:55', progress: 100 },
+          ],
+        },
+      }),
+    )
+    expect(schedHtml).toContain('data-narrow="true"')
+    expect(schedHtml).toContain('00:05 准时注入故障')
+    expect(schedHtml).toContain('left:calc(')
+    expect(schedHtml).toContain('right:calc(')
+
+    const slices90 = Array.from({ length: 90 }, (_, i) => ({
+      label: `D-${90 - i}`,
+      status: i === 42 ? 'warning' : 'ok',
+    }))
+    const trackerHtml = renderToStaticMarkup(
+      createElement(renderOf(DshTrackerImpl), {
+        ...dummyCtx,
+        props: { title: '90天可用性', data: slices90 },
+      }),
+    )
+    expect(trackerHtml).toContain('gap:1px')
+    expect(trackerHtml).toContain('minmax(1.5px, 1fr)')
+
+    // Default SSR viewport is 1024x800; a narrow right-edge trigger at left=910 must shift left so left+width <= 1016
+    const clamped = computeClampedPopoverBox(
+      { top: 120, bottom: 156, left: 910, width: 100 },
+      { minWidth: 240, estHeight: 260 },
+    )
+    expect(clamped.width).toBe(240)
+    expect(clamped.left + clamped.width).toBeLessThanOrEqual(1016)
+    expect(clamped.left).toBeGreaterThanOrEqual(8)
   })
 })

@@ -1834,11 +1834,13 @@
 .selectOptionLabel {
   font-size: 12.5px;
   font-weight: 500;
+  overflow-wrap: anywhere;
 }
 
 .selectOptionDesc {
   font-size: 11px;
   color: var(--dsw-alias-label-tertiary, rgba(128, 128, 128, 0.82));
+  overflow-wrap: anywhere;
 }
 
 .selectOptionCheck {
@@ -1854,7 +1856,20 @@
   color: var(--dsw-alias-label-tertiary, rgba(128, 128, 128, 0.8));
 }
 
+.segmentedHostWrap {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.segmentedHostWrap::-webkit-scrollbar {
+  display: none;
+}
+
 .switchCard {
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -2092,6 +2107,8 @@
 .logCountMeta {
   font-size: 11px;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  flex-shrink: 0;
   color: var(--dsw-alias-label-tertiary, rgba(128, 128, 128, 0.8));
 }
 
@@ -2854,6 +2871,15 @@
   pointer-events: none;
 }
 
+.serviceGraphLabelSvg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 2;
+  display: block;
+  pointer-events: none;
+}
+
 .serviceEdgePath {
   stroke: var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.42));
   stroke-width: 1.6;
@@ -2885,9 +2911,9 @@
 }
 
 .serviceEdgeLabelBg {
-  fill: var(--dsw-alias-bg-layer-2, rgba(28, 30, 36, 0.9));
-  stroke: var(--dsw-alias-border-l1, rgba(128, 128, 128, 0.24));
-  stroke-width: 0.8;
+  fill: var(--dsw-alias-bg-base, #181a20);
+  stroke: var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.34));
+  stroke-width: 1;
 }
 
 .serviceEdgeLabelText {
@@ -2898,6 +2924,7 @@
 
 .serviceNodeBox {
   position: absolute;
+  z-index: 1;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
@@ -2969,10 +2996,12 @@
   align-items: center;
   justify-content: space-between;
   gap: 6px;
+  min-width: 0;
   font-size: 10.5px;
 }
 
 .serviceNodeSub {
+  min-width: 0;
   color: var(--dsw-alias-label-tertiary, rgba(128, 128, 128, 0.82));
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2980,6 +3009,7 @@
 }
 
 .serviceNodeMetric {
+  flex-shrink: 0;
   font-family: var(--dsw-font-family-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
   color: var(--dsw-alias-label-secondary, inherit);
   white-space: nowrap;
@@ -3071,6 +3101,7 @@
   border-radius: var(--dsw-radius-md, 10px);
   border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.2));
   background: var(--dsw-alias-bg-layer-1, transparent);
+  overflow: hidden;
   min-width: 0;
 }
 
@@ -3154,14 +3185,29 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  min-width: 0;
   font-size: 11.5px;
   font-variant-numeric: tabular-nums;
   color: var(--dsw-alias-label-tertiary, rgba(128, 128, 128, 0.84));
 }
 
 .trackerFooterStrong {
+  flex-shrink: 0;
   font-weight: 600;
   color: var(--dsw-alias-label-primary, inherit);
+}
+
+.trackerFooterEdge {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.trackerFooterHint,
+.trackerFooterNote {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .categoryTrack {
@@ -3549,9 +3595,15 @@
 .apiTabBar {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 6px;
   padding: 8px 12px;
   border-bottom: 1px solid var(--dsw-alias-border-l1, rgba(128, 128, 128, 0.14));
+}
+
+.apiTabBar button {
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .apiBody {
@@ -3637,9 +3689,17 @@
 .scheduleAxisRow,
 .scheduleRow {
   display: grid;
-  grid-template-columns: minmax(120px, 180px) 1fr;
+  grid-template-columns: minmax(120px, 180px) minmax(0, 1fr);
   align-items: center;
   gap: 12px;
+}
+
+@media (max-width: 560px) {
+  .scheduleAxisRow,
+  .scheduleRow {
+    grid-template-columns: minmax(96px, 132px) minmax(0, 1fr);
+    gap: 8px;
+  }
 }
 
 .scheduleAxisTicks {
@@ -3753,6 +3813,28 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.scheduleBar[data-narrow="true"] {
+  padding: 0;
+}
+
+.scheduleBarOutsideLabel {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 3;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--dsw-alias-bg-base, #181a20) 80%, transparent);
+  font-family: var(--dsw-font-family-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--dsw-alias-label-secondary, rgba(128, 128, 128, 0.92));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
 }
 
 /* ─────────────────────────── Result ─────────────────────────── */
@@ -4080,6 +4162,8 @@
 
 .kvLabelBordered {
   padding: 8px 12px;
+  min-width: 0;
+  overflow-wrap: break-word;
   font-size: 12px;
   font-weight: 500;
   color: var(--dsw-alias-label-secondary, rgba(128, 128, 128, 0.9));
@@ -4087,6 +4171,16 @@
   border-right: 1px solid var(--dsw-alias-border-l1, rgba(128, 128, 128, 0.16));
   display: flex;
   align-items: center;
+}
+
+@media (max-width: 640px) {
+  .kvGridBordered {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .kvCellBordered {
+    grid-column: span 1;
+  }
 }
 
 .kvValueBordered {
@@ -4384,6 +4478,7 @@
 .dateRangeInputs {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 6px;
   padding: 4px 8px;
   border-radius: var(--dsw-radius-sm, 8px);
@@ -4398,8 +4493,9 @@
 }
 
 .dateRangeInput {
-  flex: 1;
-  min-width: 112px;
+  flex: 1 1 124px;
+  min-width: 0;
+  max-width: 100%;
   border: none;
   outline: none;
   background: transparent;
@@ -4408,6 +4504,10 @@
   font-size: 12.5px;
   font-variant-numeric: tabular-nums;
   color-scheme: light dark;
+}
+
+.dateRangeInput[type="datetime-local"] {
+  flex-basis: 168px;
 }
 
 .dateRangeArrow {
@@ -4475,8 +4575,13 @@
 }
 
 .treeSelectGroupText {
+  flex: 1;
+  min-width: 0;
   font-weight: 600;
   color: var(--dsw-alias-label-secondary, inherit);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .treeSelectLeafText {
@@ -4632,6 +4737,7 @@
 .generalTreeMainBtn {
   flex: 1;
   min-width: 0;
+  overflow: hidden;
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -4644,6 +4750,8 @@
 }
 
 .generalTreeBranchLabel {
+  flex: 0 1 auto;
+  min-width: 40px;
   font-size: 12.5px;
   font-weight: 600;
   overflow: hidden;
@@ -4652,6 +4760,8 @@
 }
 
 .generalTreeLeafLabel {
+  flex: 0 1 auto;
+  min-width: 40px;
   font-family: var(--dsw-font-family-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
   font-size: 12px;
   overflow: hidden;
@@ -4660,6 +4770,8 @@
 }
 
 .generalTreeSub {
+  flex: 0 999 auto;
+  min-width: 0;
   font-size: 11.5px;
   color: var(--dsw-alias-label-tertiary, rgba(128, 128, 128, 0.82));
   overflow: hidden;
@@ -4676,8 +4788,9 @@
 }
 
 .generalTreeBarTrack {
-  width: 68px;
+  width: 56px;
   height: 6px;
+  flex-shrink: 0;
   border-radius: 999px;
   background: var(--dsw-alias-bg-layer-2, rgba(128, 128, 128, 0.16));
   overflow: hidden;

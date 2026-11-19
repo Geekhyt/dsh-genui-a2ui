@@ -53,8 +53,10 @@ import {
 import {
   SurfaceReadOnlyContext,
   SurfaceValidationContext,
+  computeClampedPopoverBox,
   defineComponent,
   weightStyle,
+  type ClampedPopoverBox,
 } from './widget-helpers.tsx'
 
 const SEARCH_ICON_14 = <DshSearchIcon size={14} />
@@ -198,11 +200,7 @@ export const DshMultiSelectImpl = defineComponent<{
   const [query, setQuery] = useState('')
   const deferredQuery = useDeferredValue(query)
   const triggerRef = useRef<HTMLDivElement | null>(null)
-  const [popoverBox, setPopoverBox] = useState<{
-    top: number
-    left: number
-    width: number
-  } | null>(null)
+  const [popoverBox, setPopoverBox] = useState<ClampedPopoverBox | null>(null)
 
   const selected = useMemo(
     () => (Array.isArray(props.value) ? props.value.map(String).filter(Boolean) : []),
@@ -254,14 +252,7 @@ export const DshMultiSelectImpl = defineComponent<{
     }
     if (triggerRef.current) {
       const rect = triggerRef.current.getBoundingClientRect()
-      const viewportH = typeof window !== 'undefined' ? window.innerHeight : 800
-      const estH = 260
-      const placeAbove = rect.bottom + estH > viewportH - 12 && rect.top > estH
-      setPopoverBox({
-        top: placeAbove ? Math.max(8, rect.top - estH - 6) : rect.bottom + 4,
-        left: Math.max(8, rect.left),
-        width: Math.max(220, rect.width),
-      })
+      setPopoverBox(computeClampedPopoverBox(rect, { minWidth: 220, estHeight: 260 }))
     }
     setOpen(true)
   }
@@ -375,6 +366,7 @@ export const DshMultiSelectImpl = defineComponent<{
                   top: popoverBox.top,
                   left: popoverBox.left,
                   width: popoverBox.width,
+                  maxHeight: popoverBox.maxHeight,
                 }}
                 onClick={(e) => e.stopPropagation()}
               >
@@ -561,7 +553,7 @@ function TreeSelectOptionBranch(props: {
       <div
         className={css.treeSelectRow}
         data-selected={isSelected ? 'true' : 'false'}
-        style={{ paddingLeft: 8 + depth * 14 }}
+        style={{ paddingLeft: 8 + Math.min(depth, 5) * 13 }}
       >
         {isBranch ? (
           <button
@@ -630,11 +622,7 @@ export const DshTreeSelectImpl = defineComponent<{
   const [query, setQuery] = useState('')
   const deferredQuery = useDeferredValue(query)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
-  const [popoverBox, setPopoverBox] = useState<{
-    top: number
-    left: number
-    width: number
-  } | null>(null)
+  const [popoverBox, setPopoverBox] = useState<ClampedPopoverBox | null>(null)
 
   const tree = useMemo(() => normalizeHierarchyTree(props.nodes), [props.nodes])
   const filteredTree = useMemo(
@@ -661,14 +649,7 @@ export const DshTreeSelectImpl = defineComponent<{
     }
     if (triggerRef.current) {
       const rect = triggerRef.current.getBoundingClientRect()
-      const viewportH = typeof window !== 'undefined' ? window.innerHeight : 800
-      const estH = 290
-      const placeAbove = rect.bottom + estH > viewportH - 12 && rect.top > estH
-      setPopoverBox({
-        top: placeAbove ? Math.max(8, rect.top - estH - 6) : rect.bottom + 4,
-        left: Math.max(8, rect.left),
-        width: Math.max(240, rect.width),
-      })
+      setPopoverBox(computeClampedPopoverBox(rect, { minWidth: 240, estHeight: 280 }))
     }
     setOpen(true)
   }
@@ -729,6 +710,7 @@ export const DshTreeSelectImpl = defineComponent<{
                   top: popoverBox.top,
                   left: popoverBox.left,
                   width: popoverBox.width,
+                  maxHeight: popoverBox.maxHeight,
                 }}
                 onClick={(e) => e.stopPropagation()}
               >
@@ -929,7 +911,7 @@ function GeneralTreeBranch(props: {
       <div
         className={css.generalTreeRow}
         data-status={node.status}
-        style={{ paddingLeft: 10 + depth * 18 }}
+        style={{ paddingLeft: 10 + Math.min(depth, 6) * 16 }}
       >
         {isBranch ? (
           <button

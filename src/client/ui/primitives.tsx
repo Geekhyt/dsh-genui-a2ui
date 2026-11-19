@@ -201,7 +201,7 @@ export function DshSwitch(props: {
         borderRadius: 999,
         border: '1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.28))',
         background: props.checked
-          ? 'var(--dsw-alias-brand-primary, #3b82f6)'
+          ? 'var(--dsw-alias-state-info-primary, #3b82f6)'
           : 'var(--dsw-alias-bg-layer-3, rgba(128,128,128,0.2))',
         cursor: props.disabled ? 'not-allowed' : 'pointer',
         opacity: props.disabled ? 0.5 : 1,
@@ -365,9 +365,11 @@ export function DshSegmentedControl<Value extends string = string>(props: {
       style={{
         display: 'inline-grid',
         gridAutoFlow: 'column',
-        gridAutoColumns: '1fr',
+        gridAutoColumns: 'minmax(0, 1fr)',
         gap: 4,
         width: '100%',
+        minWidth: 0,
+        boxSizing: 'border-box',
         padding: 3,
         borderRadius: 'var(--dsw-radius-md, 10px)',
         background: 'var(--dsw-alias-bg-layer-2, rgba(128,128,128,0.12))',
@@ -384,20 +386,22 @@ export function DshSegmentedControl<Value extends string = string>(props: {
             role="radio"
             aria-checked={active}
             disabled={isDisabled}
-            title={opt.title}
+            title={opt.title ?? opt.label}
             onClick={() => {
               if (!isDisabled) props.onChange(opt.value)
             }}
             style={{
+              minWidth: 0,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
               padding: '5px 10px',
               borderRadius: 'var(--dsw-radius-sm, 7px)',
               border: 'none',
               fontSize: 12,
               fontWeight: active ? 600 : 400,
-              background: active ? 'var(--dsw-alias-brand-primary, #3b82f6)' : 'transparent',
-              color: active
-                ? 'var(--dsw-alias-label-primary-inverted, #ffffff)'
-                : 'var(--dsw-alias-label-secondary, inherit)',
+              background: active ? 'var(--dsw-alias-state-info-primary, #3b82f6)' : 'transparent',
+              color: active ? '#ffffff' : 'var(--dsw-alias-label-secondary, inherit)',
               cursor: isDisabled ? 'not-allowed' : 'pointer',
               opacity: isDisabled ? 0.5 : 1,
             }}

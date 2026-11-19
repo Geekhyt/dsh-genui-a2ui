@@ -442,6 +442,8 @@ export interface MetricRingGeometry {
   readonly circumference: number
   readonly dashOffset: number
   readonly resolvedTone: MetricRingTone
+  readonly numberFontSize: number
+  readonly unitFontSize: number
 }
 
 export function computeMetricRingGeometry(params: {
@@ -449,6 +451,7 @@ export function computeMetricRingGeometry(params: {
   readonly max?: number | undefined
   readonly size?: number | undefined
   readonly tone?: 'brand' | 'success' | 'warning' | 'danger' | 'auto' | undefined
+  readonly unit?: string | undefined
 }): MetricRingGeometry {
   const num = Number(params.value)
   const safeVal = Number.isFinite(num) ? num : 0
@@ -468,7 +471,23 @@ export function computeMetricRingGeometry(params: {
 
   const displayNumber = Number.isInteger(safeVal)
     ? String(safeVal)
-    : safeVal.toFixed(Math.abs(safeVal) < 10 ? 2 : 1).replace(/\.?0+$/, '')
+    : Number(safeVal.toFixed(2)).toString()
+
+  const resolvedUnit = params.unit !== undefined ? params.unit : max === 100 ? '%' : ''
+  const innerClearDiameter = Math.max(28, radius * 2 - strokeWidth - 8)
+  let charEmUnits = 0
+  for (const ch of displayNumber) {
+    charEmUnits += (ch.codePointAt(0) ?? 0) > 0xff ? 1.05 : 0.62
+  }
+  if (resolvedUnit) {
+    charEmUnits += 0.1
+    for (const ch of resolvedUnit) {
+      charEmUnits += (ch.codePointAt(0) ?? 0) > 0xff ? 0.78 : 0.48
+    }
+  }
+  const maxFitFont = innerClearDiameter / Math.max(1.6, charEmUnits)
+  const numberFontSize = Number(Math.max(10, Math.min(size * 0.2, maxFitFont)).toFixed(1))
+  const unitFontSize = Number(Math.max(8.5, numberFontSize * 0.66).toFixed(1))
 
   let resolvedTone: MetricRingTone
   if (!params.tone || params.tone === 'brand') {
@@ -488,6 +507,8 @@ export function computeMetricRingGeometry(params: {
     circumference,
     dashOffset,
     resolvedTone,
+    numberFontSize,
+    unitFontSize,
   }
 }
 
@@ -514,11 +535,21 @@ export interface PositionedServiceEdge {
   readonly from: string
   readonly to: string
   readonly label?: string | undefined
+  readonly labelWidth: number
   readonly status: 'healthy' | 'warning' | 'error'
   readonly pathD: string
   readonly labelX: number
   readonly labelY: number
   readonly isBackEdge: boolean
+}
+
+export function estimateEdgeLabelWidth(label: string | undefined): number {
+  if (!label) return 0
+  let units = 0
+  for (const ch of label) {
+    units += (ch.codePointAt(0) ?? 0) > 0xff ? 11.5 : 6.6
+  }
+  return Math.max(44, Math.ceil(units + 16))
 }
 
 export interface ServiceGraphLayout {
@@ -539,6 +570,37 @@ function normalizeHealthStatus(raw: unknown): ServiceHealthStatus {
   if (s === 'warning' || s === 'warn' || s === 'degraded') return 'warning'
   if (s === 'unknown' || s === 'pending' || s === 'idle') return 'unknown'
   return 'healthy'
+}
+
+function estimateInlineTextPx(text: string | undefined, asciiPx: number, cjkPx: number): number {
+  if (!text) return 0
+  let total = 0
+  for (const ch of text) {
+    if (ch === ' ' || ch === '·' || ch === '.' || ch === ':' || ch === '-') {
+      total += asciiPx * 0.52
+    } else {
+      total += (ch.codePointAt(0) ?? 0) > 0xff ? cjkPx : asciiPx
+    }
+  }
+  return Math.ceil(total)
+}
+
+function cubicAt(t: number, p0: number, p1: number, p2: number, p3: number): number {
+  const u = 1 - t
+  return u * u * u * p0 + 3 * u * u * t * p1 + 3 * u * t * t * p2 + t * t * t * p3
+}
+
+function rectsOverlap(
+  ax1: number,
+  ay1: number,
+  ax2: number,
+  ay2: number,
+  bx1: number,
+  by1: number,
+  bx2: number,
+  by2: number,
+): boolean {
+  return ax1 < bx2 && ax2 > bx1 && ay1 < by2 && ay2 > by1
 }
 
 function normalizeEdgeStatus(raw: unknown): 'healthy' | 'warning' | 'error' {
@@ -718,121 +780,443 @@ export function buildServiceGraphLayout(
     })
   }
 
-  const NODE_W = 158
+  const estimateNodeIdealW = (n: (typeof parsedNodes)[number]): number => {
+    const topW = 35 + estimateInlineTextPx(n.label, 6.85, 12.5)
+    const bottomW =
+      20 +
+      estimateInlineTextPx(n.sublabel, 5.8, 10.8) +
+      (n.sublabel && n.metric ? 8 : 0) +
+      estimateInlineTextPx(n.metric, 6.3, 10.8)
+    return Math.max(148, Math.min(194, Math.max(topW, bottomW)))
+  }
+
+  let maxIdealNodeW = 148
+  for (const n of parsedNodes) {
+    maxIdealNodeW = Math.max(maxIdealNodeW, estimateNodeIdealW(n))
+  }
+  const NODE_W = maxIdealNodeW
+  const lrRankWidths: number[] = []
+  for (let r = 0; r <= maxRank; r++) {
+    const bucket = layers.get(r) ?? []
+    let rw = 148
+    for (const n of bucket) rw = Math.max(rw, estimateNodeIdealW(n))
+    lrRankWidths.push(rw)
+  }
+
   const NODE_H = 58
-  const PAD_X = 16
+  const PAD_X = 14
   const PAD_Y = 16
-  const RANK_GAP = direction === 'LR' ? 62 : 56
+  const hasTbForwardLabel =
+    direction === 'TB' &&
+    parsedEdges.some((e) => Boolean(e.label) && !backEdgeKeys.has(`${e.from}->${e.to}`))
+  const TB_RANK_GAP = hasTbForwardLabel ? 64 : 56
   const SIBLING_GAP = direction === 'LR' ? 18 : 20
+
+  // Compute adaptive horizontal rank gaps in LR mode so long ASCII/CJK edge labels
+  // never collide with or get occluded by adjacent node boxes.
+  const lrRankGaps = new Array<number>(Math.max(0, maxRank)).fill(64)
+  if (direction === 'LR' && maxRank > 0) {
+    for (const e of parsedEdges) {
+      if (!e.label || backEdgeKeys.has(`${e.from}->${e.to}`)) continue
+      const rFrom = rankOf.get(e.from) ?? 0
+      const rTo = rankOf.get(e.to) ?? 0
+      if (rTo <= rFrom) continue
+      const span = rTo - rFrom
+      const neededTotal = estimateEdgeLabelWidth(e.label) + 24
+      if (span === 1) {
+        lrRankGaps[rFrom] = Math.max(lrRankGaps[rFrom] ?? 64, neededTotal)
+      } else {
+        const intermediateNodesW = lrRankWidths.slice(rFrom + 1, rTo).reduce((sum, w) => sum + w, 0)
+        const currentSpanWidth =
+          intermediateNodesW + lrRankGaps.slice(rFrom, rTo).reduce((sum, g) => sum + g, 0)
+        if (currentSpanWidth < neededTotal) {
+          const extraEach = Math.ceil((neededTotal - currentSpanWidth) / span)
+          for (let r = rFrom; r < rTo; r++) {
+            lrRankGaps[r] = (lrRankGaps[r] ?? 64) + extraEach
+          }
+        }
+      }
+    }
+  }
+
+  const lrRankX: number[] = [PAD_X]
+  for (let r = 0; r < maxRank; r++) {
+    lrRankX.push(lrRankX[r]! + (lrRankWidths[r] ?? NODE_W) + (lrRankGaps[r] ?? 64))
+  }
 
   let maxLayerCount = 1
   for (const bucket of layers.values()) {
     if (bucket.length > maxLayerCount) maxLayerCount = bucket.length
   }
 
+  let maxTbForwardLabelW = 0
+  if (direction === 'TB') {
+    for (const e of parsedEdges) {
+      if (e.label && !backEdgeKeys.has(`${e.from}->${e.to}`)) {
+        maxTbForwardLabelW = Math.max(maxTbForwardLabelW, estimateEdgeLabelWidth(e.label))
+      }
+    }
+  }
+
   const numRanks = maxRank + 1
-  const width =
+  const baseWidth =
     direction === 'LR'
-      ? PAD_X * 2 + numRanks * NODE_W + Math.max(0, numRanks - 1) * RANK_GAP
-      : PAD_X * 2 + maxLayerCount * NODE_W + Math.max(0, maxLayerCount - 1) * SIBLING_GAP
-  const height =
+      ? (lrRankX[maxRank] ?? PAD_X) + (lrRankWidths[maxRank] ?? NODE_W) + PAD_X
+      : Math.max(
+          PAD_X * 2 + maxLayerCount * NODE_W + Math.max(0, maxLayerCount - 1) * SIBLING_GAP,
+          maxTbForwardLabelW + PAD_X * 2,
+        )
+  const baseHeight =
     direction === 'LR'
       ? PAD_Y * 2 + maxLayerCount * NODE_H + Math.max(0, maxLayerCount - 1) * SIBLING_GAP
-      : PAD_Y * 2 + numRanks * NODE_H + Math.max(0, numRanks - 1) * RANK_GAP
+      : PAD_Y * 2 + numRanks * NODE_H + Math.max(0, numRanks - 1) * TB_RANK_GAP
 
-  const posNodes: PositionedServiceNode[] = []
-  const posById = new Map<string, PositionedServiceNode>()
+  const draftNodes: Array<{
+    id: string
+    label: string
+    status: ServiceHealthStatus
+    metric?: string | undefined
+    sublabel?: string | undefined
+    group?: string | undefined
+    x: number
+    y: number
+    width: number
+    height: number
+    raw: Record<string, unknown>
+  }> = []
+  const posById = new Map<string, (typeof draftNodes)[number]>()
 
   for (let r = 0; r <= maxRank; r++) {
     const bucket = layers.get(r) ?? []
     const count = bucket.length
     if (direction === 'LR') {
       const colSpan = count * NODE_H + Math.max(0, count - 1) * SIBLING_GAP
-      const startY = Math.round((height - colSpan) / 2)
-      const x = PAD_X + r * (NODE_W + RANK_GAP)
+      const startY = Math.round((baseHeight - colSpan) / 2)
+      const x = lrRankX[r] ?? PAD_X
+      const colW = lrRankWidths[r] ?? NODE_W
       bucket.forEach((n, idx) => {
-        const p: PositionedServiceNode = {
+        const p = {
           ...n,
           x,
           y: startY + idx * (NODE_H + SIBLING_GAP),
-          width: NODE_W,
+          width: colW,
           height: NODE_H,
         }
-        posNodes.push(p)
+        draftNodes.push(p)
         posById.set(p.id, p)
       })
     } else {
       const rowSpan = count * NODE_W + Math.max(0, count - 1) * SIBLING_GAP
-      const startX = Math.round((width - rowSpan) / 2)
-      const y = PAD_Y + r * (NODE_H + RANK_GAP)
+      const startX = Math.round((baseWidth - rowSpan) / 2)
+      const y = PAD_Y + r * (NODE_H + TB_RANK_GAP)
       bucket.forEach((n, idx) => {
-        const p: PositionedServiceNode = {
+        const p = {
           ...n,
           x: startX + idx * (NODE_W + SIBLING_GAP),
           y,
           width: NODE_W,
           height: NODE_H,
         }
-        posNodes.push(p)
+        draftNodes.push(p)
         posById.set(p.id, p)
       })
     }
   }
 
-  const posEdges: PositionedServiceEdge[] = []
+  const globalMinNodeY = Math.min(...draftNodes.map((n) => n.y))
+  const globalMaxNodeRight = Math.max(...draftNodes.map((n) => n.x + n.width))
+  let backEdgeIdx = 0
+  let skipEdgeIdx = 0
+
+  interface DraftEdge {
+    id: string
+    from: string
+    to: string
+    label?: string | undefined
+    labelWidth: number
+    status: 'healthy' | 'warning' | 'error'
+    sx: number
+    sy: number
+    cx1: number
+    cy1: number
+    cx2: number
+    cy2: number
+    tx: number
+    ty: number
+    labelX: number
+    labelY: number
+    isBackEdge: boolean
+  }
+
+  const placedLabelRects: Array<{ x1: number; y1: number; x2: number; y2: number }> = []
+  const draftEdges: DraftEdge[] = []
+
   parsedEdges.forEach((e, idx) => {
     const src = posById.get(e.from)
     const dst = posById.get(e.to)
     if (!src || !dst) return
     const isBack = backEdgeKeys.has(`${e.from}->${e.to}`)
+    const rFrom = rankOf.get(e.from) ?? 0
+    const rTo = rankOf.get(e.to) ?? 0
+    const labelW = estimateEdgeLabelWidth(e.label)
+
     let sx: number
     let sy: number
+    let cx1: number
+    let cy1: number
+    let cx2: number
+    let cy2: number
     let tx: number
     let ty: number
-    let pathD: string
-    let labelX: number
-    let labelY: number
 
     if (direction === 'LR') {
-      sx = isBack ? src.x : src.x + src.width
-      sy = src.y + src.height / 2
-      tx = isBack ? dst.x + dst.width : dst.x
-      ty = dst.y + dst.height / 2
       if (isBack) {
-        const arcY = Math.min(src.y, dst.y) - 24
-        pathD = `M ${sx} ${sy} C ${sx - 30} ${arcY}, ${tx + 30} ${arcY}, ${tx} ${ty}`
-        labelX = (sx + tx) / 2
-        labelY = arcY + 6
+        if (rFrom === rTo) {
+          sx = src.x + src.width
+          sy = src.y + src.height / 2
+          tx = dst.x + dst.width
+          ty = dst.y + dst.height / 2
+          const apexX =
+            Math.max(src.x + src.width, dst.x + dst.width) +
+            Math.max(36, labelW / 2 + 16) +
+            backEdgeIdx * 26
+          cx1 = (apexX - 0.125 * (sx + tx)) / 0.75
+          cx2 = cx1
+          cy1 = sy
+          cy2 = ty
+        } else {
+          sx = src.x + src.width / 2
+          sy = src.y
+          tx = dst.x + dst.width / 2
+          ty = dst.y
+          const apexY = globalMinNodeY - (26 + backEdgeIdx * 24)
+          cx1 = sx
+          cx2 = tx
+          cy1 = (apexY - 0.125 * (sy + ty)) / 0.75
+          cy2 = cy1
+        }
+        backEdgeIdx += 1
       } else {
+        sx = src.x + src.width
+        sy = src.y + src.height / 2
+        tx = dst.x
+        ty = dst.y + dst.height / 2
         const dx = Math.max(28, Math.abs(tx - sx) * 0.48)
-        pathD = `M ${sx} ${sy} C ${sx + dx} ${sy}, ${tx - dx} ${ty}, ${tx} ${ty}`
-        labelX = (sx + tx) / 2
-        labelY = (sy + ty) / 2
+        cx1 = sx + dx
+        cy1 = sy
+        cx2 = tx - dx
+        cy2 = ty
+
+        if (rTo - rFrom > 1) {
+          const midNodes = draftNodes.filter((m) => {
+            const rm = rankOf.get(m.id) ?? -1
+            return rm > rFrom && rm < rTo
+          })
+          const hitsMidNode = midNodes.some((m) =>
+            [0.2, 0.35, 0.5, 0.65, 0.8].some((t) => {
+              const bx = cubicAt(t, sx, cx1, cx2, tx)
+              const by = cubicAt(t, sy, cy1, cy2, ty)
+              return (
+                bx >= m.x - 10 &&
+                bx <= m.x + m.width + 10 &&
+                by >= m.y - 14 &&
+                by <= m.y + m.height + 14
+              )
+            }),
+          )
+          if (hitsMidNode && midNodes.length > 0) {
+            const maxMidBottom = Math.max(...midNodes.map((m) => m.y + m.height))
+            const apexY = maxMidBottom + 24 + skipEdgeIdx * 24
+            cy1 = (apexY - 0.125 * (sy + ty)) / 0.75
+            cy2 = cy1
+            skipEdgeIdx += 1
+          }
+        }
       }
+    } else if (isBack) {
+      sx = src.x + src.width
+      sy = src.y + src.height / 2
+      tx = dst.x + dst.width
+      ty = dst.y + dst.height / 2
+      const apexX = globalMaxNodeRight + Math.max(36, labelW / 2 + 16) + backEdgeIdx * 28
+      cx1 = (apexX - 0.125 * (sx + tx)) / 0.75
+      cx2 = cx1
+      cy1 = sy
+      cy2 = ty
+      backEdgeIdx += 1
     } else {
       sx = src.x + src.width / 2
-      sy = isBack ? src.y : src.y + src.height
+      sy = src.y + src.height
       tx = dst.x + dst.width / 2
-      ty = isBack ? dst.y + dst.height : dst.y
+      ty = dst.y
       const dy = Math.max(24, Math.abs(ty - sy) * 0.48)
-      pathD = isBack
-        ? `M ${sx} ${sy} C ${sx + 36} ${sy - dy}, ${tx + 36} ${ty + dy}, ${tx} ${ty}`
-        : `M ${sx} ${sy} C ${sx} ${sy + dy}, ${tx} ${ty - dy}, ${tx} ${ty}`
-      labelX = (sx + tx) / 2
-      labelY = (sy + ty) / 2
+      cx1 = sx
+      cy1 = sy + dy
+      cx2 = tx
+      cy2 = ty - dy
+
+      if (rTo - rFrom > 1) {
+        const midNodes = draftNodes.filter((m) => {
+          const rm = rankOf.get(m.id) ?? -1
+          return rm > rFrom && rm < rTo
+        })
+        const hitsMidNode = midNodes.some((m) =>
+          [0.2, 0.35, 0.5, 0.65, 0.8].some((t) => {
+            const bx = cubicAt(t, sx, cx1, cx2, tx)
+            const by = cubicAt(t, sy, cy1, cy2, ty)
+            return (
+              bx >= m.x - 12 &&
+              bx <= m.x + m.width + 12 &&
+              by >= m.y - 10 &&
+              by <= m.y + m.height + 10
+            )
+          }),
+        )
+        if (hitsMidNode && midNodes.length > 0) {
+          sx = src.x + src.width
+          sy = src.y + src.height / 2
+          tx = dst.x + dst.width
+          ty = dst.y + dst.height / 2
+          const maxMidRight = Math.max(...midNodes.map((m) => m.x + m.width))
+          const apexX = maxMidRight + Math.max(34, labelW / 2 + 14) + skipEdgeIdx * 28
+          cx1 = (apexX - 0.125 * (sx + tx)) / 0.75
+          cx2 = cx1
+          cy1 = sy
+          cy2 = ty
+          skipEdgeIdx += 1
+        }
+      }
     }
 
-    posEdges.push({
+    let labelX = cubicAt(0.5, sx, cx1, cx2, tx)
+    let labelY = cubicAt(0.5, sy, cy1, cy2, ty)
+
+    if (e.label && labelW > 0) {
+      const collidesAt = (lx: number, ly: number): boolean => {
+        const x1 = lx - labelW / 2 - 3
+        const y1 = ly - 10
+        const x2 = lx + labelW / 2 + 3
+        const y2 = ly + 10
+        for (const n of draftNodes) {
+          if (rectsOverlap(x1, y1, x2, y2, n.x - 2, n.y - 2, n.x + n.width + 2, n.y + n.height + 2))
+            return true
+        }
+        for (const prev of placedLabelRects) {
+          if (rectsOverlap(x1, y1, x2, y2, prev.x1, prev.y1, prev.x2, prev.y2)) return true
+        }
+        return false
+      }
+
+      let placed = false
+      for (const tCand of [0.5, 0.34, 0.66, 0.27, 0.73]) {
+        const candX = cubicAt(tCand, sx, cx1, cx2, tx)
+        const candY = cubicAt(tCand, sy, cy1, cy2, ty)
+        if (!collidesAt(candX, candY)) {
+          labelX = candX
+          labelY = candY
+          placed = true
+          break
+        }
+      }
+      if (!placed) {
+        for (const dyOffset of [-20, 20, -38, 38]) {
+          if (!collidesAt(labelX, labelY + dyOffset)) {
+            labelY += dyOffset
+            break
+          }
+        }
+      }
+      placedLabelRects.push({
+        x1: labelX - labelW / 2 - 2,
+        y1: labelY - 9,
+        x2: labelX + labelW / 2 + 2,
+        y2: labelY + 9,
+      })
+    }
+
+    draftEdges.push({
       id: `edge_${idx}_${e.from}_${e.to}`,
       from: e.from,
       to: e.to,
       label: e.label,
+      labelWidth: labelW,
       status: e.status,
-      pathD,
-      labelX: Math.round(labelX),
-      labelY: Math.round(labelY),
+      sx,
+      sy,
+      cx1,
+      cy1,
+      cx2,
+      cy2,
+      tx,
+      ty,
+      labelX,
+      labelY,
       isBackEdge: isBack,
     })
+  })
+
+  // Normalize canvas bounding box so every node, curve sample, and edge label pill
+  // stays strictly inside [PAD_X..width-PAD_X, PAD_Y..height-PAD_Y] with zero SVG clipping.
+  let minX = Number.POSITIVE_INFINITY
+  let minY = Number.POSITIVE_INFINITY
+  let maxX = Number.NEGATIVE_INFINITY
+  let maxY = Number.NEGATIVE_INFINITY
+
+  for (const n of draftNodes) {
+    minX = Math.min(minX, n.x)
+    minY = Math.min(minY, n.y)
+    maxX = Math.max(maxX, n.x + n.width)
+    maxY = Math.max(maxY, n.y + n.height)
+  }
+  for (const de of draftEdges) {
+    for (const t of [0, 0.25, 0.5, 0.75, 1]) {
+      const bx = cubicAt(t, de.sx, de.cx1, de.cx2, de.tx)
+      const by = cubicAt(t, de.sy, de.cy1, de.cy2, de.ty)
+      minX = Math.min(minX, bx - 4)
+      minY = Math.min(minY, by - 4)
+      maxX = Math.max(maxX, bx + 4)
+      maxY = Math.max(maxY, by + 4)
+    }
+    if (de.label && de.labelWidth > 0) {
+      minX = Math.min(minX, de.labelX - de.labelWidth / 2)
+      minY = Math.min(minY, de.labelY - 10)
+      maxX = Math.max(maxX, de.labelX + de.labelWidth / 2)
+      maxY = Math.max(maxY, de.labelY + 10)
+    }
+  }
+
+  const shiftX = minX < PAD_X ? Math.ceil(PAD_X - minX) : 0
+  const shiftY = minY < PAD_Y ? Math.ceil(PAD_Y - minY) : 0
+  const width = Math.max(baseWidth, Math.ceil(maxX + shiftX + PAD_X))
+  const height = Math.max(baseHeight, Math.ceil(maxY + shiftY + PAD_Y))
+
+  const posNodes: PositionedServiceNode[] = draftNodes.map((n) => ({
+    ...n,
+    x: n.x + shiftX,
+    y: n.y + shiftY,
+  }))
+
+  const posEdges: PositionedServiceEdge[] = draftEdges.map((de) => {
+    const sx = Math.round((de.sx + shiftX) * 10) / 10
+    const sy = Math.round((de.sy + shiftY) * 10) / 10
+    const cx1 = Math.round((de.cx1 + shiftX) * 10) / 10
+    const cy1 = Math.round((de.cy1 + shiftY) * 10) / 10
+    const cx2 = Math.round((de.cx2 + shiftX) * 10) / 10
+    const cy2 = Math.round((de.cy2 + shiftY) * 10) / 10
+    const tx = Math.round((de.tx + shiftX) * 10) / 10
+    const ty = Math.round((de.ty + shiftY) * 10) / 10
+    return {
+      id: de.id,
+      from: de.from,
+      to: de.to,
+      label: de.label,
+      labelWidth: de.labelWidth,
+      status: de.status,
+      pathD: `M ${sx} ${sy} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${tx} ${ty}`,
+      labelX: Math.round(de.labelX + shiftX),
+      labelY: Math.round(de.labelY + shiftY),
+      isBackEdge: de.isBackEdge,
+    }
   })
 
   return {

@@ -47,6 +47,42 @@ export function weightStyle(weight: number | undefined, minWidth = 0): CSSProper
   return { flexGrow: weight, flexBasis: 'var(--a2ui-flex-basis, 0px)', minWidth }
 }
 
+export interface ClampedPopoverBox {
+  readonly top: number
+  readonly left: number
+  readonly width: number
+  readonly maxHeight: number
+}
+
+/**
+ * Compute viewport-clamped fixed coordinates for portal dropdowns (`Select`, `MultiSelect`, `TreeSelect`)
+ * so narrow right-aligned columns or short viewports never clip the popover off-screen.
+ */
+export function computeClampedPopoverBox(
+  rect: {
+    readonly top: number
+    readonly bottom: number
+    readonly left: number
+    readonly width: number
+  },
+  opts: { readonly minWidth: number; readonly estHeight: number },
+): ClampedPopoverBox {
+  const viewportW = typeof window !== 'undefined' ? window.innerWidth : 1024
+  const viewportH = typeof window !== 'undefined' ? window.innerHeight : 800
+  const availW = Math.max(120, viewportW - 16)
+  const width = Math.min(availW, Math.max(opts.minWidth, Math.round(rect.width)))
+  const left = Math.max(8, Math.min(Math.round(rect.left), viewportW - width - 8))
+  const spaceBelow = viewportH - rect.bottom - 12
+  const spaceAbove = rect.top - 12
+  const placeAbove = spaceBelow < opts.estHeight && spaceAbove > spaceBelow
+  const maxHeight = Math.max(140, Math.min(280, Math.floor(placeAbove ? spaceAbove : spaceBelow)))
+  const effectiveH = Math.min(opts.estHeight, maxHeight)
+  const top = placeAbove
+    ? Math.max(8, Math.round(rect.top - effectiveH - 4))
+    : Math.round(rect.bottom + 4)
+  return { top, left, width, maxHeight }
+}
+
 export function renderChildRef(
   buildChild: (id: string, basePath?: string) => ReactNode,
   ref: ChildRef,

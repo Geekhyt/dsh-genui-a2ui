@@ -827,6 +827,12 @@ export const DshMetricRingImpl = defineComponent<{
   size?: number
   weight?: number
 }>(MetricRingApi, function DshMetricRing({ props }) {
+  const label = props.label !== undefined && props.label !== null ? String(props.label) : ''
+  const sublabel =
+    props.sublabel !== undefined && props.sublabel !== null ? String(props.sublabel) : ''
+  const maxVal = typeof props.max === 'number' && props.max > 0 ? props.max : 100
+  const unit =
+    props.unit !== undefined && props.unit !== null ? String(props.unit) : maxVal === 100 ? '%' : ''
   const geom = useMemo(
     () =>
       computeMetricRingGeometry({
@@ -834,15 +840,10 @@ export const DshMetricRingImpl = defineComponent<{
         max: props.max,
         size: props.size,
         tone: props.tone,
+        unit,
       }),
-    [props.value, props.max, props.size, props.tone],
+    [props.value, props.max, props.size, props.tone, unit],
   )
-  const label = props.label !== undefined && props.label !== null ? String(props.label) : ''
-  const sublabel =
-    props.sublabel !== undefined && props.sublabel !== null ? String(props.sublabel) : ''
-  const maxVal = typeof props.max === 'number' && props.max > 0 ? props.max : 100
-  const unit =
-    props.unit !== undefined && props.unit !== null ? String(props.unit) : maxVal === 100 ? '%' : ''
   const center = geom.size / 2
 
   return (
@@ -891,8 +892,14 @@ export const DshMetricRingImpl = defineComponent<{
         </svg>
         <div className={css.metricRingCenterText}>
           <span className={css.metricRingValueGroup}>
-            <span className={css.metricRingNumber}>{geom.displayNumber}</span>
-            {unit ? <span className={css.metricRingUnit}>{unit}</span> : null}
+            <span className={css.metricRingNumber} style={{ fontSize: geom.numberFontSize }}>
+              {geom.displayNumber}
+            </span>
+            {unit ? (
+              <span className={css.metricRingUnit} style={{ fontSize: geom.unitFontSize }}>
+                {unit}
+              </span>
+            ) : null}
           </span>
         </div>
       </div>
@@ -1014,35 +1021,15 @@ export const DshServiceGraphImpl = defineComponent<{
               const isHighlighted =
                 activeNode !== null && (edge.from === activeNode.id || edge.to === activeNode.id)
               return (
-                <g key={edge.id}>
-                  <path
-                    d={edge.pathD}
-                    fill="none"
-                    className={css.serviceEdgePath}
-                    data-status={edge.status}
-                    data-highlight={isHighlighted ? 'true' : 'false'}
-                    markerEnd={`url(#${markerPrefix}-arrow-${edge.status})`}
-                  />
-                  {edge.label ? (
-                    <g transform={`translate(${edge.labelX}, ${edge.labelY})`}>
-                      <rect
-                        x={-Math.max(22, edge.label.length * 3.8)}
-                        y={-9}
-                        width={Math.max(44, edge.label.length * 7.6)}
-                        height={18}
-                        rx={5}
-                        className={css.serviceEdgeLabelBg}
-                      />
-                      <text
-                        textAnchor="middle"
-                        dominantBaseline="central"
-                        className={css.serviceEdgeLabelText}
-                      >
-                        {edge.label}
-                      </text>
-                    </g>
-                  ) : null}
-                </g>
+                <path
+                  key={edge.id}
+                  d={edge.pathD}
+                  fill="none"
+                  className={css.serviceEdgePath}
+                  data-status={edge.status}
+                  data-highlight={isHighlighted ? 'true' : 'false'}
+                  markerEnd={`url(#${markerPrefix}-arrow-${edge.status})`}
+                />
               )
             })}
           </svg>
@@ -1066,12 +1053,16 @@ export const DshServiceGraphImpl = defineComponent<{
               >
                 <span className={css.serviceNodeTop}>
                   <span className={css.serviceNodeDot} data-status={node.status} />
-                  <span className={css.serviceNodeName}>{node.label}</span>
+                  <span className={css.serviceNodeName} title={node.label}>
+                    {node.label}
+                  </span>
                 </span>
                 {node.metric || node.sublabel ? (
                   <span className={css.serviceNodeBottom}>
                     {node.sublabel ? (
-                      <span className={css.serviceNodeSub}>{node.sublabel}</span>
+                      <span className={css.serviceNodeSub} title={node.sublabel}>
+                        {node.sublabel}
+                      </span>
                     ) : null}
                     {node.metric ? (
                       <span className={css.serviceNodeMetric}>{node.metric}</span>
@@ -1081,6 +1072,38 @@ export const DshServiceGraphImpl = defineComponent<{
               </button>
             )
           })}
+
+          {layout.edges.some((e) => Boolean(e.label)) ? (
+            <svg
+              width={layout.width}
+              height={layout.height}
+              viewBox={`0 0 ${layout.width} ${layout.height}`}
+              className={css.serviceGraphLabelSvg}
+              aria-hidden="true"
+            >
+              {layout.edges.map((edge) =>
+                edge.label ? (
+                  <g key={edge.id} transform={`translate(${edge.labelX}, ${edge.labelY})`}>
+                    <rect
+                      x={-edge.labelWidth / 2}
+                      y={-9}
+                      width={edge.labelWidth}
+                      height={18}
+                      rx={5}
+                      className={css.serviceEdgeLabelBg}
+                    />
+                    <text
+                      textAnchor="middle"
+                      dominantBaseline="central"
+                      className={css.serviceEdgeLabelText}
+                    >
+                      {edge.label}
+                    </text>
+                  </g>
+                ) : null,
+              )}
+            </svg>
+          ) : null}
         </div>
       </div>
 
