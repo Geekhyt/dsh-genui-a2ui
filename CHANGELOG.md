@@ -2,6 +2,23 @@
 
 All notable changes to `dsh-genui-a2ui` are documented in this file.
 
+## [0.2.1] - 2026-11-20
+
+### Fixed
+- **`ServiceGraph` Multi-Edge & Wide-Label Geometry Hardening**:
+  - Added per-rank adaptive node widths (`148px–194px`) and dynamic `LR` / `TB` inter-rank gaps sized to CJK/ASCII edge label pixel widths so long labels never collide with adjacent node boxes.
+  - Added automatic obstacle-avoidance bowing for multi-rank skip edges (`span > 1`), staggered Bezier placement (`t = 0.34 / 0.66`) for X-crossing edge labels, top/right-arc routing for cyclic back-edges, positive SVG bounding-box normalization (preventing negative `viewBox` clipping), and a foreground SVG label layer (`z-index: 2`).
+- **Narrow-Viewport & Dense-Data Layout Resilience Across v3/v4/v5 Widgets**:
+  - **`Schedule`**: Automatically places labels outside ultra-narrow Gantt bars (`data-narrow="true"`) on the side with more lane room instead of clipping text inside short-duration bars.
+  - **`Tree` & `TreeSelect`**: Isolated left label/badge content (`overflow: hidden`) from right-aligned `sharePct` waterfall bars, prioritized subtitle shrink (`flex-shrink: 999`) before primary node labels, and capped deep-tree indentation.
+  - **`Segmented` & `Switch`**: Computed character-aware minimum flex basis on `Segmented` so side-by-side `Segmented` + `Switch` rows wrap cleanly onto full-width lines in narrow containers without pill truncation or overlap.
+  - **Portal Popovers (`Select`, `MultiSelect`, `TreeSelect`)**: Unified viewport-clamped positioning (`computeClampedPopoverBox`) so right-aligned narrow triggers and short viewports never clip dropdowns off-screen.
+  - **`MetricRing`, `Tracker`, `DateRange`, `ApiEndpoint`, `Terminal` & `KeyValue(bordered)`**: Preserved 2-decimal SLA precision (e.g. `99.95%`) with inner-diameter-aware font scaling on `MetricRing`, adaptive `1px` slice gaps on 60–90 slice `Tracker` strips, narrow-column wrapping on `datetime-local` `DateRange`, single-line tab pills on `ApiEndpoint`, and `< 640px` single-column fallback on bordered `KeyValue`.
+
+### Changed
+- **Expanded Ready-to-Run README & Mock Showcase Examples (`12 → 15`)**:
+  - Added copy-pasteable bilingual prompt examples in `README.md`, `README.en.md`, `docs/DETAIL.zh.md`, `docs/DETAIL.md`, and `scripts/mock-llm.mjs` covering `Comparison` + `SourceList`, `ApiEndpoint` + `DateRange` + `MetricRing`, and `Kanban` + `Timeline` + `Matrix` + `Result`.
+
 ## [0.2.0] - 2026-11-19
 
 ### Added

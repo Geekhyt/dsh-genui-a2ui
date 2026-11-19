@@ -425,4 +425,18 @@ describe('Evolution v5: Ant Design 5.x / AntD Pro / AntD X Parity (57 Components
     expect(clamped.left + clamped.width).toBeLessThanOrEqual(1016)
     expect(clamped.left).toBeGreaterThanOrEqual(8)
   })
+
+  it('compiles every exported SHOWCASE_*_UI example in scripts/mock-llm.mjs cleanly', async () => {
+    const mockHref = new URL('../scripts/mock-llm.mjs', import.meta.url).href
+    const mockMod = (await import(mockHref)) as Record<string, unknown>
+    const sessions = new SurfaceSessions(createGenerator())
+    const showcaseEntries = Object.entries(mockMod).filter(
+      ([k, v]) => k.startsWith('SHOWCASE_') && k.endsWith('_UI') && typeof v === 'string',
+    )
+    expect(showcaseEntries.length).toBeGreaterThanOrEqual(15)
+    for (const [name, dsl] of showcaseEntries) {
+      const compiled = sessions.compile(`mock_${name}`, dsl as string)
+      expect(compiled.length, `${name} failed to compile`).toBeGreaterThan(0)
+    }
+  })
 })

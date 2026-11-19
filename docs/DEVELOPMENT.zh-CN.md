@@ -235,7 +235,7 @@ npm run typecheck
 # 构建 Host ESM + 4 个 Client 分包（自动校验首屏 < 500 kB 门禁）
 npm run build
 
-# 运行全部 18 个测试套件 / 75 项单元、React 架构最佳实践、契约与分包门禁测试
+# 运行全部 18 个测试套件 / 76 项单元、React 架构最佳实践、契约与分包门禁测试
 npm test
 
 # 核验与本机 DeepSeek Harness.app 内部 27 项模块导出及 Slots 的契约兼容性

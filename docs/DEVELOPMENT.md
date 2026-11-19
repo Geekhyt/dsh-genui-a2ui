@@ -235,7 +235,7 @@ npm run typecheck
 # Build Host ESM + 4 Client CJS chunks (enforces cold-boot size gate)
 npm run build
 
-# Run all 18 Vitest suites / 75 unit, React best-practice, contract, and bundle tests
+# Run all 18 Vitest suites / 76 unit, React best-practice, contract, and bundle tests
 npm test
 
 # Verify compatibility against 27 installed DeepSeek Harness.app platform exports & slots

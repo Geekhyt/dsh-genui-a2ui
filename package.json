@@ -1,6 +1,6 @@
 {
   "name": "dsh-genui-a2ui",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Turn DeepSeek Harness conversations into interactive dashboards, 14 chart types, Mermaid diagrams, instant what-if calculators, code diff review gates, and live task trackers.",
   "license": "MIT",
   "author": "Geekhyt",

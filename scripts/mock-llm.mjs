@@ -512,6 +512,103 @@ export const SHOWCASE_RISK_RUNBOOK_UI = [
   ']))',
 ].join('\n')
 
+export const SHOWCASE_COMPARISON_SOURCES_UI = [
+  'surface("hybrid_search_comparison")',
+  '$/scale = "medium"',
+  '$/opts = [',
+  '  { key: "pg", title: "PostgreSQL + pgvector", subtitle: "HNSW + BM25 同库融合", recommended: true, badge: "架构组推荐" },',
+  '  { key: "milvus", title: "Milvus 2.5 分布式", subtitle: "十亿级专用向量底座" },',
+  '  { key: "es", title: "Elasticsearch 8.x", subtitle: "倒排强项 + 稠密向量" }',
+  ']',
+  '$/rows = [',
+  '  { label: "ACID 强一致事务", values: { pg: "ok:原生 MVCC 事务同提交", milvus: "no:最终一致", es: "no:近实时刷新 (1s)" } },',
+  '  { label: "千万级 P99 检索延迟", values: { pg: "ok:14 ms (HNSW ef=64)", milvus: "ok:9 ms (GPU Knowhere)", es: "warn:26 ms" } },',
+  '  { label: "运维复杂度与成本", values: { pg: "ok:复用现有 RDS 零新增组件", milvus: "warn:需独立维护 Etcd/MinIO", es: "warn:JVM 堆内存开销较高" } }',
+  ']',
+  '$/refs = [',
+  '  { title: "pgvector 0.8 HNSW Iterative Scan Whitepaper", url: "https://github.com/pgvector/pgvector", score: 0.96, snippet: "Iterative index scans guarantee exact k-NN recall under selective WHERE filters." },',
+  '  { title: "ANN-Benchmarks 2026 Production Report", url: "https://ann-benchmarks.com", score: 0.91, snippet: "At < 50M 1536-d vectors, co-located PostgreSQL HNSW eliminates cross-service network hops." }',
+  ']',
+  'root = Card(Column([',
+  '  Segmented("目标数据规模档位", [{ value: "small", label: "百万级 (< 5M)" }, { value: "medium", label: "千万级 (5M–50M)" }, { value: "large", label: "亿级以上 (> 100M)" }], $/scale),',
+  '  Comparison($/opts, $/rows, title="生产级混合检索存储引擎多维权衡矩阵", action=Event("select_engine")),',
+  '  SourceList($/refs, title="权威基准与官方文档溯源")',
+  ']))',
+].join('\n')
+
+export const SHOWCASE_API_RING_DATERANGE_UI = [
+  'surface("api_slo_workbench")',
+  '$/start = "2026-11-13"',
+  '$/end = "2026-11-19"',
+  '$/req = { cluster: "prod-cn-hz", maxRps: 24000, burstMultiplier: 1.5 }',
+  '$/resp = { policyId: "rl_90412", status: "active", updatedPods: 18 }',
+  'root = Card(Column([',
+  '  Grid([',
+  '    MetricRing("网关可用性 SLA", 99.95, unit="%", size=72, tone="success", sublabel="近 7 天达标"),',
+  '    MetricRing("限流令牌桶水位", 76.4, unit="%", size=72, tone="auto", sublabel="晚高峰峰值"),',
+  '    MetricRing("P99 尾延迟预算", 42, max=100, unit="ms", size=72, tone="brand", sublabel="阈值 <= 100ms")',
+  '  ], columns=3, gap="md"),',
+  '  DateRange("SLO 统计与回溯时间区间", start=$/start, end=$/end, presets=true),',
+  '  ApiEndpoint("POST", "/v1/gateways/{gatewayId}/rate-limits", summary="动态热更新核心网关集群限流配额", status=200, latency="19 ms", params=[{ name: "gatewayId", in: "path", type: "string", required: true, description: "目标网关实例组 ID" }], requestBody=$/req, responseBody=$/resp)',
+  ']))',
+].join('\n')
+
+export const SHOWCASE_KANBAN_TIMELINE_MATRIX_UI = [
+  'surface("dr_drill_retro")',
+  '$/lanes = [',
+  '  { id: "todo", title: "待跟进改进", tone: "warning", cards: [{ id: "c1", title: "收敛 DNS 缓存 TTL 至 5s", priority: "medium", assignee: "@接入组" }] },',
+  '  { id: "doing", title: "压测验证中", tone: "info", cards: [{ id: "c2", title: "异步账单补偿队列幂等校验", priority: "high", assignee: "@清结算" }] },',
+  '  { id: "done", title: "演练已达标", tone: "success", cards: [{ id: "c3", title: "TiKV 跨可用区 Leader 秒级切流", priority: "low", assignee: "@SRE" }] }',
+  ']',
+  'root = Card(Column([',
+  '  Kanban($/lanes, title="跨可用区容灾演练跟进看板"),',
+  '  Row([',
+  '    Timeline([',
+  '      { time: "02:00:05", title: "注入杭州可用区网络隔离探针", status: "warning", actor: "ChaosMesh" },',
+  '      { time: "02:00:09", title: "流量自动切换至上海双活集群", status: "success", actor: "Envoy GSLB", description: "RTO 实测 4.1 秒，零丢单" }',
+  '    ], title="演练关键动作时间轴", weight=1),',
+  '    Matrix(["杭州主可用区", "上海双活区", "北京灾备区"], ["Q1", "Q2", "Q3", "Q4"], [[14.2, 13.5, 11.8, 10.9], [16.8, 15.1, 13.4, 12.0], [31.0, 28.4, 26.2, 24.5]], title="跨可用区季度 P99 延迟热力矩阵", unit="ms", showTotals=true, weight=1)',
+  '  ]),',
+  '  Result("success", "2026 Q4 跨可用区容灾演练圆满达标", subtitle="全链路 RTO 4.1s（目标 < 15s），RPO = 0", meta=[{ label: "演练单号", value: "DR-20261120" }, { label: "核心服务数", value: "28 / 28" }])',
+  ']))',
+].join('\n')
+
+export const SHOWCASE_MARKET_CANDLE_UI = [
+  'surface("quant_market_review")',
+  '$/ohlc = [',
+  '  { date: "11-11", open: 3420, close: 3468, low: 3405, high: 3482 },',
+  '  { date: "11-12", open: 3468, close: 3442, low: 3430, high: 3479 },',
+  '  { date: "11-13", open: 3442, close: 3510, low: 3438, high: 3526 },',
+  '  { date: "11-14", open: 3510, close: 3548, low: 3496, high: 3560 },',
+  '  { date: "11-17", open: 3548, close: 3522, low: 3508, high: 3558 },',
+  '  { date: "11-18", open: 3522, close: 3586, low: 3518, high: 3598 }',
+  ']',
+  '$/sectors = [',
+  '  { sector: "AI 算力芯片", min: -1.2, q1: 1.4, median: 3.2, q3: 5.6, max: 8.4 },',
+  '  { sector: "云原生软件", min: -2.0, q1: 0.5, median: 1.9, q3: 3.8, max: 6.1 },',
+  '  { sector: "智能终端", min: -1.8, q1: -0.2, median: 1.1, q3: 2.7, max: 4.5 }',
+  ']',
+  'root = Card(Column([',
+  '  Row([',
+  '    Chart("gauge", [{ name: "情绪热度", value: 74 }], title="市场量能情绪水位", height=240, weight=8),',
+  '    Chart("candlestick", $/ohlc, xField="date", title="科技指数日 K 线走势", height=240, weight=14)',
+  '  ]),',
+  '  Chart("boxplot", $/sectors, xField="sector", title="细分板块日涨跌幅分布箱线图 (%)", height=220)',
+  ']))',
+].join('\n')
+
+export const SHOWCASE_ACCORDION_MODAL_UI = [
+  'surface("incident_accordion_modal")',
+  'root = Card(Column([',
+  '  Accordion([',
+  '    { title: "1. 根因定位摘要（Root Cause）", defaultOpen: true, child: Text("连接池等待队列在 22:14 触顶，系下游慢查询未命中复合索引导致锁等待放大。") },',
+  '    { title: "2. 关键运行指标快照", defaultOpen: true, child: KeyValue([{ label: "峰值活跃连接", value: "200 / 200", tone: "danger" }, { label: "慢查询 P99", value: "1,420 ms", mono: true }], columns=2, bordered=true) },',
+  '    { title: "3. 在线止血与回滚预案", child: Text("1. 在线并发创建 `idx_orders_tenant_created` 索引；\\n2. 临时开启只读副本读分流。") }',
+  '  ]),',
+  '  Modal(trigger=Button(Text("查看完整慢 SQL 执行计划"), variant="primary", action=Event("open_sql_plan")), content=Column([Text("### EXPLAIN ANALYZE 慢查询详情"), Code("Seq Scan on billing_orders  (cost=0.00..184920.40 rows=1420000 width=128)\\n  Filter: ((tenant_id = $1) AND (status = \x27SETTLED\x27))", language="sql", lineNumbers=true)]))',
+  ']))',
+].join('\n')
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 function extractText(content) {
@@ -725,16 +822,33 @@ export function startMockLlmServer(port = PORT) {
       const turnTailMsgs = lastAnyUserIdx >= 0 ? messages.slice(lastAnyUserIdx + 1) : []
       const toolResults = turnTailMsgs.filter((m) => m?.role === 'tool')
 
-      const isShowcase1 = /showcase-1/i.test(userText)
-      const isShowcase2 = /showcase-2/i.test(userText)
-      const isShowcase3 = /showcase-3/i.test(userText)
-      const isShowcase4 = /showcase-4/i.test(userText)
-      const isShowcase5 = /showcase-5/i.test(userText)
-      const isShowcase6 = /showcase-6/i.test(userText)
+      const isShowcase1 = /showcase-1|全链路转化诊断|conversion diagnostic dashboard/i.test(
+        userText,
+      )
+      const isShowcase2 = /showcase-2|核心模块分层|Mermaid 架构图|layered Mermaid diagram/i.test(
+        userText,
+      )
+      const isShowcase3 = /showcase-3|缓存成本实时测算|prompt-cache cost calculator/i.test(userText)
+      const isShowcase4 = /showcase-4|双栏配置差异|split config diff/i.test(userText)
+      const isShowcase5 = /showcase-5|发布流水线进度条|release verification tracker/i.test(userText)
+      const isShowcase6 = /showcase-6|连锁咖啡|coffee store operations/i.test(userText)
       const isShowcase7 = /showcase-7|瀑布树|健康拓扑|latency spike/i.test(userText)
       const isShowcase8 = /showcase-8|专属推理集群|季度巡检与治理|SLA uptime/i.test(userText)
       const isShowcase9 = /showcase-9|容量与规格选型|GPU tier|步进数字框/i.test(userText)
       const isShowcase10 = /showcase-10|冷分区|审批门禁|approval gate/i.test(userText)
+      const isShowcase11 = /showcase-11|混合检索方案|权衡矩阵|trade-off comparison|pgvector/i.test(
+        userText,
+      )
+      const isShowcase12 = /showcase-12|接口契约调试|圆环水位|HTTP endpoint card|rate-limit/i.test(
+        userText,
+      )
+      const isShowcase13 = /showcase-13|容灾演练复盘|三泳道|failover drill|Kanban board/i.test(
+        userText,
+      )
+      const isShowcase14 = /showcase-14|量化复盘|日 K 线|candlestick chart/i.test(userText)
+      const isShowcase15 = /showcase-15|折叠手风琴|慢查询详情|collapsible accordions/i.test(
+        userText,
+      )
       const isDashboard = /dashboard|看板/i.test(userText)
       const isAsk = /ask|向导|部署/i.test(userText)
       const isDock = /dock|工作台|监控/i.test(userText)
@@ -809,6 +923,41 @@ export function startMockLlmServer(port = PORT) {
           await streamToolCall(res, model, 'a2ui_render', {
             title: '核心账单表冷分区归档风控审批与排期台',
             ui: SHOWCASE_RISK_RUNBOOK_UI,
+          })
+          return
+        }
+        if (isShowcase11) {
+          await streamToolCall(res, model, 'a2ui_render', {
+            title: '生产级混合检索选型对比与溯源引用',
+            ui: SHOWCASE_COMPARISON_SOURCES_UI,
+          })
+          return
+        }
+        if (isShowcase12) {
+          await streamToolCall(res, model, 'a2ui_render', {
+            title: '核心网关限流接口契约与圆环水位面板',
+            ui: SHOWCASE_API_RING_DATERANGE_UI,
+          })
+          return
+        }
+        if (isShowcase13) {
+          await streamToolCall(res, model, 'a2ui_render', {
+            title: '跨可用区容灾演练看板、热力矩阵与回执',
+            ui: SHOWCASE_KANBAN_TIMELINE_MATRIX_UI,
+          })
+          return
+        }
+        if (isShowcase14) {
+          await streamToolCall(res, model, 'a2ui_render', {
+            title: '科技指数 10 日量化复盘与箱线分布看板',
+            ui: SHOWCASE_MARKET_CANDLE_UI,
+          })
+          return
+        }
+        if (isShowcase15) {
+          await streamToolCall(res, model, 'a2ui_render', {
+            title: '线上网关延迟突增分级排查手风琴与慢查询弹窗',
+            ui: SHOWCASE_ACCORDION_MODAL_UI,
           })
           return
         }
