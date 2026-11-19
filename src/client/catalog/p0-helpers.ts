@@ -169,7 +169,9 @@ export function normalizeStepItems(
   if (!Array.isArray(rawItems)) return []
   const effectiveLocale = locale ?? resolveClientLocale()
   const currentIdx =
-    typeof currentRaw === 'number' && Number.isFinite(currentRaw) ? Math.trunc(currentRaw) : undefined
+    typeof currentRaw === 'number' && Number.isFinite(currentRaw)
+      ? Math.trunc(currentRaw)
+      : undefined
 
   return rawItems.map((entry, idx) => {
     if (typeof entry === 'string' || typeof entry === 'number') {
@@ -185,11 +187,16 @@ export function normalizeStepItems(
               : 'pending'
       return { title: String(entry), status: derived }
     }
-    const obj = (typeof entry === 'object' && entry !== null ? entry : {}) as Record<string, unknown>
+    const obj = (typeof entry === 'object' && entry !== null ? entry : {}) as Record<
+      string,
+      unknown
+    >
     const fallbackStepTitle = RUNTIME_MESSAGES[effectiveLocale].stepFallbackTitle(idx + 1)
     const title = String(obj.title ?? obj.label ?? obj.name ?? fallbackStepTitle)
     const description =
-      obj.description !== undefined && obj.description !== null && String(obj.description).trim() !== ''
+      obj.description !== undefined &&
+      obj.description !== null &&
+      String(obj.description).trim() !== ''
         ? String(obj.description)
         : obj.desc !== undefined && obj.desc !== null && String(obj.desc).trim() !== ''
           ? String(obj.desc)
@@ -230,6 +237,7 @@ export interface NormalizedKvItem {
   readonly label: string
   readonly value: string
   readonly tone?: TagTone
+  readonly span?: number
   readonly copyable: boolean
   readonly mono: boolean
 }
@@ -260,11 +268,19 @@ export function normalizeKeyValueItems(raw: unknown, defaultCopyable = false): N
       const rawVal = rec.value ?? rec.val ?? ''
       const value =
         typeof rawVal === 'object' && rawVal !== null ? JSON.stringify(rawVal) : String(rawVal)
-      const toneStr = typeof rec.tone === 'string' && VALID_TAG_TONES.has(rec.tone) ? (rec.tone as TagTone) : undefined
+      const toneStr =
+        typeof rec.tone === 'string' && VALID_TAG_TONES.has(rec.tone)
+          ? (rec.tone as TagTone)
+          : undefined
+      const spanNum =
+        typeof rec.span === 'number' && Number.isFinite(rec.span) && rec.span >= 1
+          ? Math.min(3, Math.trunc(rec.span))
+          : undefined
       return {
         label,
         value,
         ...(toneStr !== undefined ? { tone: toneStr } : {}),
+        ...(spanNum !== undefined ? { span: spanNum } : {}),
         copyable: typeof rec.copyable === 'boolean' ? rec.copyable : defaultCopyable,
         mono: Boolean(rec.mono),
       }

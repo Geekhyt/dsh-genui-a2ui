@@ -21,7 +21,11 @@ let renderSeq = 0
 let renderChain: Promise<unknown> = Promise.resolve()
 
 /** Resolve DSH `--dsw-*` CSS custom properties (including `oklch()` / `color-mix()`) to sRGB for Mermaid. */
-function readMermaidThemeColor(name: string, fallback: string, target?: HTMLElement | null): string {
+function readMermaidThemeColor(
+  name: string,
+  fallback: string,
+  target?: HTMLElement | null,
+): string {
   if (typeof document === 'undefined' || document.body === null) return fallback
   const source = target ?? document.documentElement
   const value = getComputedStyle(source).getPropertyValue(name).trim()

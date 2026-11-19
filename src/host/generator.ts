@@ -21,12 +21,7 @@ import {
 } from '@a2ui/agent'
 
 type SchemaCatalogInput = ConstructorParameters<typeof CatalogConfig>[0]
-import {
-  A2UI_LIMITS,
-  ASK_TOOL,
-  dshSchemaCatalog,
-  RENDER_TOOL,
-} from '../shared/catalog-schema.ts'
+import { A2UI_LIMITS, ASK_TOOL, dshSchemaCatalog, RENDER_TOOL } from '../shared/catalog-schema.ts'
 import { validateCalcExpression } from '../shared/calc-engine.ts'
 
 export { ASK_TOOL, RENDER_TOOL }
@@ -38,7 +33,8 @@ export { ASK_TOOL, RENDER_TOOL }
  * contract. `tests/prompt.spec.ts` fails if an SDK upgrade changes the
  * paragraph, so the swap can never silently stop applying.
  */
-export const SENTINEL_PARAGRAPH = /IMPORTANT: You MUST always surround the entire A2UI Express block with the literal sentinel tags[^\n]*\n/
+export const SENTINEL_PARAGRAPH =
+  /IMPORTANT: You MUST always surround the entire A2UI Express block with the literal sentinel tags[^\n]*\n/
 
 export const TOOL_CONTRACT = [
   `IMPORTANT: In this host you never write A2UI Express into your reply text. Pass the whole Express program as the \`ui\` argument of \`${RENDER_TOOL}\` (display / dashboard / workspace dock) or \`${ASK_TOOL}\` (suspend the turn and wait for user submission), without \`<a2ui>\` tags and without markdown fences.`,
@@ -141,7 +137,12 @@ function validateCalcCallsInNode(node: unknown): void {
       } else if (typeof rawVars === 'object' && !Array.isArray(rawVars)) {
         const varsRec = rawVars as Record<string, unknown>
         // Skip static key check only if `vars` itself is a dynamic $/path or @call expression
-        if (!('@path' in varsRec) && !('path' in varsRec) && !('@call' in varsRec) && !('call' in varsRec)) {
+        if (
+          !('@path' in varsRec) &&
+          !('path' in varsRec) &&
+          !('@call' in varsRec) &&
+          !('call' in varsRec)
+        ) {
           providedVars = new Set<string>(Object.keys(varsRec))
         }
       }
@@ -190,7 +191,10 @@ function validateCompiledLimits(messages: readonly AgentToRendererMessage[]): vo
       const sid = typeof p.surfaceId === 'string' ? p.surfaceId : undefined
       if (sid) surfaceIds.add(sid)
 
-      if ((kind === 'createSurface' || kind === 'updateComponents') && Array.isArray(p.components)) {
+      if (
+        (kind === 'createSurface' || kind === 'updateComponents') &&
+        Array.isArray(p.components)
+      ) {
         const key = sid ?? '_default'
         const nextCount = (componentCounts.get(key) ?? 0) + p.components.length
         if (nextCount > A2UI_LIMITS.maxComponentsPerSurface) {
@@ -333,7 +337,9 @@ export class SurfaceSessions {
         try {
           const proc = this.processor(sessionId)
           for (const id of updateIds) {
-            proc.parseResponse(`surface(${JSON.stringify(id)})\nroot = Text("")`, { wrapped: false })
+            proc.parseResponse(`surface(${JSON.stringify(id)})\nroot = Text("")`, {
+              wrapped: false,
+            })
           }
           parts = proc.parseResponse(cleaned, { wrapped: false })
         } catch (retryErr) {

@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { ExpressPromptGenerator } from '@a2ui/agent'
 import { basicCatalog } from '@a2ui/web_core/v1_0'
-import { createGenerator, RENDER_TOOL, SENTINEL_PARAGRAPH, SurfaceSessions } from '../src/host/generator.ts'
+import {
+  createGenerator,
+  RENDER_TOOL,
+  SENTINEL_PARAGRAPH,
+  SurfaceSessions,
+} from '../src/host/generator.ts'
 
 describe('ToolChannelPromptGenerator', () => {
   it('replaces the SDK <a2ui> sentinel paragraph with the a2ui_render tool contract', () => {

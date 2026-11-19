@@ -28,10 +28,7 @@ const CSS_VIRTUAL_PREFIX = '\0dsh-css:'
 const CSS_VIRTUAL_SUFFIX = '.mjs'
 const NODE_STUB_ID = '\0dsh-node-empty'
 
-const NODE_BUILTINS = new Set([
-  ...builtinModules,
-  ...builtinModules.map((m) => `node:${m}`),
-])
+const NODE_BUILTINS = new Set([...builtinModules, ...builtinModules.map((m) => `node:${m}`)])
 
 /** Wire/type layers a client bundle may inline (no shared runtime identity). */
 const INLINE_SAFE = /^@deepseek-ai\/dsh-(host-apiproxy|session|llm|tools|brand)(\/|$)/
@@ -40,7 +37,8 @@ const INLINE_SAFE = /^@deepseek-ai\/dsh-(host-apiproxy|session|llm|tools|brand)(
 const HEAVY_VIZ_ONLY = /^(echarts|zrender|mermaid|dagre-d3-es|cytoscape|katex)(\/|$)/
 
 /** Heavy A2UI / parser runtimes forbidden in the cold-boot `lib/client.js` entry. */
-const RUNTIME_CHUNK_ONLY = /^(@a2ui\/(web_core|react|agent)|antlr4ng|@tanstack\/react-table|react-aria-components)(\/|$)/
+const RUNTIME_CHUNK_ONLY =
+  /^(@a2ui\/(web_core|react|agent)|antlr4ng|@tanstack\/react-table|react-aria-components)(\/|$)/
 
 const MAX_MAIN_CLIENT_BYTES = 500 * 1024
 
@@ -179,7 +177,7 @@ function clientChunkConfig(
       'process.env.NODE_ENV': NODE_ENV,
       'import.meta.env.MODE': NODE_ENV,
       'import.meta.env': JSON.stringify({ MODE: process.env.NODE_ENV ?? 'production' }),
-      '__DSH_BUNDLED_CLIENT__': 'true',
+      __DSH_BUNDLED_CLIENT__: 'true',
     },
     plugins: [
       ...sharedBrowserPlugins(id, { forbidVizEngines, forbidA2uiRuntime: false }),
@@ -190,7 +188,11 @@ function clientChunkConfig(
           bundle: Record<string, { type?: string; fileName?: string; code?: string }>,
         ) {
           for (const item of Object.values(bundle)) {
-            if (item.type === 'chunk' && item.fileName === chunkFileName && typeof item.code === 'string') {
+            if (
+              item.type === 'chunk' &&
+              item.fileName === chunkFileName &&
+              typeof item.code === 'string'
+            ) {
               item.code = [
                 `window.__ModuleLoader__.load({ id: ${JSON.stringify(id)}, chunk: ${JSON.stringify(chunkFileName)}, factory: (require) => {`,
                 'var module = { exports: {} }; var exports = module.exports;',
@@ -243,7 +245,7 @@ function clientConfig(id: string): UserConfig {
       'process.env.NODE_ENV': NODE_ENV,
       'import.meta.env.MODE': NODE_ENV,
       'import.meta.env': JSON.stringify({ MODE: process.env.NODE_ENV ?? 'production' }),
-      '__DSH_BUNDLED_CLIENT__': 'true',
+      __DSH_BUNDLED_CLIENT__: 'true',
     },
     plugins: [
       ...sharedBrowserPlugins(id, { forbidVizEngines: true, forbidA2uiRuntime: true }),
@@ -254,7 +256,11 @@ function clientConfig(id: string): UserConfig {
           bundle: Record<string, { type?: string; fileName?: string; code?: string }>,
         ) {
           for (const item of Object.values(bundle)) {
-            if (item.type === 'chunk' && item.fileName === 'client.js' && typeof item.code === 'string') {
+            if (
+              item.type === 'chunk' &&
+              item.fileName === 'client.js' &&
+              typeof item.code === 'string'
+            ) {
               item.code = [
                 `window.__ModuleLoader__.load({ id: ${JSON.stringify(id)}, factory: (require) => {`,
                 'var module = { exports: {} }; var exports = module.exports;',
@@ -292,7 +298,9 @@ function resolveCssFile(specifier: string, importer: string | undefined): string
     return resolve(dirname(cleanImporter), specifier)
   }
   try {
-    return createRequire(importer !== undefined && existsSync(importer) ? importer : import.meta.url).resolve(specifier)
+    return createRequire(
+      importer !== undefined && existsSync(importer) ? importer : import.meta.url,
+    ).resolve(specifier)
   } catch {
     return undefined
   }
@@ -325,7 +333,8 @@ function cssInlinePlugin(id: string) {
         minify: true,
       })
       const classMap: Record<string, string> = {}
-      for (const [local, exp] of Object.entries(exports ?? {}).sort(([a], [b]) => (a < b ? -1 : 1))) classMap[local] = exp.name
+      for (const [local, exp] of Object.entries(exports ?? {}).sort(([a], [b]) => (a < b ? -1 : 1)))
+        classMap[local] = exp.name
       const normalizedFile = file.replace(/\\/g, '/')
       const tagId = `${id}/${normalizedFile.split('/').slice(-2).join('/')}`
       const regKey = `__dshPluginCss__:${id}`

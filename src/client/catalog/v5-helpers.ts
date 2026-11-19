@@ -1,0 +1,267 @@
+/**
+ * Pure, zero-DOM normalizers and precision math/tree helpers for Phase v5
+ * Ant Design / Pro / X parity components (`NumberInput`, `MultiSelect`,
+ * `DateRange`, `TreeSelect`, `CheckCard`, `Tree`, `Grid`).
+ */
+import { normalizeSelectOptions, type NormalizedSelectOption } from './v3-helpers.ts'
+
+/* ─────────────────────────── 1. NumberInput ─────────────────────────── */
+
+export function decimalPlacesOf(step: number): number {
+  const s = String(step)
+  const dot = s.indexOf('.')
+  return dot < 0 ? 0 : Math.min(8, s.length - dot - 1)
+}
+
+export function clampAndStepNumber(params: {
+  readonly current: unknown
+  readonly delta: number
+  readonly min?: number | undefined
+  readonly max?: number | undefined
+  readonly step?: number | undefined
+}): number {
+  const step =
+    typeof params.step === 'number' && Number.isFinite(params.step) && params.step > 0
+      ? params.step
+      : 1
+  const curNum = Number(params.current)
+  const base = Number.isFinite(curNum)
+    ? curNum
+    : typeof params.min === 'number' && Number.isFinite(params.min)
+      ? params.min
+      : 0
+  const precision = Math.max(decimalPlacesOf(step), decimalPlacesOf(base))
+  let next = Number((base + params.delta * step).toFixed(precision))
+  if (typeof params.min === 'number' && Number.isFinite(params.min)) {
+    next = Math.max(params.min, next)
+  }
+  if (typeof params.max === 'number' && Number.isFinite(params.max)) {
+    next = Math.min(params.max, next)
+  }
+  return next
+}
+
+/* ─────────────────────────── 2. MultiSelect ─────────────────────────── */
+
+export function normalizeMultiSelectMergedOptions(
+  rawOptions: unknown,
+  selectedValues: readonly string[],
+): readonly NormalizedSelectOption[] {
+  const base = [...normalizeSelectOptions(rawOptions)]
+  const seen = new Set(base.map((o) => o.value))
+  for (const val of selectedValues) {
+    if (val && !seen.has(val)) {
+      seen.add(val)
+      base.push({ value: val, label: val })
+    }
+  }
+  return base
+}
+
+/* ─────────────────────────── 3. DateRange ─────────────────────────── */
+
+export function computeDateRangeSpanDays(startStr: string, endStr: string): number | null {
+  if (!startStr || !endStr) return null
+  const s = Date.parse(startStr.slice(0, 10))
+  const e = Date.parse(endStr.slice(0, 10))
+  if (Number.isNaN(s) || Number.isNaN(e)) return null
+  const diffDays = Math.round(Math.abs(e - s) / 86_400_000) + 1
+  return Math.max(1, diffDays)
+}
+
+export function buildDatePresetRange(
+  days: number,
+  enableTime: boolean,
+  anchorEndStr?: string,
+): { readonly start: string; readonly end: string } {
+  const parsedAnchor = anchorEndStr ? Date.parse(anchorEndStr) : Number.NaN
+  const endObj = Number.isNaN(parsedAnchor) ? new Date() : new Date(parsedAnchor)
+  const startObj = new Date(endObj.getTime() - Math.max(0, days - 1) * 86_400_000)
+  const fmt = (d: Date) => {
+    const yyyy = d.getFullYear()
+    const mm = String(d.getMonth() + 1).padStart(2, '0')
+    const dd = String(d.getDate()).padStart(2, '0')
+    if (!enableTime) return `${yyyy}-${mm}-${dd}`
+    const hh = String(d.getHours()).padStart(2, '0')
+    const mi = String(d.getMinutes()).padStart(2, '0')
+    return `${yyyy}-${mm}-${dd}T${hh}:${mi}`
+  }
+  return { start: fmt(startObj), end: fmt(endObj) }
+}
+
+/* ─────────────────────────── 4. Tree & TreeSelect ─────────────────────────── */
+
+export type HierarchyNodeStatus = 'healthy' | 'warning' | 'error' | 'neutral'
+
+export interface NormalizedHierarchyNode {
+  readonly id: string
+  readonly value: string
+  readonly label: string
+  readonly sublabel?: string | undefined
+  readonly badge?: string | undefined
+  readonly metric?: string | undefined
+  readonly sharePct?: number | undefined
+  readonly status: HierarchyNodeStatus
+  readonly breadcrumb: string
+  readonly children: readonly NormalizedHierarchyNode[]
+  readonly raw: Record<string, unknown>
+}
+
+function normalizeNodeStatus(raw: unknown): HierarchyNodeStatus {
+  if (typeof raw !== 'string') return 'neutral'
+  const s = raw.trim().toLowerCase()
+  if (s === 'error' || s === 'err' || s === 'danger' || s === 'critical') return 'error'
+  if (s === 'warning' || s === 'warn' || s === 'slow') return 'warning'
+  if (s === 'healthy' || s === 'ok' || s === 'success' || s === 'done') return 'healthy'
+  return 'neutral'
+}
+
+export function normalizeHierarchyTree(
+  rawNodes: unknown,
+  parentPath = '',
+  prefixId = 'n',
+): readonly NormalizedHierarchyNode[] {
+  if (!Array.isArray(rawNodes)) return []
+  const out: NormalizedHierarchyNode[] = []
+  rawNodes.forEach((item, idx) => {
+    if (typeof item === 'string') {
+      const bc = parentPath ? `${parentPath} / ${item}` : item
+      out.push({
+        id: `${prefixId}_${idx}`,
+        value: item,
+        label: item,
+        status: 'neutral',
+        breadcrumb: bc,
+        children: [],
+        raw: { label: item, value: item },
+      })
+      return
+    }
+    if (typeof item === 'object' && item !== null) {
+      const rec = item as Record<string, unknown>
+      const label = String(rec.label ?? rec.title ?? rec.name ?? rec.value ?? `Node ${idx + 1}`)
+      const value = String(
+        rec.value ?? rec.id ?? rec.key ?? (parentPath ? `${parentPath}/${label}` : label),
+      )
+      const id = String(rec.id ?? `${prefixId}_${idx}`)
+      const breadcrumb = parentPath ? `${parentPath} / ${label}` : label
+      const sharePct =
+        typeof rec.sharePct === 'number' && Number.isFinite(rec.sharePct)
+          ? Math.max(0, Math.min(100, rec.sharePct))
+          : typeof rec.pct === 'number' && Number.isFinite(rec.pct)
+            ? Math.max(0, Math.min(100, rec.pct))
+            : undefined
+      const children = normalizeHierarchyTree(rec.children, breadcrumb, `${id}_c`)
+      out.push({
+        id,
+        value,
+        label,
+        sublabel: rec.sublabel ? String(rec.sublabel) : undefined,
+        badge: rec.badge ? String(rec.badge) : undefined,
+        metric: rec.metric ? String(rec.metric) : undefined,
+        sharePct,
+        status: normalizeNodeStatus(rec.status ?? rec.tone),
+        breadcrumb,
+        children,
+        raw: rec,
+      })
+    }
+  })
+  return out
+}
+
+export function filterHierarchyTree(
+  nodes: readonly NormalizedHierarchyNode[],
+  query: string,
+): readonly NormalizedHierarchyNode[] {
+  const q = query.trim().toLowerCase()
+  if (!q) return nodes
+  const out: NormalizedHierarchyNode[] = []
+  for (const node of nodes) {
+    const filteredChildren = filterHierarchyTree(node.children, q)
+    const selfMatch =
+      node.label.toLowerCase().includes(q) ||
+      node.value.toLowerCase().includes(q) ||
+      (node.sublabel ? node.sublabel.toLowerCase().includes(q) : false) ||
+      (node.badge ? node.badge.toLowerCase().includes(q) : false)
+    if (selfMatch || filteredChildren.length > 0) {
+      out.push({
+        ...node,
+        children: selfMatch && filteredChildren.length === 0 ? node.children : filteredChildren,
+      })
+    }
+  }
+  return out
+}
+
+export function findBreadcrumbByValue(
+  nodes: readonly NormalizedHierarchyNode[],
+  targetVal: string,
+): string | null {
+  if (!targetVal) return null
+  for (const n of nodes) {
+    if (n.value === targetVal) return n.breadcrumb
+    const childHit = findBreadcrumbByValue(n.children, targetVal)
+    if (childHit !== null) return childHit
+  }
+  return null
+}
+
+export function collectAllBranchIds(nodes: readonly NormalizedHierarchyNode[]): string[] {
+  const ids: string[] = []
+  const walk = (list: readonly NormalizedHierarchyNode[]) => {
+    for (const n of list) {
+      if (n.children.length > 0) {
+        ids.push(n.id)
+        walk(n.children)
+      }
+    }
+  }
+  walk(nodes)
+  return ids
+}
+
+/* ─────────────────────────── 5. CheckCard ─────────────────────────── */
+
+export interface NormalizedCheckCardOption {
+  readonly value: string
+  readonly title: string
+  readonly badge?: string | undefined
+  readonly description?: string | undefined
+  readonly recommended: boolean
+  readonly raw: Record<string, unknown>
+}
+
+export function normalizeCheckCardOptions(raw: unknown): readonly NormalizedCheckCardOption[] {
+  if (!Array.isArray(raw)) return []
+  const out: NormalizedCheckCardOption[] = []
+  raw.forEach((item, idx) => {
+    if (typeof item === 'string') {
+      out.push({
+        value: item,
+        title: item,
+        recommended: false,
+        raw: { value: item, title: item },
+      })
+      return
+    }
+    if (typeof item === 'object' && item !== null) {
+      const rec = item as Record<string, unknown>
+      const title = String(rec.title ?? rec.label ?? rec.name ?? `Option ${idx + 1}`)
+      const value = String(rec.value ?? rec.id ?? rec.key ?? title)
+      out.push({
+        value,
+        title,
+        badge: rec.badge ? String(rec.badge) : rec.price ? String(rec.price) : undefined,
+        description: rec.description
+          ? String(rec.description)
+          : rec.subtitle
+            ? String(rec.subtitle)
+            : undefined,
+        recommended: Boolean(rec.recommended),
+        raw: rec,
+      })
+    }
+  })
+  return out
+}

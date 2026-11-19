@@ -11,11 +11,7 @@ describe('a2ui_render host tool', () => {
     const value = await tool.execute(
       {
         title: '预算面板',
-        ui: [
-          'surface("budget")',
-          '$/total = 1280',
-          'root = Card(Text("预算总计"))',
-        ].join('\n'),
+        ui: ['surface("budget")', '$/total = 1280', 'root = Card(Text("预算总计"))'].join('\n'),
       },
       { agent: { session: { id: 'sess-1' } } },
     )
@@ -40,15 +36,9 @@ describe('a2ui_render host tool', () => {
     const tool = createRenderTool(sessions)
     const exec = { agent: { session: { id: 'sess-update' } } }
 
-    await tool.execute(
-      { ui: 'surface("calc")\n$/count = "1"\nroot = Card(Text($/count))' },
-      exec,
-    )
+    await tool.execute({ ui: 'surface("calc")\n$/count = "1"\nroot = Card(Text($/count))' }, exec)
 
-    const second = await tool.execute(
-      { ui: 'surface("calc", update=true)\n$/count = "2"' },
-      exec,
-    )
+    const second = await tool.execute({ ui: 'surface("calc", update=true)\n$/count = "2"' }, exec)
 
     expect(second.surfaceIds).toEqual(['calc'])
     expect(JSON.stringify(second.messages)).toContain('updateDataModel')
@@ -59,10 +49,7 @@ describe('a2ui_render host tool', () => {
     const tool = createRenderTool(sessions)
     const exec = { agent: { session: { id: 'sess-rollback' } } }
 
-    await tool.execute(
-      { ui: 'surface("main")\n$/ok = "yes"\nroot = Card(Text($/ok))' },
-      exec,
-    )
+    await tool.execute({ ui: 'surface("main")\n$/ok = "yes"\nroot = Card(Text($/ok))' }, exec)
 
     await expect(
       tool.execute({ ui: 'surface("main", update=true)\nroot = NonExistentWidget(foo=1)' }, exec),
@@ -116,9 +103,9 @@ describe('a2ui_render host tool', () => {
         tool.execute({ ui: 'surface("bad")\nroot = NopeWidget()' }, exec),
       ).rejects.toThrow(new RegExp(`retry ${i}/${A2UI_LIMITS.maxRepairsPerTurn}`))
     }
-    await expect(
-      tool.execute({ ui: 'surface("bad")\nroot = NopeWidget()' }, exec),
-    ).rejects.toThrow(/STOP calling a2ui_render/)
+    await expect(tool.execute({ ui: 'surface("bad")\nroot = NopeWidget()' }, exec)).rejects.toThrow(
+      /STOP calling a2ui_render/,
+    )
 
     const hugeUi = `surface("huge")\nroot = Text("${'x'.repeat(A2UI_LIMITS.maxUiChars + 100)}")`
     await expect(

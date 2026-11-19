@@ -3,10 +3,14 @@
  * and the Browser Client (`@a2ui/react` + `@a2ui/web_core`).
  *
  * Zero DOM, zero React, zero Lit element imports: includes all 18 official
- * A2UI v1.0 Basic Catalog component contracts plus 14 DSH-native extensions
+ * A2UI v1.0 Basic Catalog component contracts plus 39 DSH-native extensions
  * (`Chart`, `Table`, `Stat`, `Progress`, `Badge`, `Code`, `DiffView`, `Steps`,
- * `Callout`, `KeyValue`, `Accordion`, `JsonTree`, `FileTree`, `Mermaid`) —
- * 32 components total.
+ * `Callout`, `KeyValue`, `Accordion`, `JsonTree`, `FileTree`, `Mermaid`,
+ * `Select`, `Segmented`, `Switch`, `Comparison`, `LogViewer`, `Timeline`,
+ * `Kanban`, `SourceList`, `MetricRing`, `ServiceGraph`, `Tracker`, `Terminal`,
+ * `ApprovalCard`, `ApiEndpoint`, `Schedule`, `Result`, `EntityHeader`, `Matrix`,
+ * `NumberInput`, `MultiSelect`, `DateRange`, `TreeSelect`, `CheckCard`, `Tree`,
+ * `Grid`) — 57 components total.
  */
 import { z } from 'zod'
 import {
@@ -17,6 +21,8 @@ import {
   CardApi,
   Catalog,
   CheckBoxApi,
+  CheckRuleSchema,
+  ChildListSchema,
   ChildSchema,
   ChoicePickerApi,
   ColumnApi,
@@ -24,6 +30,7 @@ import {
   DividerApi,
   DynamicBooleanSchema,
   DynamicNumberSchema,
+  DynamicStringListSchema,
   DynamicStringSchema,
   DynamicValueSchema,
   IconApi,
@@ -188,13 +195,41 @@ export const TableApi = {
           .default(10)
           .describe('Maximum rows shown per page before pagination controls appear.')
           .optional(),
+        exportable: z
+          .boolean()
+          .default(false)
+          .describe(
+            'When true, displays 1-click CSV export (UTF-8 BOM) and Markdown copy buttons in the table toolbar.',
+          )
+          .optional(),
+        selectable: z
+          .boolean()
+          .default(false)
+          .describe(
+            'When true, displays row selection checkboxes and a batch action button that dispatches selected rows via `action`.',
+          )
+          .optional(),
+        batchLabel: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional label for the batch action button when `selectable=true`.',
+        ).optional(),
+        showSummary: z
+          .boolean()
+          .default(false)
+          .describe('When true, displays a numeric summary footer row across numeric columns.')
+          .optional(),
+        expandKey: z
+          .string()
+          .describe(
+            'Optional property key on row objects whose text/JSON content can be expanded inline beneath each row (`▸` / `▾`).',
+          )
+          .optional(),
         action: ActionSchema.describe(
-          'REF:#/$defs/Action|Optional row drill-down action triggered when the user clicks a table row (attaches the clicked row payload automatically).',
+          'REF:#/$defs/Action|Optional row drill-down or batch selection action triggered when clicking a row or batch action button.',
         ).optional(),
         weight: WeightSchema.optional(),
       })
       .describe(
-        'Sortable, filterable, paginated data table powered by TanStack Table, with optional row click drill-down action. Renders plain text/scalar cells only (no nested Badge/Button components; use status text or emoji prefixes for status columns, or List + Row + Badge when component rows are needed).',
+        'Enterprise ProTable powered by TanStack Table: sortable, filterable, paginated, right-aligned tabular numeric columns, with optional 1-click CSV/Markdown export (`exportable=true`), multi-row batch selection (`selectable=true`), and numeric summary footer (`showSummary=true`). Renders plain text/scalar cells only.',
       )
       .strict(),
     { mixins: [], required: ['rows'] },
@@ -443,7 +478,7 @@ export const KeyValueApi = {
     z
       .object({
         items: DynamicValueSchema.describe(
-          'REF:#/$defs/DynamicValue|Array of `{ label, value, tone?, copyable?, mono? }` entries or a key-value object/$/path map.',
+          'REF:#/$defs/DynamicValue|Array of `{ label, value, tone?, copyable?, mono?, span?: 1 | 2 | 3 }` entries or a key-value object/$/path map.',
         ),
         title: DynamicStringSchema.describe(
           'REF:#/$defs/DynamicString|Optional section title.',
@@ -455,6 +490,13 @@ export const KeyValueApi = {
           .max(3)
           .default(2)
           .describe('Number of grid columns (1 to 3, default 2).')
+          .optional(),
+        bordered: z
+          .boolean()
+          .default(false)
+          .describe(
+            'When true, renders an AntD `<Descriptions bordered>` style enterprise specification sheet with shaded label cells and multi-column `span` support.',
+          )
           .optional(),
         copyable: z
           .boolean()
@@ -604,6 +646,918 @@ export const MermaidApi = {
   ),
 } satisfies ComponentApi
 
+export const SelectApi = {
+  name: 'Select',
+  schema: spec(
+    z
+      .object({
+        checks: z.array(CheckRuleSchema.describe('REF:#/$defs/CheckRule')).optional(),
+        label: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional field label displayed above the dropdown.',
+        ).optional(),
+        options: DynamicValueSchema.describe(
+          'REF:#/$defs/DynamicValue|Array (or $/path array) of `{ value, label, description? }` option objects (or plain scalar strings).',
+        ),
+        value: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Currently selected option value, bound to a scalar string `$/path` in the surface data model.',
+        ),
+        placeholder: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional placeholder shown when `value` does not match any option.',
+        ).optional(),
+        searchable: z
+          .boolean()
+          .default(false)
+          .describe('When true, displays a filter input inside the dropdown popover.')
+          .optional(),
+        weight: WeightSchema.optional(),
+      })
+      .describe(
+        'Compact single-select dropdown menu (`HostPrimitives.Menu` + optional search filter) bound directly to a scalar string `$/path`.',
+      )
+      .strict(),
+    { mixins: ['Checkable'], required: ['options', 'value'] },
+  ),
+} satisfies ComponentApi
+
+export const SegmentedApi = {
+  name: 'Segmented',
+  schema: spec(
+    z
+      .object({
+        checks: z.array(CheckRuleSchema.describe('REF:#/$defs/CheckRule')).optional(),
+        label: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional label displayed above the segmented control.',
+        ).optional(),
+        options: DynamicValueSchema.describe(
+          'REF:#/$defs/DynamicValue|Array (or $/path array) of `{ value, label }` segment items (2–6 options recommended).',
+        ),
+        value: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Active segment value bound directly to a scalar string `$/path` (simpler than `ChoicePicker` array bindings for mode/period switches).',
+        ),
+        weight: WeightSchema.optional(),
+      })
+      .describe(
+        'Compact pill-track segmented mode switch powered by `HostPrimitives.SegmentedControl`, bound to a scalar string `$/path`.',
+      )
+      .strict(),
+    { mixins: ['Checkable'], required: ['options', 'value'] },
+  ),
+} satisfies ComponentApi
+
+export const SwitchApi = {
+  name: 'Switch',
+  schema: spec(
+    z
+      .object({
+        checks: z.array(CheckRuleSchema.describe('REF:#/$defs/CheckRule')).optional(),
+        label: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Primary toggle switch label.',
+        ),
+        value: DynamicBooleanSchema.describe(
+          'REF:#/$defs/DynamicBoolean|Boolean switch state bound to a `$/path` in the surface data model.',
+        ),
+        description: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional helper description shown below the toggle title.',
+        ).optional(),
+        weight: WeightSchema.optional(),
+      })
+      .describe(
+        'iOS/DSH-style boolean toggle switch row powered by `HostPrimitives.Switch`, with optional secondary description.',
+      )
+      .strict(),
+    { mixins: ['Checkable'], required: ['label', 'value'] },
+  ),
+} satisfies ComponentApi
+
+export const ComparisonApi = {
+  name: 'Comparison',
+  schema: spec(
+    z
+      .object({
+        options: DynamicValueSchema.describe(
+          'REF:#/$defs/DynamicValue|Array (or $/path array) of option columns `{ key, title, subtitle?, badge?, recommended?: boolean, summary? }`.',
+        ),
+        rows: DynamicValueSchema.describe(
+          'REF:#/$defs/DynamicValue|Array (or $/path array) of attribute rows `{ label, values: Record<optionKey, string | number | boolean> }`. Cell values support booleans or `"ok:..."`, `"warn:..."`, `"no:..."` prefixes for semantic status icons.',
+        ),
+        title: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional comparison matrix header title.',
+        ).optional(),
+        action: ActionSchema.describe(
+          'REF:#/$defs/Action|Optional action dispatched when the user clicks to adopt an option column (attaches `{ key, title, option }`).',
+        ).optional(),
+        weight: WeightSchema.optional(),
+      })
+      .describe(
+        'Side-by-side technical or product trade-off comparison matrix with recommended column highlight, semantic check/warn/cross cells, and optional selection action.',
+      )
+      .strict(),
+    { mixins: [], required: ['options', 'rows'] },
+  ),
+} satisfies ComponentApi
+
+export const LogViewerApi = {
+  name: 'LogViewer',
+  schema: spec(
+    z
+      .object({
+        entries: DynamicValueSchema.describe(
+          'REF:#/$defs/DynamicValue|Array (or $/path array) of structured log entries `{ time?, level?: "info" | "warn" | "error" | "debug", service?, message, detail?, filePath?, line? }` (or raw log lines).',
+        ),
+        title: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional log console header title (e.g. "payment-api · stderr").',
+        ).optional(),
+        searchable: z
+          .boolean()
+          .default(true)
+          .describe('When true (default), shows level filter pills and a search box.')
+          .optional(),
+        defaultLevel: z
+          .enum(['all', 'error', 'warn', 'info', 'debug'])
+          .default('all')
+          .describe('Initial severity filter.')
+          .optional(),
+        maxHeight: z
+          .number()
+          .int()
+          .min(140)
+          .max(720)
+          .default(320)
+          .describe('Maximum scrollable log viewport height in pixels.')
+          .optional(),
+        action: ActionSchema.describe(
+          'REF:#/$defs/Action|Optional action dispatched when clicking to diagnose a log entry.',
+        ).optional(),
+        weight: WeightSchema.optional(),
+      })
+      .describe(
+        'Structured diagnostic log & stack-trace console with severity filter pills, keyword search, collapsible stack trace details, and 1-click DSH sidebar file jump.',
+      )
+      .strict(),
+    { mixins: [], required: ['entries'] },
+  ),
+} satisfies ComponentApi
+
+export const TimelineItemSchema = spec(
+  z.object({
+    time: DynamicStringSchema.describe(
+      'REF:#/$defs/DynamicString|Optional timestamp or relative offset (e.g. "10:42:05" or "+45s").',
+    ).optional(),
+    title: DynamicStringSchema.describe('REF:#/$defs/DynamicString|Event headline.'),
+    description: DynamicStringSchema.describe(
+      'REF:#/$defs/DynamicString|Optional event summary text (Markdown supported).',
+    ).optional(),
+    actor: DynamicStringSchema.describe(
+      'REF:#/$defs/DynamicString|Optional actor, service, or author name.',
+    ).optional(),
+    status: z
+      .enum(['info', 'success', 'warning', 'danger', 'pending'])
+      .default('info')
+      .describe('Semantic status indicator color.')
+      .optional(),
+    tag: DynamicStringSchema.describe(
+      'REF:#/$defs/DynamicString|Optional compact tag shown beside the headline.',
+    ).optional(),
+    detail: DynamicStringSchema.describe(
+      'REF:#/$defs/DynamicString|Optional collapsible monospace detail or command output.',
+    ).optional(),
+    child: ChildSchema.describe(
+      'REF:#/$defs/Child|Optional nested A2UI component (e.g. `DiffView`, `KeyValue`, `Code`) rendered inside this event.',
+    ).optional(),
+  }),
+  { closure: 'additionalProperties' },
+)
+
+export const TimelineApi = {
+  name: 'Timeline',
+  schema: spec(
+    z
+      .object({
+        items: z
+          .array(TimelineItemSchema)
+          .min(1)
+          .describe('Ordered chronological, incident, or audit events.'),
+        title: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional timeline header title.',
+        ).optional(),
+        badge: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional summary tag in the header (e.g. "MTTR 12m").',
+        ).optional(),
+        weight: WeightSchema.optional(),
+      })
+      .describe(
+        'Chronological incident, release, or audit activity stream with timestamps, actor tags, collapsible details, and optional nested A2UI `child` components.',
+      )
+      .strict(),
+    { mixins: [], required: ['items'] },
+  ),
+} satisfies ComponentApi
+
+export const KanbanApi = {
+  name: 'Kanban',
+  schema: spec(
+    z
+      .object({
+        columns: DynamicValueSchema.describe(
+          'REF:#/$defs/DynamicValue|Array (or $/path array) of board lanes `{ id?, title, tone?: "neutral" | "info" | "warning" | "success" | "danger", cards: [{ id?, title, description?, priority?: "high" | "medium" | "low", tag?, assignee?, meta? }] }`.',
+        ),
+        title: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional Kanban board header title.',
+        ).optional(),
+        action: ActionSchema.describe(
+          'REF:#/$defs/Action|Optional action dispatched when clicking a task card (attaches `{ columnId, columnTitle, card }`).',
+        ).optional(),
+        weight: WeightSchema.optional(),
+      })
+      .describe(
+        'Multi-column sprint, triage, or remediation Kanban board with lane counts, priority tags, and optional card drill-down action.',
+      )
+      .strict(),
+    { mixins: [], required: ['columns'] },
+  ),
+} satisfies ComponentApi
+
+export const SourceListApi = {
+  name: 'SourceList',
+  schema: spec(
+    z
+      .object({
+        items: DynamicValueSchema.describe(
+          'REF:#/$defs/DynamicValue|Array (or $/path array) of citation/reference items `{ id?, title, url?, domain?, filePath?, line?, snippet?, score?, publishedAt?, badge? }`.',
+        ),
+        title: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional citation list header title.',
+        ).optional(),
+        action: ActionSchema.describe(
+          'REF:#/$defs/Action|Optional action dispatched when clicking a source item.',
+        ).optional(),
+        weight: WeightSchema.optional(),
+      })
+      .describe(
+        'Numbered research citation, RAG evidence, and workspace code-reference card list with relevance indicators, safe external links, and 1-click DSH sidebar file jump.',
+      )
+      .strict(),
+    { mixins: [], required: ['items'] },
+  ),
+} satisfies ComponentApi
+
+export const MetricRingApi = {
+  name: 'MetricRing',
+  schema: spec(
+    z
+      .object({
+        label: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Metric label displayed beside or under the ring.',
+        ),
+        value: DynamicNumberSchema.describe(
+          'REF:#/$defs/DynamicNumber|Current numeric value (supports reactive `$/path` or `calc(...)`).',
+        ),
+        max: z
+          .number()
+          .positive()
+          .default(100)
+          .describe('Maximum ring value (defaults to 100).')
+          .optional(),
+        unit: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Unit suffix shown in the ring center (defaults to "%" when `max` is 100).',
+        ).optional(),
+        sublabel: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional secondary caption (e.g. "42 / 64 GB" or "SLO >= 99.9%").',
+        ).optional(),
+        tone: z
+          .enum(['brand', 'success', 'warning', 'danger', 'auto'])
+          .default('brand')
+          .describe(
+            'Ring stroke color ("auto" switches green -> warning -> danger by utilization thresholds).',
+          )
+          .optional(),
+        size: z
+          .number()
+          .int()
+          .min(64)
+          .max(180)
+          .default(88)
+          .describe('SVG ring diameter in pixels (default 88).')
+          .optional(),
+        weight: WeightSchema.optional(),
+      })
+      .describe(
+        'Zero-chunk lightweight SVG radial progress/SLO ring card (~0 kB bundle cost, instant SSR/first-frame render). Pass `weight=1` when placing multiple `MetricRing` cards in a `Row`.',
+      )
+      .strict(),
+    { mixins: [], required: ['label', 'value'] },
+  ),
+} satisfies ComponentApi
+
+export const ServiceGraphApi = {
+  name: 'ServiceGraph',
+  schema: spec(
+    z
+      .object({
+        nodes: DynamicValueSchema.describe(
+          'REF:#/$defs/DynamicValue|Array (or $/path array) of service/dependency nodes `{ id, label, status?: "healthy" | "warning" | "error" | "unknown", metric?, sublabel?, group? }`.',
+        ),
+        edges: DynamicValueSchema.describe(
+          'REF:#/$defs/DynamicValue|Optional array (or $/path array) of directed call edges `{ from, to, label?, status?: "healthy" | "warning" | "error" }`.',
+        ).optional(),
+        title: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional service topology header title.',
+        ).optional(),
+        direction: z
+          .enum(['LR', 'TB'])
+          .default('LR')
+          .describe('Topological rank direction: "LR" (left-to-right) or "TB" (top-to-bottom).')
+          .optional(),
+        action: ActionSchema.describe(
+          'REF:#/$defs/Action|Optional action dispatched when clicking to inspect a service node.',
+        ).optional(),
+        weight: WeightSchema.optional(),
+      })
+      .describe(
+        'Live health-colored service/module dependency DAG with node metrics, latency edge labels, interactive upstream/downstream inspector, and optional drill-down action.',
+      )
+      .strict(),
+    { mixins: [], required: ['nodes'] },
+  ),
+} satisfies ComponentApi
+
+export const TrackerApi = {
+  name: 'Tracker',
+  schema: spec(
+    z
+      .object({
+        data: DynamicValueSchema.describe(
+          'REF:#/$defs/DynamicValue|For `mode="uptime"` (default): array of time slices `{ label, status?: "ok" | "warning" | "error" | "unknown", note? }`. For `mode="category"`: array of proportion segments `{ label, value, tone?: "brand" | "success" | "warning" | "danger" | "neutral" }`.',
+        ),
+        title: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional tracker card header title.',
+        ).optional(),
+        summary: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional right-aligned headline metric (e.g. "99.95% Uptime" or "48.2M tok").',
+        ).optional(),
+        mode: z
+          .enum(['uptime', 'category'])
+          .default('uptime')
+          .describe(
+            '"uptime" renders a Tremor-style 30–90 slice health strip with DSH HoverCard tooltips; "category" renders a multi-segment stacked quota/share bar with legend.',
+          )
+          .optional(),
+        weight: WeightSchema.optional(),
+      })
+      .describe(
+        'Zero-chunk Tremor/Vercel-style SLA uptime slice strip (`mode="uptime"`) or multi-segment category proportion bar (`mode="category"`), integrated with DSH `HoverCard` & `StateDot`.',
+      )
+      .strict(),
+    { mixins: [], required: ['data'] },
+  ),
+} satisfies ComponentApi
+
+export const TerminalApi = {
+  name: 'Terminal',
+  schema: spec(
+    z
+      .object({
+        commands: DynamicValueSchema.describe(
+          'REF:#/$defs/DynamicValue|Array (or $/path array) of shell steps `{ cmd, output?, stderr?, exitCode?: number, comment? }`, or a shell command string.',
+        ),
+        title: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional runbook or terminal header title.',
+        ).optional(),
+        cwd: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional working directory badge (e.g. "~/k8s-prod").',
+        ).optional(),
+        shell: z
+          .string()
+          .default('zsh')
+          .describe('Optional shell badge (e.g. "zsh", "bash", "psql").')
+          .optional(),
+        maxHeight: z
+          .number()
+          .int()
+          .min(120)
+          .max(680)
+          .default(340)
+          .describe('Maximum scrollable terminal body height in pixels.')
+          .optional(),
+        weight: WeightSchema.optional(),
+      })
+      .describe(
+        'Vercel Geist / DSH DevOps command & execution receipt card showing `$ command`, exit code pills, stdout/stderr separation, and 1-click copy of pure executable commands.',
+      )
+      .strict(),
+    { mixins: [], required: ['commands'] },
+  ),
+} satisfies ComponentApi
+
+export const ApprovalCardApi = {
+  name: 'ApprovalCard',
+  schema: spec(
+    z
+      .object({
+        title: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|High-impact operation or change gate headline.',
+        ),
+        summary: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional secondary context or justification.',
+        ).optional(),
+        severity: z
+          .enum(['low', 'medium', 'high', 'critical'])
+          .default('high')
+          .describe('Risk severity tier controlling border & badge color.')
+          .optional(),
+        scope: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional change ticket ID or target environment tag (e.g. "DDL-2026-1119").',
+        ).optional(),
+        impacts: DynamicValueSchema.describe(
+          'REF:#/$defs/DynamicValue|Optional array of blast-radius impact bullet strings.',
+        ).optional(),
+        confirmLabel: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional explicit acknowledgement toggle label that gates the approve button until switched ON.',
+        ).optional(),
+        approveLabel: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Custom label for the primary approve button.',
+        ).optional(),
+        rejectLabel: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Custom label for the secondary reject button.',
+        ).optional(),
+        approveAction: ActionSchema.describe(
+          'REF:#/$defs/Action|Action dispatched when the user approves the gate.',
+        ).optional(),
+        rejectAction: ActionSchema.describe(
+          'REF:#/$defs/Action|Optional action dispatched when the user rejects the gate.',
+        ).optional(),
+        weight: WeightSchema.optional(),
+      })
+      .describe(
+        'Enterprise B2B risk-confirmation & human-in-the-loop approval gate card (`a2ui_ask` or `a2ui_render`) with severity badge, blast-radius checklist, optional acknowledgement switch gate, and Approve/Reject actions.',
+      )
+      .strict(),
+    { mixins: [], required: ['title'] },
+  ),
+} satisfies ComponentApi
+
+export const ApiEndpointApi = {
+  name: 'ApiEndpoint',
+  schema: spec(
+    z
+      .object({
+        method: z
+          .enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'])
+          .describe('HTTP method.'),
+        path: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Endpoint route path (path parameters like `{tenantId}` or `:id` are highlighted automatically).',
+        ),
+        summary: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional endpoint description.',
+        ).optional(),
+        status: DynamicNumberSchema.describe(
+          'REF:#/$defs/DynamicNumber|Optional HTTP response status code (e.g. 200, 201, 422, 503).',
+        ).optional(),
+        latency: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional latency note (e.g. "34ms").',
+        ).optional(),
+        baseUrl: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional base origin used when generating the 1-click cURL snippet.',
+        ).optional(),
+        params: DynamicValueSchema.describe(
+          'REF:#/$defs/DynamicValue|Optional array of parameter descriptors `{ name, in?: "path" | "query" | "header", type?, required?: boolean, description? }`.',
+        ).optional(),
+        headers: DynamicValueSchema.describe(
+          'REF:#/$defs/DynamicValue|Optional map or `{ name, value }` array of HTTP headers.',
+        ).optional(),
+        requestBody: DynamicValueSchema.describe(
+          'REF:#/$defs/DynamicValue|Optional JSON request payload inspected via DSH `JsonTree`.',
+        ).optional(),
+        responseBody: DynamicValueSchema.describe(
+          'REF:#/$defs/DynamicValue|Optional JSON response payload inspected via DSH `JsonTree`.',
+        ).optional(),
+        action: ActionSchema.describe(
+          'REF:#/$defs/Action|Optional action to trigger or inspect this endpoint via the Agent.',
+        ).optional(),
+        weight: WeightSchema.optional(),
+      })
+      .describe(
+        'Scalar/Stripe-style API contract & HTTP request/response workbench with method badge, `{param}` route highlighting, tabbed Response/Request/Params views (`DshJsonTree`), and 1-click `curl` copy.',
+      )
+      .strict(),
+    { mixins: [], required: ['method', 'path'] },
+  ),
+} satisfies ComponentApi
+
+export const ScheduleApi = {
+  name: 'Schedule',
+  schema: spec(
+    z
+      .object({
+        items: DynamicValueSchema.describe(
+          'REF:#/$defs/DynamicValue|Array (or $/path array) of schedule tracks `{ id?, title, start, end, progress?: number, status?: "done" | "active" | "warning" | "pending" | "danger", owner?, note? }`. `start`/`end` accept `"HH:MM"` times, `"YYYY-MM-DD"`, or numeric offsets.',
+        ),
+        title: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional schedule or maintenance window header title.',
+        ).optional(),
+        range: DynamicValueSchema.describe(
+          'REF:#/$defs/DynamicValue|Optional `[minBound, maxBound]` axis tuple (e.g. `["00:00", "06:00"]` or `[0, 100]`); inferred from `items` when omitted.',
+        ).optional(),
+        now: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional current-time marker (e.g. `"02:30"`) rendered as a vertical reference line.',
+        ).optional(),
+        action: ActionSchema.describe(
+          'REF:#/$defs/Action|Optional action dispatched when clicking a schedule bar.',
+        ).optional(),
+        weight: WeightSchema.optional(),
+      })
+      .describe(
+        'Crisp Linear-style horizontal Gantt / maintenance-window schedule bar chart with progress fills, owner tags, and `Now` reference marker.',
+      )
+      .strict(),
+    { mixins: [], required: ['items'] },
+  ),
+} satisfies ComponentApi
+
+export const ResultApi = {
+  name: 'Result',
+  schema: spec(
+    z
+      .object({
+        status: z
+          .enum(['success', 'info', 'warning', 'error', 'empty'])
+          .describe('Outcome or empty-state visual variant.'),
+        title: DynamicStringSchema.describe('REF:#/$defs/DynamicString|Primary outcome headline.'),
+        subtitle: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional secondary explanation or receipt serial number.',
+        ).optional(),
+        meta: DynamicValueSchema.describe(
+          'REF:#/$defs/DynamicValue|Optional receipt key-value map or `{ label, value }` list.',
+        ).optional(),
+        actionLabel: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional CTA button text.',
+        ).optional(),
+        action: ActionSchema.describe(
+          'REF:#/$defs/Action|Optional follow-up CTA action.',
+        ).optional(),
+        child: ChildSchema.describe(
+          'REF:#/$defs/Child|Optional nested A2UI component rendered beneath the receipt summary.',
+        ).optional(),
+        weight: WeightSchema.optional(),
+      })
+      .describe(
+        'Enterprise operation receipt & guided empty-state card (`success`, `info`, `warning`, `error`, `empty`) with optional receipt metadata pills, nested `child`, and follow-up CTA.',
+      )
+      .strict(),
+    { mixins: [], required: ['status', 'title'] },
+  ),
+} satisfies ComponentApi
+
+export const EntityHeaderApi = {
+  name: 'EntityHeader',
+  schema: spec(
+    z
+      .object({
+        title: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Business entity, tenant, cluster, or ticket title.',
+        ),
+        subtitle: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional secondary identifier/owner metadata line.',
+        ).optional(),
+        avatarText: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional 1–3 character monogram shown in the entity emblem (auto-derived from `title` when omitted).',
+        ).optional(),
+        status: z
+          .enum(['healthy', 'ongoing', 'warning', 'error', 'offline'])
+          .optional()
+          .describe('Optional live health indicator rendered with DSH `StateDot`.'),
+        statusLabel: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional text shown next to the status dot (e.g. "运行正常").',
+        ).optional(),
+        badge: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional tier or category badge (e.g. "KA-Enterprise").',
+        ).optional(),
+        tags: DynamicValueSchema.describe(
+          'REF:#/$defs/DynamicValue|Optional string array of supplementary tags.',
+        ).optional(),
+        metrics: DynamicValueSchema.describe(
+          'REF:#/$defs/DynamicValue|Optional array of 2–5 summary KPIs `{ label, value, tone? }` (or key-value map).',
+        ).optional(),
+        actionLabel: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional quick action button label.',
+        ).optional(),
+        action: ActionSchema.describe(
+          'REF:#/$defs/Action|Optional quick action dispatched from the entity header.',
+        ).optional(),
+        weight: WeightSchema.optional(),
+      })
+      .describe(
+        'Enterprise B2B object summary header (`ProDescriptions` / Salesforce / Linear style) combining monogram emblem, DSH `StateDot`, tags, inline KPI strip, and quick action.',
+      )
+      .strict(),
+    { mixins: [], required: ['title'] },
+  ),
+} satisfies ComponentApi
+
+export const MatrixApi = {
+  name: 'Matrix',
+  schema: spec(
+    z
+      .object({
+        rows: DynamicValueSchema.describe('REF:#/$defs/DynamicValue|Array of row header labels.'),
+        columns: DynamicValueSchema.describe(
+          'REF:#/$defs/DynamicValue|Array of column header labels.',
+        ),
+        values: DynamicValueSchema.describe(
+          'REF:#/$defs/DynamicValue|2D array `values[rowIdx][colIdx]` of numbers, booleans, `null`, or semantic strings (`"ok:..."`, `"warn:..."`, `"no:..."`, `"✓"`, `"—"`).',
+        ),
+        title: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional matrix card title.',
+        ).optional(),
+        cornerLabel: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional top-left corner header label.',
+        ).optional(),
+        unit: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional suffix appended to numeric cells (e.g. "%").',
+        ).optional(),
+        colorScale: z
+          .enum(['brand', 'success', 'warning', 'auto'])
+          .default('brand')
+          .describe('Heat tint color scale applied automatically to numeric cells.')
+          .optional(),
+        showTotals: z
+          .boolean()
+          .default(false)
+          .describe('When true on numeric matrices, appends a row-average/total summary column.')
+          .optional(),
+        weight: WeightSchema.optional(),
+      })
+      .describe(
+        'B2B cross-tabulation conditional-formatting heat matrix (cohort retention, P&L sensitivity, benchmark grids) & RBAC role-permission matrix.',
+      )
+      .strict(),
+    { mixins: [], required: ['rows', 'columns', 'values'] },
+  ),
+} satisfies ComponentApi
+
+export const NumberInputApi = {
+  name: 'NumberInput',
+  schema: spec(
+    z
+      .object({
+        checks: z.array(CheckRuleSchema.describe('REF:#/$defs/CheckRule')).optional(),
+        label: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional field label displayed above the numeric stepper.',
+        ).optional(),
+        value: DynamicNumberSchema.describe(
+          'REF:#/$defs/DynamicNumber|Numeric value bound directly to a number `$/path` in the surface data model (integrates seamlessly with `calc(...)`).',
+        ),
+        min: z.number().describe('Optional minimum allowed numeric value.').optional(),
+        max: z.number().describe('Optional maximum allowed numeric value.').optional(),
+        step: z
+          .number()
+          .positive()
+          .default(1)
+          .describe('Increment/decrement step size (e.g. 1, 10, 0.05).')
+          .optional(),
+        unit: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional trailing unit suffix (e.g. "%", "席", "GB", "万元").',
+        ).optional(),
+        prefix: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional leading currency or symbol prefix (e.g. "¥", "$").',
+        ).optional(),
+        weight: WeightSchema.optional(),
+      })
+      .describe(
+        'AntD `InputNumber`-style precision numeric stepper (`−` / `+` buttons + keyboard input + `prefix`/`unit` affixes) bound directly to a numeric `$/path`.',
+      )
+      .strict(),
+    { mixins: ['Checkable'], required: ['value'] },
+  ),
+} satisfies ComponentApi
+
+export const MultiSelectApi = {
+  name: 'MultiSelect',
+  schema: spec(
+    z
+      .object({
+        checks: z.array(CheckRuleSchema.describe('REF:#/$defs/CheckRule')).optional(),
+        label: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional field label above the multi-select box.',
+        ).optional(),
+        options: DynamicValueSchema.describe(
+          'REF:#/$defs/DynamicValue|Array (or $/path array) of `{ value, label, description? }` option objects or strings.',
+        ),
+        value: DynamicStringListSchema.describe(
+          'REF:#/$defs/DynamicStringList|Selected values bound to a `string[]` array `$/path` in the surface data model.',
+        ),
+        placeholder: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional placeholder shown when empty.',
+        ).optional(),
+        searchable: z
+          .boolean()
+          .default(true)
+          .describe('When true (default), allows filtering options inside the dropdown.')
+          .optional(),
+        allowCreate: z
+          .boolean()
+          .default(false)
+          .describe('When true (`tags` mode), pressing Enter on custom text adds a new tag value.')
+          .optional(),
+        maxTagCount: z
+          .number()
+          .int()
+          .min(1)
+          .max(20)
+          .default(5)
+          .describe('Maximum removable tag pills shown inline before collapsing into `+N`.')
+          .optional(),
+        weight: WeightSchema.optional(),
+      })
+      .describe(
+        'AntD `Select(mode="multiple" | "tags")` compact tag-pill dropdown multi-selector with search filter and optional custom tag creation.',
+      )
+      .strict(),
+    { mixins: ['Checkable'], required: ['options', 'value'] },
+  ),
+} satisfies ComponentApi
+
+export const DateRangeApi = {
+  name: 'DateRange',
+  schema: spec(
+    z
+      .object({
+        label: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional field label above the range picker.',
+        ).optional(),
+        start: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Start date/datetime string bound to a `$/path` (e.g. `"2026-11-01"`).',
+        ),
+        end: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|End date/datetime string bound to a `$/path` (e.g. `"2026-11-30"`).',
+        ),
+        presets: z
+          .boolean()
+          .default(true)
+          .describe(
+            'When true (default), displays 1-click range preset pills (Today / 7d / 30d / 90d).',
+          )
+          .optional(),
+        enableTime: z
+          .boolean()
+          .default(false)
+          .describe('When true, switches inputs from `YYYY-MM-DD` to `datetime-local`.')
+          .optional(),
+        weight: WeightSchema.optional(),
+      })
+      .describe(
+        'AntD `RangePicker`-style dual start/end date range selector with quick B2B range presets, span day counter, and automatic `start <= end` ordering.',
+      )
+      .strict(),
+    { mixins: [], required: ['start', 'end'] },
+  ),
+} satisfies ComponentApi
+
+export const TreeSelectApi = {
+  name: 'TreeSelect',
+  schema: spec(
+    z
+      .object({
+        checks: z.array(CheckRuleSchema.describe('REF:#/$defs/CheckRule')).optional(),
+        label: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional field label above the tree selector.',
+        ).optional(),
+        nodes: DynamicValueSchema.describe(
+          'REF:#/$defs/DynamicValue|Recursive tree array `[{ value?, label, badge?, children?: [...] }]`.',
+        ),
+        value: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Selected node value bound to a scalar string `$/path`.',
+        ),
+        placeholder: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional placeholder shown when no node is selected.',
+        ).optional(),
+        searchable: z
+          .boolean()
+          .default(true)
+          .describe('When true (default), filters tree branches by keyword.')
+          .optional(),
+        weight: WeightSchema.optional(),
+      })
+      .describe(
+        'AntD `TreeSelect` / `Cascader` hierarchical dropdown selector displaying full breadcrumb path (`Cluster / Namespace / Service`) and binding to a scalar string `$/path`.',
+      )
+      .strict(),
+    { mixins: ['Checkable'], required: ['nodes', 'value'] },
+  ),
+} satisfies ComponentApi
+
+export const CheckCardApi = {
+  name: 'CheckCard',
+  schema: spec(
+    z
+      .object({
+        checks: z.array(CheckRuleSchema.describe('REF:#/$defs/CheckRule')).optional(),
+        label: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional group headline above the cards.',
+        ).optional(),
+        options: DynamicValueSchema.describe(
+          'REF:#/$defs/DynamicValue|Array of rich card items `{ value, title, badge?, description?, recommended?: boolean }`.',
+        ),
+        value: DynamicValueSchema.describe(
+          'REF:#/$defs/DynamicValue|Optional bound `$/path` (`string` when `multiple=false`, `string[]` when `multiple=true`). Omit `value` and pass `action` for `@ant-design/x` next-step Prompt cards.',
+        ).optional(),
+        multiple: z
+          .boolean()
+          .default(false)
+          .describe('When true in bound form mode, allows selecting multiple cards (`string[]`).')
+          .optional(),
+        columns: z
+          .number()
+          .int()
+          .min(1)
+          .max(4)
+          .default(3)
+          .describe('Responsive card grid column count (1..4, default 3).')
+          .optional(),
+        action: ActionSchema.describe(
+          'REF:#/$defs/Action|Optional action dispatched immediately when clicking a Prompt/Action card.',
+        ).optional(),
+        weight: WeightSchema.optional(),
+      })
+      .describe(
+        'Dual-purpose AntD Pro `<CheckCard.Group>` visual option selector (when `value` is bound) and `@ant-design/x` `<Prompts>` next-step suggestion card grid (when `action` is set).',
+      )
+      .strict(),
+    { mixins: ['Checkable'], required: ['options'] },
+  ),
+} satisfies ComponentApi
+
+export const TreeApi = {
+  name: 'Tree',
+  schema: spec(
+    z
+      .object({
+        nodes: DynamicValueSchema.describe(
+          'REF:#/$defs/DynamicValue|Recursive hierarchy array `[{ id?, label, sublabel?, badge?, metric?, sharePct?: number, status?: "healthy" | "warning" | "error" | "neutral", children?: [...] }]`.',
+        ),
+        title: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional tree header title.',
+        ).optional(),
+        summary: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional right-aligned headline summary (e.g. "Total 480ms").',
+        ).optional(),
+        searchable: z
+          .boolean()
+          .default(false)
+          .describe('When true, displays a keyword search input and Expand/Collapse All toggle.')
+          .optional(),
+        expandedDepth: z
+          .number()
+          .int()
+          .min(0)
+          .max(8)
+          .default(3)
+          .describe('Initial expanded tree depth (default 3).')
+          .optional(),
+        action: ActionSchema.describe(
+          'REF:#/$defs/Action|Optional action dispatched when clicking a tree node.',
+        ).optional(),
+        weight: WeightSchema.optional(),
+      })
+      .describe(
+        'General-purpose AntD `<Tree>` & APM trace waterfall hierarchy supporting org charts, OKR breakdowns, taxonomies, and proportional `sharePct` latency/weight bars.',
+      )
+      .strict(),
+    { mixins: [], required: ['nodes'] },
+  ),
+} satisfies ComponentApi
+
+export const GridApi = {
+  name: 'Grid',
+  schema: spec(
+    z
+      .object({
+        children: ChildListSchema.describe(
+          'REF:#/$defs/ChildList|Child components arranged automatically into a multi-row equal-width responsive CSS Grid.',
+        ),
+        columns: z
+          .number()
+          .int()
+          .min(1)
+          .max(6)
+          .default(3)
+          .describe('Number of equal-width grid columns on desktop (1..6, default 3).')
+          .optional(),
+        gap: z
+          .enum(['sm', 'md', 'lg'])
+          .default('md')
+          .describe('Grid spacing token ("sm" = 8px, "md" = 12px, "lg" = 16px).')
+          .optional(),
+        weight: WeightSchema.optional(),
+      })
+      .describe(
+        'Responsive multi-row equal-width CSS Grid container (`columns=2|3|4`) eliminating nested `Column([Row, Row])` boilerplate.',
+      )
+      .strict(),
+    { mixins: [], required: ['children'] },
+  ),
+} satisfies ComponentApi
+
 /** Standard 18 ComponentApi contracts from the A2UI 1.0 Basic Catalog (with tolerant DshTextApi). */
 export const BASIC_COMPONENT_APIS: readonly ComponentApi[] = [
   DshTextApi,
@@ -626,7 +1580,7 @@ export const BASIC_COMPONENT_APIS: readonly ComponentApi[] = [
   DateTimeInputApi,
 ]
 
-/** DSH-native extended ComponentApi contracts (14 components). */
+/** DSH-native extended ComponentApi contracts (39 components). */
 export const DSH_EXTENDED_COMPONENT_APIS: readonly ComponentApi[] = [
   ChartApi,
   TableApi,
@@ -642,9 +1596,34 @@ export const DSH_EXTENDED_COMPONENT_APIS: readonly ComponentApi[] = [
   JsonTreeApi,
   FileTreeApi,
   MermaidApi,
+  SelectApi,
+  SegmentedApi,
+  SwitchApi,
+  ComparisonApi,
+  LogViewerApi,
+  TimelineApi,
+  KanbanApi,
+  SourceListApi,
+  MetricRingApi,
+  ServiceGraphApi,
+  TrackerApi,
+  TerminalApi,
+  ApprovalCardApi,
+  ApiEndpointApi,
+  ScheduleApi,
+  ResultApi,
+  EntityHeaderApi,
+  MatrixApi,
+  NumberInputApi,
+  MultiSelectApi,
+  DateRangeApi,
+  TreeSelectApi,
+  CheckCardApi,
+  TreeApi,
+  GridApi,
 ]
 
-/** Ordered list of all 32 ComponentApi contracts in the DSH A2UI 1.0 catalog. */
+/** Ordered list of all 57 ComponentApi contracts in the DSH A2UI 1.0 catalog. */
 export const DSH_COMPONENT_APIS: readonly ComponentApi[] = [
   ...BASIC_COMPONENT_APIS,
   ...DSH_EXTENDED_COMPONENT_APIS,
@@ -815,9 +1794,11 @@ export const DSH_FUNCTION_APIS: readonly FunctionApi[] = [
 
 export const DSH_CATALOG_INSTRUCTIONS = [
   'Prefer storing mutable form values, step lists, table rows, and chart datasets under $/paths in the surface data model so follow-up turns can update them incrementally with `surface("id", update=true)`.',
-  'For KPI overviews, place `Stat(..., spark?=$/trend, weight=1)` items inside a `Row([...])`; for structured metadata/configs, prefer `KeyValue($/meta, columns=2)` or `JsonTree($/payload, title=...)`.',
-  'For quantitative visualizations, prefer `Chart(kind, $/data, xField=..., yField=..., title=...)` across its 14 kinds (`bar`, `line`, `area`, `pie`, `scatter`, `radar`, `funnel`, `gauge`, `heatmap`, `treemap`, `sankey`, `boxplot`, `graph`, `candlestick`); for architecture/flow/sequence/state/ER/Gantt diagrams, prefer `Mermaid(code, title=...)`; for >= 4 tabular rows, prefer `Table($/rows, searchable=true)`.',
-  'For workspace file trees or change summaries, prefer `FileTree($/files, title=...)`; for config/code review, prefer `DiffView($/before, $/after, title=..., filePath?=...)` or `Code(code, language=..., filePath?=...)`; for progressive disclosure of detailed sections, prefer `Accordion(items=[...])`; for multi-stage plans, prefer `Steps($/stages, current=...)`; for risk warnings, prefer `Callout(title, message, tone=...)`.',
+  'For multi-row equal-width KPI or card grids, prefer `Grid(children, columns?=3, gap?="md")`; for single-row KPI strips, place `Stat(..., spark?=$/trend, weight=1)` or `MetricRing(..., weight=1)` inside `Row([...])`; for structured metadata/descriptions, prefer `KeyValue($/meta, columns=2, bordered?=true)` or `JsonTree($/payload, title=...)`.',
+  'For form & calculator controls bound to $/paths, prefer `NumberInput(label, $/num, min?=..., max?=..., step?=..., unit?=...)`, `MultiSelect(label, options, $/tags, allowCreate?=false)`, `DateRange(label, $/start, $/end, presets?=true)`, `TreeSelect(label, nodes, $/choice)`, `CheckCard(label, options, $/choice)`, `Segmented(label, options, $/mode)`, `Select(label, options, $/choice)`, and `Switch(label, $/enabled)`.',
+  'For quantitative visualizations, prefer `Chart(kind, $/data, xField=..., yField=..., title=...)` across its 14 kinds (`bar`, `line`, `area`, `pie`, `scatter`, `radar`, `funnel`, `gauge`, `heatmap`, `treemap`, `sankey`, `boxplot`, `graph`, `candlestick`); for architecture/flow/sequence/state/ER/Gantt diagrams, prefer `Mermaid(code, title=...)`; for live health-colored service/module dependency DAGs, prefer `ServiceGraph($/nodes, $/edges, title=...)`.',
+  'For multi-option trade-off matrices, prefer `Comparison($/options, $/rows, title=...)`; for >= 4 tabular rows, prefer `Table($/rows, searchable=true, expandKey?=...)`; for hierarchical org/OKR/APM trace trees, prefer `Tree($/nodes, title=...)`; for sprint/remediation lanes, prefer `Kanban($/columns, title=...)`; for research citations or workspace code evidence, prefer `SourceList($/sources, title=...)`.',
+  'For workspace file trees or change summaries, prefer `FileTree($/files, title=...)`; for config/code review, prefer `DiffView($/before, $/after, title=..., filePath?=...)` or `Code(code, language=..., filePath?=...)`; for diagnostic logs & stack traces, prefer `LogViewer($/entries, title=...)`; for chronological incident/release streams, prefer `Timeline(items=[...], title=...)`; for progressive disclosure, prefer `Accordion(items=[...])`; for multi-stage plans, prefer `Steps($/stages, current=...)`; for risk warnings, prefer `Callout(title, message, tone=...)`; for clickable follow-up suggestion cards, prefer `CheckCard(label, options, action=action("follow_up"))`.',
   'Never fabricate real external state: if using illustrative numbers, mark them clearly in titles or captions; never claim an action has executed before receiving `[a2ui-action]`.',
 ].join('\n')
 
@@ -830,7 +1811,7 @@ export const dshSchemaCatalog: CatalogApi = new Catalog(
   {
     title: 'DeepSeek Harness A2UI 1.0 Catalog',
     description:
-      'A2UI 1.0 basic components plus 14 DSH-native extensions: Chart (14 ECharts kinds), Table (TanStack Table), Stat, Progress, Badge, Code, DiffView, Steps, Callout, KeyValue, Accordion, JsonTree, FileTree, and Mermaid.',
+      'A2UI 1.0 basic components plus 39 DSH-native extensions (57 total): Grid, NumberInput, MultiSelect, DateRange, TreeSelect, CheckCard, Tree, Chart (14 ECharts kinds), Table (ProTable), Stat, MetricRing, Tracker, Progress, Badge, Code, Terminal, DiffView, Steps, Timeline, Schedule, Callout, ApprovalCard, Result, EntityHeader, KeyValue (Descriptions), Accordion, JsonTree, ApiEndpoint, FileTree, Mermaid, ServiceGraph, Select, Segmented, Switch, Comparison, Matrix, LogViewer, Kanban, and SourceList.',
     instructions: DSH_CATALOG_INSTRUCTIONS,
     defModels: [WeightSchema],
   },

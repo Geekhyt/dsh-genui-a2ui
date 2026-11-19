@@ -38,5 +38,9 @@ export function cleanupA2uiRuntimeStyles(): void {
 
 ensureA2uiRuntimeStyles()
 
-export { SurfaceGroupView, type SurfaceActionCallback, type SurfaceGroupViewProps } from '../SurfaceView.tsx'
+export {
+  SurfaceGroupView,
+  type SurfaceActionCallback,
+  type SurfaceGroupViewProps,
+} from '../SurfaceView.tsx'
 export { StreamingExpressSession, type StreamingCompileSnapshot } from '../streaming.ts'

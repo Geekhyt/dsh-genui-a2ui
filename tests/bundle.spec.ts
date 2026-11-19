@@ -22,9 +22,7 @@ function collectSourceFiles(dir: string): string[] {
 
 function extractSyncRequires(code: string): string[] {
   return [
-    ...new Set(
-      [...code.matchAll(/(?<!\.)\brequire\((["'`])([^"'`]+)\1\)/g)].map((m) => m[2]!),
-    ),
+    ...new Set([...code.matchAll(/(?<!\.)\brequire\((["'`])([^"'`]+)\1\)/g)].map((m) => m[2]!)),
   ]
 }
 
@@ -118,72 +116,66 @@ describe('Spike 1 & Dynamic Chunk Architecture: DSH bundle purity & <500 kB gate
     }
   })
 
-    it(
-    'loads lib/index.js cleanly in Node ESM, validates runtime Config schema, and registers tools, skill, and RPC commands',
-    async () => {
-      const { resolveConfig, ValidationError } = await import('@deepseek-ai/cordis')
-      const libHref = new URL('../lib/index.js', import.meta.url).href
-      const hostMod = (await import(libHref)) as typeof import('../src/index.ts')
-      expect(hostMod.name).toBe('dsh-genui-a2ui')
-      expect(typeof hostMod.apply).toBe('function')
-      expect(hostMod.Config).toBeDefined()
-      expect(resolveConfig(hostMod as never, undefined)).toEqual({})
-      expect(
-        resolveConfig(hostMod as never, { defaultEnabled: false, stateFile: null }),
-      ).toEqual({
-        defaultEnabled: false,
-        stateFile: null,
-      })
-      expect(() => resolveConfig(hostMod as never, { defaultEnabled: 'nope' })).toThrow(
-        ValidationError,
-      )
+  it('loads lib/index.js cleanly in Node ESM, validates runtime Config schema, and registers tools, skill, and RPC commands', async () => {
+    const { resolveConfig, ValidationError } = await import('@deepseek-ai/cordis')
+    const libHref = new URL('../lib/index.js', import.meta.url).href
+    const hostMod = (await import(libHref)) as typeof import('../src/index.ts')
+    expect(hostMod.name).toBe('dsh-genui-a2ui')
+    expect(typeof hostMod.apply).toBe('function')
+    expect(hostMod.Config).toBeDefined()
+    expect(resolveConfig(hostMod as never, undefined)).toEqual({})
+    expect(resolveConfig(hostMod as never, { defaultEnabled: false, stateFile: null })).toEqual({
+      defaultEnabled: false,
+      stateFile: null,
+    })
+    expect(() => resolveConfig(hostMod as never, { defaultEnabled: 'nope' })).toThrow(
+      ValidationError,
+    )
 
-      const registeredTools: string[] = []
-      const registeredCommands: string[] = []
-      let registeredSkill: { name: string; content: string } | undefined
+    const registeredTools: string[] = []
+    const registeredCommands: string[] = []
+    let registeredSkill: { name: string; content: string } | undefined
 
-      const fakeCtx = {
-        inject(_deps: string[], fn: (inner: unknown) => void) {
-          fn({
-            tools: {
-              register: (def: { name: string }) => {
-                registeredTools.push(def.name)
-                return () => {}
-              },
+    const fakeCtx = {
+      inject(_deps: string[], fn: (inner: unknown) => void) {
+        fn({
+          tools: {
+            register: (def: { name: string }) => {
+              registeredTools.push(def.name)
+              return () => {}
             },
-            skills: {
-              register: (sk: { name: string; content: string }) => {
-                registeredSkill = sk
-                return () => {}
-              },
+          },
+          skills: {
+            register: (sk: { name: string; content: string }) => {
+              registeredSkill = sk
+              return () => {}
             },
-            commands: {
-              register: (cmd: { name: string }) => {
-                registeredCommands.push(cmd.name)
-                return () => {}
-              },
+          },
+          commands: {
+            register: (cmd: { name: string }) => {
+              registeredCommands.push(cmd.name)
+              return () => {}
             },
-            effect: (cb: () => () => void) => cb(),
-          })
-        },
-        on() {
-          return () => {}
-        },
-      }
+          },
+          effect: (cb: () => () => void) => cb(),
+        })
+      },
+      on() {
+        return () => {}
+      },
+    }
 
-      hostMod.apply(fakeCtx as never)
-      expect(registeredTools).toEqual(['a2ui_render', 'a2ui_ask'])
-      expect(registeredCommands).toEqual(['a2ui', 'a2ui-answer'])
-      expect(registeredSkill?.name).toBe('a2ui')
-      expect(registeredSkill?.content).toContain('a2ui_render')
-      expect(registeredSkill?.content).toContain('a2ui_ask')
-      expect(registeredSkill?.content).toContain('Mermaid(')
-      expect(registeredSkill?.content).toContain('Accordion(')
-      expect(registeredSkill?.content).toContain('JsonTree(')
-      expect(registeredSkill?.content).toContain('FileTree(')
-    },
-    15_000,
-  )
+    hostMod.apply(fakeCtx as never)
+    expect(registeredTools).toEqual(['a2ui_render', 'a2ui_ask'])
+    expect(registeredCommands).toEqual(['a2ui', 'a2ui-answer'])
+    expect(registeredSkill?.name).toBe('a2ui')
+    expect(registeredSkill?.content).toContain('a2ui_render')
+    expect(registeredSkill?.content).toContain('a2ui_ask')
+    expect(registeredSkill?.content).toContain('Mermaid(')
+    expect(registeredSkill?.content).toContain('Accordion(')
+    expect(registeredSkill?.content).toContain('JsonTree(')
+    expect(registeredSkill?.content).toContain('FileTree(')
+  }, 15_000)
 
   it('keeps every locale/*.json detail markdown clean, HTML-free, and fully packaged in package.json files', () => {
     const rootDir = resolve(import.meta.dirname, '..')
@@ -196,7 +188,9 @@ describe('Spike 1 & Dynamic Chunk Architecture: DSH bundle purity & <500 kB gate
       const parsed = JSON.parse(readFileSync(join(localeDir, localeFile), 'utf8')) as {
         meta?: { title?: string; description?: string; detail?: string }
       }
-      const expectedTitle = localeFile.startsWith('zh') ? 'A2UI 生成式交互界面' : 'A2UI generative UI'
+      const expectedTitle = localeFile.startsWith('zh')
+        ? 'A2UI 生成式交互界面'
+        : 'A2UI generative UI'
       expect(parsed.meta?.title).toBe(expectedTitle)
       expect(parsed.meta?.description?.length).toBeGreaterThan(20)
       const detail = parsed.meta?.detail

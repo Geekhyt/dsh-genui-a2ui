@@ -18,7 +18,12 @@ import { useShellMessages } from './i18n.ts'
 import { DshCheckIcon, DshChevronDownIcon, DshChevronUpIcon } from './ui/primitives.tsx'
 import css from './ActionUserChip.module.css'
 
-export { A2UI_ACTION_NODE_ID, a2uiActionUserTextRule, matchA2uiActionUserText, type ParsedA2uiActionData }
+export {
+  A2UI_ACTION_NODE_ID,
+  a2uiActionUserTextRule,
+  matchA2uiActionUserText,
+  type ParsedA2uiActionData,
+}
 
 function prettyJsonOrRaw(raw: string | null): string | null {
   if (!raw) return null

@@ -63,7 +63,8 @@ export function resolveClientLocale(): UiLocale {
   if (globalTag !== null) return globalTag
 
   if (typeof document !== 'undefined') {
-    const htmlLang = document.documentElement?.getAttribute?.('lang') ?? document.documentElement?.lang
+    const htmlLang =
+      document.documentElement?.getAttribute?.('lang') ?? document.documentElement?.lang
     if (typeof htmlLang === 'string' && htmlLang.trim() !== '') {
       return htmlLang.trim().toLowerCase().startsWith('zh') ? 'zh' : 'en'
     }
@@ -123,10 +124,12 @@ export const HOST_MESSAGES: Record<UiLocale, HostUiMessages> = {
     askDefaultTitle: 'A2UI 交互提问',
   },
   en: {
-    tierCommandDesc: 'Toggle or check A2UI generative UI status (on / off / status, or omit args to toggle)',
+    tierCommandDesc:
+      'Toggle or check A2UI generative UI status (on / off / status, or omit args to toggle)',
     enabledStatus: 'A2UI generative UI enabled',
     disabledStatus: 'A2UI generative UI disabled',
-    invalidTierArg: (arg) => `Invalid argument "${arg}". Expected: on | off | status (or omit to toggle)`,
+    invalidTierArg: (arg) =>
+      `Invalid argument "${arg}". Expected: on | off | status (or omit to toggle)`,
     answerCommandDesc: 'Submit a pending A2UI interactive prompt (internal bridge command)',
     missingPayload: 'Missing response payload',
     invalidPayloadJson: 'Failed to parse response JSON',
@@ -399,6 +402,110 @@ export interface RuntimeUiMessages {
   readonly tablePrevPage: string
   readonly tableNextPage: string
   readonly stepFallbackTitle: (index: number) => string
+  readonly selectPlaceholder: string
+  readonly selectSearchPlaceholder: string
+  readonly selectNoResults: string
+  readonly segmentedAria: string
+  readonly comparisonDimension: string
+  readonly comparisonScore: string
+  readonly comparisonAction: string
+  readonly comparisonRecommended: string
+  readonly comparisonChooseRecommended: string
+  readonly comparisonChoosePlan: string
+  readonly comparisonSelectedOption: string
+  readonly logDefaultTitle: string
+  readonly logSearchPlaceholder: string
+  readonly logEmpty: string
+  readonly logExpandDetail: string
+  readonly logCollapseDetail: string
+  readonly logEntryCount: (count: number) => string
+  readonly logCopyAll: string
+  readonly logAllLevels: string
+  readonly timelineDefaultTitle: string
+  readonly timelineExpandDetail: string
+  readonly timelineCollapseDetail: string
+  readonly kanbanDefaultTitle: string
+  readonly kanbanEmptyColumn: string
+  readonly kanbanPriorityHigh: string
+  readonly kanbanPriorityMedium: string
+  readonly kanbanPriorityLow: string
+  readonly sourceListDefaultTitle: string
+  readonly sourceCount: (count: number) => string
+  readonly sourceOpenFile: string
+  readonly sourceOpenUrl: string
+  readonly sourceEmpty: string
+  readonly sourceRelevanceLabel: string
+  readonly serviceGraphDefaultTitle: string
+  readonly serviceGraphSelected: (label: string) => string
+  readonly serviceGraphClickHint: string
+  readonly serviceGraphEmpty: string
+  readonly serviceGraphHealthy: string
+  readonly serviceGraphWarning: string
+  readonly serviceGraphError: string
+  readonly serviceGraphUnknown: string
+  readonly serviceGraphUpstream: string
+  readonly serviceGraphDownstream: string
+  readonly serviceGraphNone: string
+  readonly serviceGraphInspect: string
+  readonly imageLightboxDialog: string
+  readonly imageLightboxClose: string
+  readonly imageZoomHint: string
+  readonly tableExportCsv: string
+  readonly tableCopyMarkdown: string
+  readonly tableDensityStandard: string
+  readonly tableDensityCompact: string
+  readonly tableSelectedCount: (count: number) => string
+  readonly tableSelectAllAria: string
+  readonly tableSelectRowAria: (index: number) => string
+  readonly tableBatchDefault: string
+  readonly tableSummaryLabel: (count: number) => string
+  readonly trackerHoverHint: string
+  readonly trackerHealthy: string
+  readonly trackerDegraded: string
+  readonly trackerDown: string
+  readonly trackerUnknown: string
+  readonly terminalDefaultTitle: string
+  readonly terminalCopyCmd: string
+  readonly terminalStepsCount: (count: number) => string
+  readonly approvalSeverityLow: string
+  readonly approvalSeverityMedium: string
+  readonly approvalSeverityHigh: string
+  readonly approvalSeverityCritical: string
+  readonly approvalImpactHeader: string
+  readonly approvalDefaultConfirm: string
+  readonly approvalDefaultApprove: string
+  readonly approvalDefaultReject: string
+  readonly approvalApprovedDone: string
+  readonly approvalRejectedDone: string
+  readonly apiCopyCurl: string
+  readonly apiTabResponse: string
+  readonly apiTabRequest: string
+  readonly apiTabParams: string
+  readonly apiExecuteBtn: string
+  readonly apiEmptyBody: string
+  readonly scheduleDefaultTitle: string
+  readonly scheduleNowPrefix: string
+  readonly resultEmptyDefault: string
+  readonly matrixDefaultCorner: string
+  readonly matrixTotalLabel: string
+  readonly numberDecrementAria: string
+  readonly numberIncrementAria: string
+  readonly multiSelectPlaceholder: string
+  readonly multiSelectSearchCreate: string
+  readonly multiSelectSearchOnly: string
+  readonly multiSelectSelectedCount: (count: number) => string
+  readonly multiSelectClearAll: string
+  readonly dateRangePresetToday: string
+  readonly dateRangePreset7d: string
+  readonly dateRangePreset30d: string
+  readonly dateRangePreset90d: string
+  readonly dateRangeSpanDays: (days: number) => string
+  readonly treeSelectPlaceholder: string
+  readonly treeSearchPlaceholder: string
+  readonly treeExpandAll: string
+  readonly treeCollapseAll: string
+  readonly treeEmpty: string
+  readonly tableExpandRowAria: string
 }
 
 export const RUNTIME_MESSAGES: Record<UiLocale, RuntimeUiMessages> = {
@@ -473,6 +580,110 @@ export const RUNTIME_MESSAGES: Record<UiLocale, RuntimeUiMessages> = {
     tablePrevPage: '上一页',
     tableNextPage: '下一页',
     stepFallbackTitle: (n) => `步骤 ${n}`,
+    selectPlaceholder: '请选择…',
+    selectSearchPlaceholder: '搜索选项…',
+    selectNoResults: '无匹配选项',
+    segmentedAria: '分段选择',
+    comparisonDimension: '评估维度',
+    comparisonScore: '综合评分',
+    comparisonAction: '方案选型',
+    comparisonRecommended: '★ 推荐',
+    comparisonChooseRecommended: '采纳推荐方案',
+    comparisonChoosePlan: '选用此方案',
+    comparisonSelectedOption: '已选用 ✓',
+    logDefaultTitle: '结构化日志追踪',
+    logSearchPlaceholder: '过滤日志或模块…',
+    logEmpty: '无匹配日志条目',
+    logExpandDetail: '展开堆栈详情',
+    logCollapseDetail: '收起堆栈详情',
+    logEntryCount: (count) => `${count} 条`,
+    logCopyAll: '复制日志',
+    logAllLevels: '全部',
+    timelineDefaultTitle: '事件时间轴',
+    timelineExpandDetail: '展开详情',
+    timelineCollapseDetail: '收起详情',
+    kanbanDefaultTitle: '任务看板',
+    kanbanEmptyColumn: '暂无卡片',
+    kanbanPriorityHigh: '高优',
+    kanbanPriorityMedium: '中优',
+    kanbanPriorityLow: '常规',
+    sourceListDefaultTitle: '溯源引用列表',
+    sourceCount: (count) => `${count} 处引用`,
+    sourceOpenFile: '右侧边栏打开 ↗',
+    sourceOpenUrl: '打开链接 ↗',
+    sourceEmpty: '暂无引用条目',
+    sourceRelevanceLabel: '相关度',
+    serviceGraphDefaultTitle: '服务健康拓扑',
+    serviceGraphSelected: (label) => `当前选中: ${label}`,
+    serviceGraphClickHint: '点击任意节点可切换详情或触发下钻',
+    serviceGraphEmpty: '（暂无服务节点）',
+    serviceGraphHealthy: '健康',
+    serviceGraphWarning: '预警',
+    serviceGraphError: '异常',
+    serviceGraphUnknown: '未知',
+    serviceGraphUpstream: '上游',
+    serviceGraphDownstream: '下游',
+    serviceGraphNone: '无',
+    serviceGraphInspect: '下钻排查',
+    imageLightboxDialog: '图片大图预览',
+    imageLightboxClose: '关闭预览',
+    imageZoomHint: '点击放大预览',
+    tableExportCsv: '导出 CSV',
+    tableCopyMarkdown: '复制 MD',
+    tableDensityStandard: '标准',
+    tableDensityCompact: '紧凑',
+    tableSelectedCount: (count) => `已选 ${count} 项`,
+    tableSelectAllAria: '全选当前页行',
+    tableSelectRowAria: (index) => `选择第 ${index} 行`,
+    tableBatchDefault: '批量处理选中项',
+    tableSummaryLabel: (count) => `合计 (${count} 行)`,
+    trackerHoverHint: '悬停或点击分片查看详情',
+    trackerHealthy: '正常',
+    trackerDegraded: '波动',
+    trackerDown: '中断',
+    trackerUnknown: '未知',
+    terminalDefaultTitle: '命令与执行回执',
+    terminalCopyCmd: '复制命令',
+    terminalStepsCount: (count) => `${count} 步命令`,
+    approvalSeverityLow: '常规变更',
+    approvalSeverityMedium: '中风险变更',
+    approvalSeverityHigh: '高风险生产变更',
+    approvalSeverityCritical: 'P0 极高危操作',
+    approvalImpactHeader: '变更影响面 (Blast Radius)',
+    approvalDefaultConfirm: '我已核实上述变更影响面与回滚预案，确认放行',
+    approvalDefaultApprove: '确认放行',
+    approvalDefaultReject: '驳回中止',
+    approvalApprovedDone: '已放行 ✓',
+    approvalRejectedDone: '已驳回 ✕',
+    apiCopyCurl: '复制 cURL',
+    apiTabResponse: '响应体 (Response)',
+    apiTabRequest: '请求体 (Request)',
+    apiTabParams: '参数与请求头',
+    apiExecuteBtn: '触发调试',
+    apiEmptyBody: '（无载荷）',
+    scheduleDefaultTitle: '排期与变更时间窗',
+    scheduleNowPrefix: '当前',
+    resultEmptyDefault: '暂无匹配记录',
+    matrixDefaultCorner: '维度 \\ 指标',
+    matrixTotalLabel: '合计 / 均值',
+    numberDecrementAria: '减少数值',
+    numberIncrementAria: '增加数值',
+    multiSelectPlaceholder: '请选择多项…',
+    multiSelectSearchCreate: '搜索选项，或输入新标签按 Enter 创建…',
+    multiSelectSearchOnly: '搜索多选条目…',
+    multiSelectSelectedCount: (count) => `已选 ${count} 项`,
+    multiSelectClearAll: '清空',
+    dateRangePresetToday: '今日',
+    dateRangePreset7d: '近 7 天',
+    dateRangePreset30d: '近 30 天',
+    dateRangePreset90d: '近 90 天',
+    dateRangeSpanDays: (days) => `跨度 ${days} 天`,
+    treeSelectPlaceholder: '请选择层级节点…',
+    treeSearchPlaceholder: '搜索树节点…',
+    treeExpandAll: '全部展开',
+    treeCollapseAll: '全部收起',
+    treeEmpty: '无匹配节点',
+    tableExpandRowAria: '展开或收起行详情',
   },
   en: {
     generating: 'Generating…',
@@ -545,5 +756,109 @@ export const RUNTIME_MESSAGES: Record<UiLocale, RuntimeUiMessages> = {
     tablePrevPage: 'Previous',
     tableNextPage: 'Next',
     stepFallbackTitle: (n) => `Step ${n}`,
+    selectPlaceholder: 'Select…',
+    selectSearchPlaceholder: 'Search options…',
+    selectNoResults: 'No matching options',
+    segmentedAria: 'Segmented control',
+    comparisonDimension: 'Dimension',
+    comparisonScore: 'Overall score',
+    comparisonAction: 'Action',
+    comparisonRecommended: '★ Recommended',
+    comparisonChooseRecommended: 'Adopt recommended',
+    comparisonChoosePlan: 'Choose option',
+    comparisonSelectedOption: 'Selected ✓',
+    logDefaultTitle: 'Structured logs',
+    logSearchPlaceholder: 'Filter logs or module…',
+    logEmpty: 'No matching log entries',
+    logExpandDetail: 'Show stack detail',
+    logCollapseDetail: 'Hide stack detail',
+    logEntryCount: (count) => `${count} entries`,
+    logCopyAll: 'Copy logs',
+    logAllLevels: 'All',
+    timelineDefaultTitle: 'Event timeline',
+    timelineExpandDetail: 'Show details',
+    timelineCollapseDetail: 'Hide details',
+    kanbanDefaultTitle: 'Task board',
+    kanbanEmptyColumn: 'No items',
+    kanbanPriorityHigh: 'High',
+    kanbanPriorityMedium: 'Medium',
+    kanbanPriorityLow: 'Low',
+    sourceListDefaultTitle: 'Sources & citations',
+    sourceCount: (count) => `${count} ${count === 1 ? 'source' : 'sources'}`,
+    sourceOpenFile: 'Open in sidebar ↗',
+    sourceOpenUrl: 'Open link ↗',
+    sourceEmpty: 'No citations',
+    sourceRelevanceLabel: 'Relevance',
+    serviceGraphDefaultTitle: 'Service topology',
+    serviceGraphSelected: (label) => `Selected: ${label}`,
+    serviceGraphClickHint: 'Click any node to inspect or drill down',
+    serviceGraphEmpty: '(No service nodes)',
+    serviceGraphHealthy: 'Healthy',
+    serviceGraphWarning: 'Degraded',
+    serviceGraphError: 'Error',
+    serviceGraphUnknown: 'Unknown',
+    serviceGraphUpstream: 'Upstream',
+    serviceGraphDownstream: 'Downstream',
+    serviceGraphNone: 'None',
+    serviceGraphInspect: 'Inspect',
+    imageLightboxDialog: 'Image preview',
+    imageLightboxClose: 'Close preview',
+    imageZoomHint: 'Click to enlarge',
+    tableExportCsv: 'Export CSV',
+    tableCopyMarkdown: 'Copy MD',
+    tableDensityStandard: 'Standard',
+    tableDensityCompact: 'Compact',
+    tableSelectedCount: (count) => `${count} selected`,
+    tableSelectAllAria: 'Select all visible rows',
+    tableSelectRowAria: (index) => `Select row ${index}`,
+    tableBatchDefault: 'Apply to selected',
+    tableSummaryLabel: (count) => `Summary (${count} rows)`,
+    trackerHoverHint: 'Hover or click any slice for details',
+    trackerHealthy: 'Healthy',
+    trackerDegraded: 'Degraded',
+    trackerDown: 'Outage',
+    trackerUnknown: 'No data',
+    terminalDefaultTitle: 'Terminal Runbook',
+    terminalCopyCmd: 'Copy cmd',
+    terminalStepsCount: (count) => `${count} ${count === 1 ? 'command' : 'commands'}`,
+    approvalSeverityLow: 'Low Risk',
+    approvalSeverityMedium: 'Medium Risk',
+    approvalSeverityHigh: 'High-Risk Change',
+    approvalSeverityCritical: 'P0 Critical Gate',
+    approvalImpactHeader: 'Blast Radius & Impact',
+    approvalDefaultConfirm: 'I have verified the impact and rollback plan above',
+    approvalDefaultApprove: 'Approve & Execute',
+    approvalDefaultReject: 'Reject',
+    approvalApprovedDone: 'Approved ✓',
+    approvalRejectedDone: 'Rejected ✕',
+    apiCopyCurl: 'Copy cURL',
+    apiTabResponse: 'Response',
+    apiTabRequest: 'Request Body',
+    apiTabParams: 'Params & Headers',
+    apiExecuteBtn: 'Inspect / Call',
+    apiEmptyBody: '(Empty payload)',
+    scheduleDefaultTitle: 'Schedule & Timeline Window',
+    scheduleNowPrefix: 'Now',
+    resultEmptyDefault: 'No records found',
+    matrixDefaultCorner: 'Row \\ Col',
+    matrixTotalLabel: 'Total / Avg',
+    numberDecrementAria: 'Decrease value',
+    numberIncrementAria: 'Increase value',
+    multiSelectPlaceholder: 'Select options…',
+    multiSelectSearchCreate: 'Search or press Enter to create tag…',
+    multiSelectSearchOnly: 'Search options…',
+    multiSelectSelectedCount: (count) => `${count} selected`,
+    multiSelectClearAll: 'Clear',
+    dateRangePresetToday: 'Today',
+    dateRangePreset7d: 'Last 7d',
+    dateRangePreset30d: 'Last 30d',
+    dateRangePreset90d: 'Last 90d',
+    dateRangeSpanDays: (days) => `${days}d span`,
+    treeSelectPlaceholder: 'Select tree node…',
+    treeSearchPlaceholder: 'Search tree…',
+    treeExpandAll: 'Expand all',
+    treeCollapseAll: 'Collapse all',
+    treeEmpty: 'No matching nodes',
+    tableExpandRowAria: 'Toggle row details',
   },
 }

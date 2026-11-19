@@ -2,6 +2,32 @@
 
 All notable changes to `dsh-genui-a2ui` are documented in this file.
 
+## [0.2.0] - 2026-11-19
+
+### Added
+- **25 New A2UI 1.0 Native Components (`32 → 57` Total)**:
+  - **Ant Design 5.x / AntD Pro / AntD X Parity (`+7`)**:
+    - `NumberInput`: Precision numeric stepper (`−`/`+`, `min`, `max`, `step`, `prefix`, `unit`, `?checks`) bound directly to numeric `$/path` for `0ms` `calc()` integration.
+    - `MultiSelect`: Multi-value tag-pill dropdown selector (`DynamicStringListSchema`) with instant search, tag overflow counter, and `allowCreate=true` Enter-to-create custom tags.
+    - `DateRange`: Dual `start`/`end` range picker with `Today / 7d / 30d / 90d` quick preset pills, span day badge, and automatic chronological ordering.
+    - `TreeSelect`: Searchable hierarchical cascade dropdown displaying the full `Cluster / Namespace / Service` breadcrumb on the trigger.
+    - `CheckCard`: Dual-mode component acting as an AntD Pro `<CheckCard.Group>` rich option selector when `value` is bound, and as `@ant-design/x` `<Prompts>` clickable next-step suggestion cards when `action` is set.
+    - `Tree`: General-purpose hierarchy & APM distributed trace waterfall tree with proportional `sharePct` latency micro-bars, `StateDot` health indicators, and deterministic 60fps streaming expansion.
+    - `Grid`: Responsive multi-row equal-width CSS Grid container (`columns=1..6`, `gap="sm"|"md"|"lg"`).
+  - **Enterprise B2B & Vercel/Tremor Observability (`+8`)**:
+    - `EntityHeader` (cluster/service/account header with KPI strip), `Tracker` (`uptime` SLA slice strip with native `HoverCard` tooltips + `category` stacked ratio bar), `Terminal` (runbook commands with clean command-only copy), `ApiEndpoint` (HTTP contract workbench with `JsonTree` & shell-safe `cURL` copy), `ApprovalCard` (high-risk approval gate armed by native `Switch`), `Schedule` (maintenance window Gantt bar with live time marker), `Result` (structured execution receipt & empty state), and `Matrix` (conditional-formatting heat cross-tabulation & RBAC grid).
+  - **Scalar Controls, Service Topology & Triage (`+10`)**:
+    - `Select` (searchable dropdown), `Segmented`, `Switch`, `MetricRing` (threshold-colored radial gauge), `Comparison` (option trade-off matrix), `ServiceGraph` (zero-dependency health-colored DAG), `LogViewer` (level-filtered stack-trace console with sidebar file jump), `Timeline`, `Kanban`, and `SourceList` (citations & code evidence).
+- **In-Place Enterprise Upgrades & Deep DSH Host Primitive Integration (`27` Exports)**:
+  - Upgraded `Table` into an enterprise `ProTable` supporting `exportable` (UTF-8 BOM CSV & aligned GFM Markdown), `selectable` multi-row batch `[a2ui-action]` dispatch, `showSummary` numeric footers, density toggle, and `expandKey` inline row-detail drawers.
+  - Upgraded `KeyValue` with `bordered=true` table mode (aligned with AntD `<Descriptions bordered>`) and item-level `span: 1..3`.
+  - Integrated native `@deepseek-ai/dsh-client-ui-primitives` exports including `Switch`, `SegmentedControl`, `HoverCard`, `HoverCardGroup`, `StateDot`, `ImageLightbox` (click-to-zoom on `Image`), `FileTypeIcon`, `PathLabel`, `LinkIconRegular`, and `TextShimmer`, verified by `npm run check:host-api`.
+
+### Changed
+- **Zero-`useEffect` React Architecture Refactor (Vercel React Best Practices)**:
+  - Eliminated all 21 `useEffect` / `useLayoutEffect` calls across `.tsx` UI components, isolating low-level DOM/engine lifecycles strictly inside `src/client/dom-hooks.ts` and external `useSyncExternalStore` stores (`SurfaceSessionStore` + LRU-64 Mermaid SVG cache).
+  - Enforced permanently via `biome.json` `noRestrictedImports` and `tests/react-best-practices.spec.ts`, while keeping cold-boot `lib/client.js` at `58.32 kB` (`16.48 kB` gzip).
+
 ## [0.1.1] - 2026-11-16
 
 ### Added

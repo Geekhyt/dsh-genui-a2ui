@@ -1,9 +1,28 @@
 /**
- * Barrel registry assembling all 32 DSH-native light-DOM React component
+ * Barrel registry assembling all 57 DSH-native light-DOM React component
  * implementations from domain-focused modules (`LayoutWidgets`, `InputWidgets`,
- * `MediaAndDataWidgets`, `P0Widgets`, and `ExtendedWidgets`).
+ * `MediaAndDataWidgets`, `P0Widgets`, `ExtendedWidgets`, `OpsAndInsightWidgets`,
+ * `EnterpriseWidgets`, and `AntdParityWidgets`).
  */
 import type { ReactCatalogComponent } from '@a2ui/react'
+import {
+  DshCheckCardImpl,
+  DshDateRangeImpl,
+  DshMultiSelectImpl,
+  DshNumberInputImpl,
+  DshTreeImpl,
+  DshTreeSelectImpl,
+} from './AntdParityWidgets.tsx'
+import {
+  DshApiEndpointImpl,
+  DshApprovalCardImpl,
+  DshEntityHeaderImpl,
+  DshMatrixImpl,
+  DshResultImpl,
+  DshScheduleImpl,
+  DshTerminalImpl,
+  DshTrackerImpl,
+} from './EnterpriseWidgets.tsx'
 import {
   DshAccordionImpl,
   DshFileTreeImpl,
@@ -15,13 +34,17 @@ import {
   DshCheckBoxImpl,
   DshChoicePickerImpl,
   DshDateTimeInputImpl,
+  DshSegmentedImpl,
+  DshSelectImpl,
   DshSliderImpl,
+  DshSwitchImpl,
   DshTextFieldImpl,
 } from './InputWidgets.tsx'
 import {
   DshCardImpl,
   DshColumnImpl,
   DshDividerImpl,
+  DshGridImpl,
   DshListImpl,
   DshModalImpl,
   DshRowImpl,
@@ -41,14 +64,20 @@ import {
   DshVideoImpl,
 } from './MediaAndDataWidgets.tsx'
 import {
-  DshCalloutImpl,
-  DshDiffViewImpl,
-  DshKeyValueImpl,
-  DshStepsImpl,
-} from './P0Widgets.tsx'
+  DshComparisonImpl,
+  DshKanbanImpl,
+  DshLogViewerImpl,
+  DshMetricRingImpl,
+  DshServiceGraphImpl,
+  DshSourceListImpl,
+  DshTimelineImpl,
+} from './OpsAndInsightWidgets.tsx'
+import { DshCalloutImpl, DshDiffViewImpl, DshKeyValueImpl, DshStepsImpl } from './P0Widgets.tsx'
 
 export {
   DshAccordionImpl,
+  DshApiEndpointImpl,
+  DshApprovalCardImpl,
   DshAudioPlayerImpl,
   DshBadgeImpl,
   DshButtonImpl,
@@ -56,33 +85,56 @@ export {
   DshCardImpl,
   DshChartImpl,
   DshCheckBoxImpl,
+  DshCheckCardImpl,
   DshChoicePickerImpl,
   DshCodeImpl,
   DshColumnImpl,
+  DshComparisonImpl,
+  DshDateRangeImpl,
   DshDateTimeInputImpl,
   DshDiffViewImpl,
   DshDividerImpl,
+  DshEntityHeaderImpl,
   DshFileTreeImpl,
+  DshGridImpl,
   DshIconImpl,
   DshImageImpl,
   DshJsonTreeImpl,
+  DshKanbanImpl,
   DshKeyValueImpl,
   DshListImpl,
+  DshLogViewerImpl,
+  DshMatrixImpl,
   DshMermaidImpl,
+  DshMetricRingImpl,
   DshModalImpl,
+  DshMultiSelectImpl,
+  DshNumberInputImpl,
   DshProgressImpl,
+  DshResultImpl,
   DshRowImpl,
+  DshScheduleImpl,
+  DshSegmentedImpl,
+  DshSelectImpl,
+  DshServiceGraphImpl,
   DshSliderImpl,
+  DshSourceListImpl,
   DshStatImpl,
   DshStepsImpl,
+  DshSwitchImpl,
   DshTableImpl,
   DshTabsImpl,
+  DshTerminalImpl,
   DshTextFieldImpl,
   DshTextImpl,
+  DshTimelineImpl,
+  DshTrackerImpl,
+  DshTreeImpl,
+  DshTreeSelectImpl,
   DshVideoImpl,
 }
 
-/** Complete list of all 32 DSH-native React component implementations. */
+/** Complete list of all 57 DSH-native React component implementations. */
 export const DSH_REACT_COMPONENTS: readonly ReactCatalogComponent[] = [
   DshTextImpl,
   DshImageImpl,
@@ -116,4 +168,29 @@ export const DSH_REACT_COMPONENTS: readonly ReactCatalogComponent[] = [
   DshJsonTreeImpl,
   DshFileTreeImpl,
   DshMermaidImpl,
+  DshSelectImpl,
+  DshSegmentedImpl,
+  DshSwitchImpl,
+  DshComparisonImpl,
+  DshLogViewerImpl,
+  DshTimelineImpl,
+  DshKanbanImpl,
+  DshSourceListImpl,
+  DshMetricRingImpl,
+  DshServiceGraphImpl,
+  DshTrackerImpl,
+  DshTerminalImpl,
+  DshApprovalCardImpl,
+  DshApiEndpointImpl,
+  DshScheduleImpl,
+  DshResultImpl,
+  DshEntityHeaderImpl,
+  DshMatrixImpl,
+  DshNumberInputImpl,
+  DshMultiSelectImpl,
+  DshDateRangeImpl,
+  DshTreeSelectImpl,
+  DshCheckCardImpl,
+  DshTreeImpl,
+  DshGridImpl,
 ]

@@ -11,13 +11,38 @@ export function isDarkTheme(): boolean {
   return typeof document !== 'undefined' && document.body?.hasAttribute(DARK_ATTR) === true
 }
 
-function subscribeDarkTheme(listener: () => void): () => void {
-  if (typeof document === 'undefined' || typeof MutationObserver === 'undefined' || !document.body) {
+const themeListeners = new Set<() => void>()
+let sharedThemeObserver: MutationObserver | null = null
+
+function notifyThemeListeners(): void {
+  for (const listener of themeListeners) {
+    listener()
+  }
+}
+
+export function subscribeDarkTheme(listener: () => void): () => void {
+  if (
+    typeof document === 'undefined' ||
+    typeof MutationObserver === 'undefined' ||
+    !document.body
+  ) {
     return () => {}
   }
-  const observer = new MutationObserver(listener)
-  observer.observe(document.body, { attributes: true, attributeFilter: [DARK_ATTR] })
-  return () => observer.disconnect()
+  themeListeners.add(listener)
+  if (sharedThemeObserver === null) {
+    sharedThemeObserver = new MutationObserver(notifyThemeListeners)
+    sharedThemeObserver.observe(document.body, {
+      attributes: true,
+      attributeFilter: [DARK_ATTR],
+    })
+  }
+  return () => {
+    themeListeners.delete(listener)
+    if (themeListeners.size === 0 && sharedThemeObserver !== null) {
+      sharedThemeObserver.disconnect()
+      sharedThemeObserver = null
+    }
+  }
 }
 
 /** Reactively track DSH dark/light skin mode (`body[data-ds-dark-theme]`). */

@@ -38,7 +38,8 @@ function stripMatchingPrefix(line: string, prefixes: readonly string[]): string 
 }
 
 function extractClickSelection(action: ActionPayload): Record<string, unknown> | null {
-  const meta = (action as { readonly metadata?: { readonly extensions?: Record<string, unknown> } }).metadata
+  const meta = (action as { readonly metadata?: { readonly extensions?: Record<string, unknown> } })
+    .metadata
   const raw = meta?.extensions?.dshSelection
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return null
   const cleaned = sanitizeDataModel(raw)
@@ -59,8 +60,14 @@ function formatSelectionLabel(selection: Record<string, unknown>): string | unde
         : ''
     return msg.actionViewFile(`${p}${ln}`)
   }
-  const label = typeof selection.label === 'string' && selection.label.trim() !== '' ? selection.label.trim() : ''
-  const series = typeof selection.series === 'string' && selection.series.trim() !== '' ? selection.series.trim() : ''
+  const label =
+    typeof selection.label === 'string' && selection.label.trim() !== ''
+      ? selection.label.trim()
+      : ''
+  const series =
+    typeof selection.series === 'string' && selection.series.trim() !== ''
+      ? selection.series.trim()
+      : ''
   const val =
     typeof selection.value === 'number' || typeof selection.value === 'string'
       ? String(selection.value)
@@ -77,8 +84,7 @@ export function enrichActionWithSelection(action: ActionPayload): ActionPayload 
   if (selection === null) {
     return { ...action, context: cleanContext }
   }
-  const mergedContext =
-    'selection' in cleanContext ? cleanContext : { ...cleanContext, selection }
+  const mergedContext = 'selection' in cleanContext ? cleanContext : { ...cleanContext, selection }
   const autoMsg =
     action.userMessage !== undefined && action.userMessage.trim() !== ''
       ? action.userMessage
@@ -115,7 +121,8 @@ export function formatActionMessage(
   return parts.join('\n')
 }
 
-const HEADER_RE = /\[a2ui-action\]\s+surface="([^"]*)"\s+action="([^"]*)"(?:\s+component="([^"]*)")?/g
+const HEADER_RE =
+  /\[a2ui-action\]\s+surface="([^"]*)"\s+action="([^"]*)"(?:\s+component="([^"]*)")?/g
 
 /** Match the next `[a2ui-action]` block in `text` starting at `from`. */
 export function matchA2uiActionUserText(

@@ -15,14 +15,21 @@ describe('turn-surfaces projection', () => {
       version: 1,
       title: '第一轮面板',
       surfaceIds: ['panel'],
-      messages: [{ version: '1.0', createSurface: { surfaceId: 'panel', catalogId: 'basic' } } as never],
+      messages: [
+        { version: '1.0', createSurface: { surfaceId: 'panel', catalogId: 'basic' } } as never,
+      ],
     })
     const meta2 = parseRenderMeta({
       kind: 'dsh-a2ui',
       version: 1,
       title: '第二轮更新',
       surfaceIds: ['panel'],
-      messages: [{ version: '1.0', updateDataModel: { surfaceId: 'panel', path: '/count', value: 2 } } as never],
+      messages: [
+        {
+          version: '1.0',
+          updateDataModel: { surfaceId: 'panel', path: '/count', value: 2 },
+        } as never,
+      ],
     })
     expect(meta1).not.toBeNull()
     expect(meta2).not.toBeNull()

@@ -2,7 +2,7 @@
  * Media (`Icon`, `Image`, `Video`, `AudioPlayer`) and DSH data visualization
  * components (`Stat`, `Progress`, `Badge`, `Code`, `Chart`, `Table`).
  */
-import { useContext, useId, useMemo } from 'react'
+import { useContext, useId, useMemo, useState } from 'react'
 import { ProgressBar as AriaProgressBar } from 'react-aria-components'
 import {
   AudioPlayerApi,
@@ -21,7 +21,7 @@ import {
 } from '../../shared/catalog-schema.ts'
 import { parseFileTarget } from '../file-opener.tsx'
 import { useRuntimeMessages } from '../i18n.ts'
-import { DshCodeBlock, DshTag, type TagTone } from '../ui/primitives.tsx'
+import { DshCodeBlock, DshImageLightbox, DshTag, type TagTone } from '../ui/primitives.tsx'
 import css from './Catalog.module.css'
 import { EChartsWidget, type ChartKind } from './EChartsWidget.tsx'
 import { FileOpenChip } from './FileOpenChip.tsx'
@@ -67,28 +67,43 @@ export const DshImageImpl = defineComponent<{
   variant?: 'icon' | 'avatar' | 'smallFeature' | 'mediumFeature' | 'largeFeature' | 'header'
   weight?: number
 }>(ImageApi, function DshImage({ props }) {
+  const msg = useRuntimeMessages()
+  const [lightboxOpen, setLightboxOpen] = useState(false)
   if (!isSafeMediaUrl(props.url)) return null
+  const src = String(props.url)
+  const alt = props.description ? String(props.description) : ''
   const fit = props.fit === 'scaleDown' ? 'scale-down' : (props.fit ?? 'cover')
   const height = IMAGE_HEIGHTS[props.variant ?? 'mediumFeature'] ?? 168
   const isAvatar = props.variant === 'avatar' || props.variant === 'icon'
+  const canZoom = props.variant !== 'icon'
+
   return (
-    <div
-      className={css.imageWrap}
-      style={{
-        ...weightStyle(props.weight),
-        width: isAvatar ? height : '100%',
-        height,
-        borderRadius: props.variant === 'avatar' ? '999px' : undefined,
-      }}
-    >
-      <img
-        src={props.url}
-        alt={props.description ? String(props.description) : ''}
-        className={css.image}
-        style={{ objectFit: fit }}
-        loading="lazy"
-      />
-    </div>
+    <>
+      <div
+        className={css.imageWrap}
+        style={{
+          ...weightStyle(props.weight),
+          width: isAvatar ? height : '100%',
+          height,
+          borderRadius: props.variant === 'avatar' ? '999px' : undefined,
+          cursor: canZoom ? 'zoom-in' : undefined,
+        }}
+        title={canZoom ? msg.imageZoomHint : undefined}
+        onClick={canZoom ? () => setLightboxOpen(true) : undefined}
+      >
+        <img src={src} alt={alt} className={css.image} style={{ objectFit: fit }} loading="lazy" />
+      </div>
+      {canZoom ? (
+        <DshImageLightbox
+          open={lightboxOpen}
+          src={src}
+          alt={alt || msg.imageLightboxDialog}
+          dialogLabel={msg.imageLightboxDialog}
+          closeLabel={msg.imageLightboxClose}
+          onClose={() => setLightboxOpen(false)}
+        />
+      ) : null}
+    </>
   )
 })
 
@@ -342,6 +357,11 @@ export const DshTableImpl = defineComponent<{
   title?: unknown
   searchable?: boolean
   pageSize?: number
+  exportable?: boolean
+  selectable?: boolean
+  batchLabel?: unknown
+  showSummary?: boolean
+  expandKey?: string
   action?: ((options?: ActionDispatchOptions) => Promise<void>) | undefined
   weight?: number
 }>(TableApi, function DshTable({ props }) {
@@ -353,6 +373,11 @@ export const DshTableImpl = defineComponent<{
       title={props.title ? String(props.title) : undefined}
       searchable={props.searchable}
       pageSize={props.pageSize}
+      exportable={props.exportable}
+      selectable={readOnly ? false : props.selectable}
+      batchLabel={props.batchLabel ? String(props.batchLabel) : undefined}
+      showSummary={props.showSummary}
+      expandKey={props.expandKey}
       action={readOnly ? undefined : props.action}
       weight={props.weight}
     />

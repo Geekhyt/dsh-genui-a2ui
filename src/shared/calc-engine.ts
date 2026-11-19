@@ -48,8 +48,18 @@ type ExprNode =
   | { readonly kind: 'num'; readonly value: number }
   | { readonly kind: 'var'; readonly name: string }
   | { readonly kind: 'unary'; readonly op: '-' | '+' | '!'; readonly arg: ExprNode }
-  | { readonly kind: 'binary'; readonly op: string; readonly left: ExprNode; readonly right: ExprNode }
-  | { readonly kind: 'ternary'; readonly cond: ExprNode; readonly truthy: ExprNode; readonly falsy: ExprNode }
+  | {
+      readonly kind: 'binary'
+      readonly op: string
+      readonly left: ExprNode
+      readonly right: ExprNode
+    }
+  | {
+      readonly kind: 'ternary'
+      readonly cond: ExprNode
+      readonly truthy: ExprNode
+      readonly falsy: ExprNode
+    }
   | { readonly kind: 'call'; readonly fn: string; readonly args: readonly ExprNode[] }
 
 const astCache = new Map<string, ExprNode | null>()
@@ -73,7 +83,10 @@ function tokenize(src: string): { readonly tokens?: readonly Token[]; readonly e
       continue
     }
 
-    if ((ch >= '0' && ch <= '9') || (ch === '.' && i + 1 < n && src[i + 1]! >= '0' && src[i + 1]! <= '9')) {
+    if (
+      (ch >= '0' && ch <= '9') ||
+      (ch === '.' && i + 1 < n && src[i + 1]! >= '0' && src[i + 1]! <= '9')
+    ) {
       const start = i
       while (i < n && src[i]! >= '0' && src[i]! <= '9') i++
       if (i < n && src[i] === '.') {
@@ -85,10 +98,12 @@ function tokenize(src: string): { readonly tokens?: readonly Token[]; readonly e
         if (i < n && (src[i] === '+' || src[i] === '-')) i++
         const expStart = i
         while (i < n && src[i]! >= '0' && src[i]! <= '9') i++
-        if (i === expStart) return { error: `Invalid scientific notation near "${src.slice(start, i + 2)}".` }
+        if (i === expStart)
+          return { error: `Invalid scientific notation near "${src.slice(start, i + 2)}".` }
       }
       const parsed = Number(src.slice(start, i))
-      if (!Number.isFinite(parsed)) return { error: `Non-finite numeric literal "${src.slice(start, i)}".` }
+      if (!Number.isFinite(parsed))
+        return { error: `Non-finite numeric literal "${src.slice(start, i)}".` }
       tokens.push({ kind: 'num', value: parsed })
       continue
     }
@@ -175,7 +190,10 @@ function tokenize(src: string): { readonly tokens?: readonly Token[]; readonly e
   return { tokens }
 }
 
-function parseTokens(tokens: readonly Token[]): { readonly ast?: ExprNode; readonly error?: string } {
+function parseTokens(tokens: readonly Token[]): {
+  readonly ast?: ExprNode
+  readonly error?: string
+} {
   let pos = 0
   let parseErr: string | undefined
   const peek = (): Token => tokens[pos] ?? { kind: 'eof' }
@@ -361,10 +379,7 @@ function parseTokens(tokens: readonly Token[]): { readonly ast?: ExprNode; reado
   return { ast: root }
 }
 
-function validateAstSemantics(
-  node: ExprNode,
-  providedVars?: ReadonlySet<string>,
-): string | null {
+function validateAstSemantics(node: ExprNode, providedVars?: ReadonlySet<string>): string | null {
   switch (node.kind) {
     case 'num':
       return null
@@ -518,9 +533,7 @@ function evalAst(node: ExprNode, vars: Record<string, unknown>): number {
       return v
     }
     case 'ternary':
-      return evalAst(node.cond, vars) !== 0
-        ? evalAst(node.truthy, vars)
-        : evalAst(node.falsy, vars)
+      return evalAst(node.cond, vars) !== 0 ? evalAst(node.truthy, vars) : evalAst(node.falsy, vars)
     case 'call': {
       const evaluated = node.args.map((arg) => evalAst(arg, vars))
       const res = evalBuiltinCall(node.fn, evaluated)
@@ -583,11 +596,7 @@ function evalAst(node: ExprNode, vars: Record<string, unknown>): number {
  * Evaluate an algebraic formula string safely against `vars`, optionally rounding to `decimals`.
  * Returns `0` for malformed expressions, NaN, Infinity, or division by zero.
  */
-export function evaluateCalcExpression(
-  expr: unknown,
-  vars?: unknown,
-  decimals?: unknown,
-): number {
+export function evaluateCalcExpression(expr: unknown, vars?: unknown, decimals?: unknown): number {
   if (typeof expr !== 'string' || expr.trim() === '') return 0
   const ast = getCompiledAst(expr.trim())
   if (!ast) return 0
@@ -597,7 +606,12 @@ export function evaluateCalcExpression(
       : {}
   const raw = evalAst(ast, env)
   if (!Number.isFinite(raw) || raw === 0) return 0
-  if (typeof decimals === 'number' && Number.isInteger(decimals) && decimals >= 0 && decimals <= 8) {
+  if (
+    typeof decimals === 'number' &&
+    Number.isInteger(decimals) &&
+    decimals >= 0 &&
+    decimals <= 8
+  ) {
     const factor = 10 ** decimals
     return Math.round((raw + Number.EPSILON) * factor) / factor
   }

@@ -59,6 +59,7 @@ export interface A2uiToolViewProps extends ToolViewOwnerProps {
 }
 
 const NOOP_SUBSCRIBE = () => () => {}
+const APPS_ICON_14 = <DshAppsIcon size={14} />
 
 export const A2uiToolView = memo(function A2uiToolView({
   callId,
@@ -89,7 +90,7 @@ export const A2uiToolView = memo(function A2uiToolView({
     [chatStore],
   )
   const getSnapshot = useCallback(() => chatStore?.getSnapshot(), [chatStore])
-  const chatSnapshot = useSyncExternalStore(subscribe, getSnapshot, () => undefined)
+  const chatSnapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
   const turnClosed = useMemo(
     () => isTurnClosedForCall(chatSnapshot, callId),
     [chatSnapshot, callId],
@@ -113,6 +114,21 @@ export const A2uiToolView = memo(function A2uiToolView({
     callId,
   )
 
+  const visibleIds = useMemo(() => {
+    const streamIds = streamingSnapshot?.surfaceIds ?? []
+    return streamIds.length > 0 ? new Set(streamIds) : undefined
+  }, [streamingSnapshot])
+
+  const liveMessages = useMemo(() => {
+    const priorForStream =
+      phase !== 'result' && visibleIds !== undefined
+        ? filterMessagesBySurfaceIds(resolveSessionMessages(chatSnapshot), visibleIds)
+        : []
+    const currentMsgs =
+      settledMeta !== null ? settledMeta.messages : (streamingSnapshot?.messages ?? [])
+    return priorForStream.length > 0 ? [...priorForStream, ...currentMsgs] : currentMsgs
+  }, [chatSnapshot, phase, settledMeta, streamingSnapshot, visibleIds])
+
   const msg = useShellMessages()
   const title = settledMeta?.title ?? argTitle ?? 'A2UI'
 
@@ -126,7 +142,7 @@ export const A2uiToolView = memo(function A2uiToolView({
     return (
       <div data-tool="a2ui_render" data-state={stopped ? 'stopped' : 'error'}>
         <DshDisclosureRow
-          icon={<DshAppsIcon size={14} />}
+          icon={APPS_ICON_14}
           title="A2UI"
           running={false}
           open={expanded && hasReason}
@@ -159,7 +175,7 @@ export const A2uiToolView = memo(function A2uiToolView({
     return (
       <div data-tool="a2ui_render" data-placement="dock" data-state="docked">
         <DshDisclosureRow
-          icon={<DshAppsIcon size={14} />}
+          icon={APPS_ICON_14}
           title="A2UI"
           running={false}
           open={expanded && hasSource}
@@ -191,7 +207,7 @@ export const A2uiToolView = memo(function A2uiToolView({
     return (
       <div data-tool="a2ui_render" data-placement="inline" data-state="inline-settled">
         <DshDisclosureRow
-          icon={<DshAppsIcon size={14} />}
+          icon={APPS_ICON_14}
           title={msg.inlineCardTitle}
           running={false}
           open={inlineOpen}
@@ -224,15 +240,6 @@ export const A2uiToolView = memo(function A2uiToolView({
   //    Once `phase === 'result'` with `chatStore` present, `TurnTailView` immediately owns
   //    `placement="answer"`, so we collapse into the 1-line receipt below with zero dual-mount!
   if (phase !== 'result' || (chatStore === undefined && !turnClosed)) {
-    const streamIds = streamingSnapshot?.surfaceIds ?? []
-    const visibleIds = streamIds.length > 0 ? new Set(streamIds) : undefined
-    const priorForStream =
-      phase !== 'result' && visibleIds !== undefined
-        ? filterMessagesBySurfaceIds(resolveSessionMessages(chatSnapshot), visibleIds)
-        : []
-    const currentMsgs = settledMeta !== null ? settledMeta.messages : (streamingSnapshot?.messages ?? [])
-    const liveMessages =
-      priorForStream.length > 0 ? [...priorForStream, ...currentMsgs] : currentMsgs
     return (
       <div
         data-tool="a2ui_render"
@@ -258,7 +265,7 @@ export const A2uiToolView = memo(function A2uiToolView({
   return (
     <div data-tool="a2ui_render" data-placement={placement} data-state="ok">
       <DshDisclosureRow
-        icon={<DshAppsIcon size={14} />}
+        icon={APPS_ICON_14}
         title="A2UI"
         running={false}
         open={expanded && hasSource}

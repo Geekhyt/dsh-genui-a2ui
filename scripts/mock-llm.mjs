@@ -192,7 +192,7 @@ export const SHOWCASE_EXECUTIVE_UI = [
   ']',
   '$/regions = [',
   '  { region: "华东研发集群", q2: 1420, q3: 1860 },',
-  '  { region: "华北政企集群", q2: 1180, q3: 1540 },',
+  '  { region: "华北专属集群", q2: 1180, q3: 1540 },',
   '  { region: "华南出海集群", q2: 1090, q3: 1620 },',
   '  { region: "海外 SaaS 区", q2: 760, q3: 1820 }',
   ']',
@@ -274,7 +274,7 @@ export const SHOWCASE_ARCHITECTURE_UI = [
       '    Ask["a2ui_ask 审批门禁"]',
       '  end',
       '  subgraph L2["Host 安全编译与状态层"]',
-      '    Validator["32 组件 Schema 校验"]',
+      '    Validator["57 组件 Schema 校验"]',
       '    AstGuard["公式 AST 安全门禁"]',
       '    Store[("跨轮次状态快照")]',
       '  end',
@@ -295,7 +295,7 @@ export const SHOWCASE_ARCHITECTURE_UI = [
   )}`,
   '$/files = [',
   '  { path: "src/index.ts", status: "modified", line: 261, summary: "Host 插件入口、工具与系统提示词注册" },',
-  '  { path: "src/shared/catalog-schema.ts", status: "modified", line: 585, summary: "32 组件与 23 函数同构 Schema 契约" },',
+  '  { path: "src/shared/catalog-schema.ts", status: "modified", line: 585, summary: "57 组件与 23 函数同构 Schema 契约" },',
   '  { path: "src/client/chunk-loader.ts", status: "added", line: 1, summary: "window.__ModuleLoader__ 四分包懒加载" },',
   '  { path: "src/client/chunks/mermaid-chunk.ts", status: "added", line: 1, summary: "strict 沙盒与 SVG 净化架构图渲染" },',
   '  { path: "src/client/catalog/ExtendedWidgets.tsx", status: "modified", line: 196, summary: "工作区文件树与右侧边栏联动跳转" }',
@@ -390,6 +390,126 @@ export const SHOWCASE_DOCK_PIPELINE_UI = [
   '  ]),',
   '  Progress(86, label="v0.1.0 开源发布质量流水线总进度（跨轮次常驻监控）", tone="success")',
   '])',
+].join('\n')
+
+export const SHOWCASE_SRE_APM_UI = [
+  'surface("sre_apm_workbench")',
+  '$/nodes = [',
+  '  { id: "gw", label: "API Gateway", status: "healthy", metric: "2.4k RPS" },',
+  '  { id: "checkout", label: "Checkout API", status: "warning", metric: "P99 184ms" },',
+  '  { id: "risk", label: "Fraud Scorer · TiKV", status: "error", metric: "P99 142ms" }',
+  ']',
+  '$/edges = [',
+  '  { from: "gw", to: "checkout", label: "HTTP 200", status: "healthy" },',
+  '  { from: "checkout", to: "risk", label: "region #19 慢读", status: "error" }',
+  ']',
+  '$/traceTree = [',
+  '  { label: "POST /v1/checkout/confirm", sublabel: "api-gateway", metric: "184.0 ms", sharePct: 100, status: "warning", badge: "HTTP 200", children: [',
+  '    { label: "AuthGrpc.VerifySession", sublabel: "auth-svc", metric: "11.2 ms", sharePct: 6, status: "healthy" },',
+  '    { label: "RiskEngine.EvaluateOrderGraph", sublabel: "fraud-scorer", metric: "141.6 ms", sharePct: 77, status: "error", badge: "慢调用瓶颈", children: [',
+  '      { label: "FeatureStore.BatchFetch90d", sublabel: "tikv-prod", metric: "126.8 ms", sharePct: 69, status: "error", badge: "热点分片 #19" },',
+  '      { label: "OnnxRuntime.ScoreModelV3", sublabel: "gpu-l20", metric: "14.8 ms", sharePct: 8, status: "healthy" }',
+  '    ] },',
+  '    { label: "InventorySvc.LockSkuBatch", sublabel: "stock-svc", metric: "28.4 ms", sharePct: 15, status: "healthy" }',
+  '  ] }',
+  ']',
+  '$/logs = [',
+  '  { time: "22:14:08", level: "error", service: "fraud-scorer", message: "TiKV region #19 read_index timeout (126.8ms > 80ms SLA)", filePath: "src/host/generator.ts", line: 96 },',
+  '  { time: "22:14:09", level: "warn", service: "checkout-api", message: "Fallback local risk cache engaged for 18% of requests" }',
+  ']',
+  'root = Card(Column([',
+  '  ServiceGraph($/nodes, $/edges, title="核心支付与风控调用链实时健康拓扑", direction="LR"),',
+  '  Tree($/traceTree, title="分布式 Trace 耗时瀑布树 (#tr_88412)", summary="总耗时 184.0 ms", expandedDepth=4),',
+  '  LogViewer($/logs, title="关联异常堆栈与工作区源码定位", searchable=false, maxHeight=160)',
+  ']))',
+].join('\n')
+
+export const SHOWCASE_ENTERPRISE_PROTABLE_UI = [
+  'surface("enterprise_governance_protable")',
+  '$/sla = [',
+  '  { label: "11-01", status: "ok" }, { label: "11-02", status: "ok" }, { label: "11-03", status: "ok" }, { label: "11-04", status: "ok" }, { label: "11-05", status: "ok" },',
+  '  { label: "11-06", status: "ok" }, { label: "11-07", status: "warning", note: "P99 抖动 420ms (4m)" }, { label: "11-08", status: "ok" }, { label: "11-09", status: "ok" }, { label: "11-10", status: "ok" },',
+  '  { label: "11-11", status: "ok" }, { label: "11-12", status: "ok" }, { label: "11-13", status: "ok" }, { label: "11-14", status: "ok" }, { label: "11-15", status: "ok" },',
+  '  { label: "11-16", status: "ok" }, { label: "11-17", status: "ok" }, { label: "11-18", status: "ok" }, { label: "11-19", status: "ok" }, { label: "11-20", status: "ok" }',
+  ']',
+  '$/specs = [',
+  '  { label: "巡检工单号", value: "GOV-2026-Q4-019", mono: true, copyable: true },',
+  '  { label: "安全隔离规格", value: "SOC2 Type II · VPC 专线隔离", tone: "success" },',
+  '  { label: "跨列治理结论", value: "发现 3 台夜间低利用率 GPU 实例，启用自动弹性缩容后预计每月净节省 ¥33,700（span=2 跨双列对齐）。", span: 2 }',
+  ']',
+  '$/idleRows = [',
+  '  { instance: "gpu-hz-a10-04", region: "华东杭州 AZ2", util: "3.2%", save: "¥12,400", status: "🟡 持续低载", detail: "7d_p95_gpu_util: 6.1%  |  recommended_action: night_autoscale_00_08" },',
+  '  { instance: "gpu-bj-l20-12", region: "华北北京 AZ1", util: "0.4%", save: "¥16,400", status: "🔴 空载挂起", detail: "idle_since: 2026-11-12T03:00Z  |  owner: quant-research-team" },',
+  '  { instance: "gpu-sh-t4-03", region: "华东上海 AZ1", util: "9.8%", save: "¥4,900", status: "🟡 波谷闲置", detail: "recommended_action: merge_into_shared_pool_sh01" }',
+  ']',
+  'root = Card(Column([',
+  '  EntityHeader("NovaAI · 核心生产推理集群", subtitle="集群 ID: cls_hz_90812 · 值班 SRE: 林珊", avatarText="NV", status="healthy", statusLabel="SLA 达标", badge="Dedicated", tags=["VPC 专线", "ISO-27001"], metrics=[{ label: "月度算力预算", value: "¥200,000" }, { label: "并发水位", value: "420 / 500 RPM" }, { label: "近 20 日可用性", value: "99.96%" }]),',
+  '  Tracker($/sla, title="核心推理网关 20 日 SLA 可用性时序条", summary="99.96% 正常", mode="uptime"),',
+  '  KeyValue($/specs, title="季度治理工单规格书 (Descriptions · bordered=true)", columns=2, bordered=true, copyable=true),',
+  '  Table($/idleRows, columns=[{ key: "instance", label: "实例标识" }, { key: "region", label: "可用区" }, { key: "util", label: "均值利用率" }, { key: "save", label: "月度可节省" }, { key: "status", label: "诊断状态" }], title="闲置算力治理清单 (ProTable · 行内展开详情 + 导出 + 汇总)", expandKey="detail", searchable=true, exportable=true, showSummary=true)',
+  ']))',
+].join('\n')
+
+export const SHOWCASE_ANTD_CAPACITY_UI = [
+  'surface("antd_capacity_planner")',
+  '$/spec = "h20-tp4"',
+  '$/replicas = 6',
+  '$/qpsPerPod = 160',
+  '$/regions = ["cn-hangzhou", "cn-shanghai"]',
+  '$/targetSvc = "prod-cn-hz/llm-serving/deepseek-r1-svc"',
+  '$/specOpts = [',
+  '  { value: "l20-tp2", title: "L20 · TP2 标准推理型", badge: "¥18 / 小时", description: "48GB 显存 · 适合中小并发在线客服与轻量 Agent" },',
+  '  { value: "h20-tp4", title: "H20 · TP4 旗舰吞吐型", badge: "¥46 / 小时", recommended: true, description: "384GB 显存 · 适合 128K 长上下文高并发生产负载" },',
+  '  { value: "h800-tp8", title: "H800 · TP8 专属集群型", badge: "¥118 / 小时", description: "640GB NVLink · 适合满血 671B MoE 专线独占部署" }',
+  ']',
+  '$/k8sTree = [',
+  '  { label: "prod-cn-hz", children: [',
+  '    { label: "llm-serving", children: [',
+  '      { label: "deepseek-r1-svc", value: "prod-cn-hz/llm-serving/deepseek-r1-svc", badge: "Online" }',
+  '    ] }',
+  '  ] }',
+  ']',
+  '$/prompts = [',
+  '  { value: "stress_curve", title: "生成 H20 · TP4 并发吞吐与首字延迟压测曲线", badge: "推荐追问", description: "对比并发 32 / 64 / 128 下 TTFT P99 表现" },',
+  '  { value: "spot_plan", title: "测算夜间波谷自动缩容与抢占式混合配比方案", badge: "FinOps", description: "基于近 30 天流量曲线规划弹性策略" }',
+  ']',
+  'unitPrice = cond(eq($/spec, "l20-tp2"), 18, cond(eq($/spec, "h20-tp4"), 46, 118))',
+  'peakRps = calc("r * q", { r: $/replicas, q: $/qpsPerPod }, decimals=0)',
+  'monthlyBudget = calc("r * p * 24 * 30", { r: $/replicas, p: unitPrice }, decimals=0)',
+  'root = Card(Column([',
+  '  Grid([',
+  '    Stat("集群峰值承载吞吐", formatNumber(peakRps), delta="+28%", trend="up", caption="RPS · 0ms 实时联动"),',
+  '    Stat("7×24 包月总预算", formatCurrency(monthlyBudget, "CNY", 0), caption="按实例数 × 机型单价折算"),',
+  '    Stat("多活部署副本数", $/replicas, caption="Pods · 跨可用区均衡")',
+  '  ], columns=3, gap="md"),',
+  '  CheckCard("选择 GPU 推理机型档位 (CheckCard.Group)", $/specOpts, value=$/spec, columns=3),',
+  '  Row([',
+  '    NumberInput("目标副本数 (NumberInput)", $/replicas, min=1, max=32, step=1, unit="Pods", weight=1),',
+  '    NumberInput("单副本并发上限", $/qpsPerPod, min=40, max=640, step=20, prefix="×", unit="RPS", weight=1)',
+  '  ]),',
+  '  Row([',
+  '    MultiSelect("多活容灾可用区 (MultiSelect)", [{ value: "cn-hangzhou", label: "杭州金融云" }, { value: "cn-shanghai", label: "上海张江" }, { value: "cn-beijing", label: "北京乌兰察布" }], $/regions, allowCreate=true, weight=1),',
+  '    TreeSelect("绑定目标微服务 (TreeSelect)", $/k8sTree, $/targetSvc, weight=1)',
+  '  ]),',
+  '  CheckCard("推荐下一步深度推演 (@ant-design/x Prompts)", $/prompts, columns=2, action=Event("next_step"))',
+  ']))',
+].join('\n')
+
+export const SHOWCASE_RISK_RUNBOOK_UI = [
+  'surface("risk_runbook_matrix")',
+  '$/cmds = [',
+  '  { comment: "校验只读备份快照完整性", cmd: "pg_verifybackup /backup/fin-2026-1119 --progress", output: "backup successfully verified (SHA-256 OK)", exitCode: 0 }',
+  ']',
+  '$/sched = [',
+  '  { title: "1. 快照校验", start: "00:00", end: "01:30", progress: 100, status: "done" },',
+  '  { title: "2. 冷分区解绑归档", start: "01:30", end: "03:30", progress: 60, status: "active", owner: "@DBA" },',
+  '  { title: "3. 业务回归巡检", start: "03:30", end: "05:00", status: "pending", owner: "@SRE" }',
+  ']',
+  'root = Card(Column([',
+  '  ApprovalCard("执行核心账单表历史冷分区在线归档", summary="预计释放主库 1.8 TB NVMe 空间，元数据锁 < 60ms", severity="high", scope="DDL-2026-1119", impacts=["涉及 2024 Q1–Q2 已结清分区 1,420 万行", "冷存桶双副本校验通过"], confirmLabel="已核验备份快照完整可用，确认放行", approveAction=Event("approve_ddl"), rejectAction=Event("reject_ddl")),',
+  '  Terminal($/cmds, title="前置核验命令手册", cwd="~/dba-ops", shell="zsh"),',
+  '  Schedule($/sched, title="凌晨变更窗口排期甘特条 (00:00 – 05:00)", range=["00:00", "05:00"], now="02:30")',
+  ']))',
 ].join('\n')
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
@@ -611,6 +731,10 @@ export function startMockLlmServer(port = PORT) {
       const isShowcase4 = /showcase-4/i.test(userText)
       const isShowcase5 = /showcase-5/i.test(userText)
       const isShowcase6 = /showcase-6/i.test(userText)
+      const isShowcase7 = /showcase-7|瀑布树|健康拓扑|latency spike/i.test(userText)
+      const isShowcase8 = /showcase-8|专属推理集群|季度巡检与治理|SLA uptime/i.test(userText)
+      const isShowcase9 = /showcase-9|容量与规格选型|GPU tier|步进数字框/i.test(userText)
+      const isShowcase10 = /showcase-10|冷分区|审批门禁|approval gate/i.test(userText)
       const isDashboard = /dashboard|看板/i.test(userText)
       const isAsk = /ask|向导|部署/i.test(userText)
       const isDock = /dock|工作台|监控/i.test(userText)
@@ -657,6 +781,34 @@ export function startMockLlmServer(port = PORT) {
             title: 'v0.1.0 开源发布质量门禁流水线',
             placement: 'dock',
             ui: SHOWCASE_DOCK_PIPELINE_UI,
+          })
+          return
+        }
+        if (isShowcase7) {
+          await streamToolCall(res, model, 'a2ui_render', {
+            title: '支付结算链路 P99 延迟突增拓扑与瀑布诊断',
+            ui: SHOWCASE_SRE_APM_UI,
+          })
+          return
+        }
+        if (isShowcase8) {
+          await streamToolCall(res, model, 'a2ui_render', {
+            title: '核心生产推理集群 SLA 巡检与算力治理台',
+            ui: SHOWCASE_ENTERPRISE_PROTABLE_UI,
+          })
+          return
+        }
+        if (isShowcase9) {
+          await streamToolCall(res, model, 'a2ui_render', {
+            title: '私有化大模型集群规格选型与容量规划台',
+            ui: SHOWCASE_ANTD_CAPACITY_UI,
+          })
+          return
+        }
+        if (isShowcase10) {
+          await streamToolCall(res, model, 'a2ui_render', {
+            title: '核心账单表冷分区归档风控审批与排期台',
+            ui: SHOWCASE_RISK_RUNBOOK_UI,
           })
           return
         }
@@ -774,15 +926,23 @@ export function startMockLlmServer(port = PORT) {
                 ? '已收到您的双栏 Diff 审核放行指令，正在将分包加载降级保护补丁写入工作区。'
                 : isShowcase5
                   ? '已将 v0.1.0 发布前自动化质量流水线挂载至会话底部常驻工作台（Dock），后续各阶段核验状态将原地实时刷新。'
-                  : userText.includes('[a2ui-action]')
-                    ? '已根据您的操作实时增量刷新界面数据模型。'
-                    : isDock
-                      ? '已将 CI/CD 发布流水线监控面板固定在输入框上方的常驻工作台（Dock），后续轮次将继续实时原地刷新。'
-                      : isInline
-                        ? '已在工具步骤流内嵌渲染诊断摘要。'
-                        : isDashboard
-                          ? '已为您生成 2026 区域经营交互看板（示例数据），可切换图表、搜索排序明细表或一键调整预测情景。'
-                          : '已为您准备好餐厅预订交互卡片，您可直接在下方调整人数、口味或包间选项后点击确认。'
+                  : isShowcase7
+                    ? '已定位延迟突增根因：Fraud Scorer 访问 TiKV 热点分片 #19 耗时占全链路 77%，可点击下方日志直跳工作区源码。'
+                    : isShowcase8
+                      ? '已汇总核心生产推理集群近 20 日 SLA 时序、隔离规格书与 3 台低利用率 GPU 实例治理清单。'
+                      : isShowcase9
+                        ? '已就绪私有化推理集群容量选型工作台，切换 GPU 档位或点击步进器即可在本地 0ms 重算吞吐与包月预算。'
+                        : isShowcase10
+                          ? '已生成核心账单表冷分区归档风控审批卡、前置快照校验手册与凌晨维护窗口甘特排期。'
+                          : userText.includes('[a2ui-action]')
+                            ? '已根据您的操作实时增量刷新界面数据模型。'
+                            : isDock
+                              ? '已将 CI/CD 发布流水线监控面板固定在输入框上方的常驻工作台（Dock），后续轮次将继续实时原地刷新。'
+                              : isInline
+                                ? '已在工具步骤流内嵌渲染诊断摘要。'
+                                : isDashboard
+                                  ? '已为您生成 2026 区域经营交互看板（示例数据），可切换图表、搜索排序明细表或一键调整预测情景。'
+                                  : '已为您准备好餐厅预订交互卡片，您可直接在下方调整人数、口味或包间选项后点击确认。'
       await streamTextReply(res, model, reply)
       return
     }

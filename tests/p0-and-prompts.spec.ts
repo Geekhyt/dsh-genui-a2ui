@@ -21,13 +21,11 @@ import {
 import { DSH_COMPONENT_APIS, dshSchemaCatalog } from '../src/shared/catalog-schema.ts'
 
 describe('P0 components: DiffView, Steps, Callout, KeyValue', () => {
-  it('exposes all 32 components in dshSchemaCatalog and compiles P0 compositions cleanly', () => {
-    expect(DSH_COMPONENT_APIS).toHaveLength(32)
+  it('exposes all 57 components in dshSchemaCatalog and compiles P0 compositions cleanly', () => {
+    expect(DSH_COMPONENT_APIS).toHaveLength(57)
     const json = dshSchemaCatalog.toJson()
     const compNames = Object.keys(json.components as Record<string, unknown>)
-    expect(compNames).toEqual(
-      expect.arrayContaining(['DiffView', 'Steps', 'Callout', 'KeyValue']),
-    )
+    expect(compNames).toEqual(expect.arrayContaining(['DiffView', 'Steps', 'Callout', 'KeyValue']))
 
     const sessions = new SurfaceSessions(createGenerator())
     const compiled = sessions.compile(
@@ -54,9 +52,7 @@ describe('P0 components: DiffView, Steps, Callout, KeyValue', () => {
       | { createSurface: { components?: Array<{ component: string }> } }
       | undefined
     const usedTypes = (createMsg?.createSurface.components ?? []).map((c) => c.component)
-    expect(usedTypes).toEqual(
-      expect.arrayContaining(['Callout', 'KeyValue', 'DiffView', 'Steps']),
-    )
+    expect(usedTypes).toEqual(expect.arrayContaining(['Callout', 'KeyValue', 'DiffView', 'Steps']))
   })
 
   it('computes accurate LCS line diffs, split rows, normalized steps, and key-value maps', () => {
@@ -86,7 +82,9 @@ describe('Prompt optimizations & cross-restart update=true hydration', () => {
     const sessions = new SurfaceSessions(createGenerator())
     expect(sessions.compile('sess-fast', FAST_PATH_EXAMPLE).length).toBeGreaterThan(0)
     expect(sessions.compile('sess-golden-1', GOLDEN_DASHBOARD_EXAMPLE).length).toBeGreaterThan(0)
-    expect(sessions.compile('sess-golden-calc', GOLDEN_CALCULATOR_EXAMPLE).length).toBeGreaterThan(0)
+    expect(sessions.compile('sess-golden-calc', GOLDEN_CALCULATOR_EXAMPLE).length).toBeGreaterThan(
+      0,
+    )
     expect(sessions.compile('sess-golden-2', GOLDEN_ASK_EXAMPLE).length).toBeGreaterThan(0)
   })
 
@@ -120,7 +118,10 @@ describe('Prompt optimizations & cross-restart update=true hydration', () => {
       inject(_deps: string[], fn: (inner: unknown) => void) {
         fn({
           tools: {
-            register: (def: { name: string }, opts?: { when?: (ctx: { agent?: unknown }) => boolean }) => {
+            register: (
+              def: { name: string },
+              opts?: { when?: (ctx: { agent?: unknown }) => boolean },
+            ) => {
               if (def.name === 'a2ui_render') renderWhen = opts?.when
               return () => {}
             },

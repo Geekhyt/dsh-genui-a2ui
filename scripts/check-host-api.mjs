@@ -51,7 +51,9 @@ const REQUIRED_PRIMITIVE_EXPORTS = [
   'Checkbox',
   'Input',
   'Pill',
+  'SegmentedControl',
   'SegmentedTabs',
+  'Switch',
   'Tag',
   'Modal',
   'Menu',
@@ -61,6 +63,14 @@ const REQUIRED_PRIMITIVE_EXPORTS = [
   'JsonTree',
   'DisclosureRow',
   'MarkdownText',
+  'StateDot',
+  'HoverCard',
+  'HoverCardGroup',
+  'ImageLightbox',
+  'FileTypeIcon',
+  'PathLabel',
+  'LinkIconRegular',
+  'TextShimmer',
   'IconAppsAddOutlineRegular',
   'IconSearchOutlineRegular',
   'IconWarningOutlineRegular',
@@ -75,7 +85,9 @@ const REQUIRED_SLOTS = [
 ]
 
 if (!existsSync(ASAR_PATH)) {
-  console.log(`[check-host-api] Skipped: DeepSeek Harness app.asar not present on this machine (${ASAR_PATH}).`)
+  console.log(
+    `[check-host-api] Skipped: DeepSeek Harness app.asar not present on this machine (${ASAR_PATH}).`,
+  )
   process.exit(0)
 }
 

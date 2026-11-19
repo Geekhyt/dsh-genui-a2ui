@@ -12,7 +12,10 @@
   font-weight: 500;
   line-height: 20px;
   display: inline-flex;
-  transition: background-color 0.14s ease, color 0.14s ease, border-color 0.14s ease;
+  transition:
+    background-color 0.14s ease,
+    color 0.14s ease,
+    border-color 0.14s ease;
 }
 
 .triggerOn {

@@ -16,12 +16,7 @@
  * @module dsh-genui-a2ui/client
  */
 import type { Context } from '@deepseek-ai/cordis'
-import {
-  ANSWER_COMMAND,
-  ASK_TOOL,
-  RENDER_TOOL,
-  TIER_COMMAND,
-} from '../shared/constants.ts'
+import { ANSWER_COMMAND, ASK_TOOL, RENDER_TOOL, TIER_COMMAND } from '../shared/constants.ts'
 import type { AskAnswerInput } from '../shared/wire-types.ts'
 import {
   A2UI_ACTION_NODE_ID,
@@ -38,12 +33,7 @@ import {
 } from './file-opener.tsx'
 import type { SurfaceActionCallback } from './SurfaceView.tsx'
 import { getLoadedRuntimeChunk } from './chunk-loader.ts'
-import {
-  getA2uiEnabled,
-  publishCommandNotice,
-  setA2uiEnabled,
-  setFallbackDefaultEnabled,
-} from './persistence.ts'
+import { publishCommandNotice, setA2uiEnabled, setFallbackDefaultEnabled } from './persistence.ts'
 import { mountPluginCssSheets, unmountPluginCssSheets } from './style-lifecycle.ts'
 import { A2uiTierControl } from './TierControl.tsx'
 import { A2uiToolView, type ChatExternalStore } from './ToolView.tsx'
@@ -52,6 +42,7 @@ import {
   a2uiSurfaceNodeDefinition,
   isChatTimelineActive,
   parseA2uiEnabledFromStatusText,
+  resolveLatestA2uiCommandState,
 } from './turn-surfaces.ts'
 
 export const inject = ['slots', 'sessions', 'uiConversation']
@@ -62,11 +53,18 @@ export interface ClientConfig {
 
 interface SidebarRightService {
   openResource(address: string, options?: { params?: { line?: number } }): void
-  openResourceIn?(sessionId: string, address: string, options?: { params?: { line?: number } }): void
+  openResourceIn?(
+    sessionId: string,
+    address: string,
+    options?: { params?: { line?: number } },
+  ): void
 }
 
 interface SlotsService {
-  inject(name: string, register: (() => () => void) | (() => Generator<() => void, void, unknown>)): () => void
+  inject(
+    name: string,
+    register: (() => () => void) | (() => Generator<() => void, void, unknown>),
+  ): () => void
   register(options: Record<string, unknown>, component: unknown): () => void
 }
 
@@ -95,7 +93,9 @@ interface SessionsService {
   binding?(sessionId: string): SessionBindingLike | undefined
   scope?(sessionId: string): { get?(name: string): unknown } | undefined
   readonly list?: {
-    getSnapshot?(): { readonly byId?: Record<string, { readonly cwd?: string | undefined }> } | undefined
+    getSnapshot?():
+      | { readonly byId?: Record<string, { readonly cwd?: string | undefined }> }
+      | undefined
   }
 }
 
@@ -117,7 +117,10 @@ interface ClientHostContext {
   uiConversation: UiConversationService
 }
 
-function resolveChatStore(host: ClientHostContext, sessionId: string | undefined): ChatExternalStore | undefined {
+function resolveChatStore(
+  host: ClientHostContext,
+  sessionId: string | undefined,
+): ChatExternalStore | undefined {
   if (sessionId === undefined || sessionId === '') return undefined
   if (host.sessions.binding === undefined) return undefined
   try {
@@ -135,10 +138,15 @@ function createActionSender(
 ): SurfaceActionCallback | undefined {
   if (sessionId === undefined || sessionId === '') return undefined
   return (message: string) => {
-    const conversation = host.sessions.scope?.(sessionId)?.get?.('conversation') as ConversationLike | undefined
+    const conversation = host.sessions.scope?.(sessionId)?.get?.('conversation') as
+      | ConversationLike
+      | undefined
     if (conversation === undefined) return
     void conversation.send(message).catch((err: unknown) => {
-      console.warn('[dsh-genui-a2ui] failed to send action to session:', err instanceof Error ? err.message : String(err))
+      console.warn(
+        '[dsh-genui-a2ui] failed to send action to session:',
+        err instanceof Error ? err.message : String(err),
+      )
     })
   }
 }
@@ -172,8 +180,10 @@ function createFileOpener(
     if (sr === undefined) return
     const cwd = host.sessions.list?.getSnapshot?.()?.byId?.[sessionId]?.cwd
     const workingDir =
-      host.sessions.binding?.(sessionId)?.session?.projections?.faceOf?.('workingDirectory')?.getSnapshot?.() ??
-      undefined
+      host.sessions
+        .binding?.(sessionId)
+        ?.session?.projections?.faceOf?.('workingDirectory')
+        ?.getSnapshot?.() ?? undefined
     const address = fileAddressFor(sessionId, cwd, resolveSessionPath(workingDir, target.path))
     const opts = target.line !== undefined ? { params: { line: target.line } } : undefined
     try {
@@ -196,24 +206,24 @@ export function apply(ctx: Context, config: ClientConfig = {}): void {
   if (typeof (ctx as { inject?: unknown }).inject === 'function') {
     ctx.inject(['sidebarRight'], (srCtx) => {
       sidebarRightSvc = (srCtx as unknown as { sidebarRight?: SidebarRightService }).sidebarRight
-      srCtx.effect(() => () => {
-        sidebarRightSvc = undefined
-      }, 'dsh-genui-a2ui: sidebarRight ref')
+      srCtx.effect(
+        () => () => {
+          sidebarRightSvc = undefined
+        },
+        'dsh-genui-a2ui: sidebarRight ref',
+      )
     })
   }
   const getSidebarRight = () => sidebarRightSvc
 
-  ctx.effect(
-    () => {
-      mountPluginCssSheets('dsh-genui-a2ui')
-      getLoadedRuntimeChunk()?.ensureA2uiRuntimeStyles()
-      return () => {
-        getLoadedRuntimeChunk()?.cleanupA2uiRuntimeStyles()
-        unmountPluginCssSheets('dsh-genui-a2ui')
-      }
-    },
-    'dsh-genui-a2ui: styles',
-  )
+  ctx.effect(() => {
+    mountPluginCssSheets('dsh-genui-a2ui')
+    getLoadedRuntimeChunk()?.ensureA2uiRuntimeStyles()
+    return () => {
+      getLoadedRuntimeChunk()?.cleanupA2uiRuntimeStyles()
+      unmountPluginCssSheets('dsh-genui-a2ui')
+    }
+  }, 'dsh-genui-a2ui: styles')
 
   const match = a2uiSurfaceNodeDefinition.match.bind(a2uiSurfaceNodeDefinition)
   ctx.effect(
@@ -275,7 +285,11 @@ export function apply(ctx: Context, config: ClientConfig = {}): void {
               chatStore: resolveChatStore(host, sessionId),
               openWorkspaceFile: createFileOpener(host, getSidebarRight, sessionId),
               submitAskAnswer: (payload: AskAnswerInput) =>
-                executeSessionCommand(host, sessionId, `/${ANSWER_COMMAND} ${JSON.stringify(payload)}`),
+                executeSessionCommand(
+                  host,
+                  sessionId,
+                  `/${ANSWER_COMMAND} ${JSON.stringify(payload)}`,
+                ),
             }),
           },
           A2uiAskToolView,
@@ -318,7 +332,11 @@ export function apply(ctx: Context, config: ClientConfig = {}): void {
               chatStore: resolveChatStore(host, sessionId),
               openWorkspaceFile: createFileOpener(host, getSidebarRight, sessionId),
               submitAskAnswer: (payload: AskAnswerInput) =>
-                executeSessionCommand(host, sessionId, `/${ANSWER_COMMAND} ${JSON.stringify(payload)}`),
+                executeSessionCommand(
+                  host,
+                  sessionId,
+                  `/${ANSWER_COMMAND} ${JSON.stringify(payload)}`,
+                ),
             }),
           },
           A2uiAskDockView,
@@ -352,19 +370,16 @@ export function apply(ctx: Context, config: ClientConfig = {}): void {
         if (commandName !== TIER_COMMAND) return
         const text = typeof result?.text === 'string' ? result.text.trim() : ''
         if (text === '') return
+        const snapshot = resolveChatStore(host, sessionId)?.getSnapshot()
         if (result?.kind === 'success') {
           const parsedEnabled = parseA2uiEnabledFromStatusText(text)
-          if (parsedEnabled !== null && getA2uiEnabled(sessionId) !== parsedEnabled) {
-            setA2uiEnabled(sessionId, parsedEnabled)
+          if (parsedEnabled !== null) {
+            const latestSeq = resolveLatestA2uiCommandState(snapshot)?.seq
+            setA2uiEnabled(sessionId, parsedEnabled, latestSeq)
           }
         }
-        const snapshot = resolveChatStore(host, sessionId)?.getSnapshot()
         if (isChatTimelineActive(snapshot)) return
-        publishCommandNotice(
-          sessionId,
-          result?.kind === 'error' ? 'error' : 'success',
-          text,
-        )
+        publishCommandNotice(sessionId, result?.kind === 'error' ? 'error' : 'success', text)
       }) as never,
     )
   }
@@ -381,7 +396,11 @@ export function apply(ctx: Context, config: ClientConfig = {}): void {
               sessionId,
               chatStore: resolveChatStore(host, sessionId),
               syncHostEnabled: (enabled: boolean) =>
-                executeSessionCommand(host, sessionId, `/${TIER_COMMAND} ${enabled ? 'on' : 'off'}`),
+                executeSessionCommand(
+                  host,
+                  sessionId,
+                  `/${TIER_COMMAND} ${enabled ? 'on' : 'off'}`,
+                ),
             }),
           },
           A2uiTierControl,

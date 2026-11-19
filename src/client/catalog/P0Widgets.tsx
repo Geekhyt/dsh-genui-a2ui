@@ -5,17 +5,12 @@
  * - `Callout`: Semantic alert banner (`info` | `success` | `warning` | `danger`) + optional nested `child`
  * - `KeyValue`: Structured attribute grid (accepts array or plain map + 1-click value copy)
  */
-import { useMemo, useState, type CSSProperties, type FC, type ReactNode } from 'react'
-import {
-  createComponentImplementation,
-  type ReactA2uiComponentProps,
-  type ReactCatalogComponent,
-} from '@a2ui/react'
-import type { ComponentApi } from '@a2ui/web_core/v1_0'
+import { useMemo, useState, type CSSProperties } from 'react'
 import { CalloutApi, DiffViewApi, KeyValueApi, StepsApi } from '../../shared/catalog-schema.ts'
 import { parseFileTarget } from '../file-opener.tsx'
 import { useRuntimeMessages, useUiLocale } from '../i18n.ts'
 import { DshChevronDownIcon, DshChevronUpIcon, DshMarkdown, DshTag } from '../ui/primitives.tsx'
+import css from './Catalog.module.css'
 import { FileOpenChip } from './FileOpenChip.tsx'
 import {
   computeLineDiff,
@@ -23,33 +18,7 @@ import {
   normalizeStepItems,
   pairSplitDiffRows,
 } from './p0-helpers.ts'
-import css from './Catalog.module.css'
-
-type ChildRef =
-  | string
-  | { readonly id: string; readonly basePath?: string | undefined }
-  | null
-  | undefined
-
-function defineComponent<Props>(
-  api: ComponentApi,
-  render: FC<ReactA2uiComponentProps<Props>>,
-): ReactCatalogComponent {
-  return createComponentImplementation(api as never, render as never)
-}
-
-function weightStyle(weight: number | undefined, minWidth = 0): CSSProperties | undefined {
-  if (weight === undefined) return undefined
-  return { flexGrow: weight, flexBasis: 'var(--a2ui-flex-basis, 0px)', minWidth }
-}
-
-function renderChildRef(
-  buildChild: (id: string, basePath?: string) => ReactNode,
-  ref: ChildRef,
-): ReactNode {
-  if (!ref) return null
-  return typeof ref === 'string' ? buildChild(ref) : buildChild(ref.id, ref.basePath)
-}
+import { defineComponent, renderChildRef, weightStyle, type ChildRef } from './widget-helpers.tsx'
 
 function copyToClipboardSafe(text: string): void {
   if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
@@ -222,42 +191,47 @@ export const DshStepsImpl = defineComponent<{
 
 /* ─────────────────────────── 3. Callout ─────────────────────────── */
 
+const CHEVRON_UP_13 = <DshChevronUpIcon size={13} />
+const CHEVRON_DOWN_13 = <DshChevronDownIcon size={13} />
+
+const CALLOUT_SUCCESS_GLYPH = (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.4" />
+    <path
+      d="M5.2 8.2L7.1 10.1L10.9 6.2"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+)
+
+const CALLOUT_WARNING_GLYPH = (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <path
+      d="M8 2.2L14.3 13.4H1.7L8 2.2Z"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinejoin="round"
+    />
+    <path d="M8 6.4V9.4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    <circle cx="8" cy="11.5" r="0.8" fill="currentColor" />
+  </svg>
+)
+
+const CALLOUT_INFO_GLYPH = (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.4" />
+    <path d="M8 7.2V11.2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    <circle cx="8" cy="5" r="0.85" fill="currentColor" />
+  </svg>
+)
+
 function CalloutGlyph({ tone }: { readonly tone: 'info' | 'success' | 'warning' | 'danger' }) {
-  if (tone === 'success') {
-    return (
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-        <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.4" />
-        <path
-          d="M5.2 8.2L7.1 10.1L10.9 6.2"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    )
-  }
-  if (tone === 'warning' || tone === 'danger') {
-    return (
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-        <path
-          d="M8 2.2L14.3 13.4H1.7L8 2.2Z"
-          stroke="currentColor"
-          strokeWidth="1.4"
-          strokeLinejoin="round"
-        />
-        <path d="M8 6.4V9.4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-        <circle cx="8" cy="11.5" r="0.8" fill="currentColor" />
-      </svg>
-    )
-  }
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.4" />
-      <path d="M8 7.2V11.2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-      <circle cx="8" cy="5" r="0.85" fill="currentColor" />
-    </svg>
-  )
+  if (tone === 'success') return CALLOUT_SUCCESS_GLYPH
+  if (tone === 'warning' || tone === 'danger') return CALLOUT_WARNING_GLYPH
+  return CALLOUT_INFO_GLYPH
 }
 
 export const DshCalloutImpl = defineComponent<{
@@ -295,7 +269,7 @@ export const DshCalloutImpl = defineComponent<{
               aria-expanded={expanded}
               onClick={() => setExpanded((v) => !v)}
             >
-              {expanded ? <DshChevronUpIcon size={13} /> : <DshChevronDownIcon size={13} />}
+              {expanded ? CHEVRON_UP_13 : CHEVRON_DOWN_13}
             </button>
           ) : null}
         </div>
@@ -316,6 +290,7 @@ export const DshKeyValueImpl = defineComponent<{
   items?: unknown
   title?: unknown
   columns?: number
+  bordered?: boolean
   copyable?: boolean
   weight?: number
 }>(KeyValueApi, function DshKeyValue({ props }) {
@@ -329,6 +304,7 @@ export const DshKeyValueImpl = defineComponent<{
     typeof props.columns === 'number' && props.columns >= 1 && props.columns <= 3
       ? Math.trunc(props.columns)
       : 2
+  const bordered = Boolean(props.bordered)
   const headerTitle = props.title ? String(props.title) : ''
 
   const handleCopy = (idx: number, text: string) => {
@@ -340,20 +316,45 @@ export const DshKeyValueImpl = defineComponent<{
   }
 
   return (
-    <div className={css.kvCard} style={weightStyle(props.weight, 200)} data-a2ui-keyvalue="">
-      {headerTitle ? <div className={css.kvTitle}>{headerTitle}</div> : null}
-      <dl className={css.kvGrid} style={{ '--kv-cols': cols } as CSSProperties}>
+    <div
+      className={bordered ? `${css.kvCard} ${css.kvCardBordered}` : css.kvCard}
+      style={weightStyle(props.weight, 200)}
+      data-a2ui-keyvalue=""
+      data-bordered={bordered ? 'true' : 'false'}
+    >
+      {headerTitle ? (
+        <div className={bordered ? css.kvTitleBordered : css.kvTitle}>{headerTitle}</div>
+      ) : null}
+      <dl
+        className={bordered ? css.kvGridBordered : css.kvGrid}
+        style={{ '--kv-cols': cols } as CSSProperties}
+      >
         {entries.map((entry, idx) => {
+          const explicitSpan = entry.span ? Math.min(cols, entry.span) : undefined
           const remainder = entries.length % cols
-          const spanCols = remainder !== 0 && idx === entries.length - 1 ? cols - remainder + 1 : 1
+          const autoLastSpan =
+            !explicitSpan && remainder !== 0 && idx === entries.length - 1
+              ? cols - remainder + 1
+              : 1
+          const spanCols = explicitSpan ?? autoLastSpan
           return (
             <div
               key={`${entry.label}-${idx}`}
-              className={css.kvCell}
+              className={bordered ? css.kvCellBordered : css.kvCell}
               style={spanCols > 1 ? ({ '--kv-span': spanCols } as CSSProperties) : undefined}
             >
-              <dt className={css.kvLabel}>{entry.label}</dt>
-              <dd className={entry.mono ? `${css.kvValue} ${css.kvMono}` : css.kvValue}>
+              <dt className={bordered ? css.kvLabelBordered : css.kvLabel}>{entry.label}</dt>
+              <dd
+                className={
+                  bordered
+                    ? entry.mono
+                      ? `${css.kvValueBordered} ${css.kvMono}`
+                      : css.kvValueBordered
+                    : entry.mono
+                      ? `${css.kvValue} ${css.kvMono}`
+                      : css.kvValue
+                }
+              >
                 {entry.tone ? (
                   <DshTag tone={entry.tone}>{entry.value}</DshTag>
                 ) : (

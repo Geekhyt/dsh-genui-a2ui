@@ -25,7 +25,11 @@ import {
 import { createGenerator, SurfaceSessions } from '../src/host/generator.ts'
 import { apply, GOLDEN_CALCULATOR_EXAMPLE } from '../src/index.ts'
 import { validateCalcExpression } from '../src/shared/calc-engine.ts'
-import { DSH_CATALOG_ID, DSH_COMPONENT_APIS, DSH_FUNCTION_APIS } from '../src/shared/catalog-schema.ts'
+import {
+  DSH_CATALOG_ID,
+  DSH_COMPONENT_APIS,
+  DSH_FUNCTION_APIS,
+} from '../src/shared/catalog-schema.ts'
 
 describe('Stage 1 Governance: surface message pruning, memo stability, & switch sync', () => {
   it('prunes unrelated surface messages per turn and preserves === batch identity across snapshots', () => {
@@ -73,7 +77,10 @@ describe('Stage 1 Governance: surface message pruning, memo stability, & switch 
           placement: 'answer',
           surfaceIds: ['weather'],
           messages: [
-            { version: '1.0', updateDataModel: { surfaceId: 'weather', path: '/hi', value: 12 } } as never,
+            {
+              version: '1.0',
+              updateDataModel: { surfaceId: 'weather', path: '/hi', value: 12 },
+            } as never,
           ],
         },
       },
@@ -161,9 +168,9 @@ describe('Stage 1 Governance: surface message pruning, memo stability, & switch 
 
       // Simulate cold Host restart reading from the same `stateFile`
       apply(makeCtx() as never, { stateFile })
-      expect(cmdHandler!({ agent: { session: { id: 's-new' } }, rawInput: 'status' }).text).toContain(
-        '已关闭',
-      )
+      expect(
+        cmdHandler!({ agent: { session: { id: 's-new' } }, rawInput: 'status' }).text,
+      ).toContain('已关闭')
 
       // Client chat command detector picks up the latest `/a2ui` command outcome
       const chatSnap: ChatTargetSnapshot = {
@@ -172,12 +179,20 @@ describe('Stage 1 Governance: surface message pruning, memo stability, & switch 
             {
               kind: 'command',
               anchorSeq: 12,
-              data: { name: 'a2ui', seq: 12, outcome: { kind: 'success', text: 'A2UI 生成式界面已关闭' } },
+              data: {
+                name: 'a2ui',
+                seq: 12,
+                outcome: { kind: 'success', text: 'A2UI 生成式界面已关闭' },
+              },
             },
             {
               kind: 'command',
               anchorSeq: 18,
-              data: { name: 'a2ui', seq: 18, outcome: { kind: 'success', text: 'A2UI 生成式界面已开启' } },
+              data: {
+                name: 'a2ui',
+                seq: 18,
+                outcome: { kind: 'success', text: 'A2UI 生成式界面已开启' },
+              },
             },
           ],
         },
@@ -237,11 +252,7 @@ describe('Stage 2 Evolution: slimmed calc() formula gateway, static validation &
     expect(computeCalc('round(exp(1), 4)')).toBe(2.7183)
     expect(computeCalc('log(1000, 10) + sqrt(144) + clamp(150, 0, 100)')).toBe(115)
     expect(
-      computeCalc(
-        'p * (r/1200) / (1 - (1 + r/1200)^-(y*12))',
-        { p: 1_000_000, r: 3.85, y: 30 },
-        2,
-      ),
+      computeCalc('p * (r/1200) / (1 - (1 + r/1200)^-(y*12))', { p: 1_000_000, r: 3.85, y: 30 }, 2),
     ).toBe(4688.08)
     expect(computeCalc('pmt(r/1200, y*12, p)', { p: 1_000_000, r: 3.85, y: 30 }, 2)).toBe(4688.08)
     expect(
@@ -279,7 +290,9 @@ describe('Stage 2 Evolution: slimmed calc() formula gateway, static validation &
 
     // Default: 100万, 30年, 3.85%, 等额本息 -> exact monthly = 4,688.08, total interest = 68.77万, total = 168.77万
     expect(ctx.resolveDynamicValue(stats[0]!.properties.label as never)).toBe('每月月供')
-    expect(String(ctx.resolveDynamicValue(stats[0]!.properties.value as never))).toContain('4,688.08')
+    expect(String(ctx.resolveDynamicValue(stats[0]!.properties.value as never))).toContain(
+      '4,688.08',
+    )
     expect(ctx.resolveDynamicValue(stats[1]!.properties.value as never)).toBe(68.77)
     expect(ctx.resolveDynamicValue(stats[2]!.properties.value as never)).toBe(168.77)
     expect(ctx.resolveDynamicValue(chart.properties.data as never)).toEqual([
@@ -290,7 +303,9 @@ describe('Stage 2 Evolution: slimmed calc() formula gateway, static validation &
     // Switch ChoicePicker mode to 等额本金 (`$/mode = ["benjin"]`) -> exact first-month = 5,986.11, interest = 57.91万
     surface.dataModel.set('/mode', ['benjin'])
     expect(ctx.resolveDynamicValue(stats[0]!.properties.label as never)).toBe('首月月供')
-    expect(String(ctx.resolveDynamicValue(stats[0]!.properties.value as never))).toContain('5,986.11')
+    expect(String(ctx.resolveDynamicValue(stats[0]!.properties.value as never))).toContain(
+      '5,986.11',
+    )
     expect(ctx.resolveDynamicValue(stats[1]!.properties.value as never)).toBe(57.91)
     expect(ctx.resolveDynamicValue(chart.properties.data as never)).toEqual([
       { item: '贷款本金', wan: 100 },
@@ -300,7 +315,9 @@ describe('Stage 2 Evolution: slimmed calc() formula gateway, static validation &
     // Drag Years slider to 20 years (`$/years = 20`) back on 等额本息 -> live recomputation
     surface.dataModel.set('/mode', ['benxi'])
     surface.dataModel.set('/years', 20)
-    expect(String(ctx.resolveDynamicValue(stats[0]!.properties.value as never))).toContain('5,981.06')
+    expect(String(ctx.resolveDynamicValue(stats[0]!.properties.value as never))).toContain(
+      '5,981.06',
+    )
   })
 
   it('statically validates calc() syntax, unknown functions, unbound vars, pruned math, and $/path traps on Host', () => {
@@ -384,6 +401,8 @@ describe('Stage 2 Evolution: slimmed calc() formula gateway, static validation &
     expect(enriched.userMessage).toBe('下钻查看：下旬 · lo (-5)')
     const wireText = formatActionMessage(rawAction as never, {})
     expect(wireText).toContain('用户说明：下钻查看：下旬 · lo (-5)')
-    expect(wireText).toContain('"selection":{"source":"chart","label":"下旬","series":"lo","value":-5')
+    expect(wireText).toContain(
+      '"selection":{"source":"chart","label":"下旬","series":"lo","value":-5',
+    )
   })
 })

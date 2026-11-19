@@ -67,7 +67,10 @@ describe('Issue 1 & Issue 2 regression suite: dynamic skill unregistration and b
     let registeredProvider:
       | {
           readonly name: string
-          list(options: { cwd?: string; scope?: unknown }): Promise<readonly Record<string, unknown>[]>
+          list(options: {
+            cwd?: string
+            scope?: unknown
+          }): Promise<readonly Record<string, unknown>[]>
           get(
             candidate: Record<string, unknown>,
             options: { cwd?: string; scope?: unknown },
@@ -90,7 +93,10 @@ describe('Issue 1 & Issue 2 regression suite: dynamic skill unregistration and b
       inject(_deps: string[], fn: (c: unknown) => void) {
         fn({
           tools: {
-            register: (def: { name: string }, opts?: { when?: (ctx: { agent?: unknown }) => boolean }) => {
+            register: (
+              def: { name: string },
+              opts?: { when?: (ctx: { agent?: unknown }) => boolean },
+            ) => {
               if (def.name === 'a2ui_render') renderWhen = opts?.when
               return () => {}
             },
@@ -104,7 +110,10 @@ describe('Issue 1 & Issue 2 regression suite: dynamic skill unregistration and b
           },
           skills: {
             registerProvider(
-              create: (control: { signal: AbortSignal; invalidate: () => void }) => NonNullable<typeof registeredProvider>,
+              create: (control: {
+                signal: AbortSignal
+                invalidate: () => void
+              }) => NonNullable<typeof registeredProvider>,
             ) {
               const abort = new AbortController()
               registeredProvider = create({
@@ -161,7 +170,9 @@ describe('Issue 1 & Issue 2 regression suite: dynamic skill unregistration and b
     expect(loaded?.content).toContain('Availability guard (`/a2ui off`)')
 
     expect(await registeredProvider!.list({ cwd: '/repo', scope: subAgent })).toEqual([])
-    expect(await registeredProvider!.get(initialList[0]!, { cwd: '/repo', scope: subAgent })).toBeUndefined()
+    expect(
+      await registeredProvider!.get(initialList[0]!, { cwd: '/repo', scope: subAgent }),
+    ).toBeUndefined()
 
     // 2. Explicitly pin Session A ON, then run `/a2ui off` in Session B:
     //    - invalidates SkillRegistry cache synchronously
@@ -180,7 +191,9 @@ describe('Issue 1 & Issue 2 regression suite: dynamic skill unregistration and b
     expect(await registeredProvider!.list({ cwd: '/repo', scope: agentB })).toEqual([])
     expect(await registeredProvider!.list({ cwd: '/repo' })).toEqual([])
     expect(await registeredProvider!.list({ cwd: '/repo', scope: agentC })).toEqual([])
-    expect(await registeredProvider!.get(initialList[0]!, { cwd: '/repo', scope: agentB })).toBeUndefined()
+    expect(
+      await registeredProvider!.get(initialList[0]!, { cwd: '/repo', scope: agentB }),
+    ).toBeUndefined()
 
     expect(await registeredProvider!.list({ cwd: '/repo', scope: agentA })).toHaveLength(1)
     for (const fn of disposedListeners) fn({ id: 'sess-a' })
@@ -203,9 +216,15 @@ describe('Issue 1 & Issue 2 regression suite: dynamic skill unregistration and b
             systemPrompt: { section: () => () => {} },
             skills: {
               registerProvider(
-                create: (control: { signal: AbortSignal; invalidate: () => void }) => NonNullable<typeof registeredProvider>,
+                create: (control: {
+                  signal: AbortSignal
+                  invalidate: () => void
+                }) => NonNullable<typeof registeredProvider>,
               ) {
-                coldProvider = create({ signal: new AbortController().signal, invalidate: () => {} })
+                coldProvider = create({
+                  signal: new AbortController().signal,
+                  invalidate: () => {},
+                })
                 return () => {}
               },
               register: () => () => {},
@@ -284,7 +303,11 @@ describe('Issue 1 & Issue 2 regression suite: dynamic skill unregistration and b
         {
           kind: 'command',
           anchorSeq: 1,
-          data: { name: 'a2ui', seq: 1, outcome: { kind: 'success', text: 'A2UI 生成式界面已关闭' } },
+          data: {
+            name: 'a2ui',
+            seq: 1,
+            outcome: { kind: 'success', text: 'A2UI 生成式界面已关闭' },
+          },
         },
       ],
     ])
@@ -294,17 +317,18 @@ describe('Issue 1 & Issue 2 regression suite: dynamic skill unregistration and b
     })
 
     // Active session: has a `user` turn node (ChatView is mounted and already renders GenericCommandCard)
-    const activeNodes = new Map<
-      string,
-      { kind: string; anchorSeq: number; data: unknown }
-    >([
+    const activeNodes = new Map<string, { kind: string; anchorSeq: number; data: unknown }>([
       ['user-1', { kind: 'user', anchorSeq: 1, data: {} }],
       [
         'cmd-2',
         {
           kind: 'command',
           anchorSeq: 2,
-          data: { name: 'a2ui', seq: 2, outcome: { kind: 'success', text: 'A2UI 生成式界面已开启' } },
+          data: {
+            name: 'a2ui',
+            seq: 2,
+            outcome: { kind: 'success', text: 'A2UI 生成式界面已开启' },
+          },
         },
       ],
     ])
@@ -356,7 +380,11 @@ describe('Issue 1 & Issue 2 regression suite: dynamic skill unregistration and b
       },
       on(
         event: string,
-        listener: (sessionId: string, commandName: string, result: { kind: string; text?: string }) => void,
+        listener: (
+          sessionId: string,
+          commandName: string,
+          result: { kind: string; text?: string },
+        ) => void,
       ) {
         if (event === 'command/executed') commandExecutedListeners.push(listener)
         return () => {}

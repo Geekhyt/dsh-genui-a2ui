@@ -20,7 +20,8 @@ export type { AskAnswerInput, AskMeta }
 export const DEFAULT_ASK_TIMEOUT_SECONDS = 180
 const MAX_TIMEOUT_SECONDS = 2_147_483
 
-const SECRET_KEY_RE = /^(?:password|passwd|pwd|secret|api[_-]?key|access[_-]?token|refresh[_-]?token|private[_-]?key)$/i
+const SECRET_KEY_RE =
+  /^(?:password|passwd|pwd|secret|api[_-]?key|access[_-]?token|refresh[_-]?token|private[_-]?key)$/i
 
 export function sanitizePayloadObject(value: unknown): Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return {}
@@ -180,7 +181,10 @@ export class PendingAskRegistry {
 
     target.resolve({
       status: 'answered',
-      action: typeof input.action === 'string' && input.action.trim() !== '' ? input.action.trim() : 'submit',
+      action:
+        typeof input.action === 'string' && input.action.trim() !== ''
+          ? input.action.trim()
+          : 'submit',
       surfaceId:
         typeof input.surfaceId === 'string' && input.surfaceId.trim() !== ''
           ? input.surfaceId.trim()
@@ -261,7 +265,10 @@ export function readAskArgs(args: unknown): {
   }
   return {
     ui: typeof record.ui === 'string' ? record.ui : undefined,
-    title: typeof record.title === 'string' && record.title.trim() !== '' ? record.title.trim() : undefined,
+    title:
+      typeof record.title === 'string' && record.title.trim() !== ''
+        ? record.title.trim()
+        : undefined,
     timeout,
   }
 }
@@ -370,7 +377,8 @@ export function createAskTool(sessions: SurfaceSessions, asks: PendingAskRegistr
 
       sessions.clearCompileFailures(sid, 'ask')
       const surfaceIds = surfaceIdsOf(messages)
-      const callId = typeof exec?.callId === 'string' && exec.callId !== '' ? exec.callId : `ask_${Date.now()}`
+      const callId =
+        typeof exec?.callId === 'string' && exec.callId !== '' ? exec.callId : `ask_${Date.now()}`
       const settlement = await asks.wait({
         sessionId: sid,
         callId,

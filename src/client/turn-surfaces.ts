@@ -12,7 +12,12 @@
  * - reactive `resolveDockBatch` for the persistent `conversation.input.dock` panel.
  */
 import type { AgentToRendererMessage } from '@a2ui/agent'
-import { ASK_TOOL, normalizePlacement, RENDER_TOOL, type SurfacePlacement } from '../shared/constants.ts'
+import {
+  ASK_TOOL,
+  normalizePlacement,
+  RENDER_TOOL,
+  type SurfacePlacement,
+} from '../shared/constants.ts'
 import type { AskMeta, RenderMeta } from '../shared/wire-types.ts'
 
 export const A2UI_SURFACE_NODE_KIND = 'a2ui-surface'
@@ -50,7 +55,8 @@ export function parseRenderMeta(meta: unknown): RenderMeta | null {
   if (meta.kind !== undefined && meta.kind !== 'dsh-a2ui') return null
   if (meta.version !== 1 || !Array.isArray(meta.messages) || meta.messages.length === 0) return null
   const messages = meta.messages as AgentToRendererMessage[]
-  const title = typeof meta.title === 'string' && meta.title.trim() !== '' ? meta.title.trim() : null
+  const title =
+    typeof meta.title === 'string' && meta.title.trim() !== '' ? meta.title.trim() : null
   const placement = normalizePlacement(meta.placement)
   const surfaceIds = Array.isArray(meta.surfaceIds)
     ? meta.surfaceIds.filter((s): s is string => typeof s === 'string')
@@ -121,7 +127,10 @@ function turnNumberOf(match: EventMatch | undefined): number {
   return typeof fromData === 'number' ? fromData : 0
 }
 
-function extractSettledFromResult(match: EventMatch, requireExplicitKind: boolean): SettledA2uiCall | undefined {
+function extractSettledFromResult(
+  match: EventMatch,
+  requireExplicitKind: boolean,
+): SettledA2uiCall | undefined {
   const event = match.event
   if (event.type !== 'tool/result') return undefined
   if (event.surfaceOp !== undefined && event.surfaceOp !== 'append') return undefined
@@ -132,7 +141,8 @@ function extractSettledFromResult(match: EventMatch, requireExplicitKind: boolea
   const source = message.source
   const callId = isRecord(source) && typeof source.callId === 'string' ? source.callId : ''
   if (callId === '') return undefined
-  if (requireExplicitKind && (!isRecord(data.meta) || data.meta.kind !== 'dsh-a2ui')) return undefined
+  if (requireExplicitKind && (!isRecord(data.meta) || data.meta.kind !== 'dsh-a2ui'))
+    return undefined
   const meta = parseRenderMeta(data.meta)
   if (meta === null) return undefined
   return {
@@ -153,7 +163,12 @@ export const a2uiSurfaceNodeDefinition = {
   match: (event: ConversationEvent) => {
     const data = event.data
     if (!isRecord(data)) return null
-    if (event.type === 'tool/call' && data.name === RENDER_TOOL && typeof data.callId === 'string' && data.callId !== '') {
+    if (
+      event.type === 'tool/call' &&
+      data.name === RENDER_TOOL &&
+      typeof data.callId === 'string' &&
+      data.callId !== ''
+    ) {
       return { id: data.callId, role: 'start' as const }
     }
     if (event.type === 'tool/result') {
@@ -233,7 +248,10 @@ export function isChatTimelineActive(snapshot: ChatTargetSnapshot | undefined): 
 }
 
 /** Whether the turn owning a given `callId` has already closed (`turn/end` arrived). */
-export function isTurnClosedForCall(snapshot: ChatTargetSnapshot | undefined, callId: string): boolean {
+export function isTurnClosedForCall(
+  snapshot: ChatTargetSnapshot | undefined,
+  callId: string,
+): boolean {
   if (snapshot === undefined) return false
   for (const node of snapshot.nodes.values()) {
     if ((node.kind === 'tool-call' || node.kind === A2UI_SURFACE_NODE_KIND) && node.id === callId) {
@@ -287,7 +305,9 @@ export function filterMessagesBySurfaceIds(
 }
 
 /** All settled A2UI wire messages in the session in ascending sequence order. */
-export function resolveSessionMessages(snapshot: ChatTargetSnapshot | undefined): AgentToRendererMessage[] {
+export function resolveSessionMessages(
+  snapshot: ChatTargetSnapshot | undefined,
+): AgentToRendererMessage[] {
   return collectOrderedCalls(snapshot).flatMap((c) => c.messages)
 }
 
@@ -375,7 +395,13 @@ export function resolveTurnTailBatch(
     return prev.batch
   }
 
-  const batch: TurnTailBatch = { title: lastTitle, visibleSurfaceIds, messages, latestSeq, superseded }
+  const batch: TurnTailBatch = {
+    title: lastTitle,
+    visibleSurfaceIds,
+    messages,
+    latestSeq,
+    superseded,
+  }
   if (turnTailMemo.size >= MAX_TURN_TAIL_MEMO) {
     const oldest = turnTailMemo.keys().next().value
     if (oldest !== undefined) turnTailMemo.delete(oldest)
@@ -407,8 +433,7 @@ export function resolveDockBatch(snapshot: ChatTargetSnapshot | undefined): Dock
   let latestSeq = 0
 
   for (const call of allCalls) {
-    const touchesDock =
-      call.placement === 'dock' || call.surfaceIds.some((id) => dockedIds.has(id))
+    const touchesDock = call.placement === 'dock' || call.surfaceIds.some((id) => dockedIds.has(id))
     if (!touchesDock) continue
 
     if (call.placement === 'dock') {
@@ -495,7 +520,9 @@ interface RawToolCallRoot {
  * live Chat target snapshot so it can pop open above the composer (`conversation.input.dock`),
  * remaining visible even when DSH's `stepGrouping: "collapsed"` hides the process group.
  */
-export function resolveActiveAskCall(snapshot: ChatTargetSnapshot | undefined): ActiveAskCall | null {
+export function resolveActiveAskCall(
+  snapshot: ChatTargetSnapshot | undefined,
+): ActiveAskCall | null {
   if (snapshot === undefined) return null
   let latest: { seq: number; ask: ActiveAskCall } | null = null
   for (const node of snapshot.nodes.values()) {

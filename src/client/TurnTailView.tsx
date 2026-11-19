@@ -42,12 +42,9 @@ export const A2uiTurnTailView = memo(function A2uiTurnTailView({
     [chatStore],
   )
   const getSnapshot = useCallback(() => chatStore?.getSnapshot(), [chatStore])
-  const snapshot = useSyncExternalStore(subscribe, getSnapshot, () => undefined)
+  const snapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 
-  const batch = useMemo(
-    () => resolveTurnTailBatch(snapshot, turn.turn),
-    [snapshot, turn.turn],
-  )
+  const batch = useMemo(() => resolveTurnTailBatch(snapshot, turn.turn), [snapshot, turn.turn])
 
   if (batch === null || batch.messages.length === 0) return null
 

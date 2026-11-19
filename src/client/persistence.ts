@@ -15,7 +15,8 @@ export const ENABLED_STORAGE_KEY = 'dsh-a2ui:tier:v1'
 export const MAX_DRAFT_ENTRIES = 200
 const MAX_SINGLE_DRAFT_CHARS = 32_768
 
-const SECRET_KEY_RE = /^(?:password|passwd|pwd|secret|api[_-]?key|access[_-]?token|refresh[_-]?token|private[_-]?key)$/i
+const SECRET_KEY_RE =
+  /^(?:password|passwd|pwd|secret|api[_-]?key|access[_-]?token|refresh[_-]?token|private[_-]?key)$/i
 
 interface DraftEntry {
   readonly key: string
@@ -65,6 +66,11 @@ export function resetPersistenceForTests(): void {
   cachedDockMap = {}
   cachedEnabledRaw = undefined
   cachedEnabledStore = { defaultEnabled: true, bySession: {} }
+  lastAppliedCommandSeqBySession.clear()
+  for (const timer of commandNoticeTimersBySession.values()) {
+    clearTimeout(timer)
+  }
+  commandNoticeTimersBySession.clear()
   commandNoticesBySession.clear()
   try {
     if (typeof window !== 'undefined' && window.localStorage) {
@@ -312,6 +318,7 @@ export function dismissDockAtSeq(sessionId: string, seq: number): void {
 // ---------------------------------------------------------------------------
 
 const enabledListeners = new Set<() => void>()
+const lastAppliedCommandSeqBySession = new Map<string, number>()
 let fallbackDefaultEnabled = true
 let cachedEnabledRaw: string | null | undefined
 let cachedEnabledStore: EnabledStoreShape = { defaultEnabled: true, bySession: {} }
@@ -376,17 +383,61 @@ export function getA2uiEnabled(sessionId: string | undefined): boolean {
   return store.defaultEnabled
 }
 
-export function setA2uiEnabled(sessionId: string | undefined, enabled: boolean): void {
+export function setA2uiEnabled(
+  sessionId: string | undefined,
+  enabled: boolean,
+  atCommandSeq?: number,
+): void {
+  if (typeof atCommandSeq === 'number') {
+    const seqKey = sessionId ?? 'global'
+    const prevSeq = lastAppliedCommandSeqBySession.get(seqKey) ?? -1
+    if (atCommandSeq > prevSeq) {
+      lastAppliedCommandSeqBySession.set(seqKey, atCommandSeq)
+    }
+  }
   const prev = readEnabledStore()
   const next: EnabledStoreShape = {
     defaultEnabled: enabled,
     bySession: sessionId ? { ...prev.bySession, [sessionId]: enabled } : { ...prev.bySession },
   }
   const serialized = JSON.stringify(next)
+  if (serialized === cachedEnabledRaw) return
   cachedEnabledRaw = serialized
   cachedEnabledStore = next
   writeStorage(ENABLED_STORAGE_KEY, serialized)
   notifyListeners(enabledListeners)
+}
+
+/**
+ * Purely derive the effective `enabled` state for `sessionId` by combining `localStorage`
+ * with any newer `/a2ui` slash-command node in the chat transcript (`rerender-derived-state-no-effect`).
+ */
+export function resolveEffectiveA2uiEnabled(
+  sessionId: string | undefined,
+  latestCommand: { readonly seq: number; readonly enabled: boolean } | null,
+): boolean {
+  if (latestCommand !== null) {
+    const seqKey = sessionId ?? 'global'
+    const watermark = lastAppliedCommandSeqBySession.get(seqKey) ?? -1
+    if (latestCommand.seq > watermark) {
+      return latestCommand.enabled
+    }
+  }
+  return getA2uiEnabled(sessionId)
+}
+
+/**
+ * Persist a newly observed `/a2ui` command watermark from an external store subscription.
+ */
+export function reconcileLatestA2uiCommand(
+  sessionId: string | undefined,
+  latestCommand: { readonly seq: number; readonly enabled: boolean } | null,
+): void {
+  if (latestCommand === null) return
+  const seqKey = sessionId ?? 'global'
+  const watermark = lastAppliedCommandSeqBySession.get(seqKey) ?? -1
+  if (latestCommand.seq <= watermark) return
+  setA2uiEnabled(sessionId, latestCommand.enabled, latestCommand.seq)
 }
 
 // ---------------------------------------------------------------------------
@@ -400,9 +451,19 @@ export interface A2uiCommandNotice {
 }
 
 const MAX_COMMAND_NOTICE_SESSIONS = 32
+const COMMAND_NOTICE_TTL_MS = 4200
 const commandNoticeListeners = new Set<() => void>()
 const commandNoticesBySession = new Map<string, A2uiCommandNotice>()
+const commandNoticeTimersBySession = new Map<string, ReturnType<typeof setTimeout>>()
 let nextCommandNoticeSeq = 0
+
+function clearNoticeTimer(sessionId: string): void {
+  const prevTimer = commandNoticeTimersBySession.get(sessionId)
+  if (prevTimer !== undefined) {
+    clearTimeout(prevTimer)
+    commandNoticeTimersBySession.delete(sessionId)
+  }
+}
 
 export function subscribeCommandNotice(listener: () => void): () => void {
   commandNoticeListeners.add(listener)
@@ -428,13 +489,20 @@ export function publishCommandNotice(
     kind,
     text: text.trim(),
   }
+  clearNoticeTimer(sessionId)
   commandNoticesBySession.delete(sessionId)
   commandNoticesBySession.set(sessionId, notice)
   while (commandNoticesBySession.size > MAX_COMMAND_NOTICE_SESSIONS) {
     const oldest = commandNoticesBySession.keys().next()
     if (oldest.done) break
+    clearNoticeTimer(oldest.value)
     commandNoticesBySession.delete(oldest.value)
   }
+  const timer = setTimeout(() => {
+    dismissCommandNotice(sessionId, notice.seq)
+  }, COMMAND_NOTICE_TTL_MS)
+  ;(timer as unknown as { unref?: () => void }).unref?.()
+  commandNoticeTimersBySession.set(sessionId, timer)
   notifyListeners(commandNoticeListeners)
   return notice
 }
@@ -444,6 +512,7 @@ export function dismissCommandNotice(sessionId: string | undefined, seq?: number
   const current = commandNoticesBySession.get(sessionId)
   if (!current) return
   if (seq !== undefined && current.seq !== seq) return
+  clearNoticeTimer(sessionId)
   commandNoticesBySession.delete(sessionId)
   notifyListeners(commandNoticeListeners)
 }

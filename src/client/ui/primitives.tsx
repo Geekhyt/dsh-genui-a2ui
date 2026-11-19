@@ -11,13 +11,12 @@ import type {
   JsonTreeLabels,
   MarkdownLabels,
   MenuItem,
+  SegmentedControlOption,
   SegmentedTab,
   TagTone,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import {
   forwardRef,
-  useEffect,
-  useRef,
   useState,
   type ButtonHTMLAttributes,
   type InputHTMLAttributes,
@@ -26,9 +25,18 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import { SHELL_MESSAGES, type UiLocale } from '../../shared/i18n.ts'
+import { useAutoDismissTimer } from '../dom-hooks.ts'
 import { useShellMessages, useUiLocale } from '../i18n.ts'
 
-export type { ButtonVariant, JsonTreeLabels, MarkdownLabels, MenuItem, SegmentedTab, TagTone }
+export type {
+  ButtonVariant,
+  JsonTreeLabels,
+  MarkdownLabels,
+  MenuItem,
+  SegmentedControlOption,
+  SegmentedTab,
+  TagTone,
+}
 
 export function getJsonTreeLabels(locale: UiLocale): JsonTreeLabels {
   const msg = SHELL_MESSAGES[locale]
@@ -80,7 +88,10 @@ const FallbackButton = forwardRef<
     className?: string | undefined
     children?: ReactNode
   } & ButtonHTMLAttributes<HTMLButtonElement>
->(function FallbackButton({ variant = 'outline', size = 'md', icon, className, children, style, ...rest }, ref) {
+>(function FallbackButton(
+  { variant = 'outline', size = 'md', icon, className, children, style, ...rest },
+  ref,
+) {
   const isPrimary = variant === 'primary'
   const isGhost = variant === 'ghost'
   return (
@@ -96,7 +107,10 @@ const FallbackButton = forwardRef<
         height: size === 'sm' ? 28 : 36,
         padding: size === 'sm' ? '0 10px' : '0 14px',
         borderRadius: size === 'sm' ? 'var(--dsw-radius-sm, 8px)' : 'var(--dsw-radius-md, 10px)',
-        border: isPrimary || isGhost ? 'none' : '1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.28))',
+        border:
+          isPrimary || isGhost
+            ? 'none'
+            : '1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.28))',
         background: isPrimary
           ? 'var(--dsw-alias-button-primary-fill, #3b82f6)'
           : isGhost
@@ -136,7 +150,12 @@ export function DshCheckbox(props: {
     <label
       title={props.title}
       className={props.className}
-      style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: props.disabled ? 'not-allowed' : 'pointer' }}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 8,
+        cursor: props.disabled ? 'not-allowed' : 'pointer',
+      }}
     >
       <input
         type="checkbox"
@@ -149,12 +168,69 @@ export function DshCheckbox(props: {
   )
 }
 
+export function DshSwitch(props: {
+  checked: boolean
+  onChange: (next: boolean) => void
+  label: string
+  disabled?: boolean
+  title?: string | undefined
+  className?: string | undefined
+}) {
+  if (hasComponent(raw.Switch)) {
+    return <HostPrimitives.Switch {...props} />
+  }
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={props.checked}
+      aria-label={props.label}
+      title={props.title}
+      disabled={props.disabled}
+      className={props.className}
+      onClick={() => {
+        if (!props.disabled) props.onChange(!props.checked)
+      }}
+      style={{
+        position: 'relative',
+        display: 'inline-flex',
+        alignItems: 'center',
+        width: 38,
+        height: 22,
+        padding: 2,
+        borderRadius: 999,
+        border: '1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.28))',
+        background: props.checked
+          ? 'var(--dsw-alias-brand-primary, #3b82f6)'
+          : 'var(--dsw-alias-bg-layer-3, rgba(128,128,128,0.2))',
+        cursor: props.disabled ? 'not-allowed' : 'pointer',
+        opacity: props.disabled ? 0.5 : 1,
+        flexShrink: 0,
+      }}
+    >
+      <span
+        style={{
+          width: 16,
+          height: 16,
+          borderRadius: '50%',
+          background: '#ffffff',
+          transform: props.checked ? 'translateX(16px)' : 'translateX(0px)',
+          transition: 'transform 0.16s ease',
+        }}
+      />
+    </button>
+  )
+}
+
 const FallbackInput = forwardRef<
   HTMLInputElement,
   { icon?: ReactNode; className?: string } & InputHTMLAttributes<HTMLInputElement>
 >(function FallbackInput({ icon, className, style, ...rest }, ref) {
   return (
-    <span className={className} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, width: '100%' }}>
+    <span
+      className={className}
+      style={{ display: 'inline-flex', alignItems: 'center', gap: 6, width: '100%' }}
+    >
       {icon}
       <input
         ref={ref}
@@ -208,7 +284,11 @@ export function DshPill(
   )
 }
 
-export function DshTag(props: { tone?: TagTone; className?: string | undefined; children?: ReactNode }) {
+export function DshTag(props: {
+  tone?: TagTone
+  className?: string | undefined
+  children?: ReactNode
+}) {
   if (hasComponent(raw.Tag)) {
     return <HostPrimitives.Tag {...props} />
   }
@@ -241,7 +321,12 @@ export function DshSegmentedTabs<Value extends string = string>(props: {
     return <>{HostPrimitives.SegmentedTabs(props)}</>
   }
   return (
-    <div role="tablist" aria-label={props.label} className={props.className} style={{ display: 'flex', gap: 4 }}>
+    <div
+      role="tablist"
+      aria-label={props.label}
+      className={props.className}
+      style={{ display: 'flex', gap: 4 }}
+    >
       {props.items.map((item) => (
         <button
           key={item.value}
@@ -255,6 +340,72 @@ export function DshSegmentedTabs<Value extends string = string>(props: {
           {item.label}
         </button>
       ))}
+    </div>
+  )
+}
+
+export function DshSegmentedControl<Value extends string = string>(props: {
+  id: string
+  value: Value
+  options: readonly SegmentedControlOption<Value>[]
+  onChange: (next: Value) => void
+  label: string
+  disabled?: boolean
+  className?: string | undefined
+}) {
+  if (hasComponent(raw.SegmentedControl)) {
+    return <HostPrimitives.SegmentedControl {...props} />
+  }
+  return (
+    <div
+      id={props.id}
+      role="radiogroup"
+      aria-label={props.label}
+      className={props.className}
+      style={{
+        display: 'inline-grid',
+        gridAutoFlow: 'column',
+        gridAutoColumns: '1fr',
+        gap: 4,
+        width: '100%',
+        padding: 3,
+        borderRadius: 'var(--dsw-radius-md, 10px)',
+        background: 'var(--dsw-alias-bg-layer-2, rgba(128,128,128,0.12))',
+        border: '1px solid var(--dsw-alias-border-l1, rgba(128,128,128,0.2))',
+      }}
+    >
+      {props.options.map((opt) => {
+        const active = opt.value === props.value
+        const isDisabled = Boolean(props.disabled || opt.disabled)
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            disabled={isDisabled}
+            title={opt.title}
+            onClick={() => {
+              if (!isDisabled) props.onChange(opt.value)
+            }}
+            style={{
+              padding: '5px 10px',
+              borderRadius: 'var(--dsw-radius-sm, 7px)',
+              border: 'none',
+              fontSize: 12,
+              fontWeight: active ? 600 : 400,
+              background: active ? 'var(--dsw-alias-brand-primary, #3b82f6)' : 'transparent',
+              color: active
+                ? 'var(--dsw-alias-label-primary-inverted, #ffffff)'
+                : 'var(--dsw-alias-label-secondary, inherit)',
+              cursor: isDisabled ? 'not-allowed' : 'pointer',
+              opacity: isDisabled ? 0.5 : 1,
+            }}
+          >
+            {opt.label}
+          </button>
+        )
+      })}
     </div>
   )
 }
@@ -300,9 +451,21 @@ export function DshModal(props: {
           border: '1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.25))',
         }}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: 12,
+          }}
+        >
           <strong style={{ fontSize: 15 }}>{props.title}</strong>
-          <DshButton variant="ghost" size="sm" onClick={props.onClose} aria-label={props.closeLabel}>
+          <DshButton
+            variant="ghost"
+            size="sm"
+            onClick={props.onClose}
+            aria-label={props.closeLabel}
+          >
             ✕
           </DshButton>
         </div>
@@ -314,11 +477,7 @@ export function DshModal(props: {
   )
 }
 
-export function DshTooltip(props: {
-  label: string
-  disabled?: boolean
-  children: ReactElement
-}) {
+export function DshTooltip(props: { label: string; disabled?: boolean; children: ReactElement }) {
   if (props.disabled || props.label.trim() === '') return props.children
   if (hasComponent(raw.Tooltip)) {
     return (
@@ -330,7 +489,11 @@ export function DshTooltip(props: {
   return <span title={props.label}>{props.children}</span>
 }
 
-export function DshMarkdown(props: { text: string; variant?: 'body' | 'compact'; streaming?: boolean }) {
+export function DshMarkdown(props: {
+  text: string
+  variant?: 'body' | 'compact'
+  streaming?: boolean
+}) {
   const locale = useUiLocale()
   if (hasComponent(raw.MarkdownText)) {
     return (
@@ -389,8 +552,7 @@ function FallbackJsonNode(props: {
   }
 
   if (value === null || typeof value !== 'object') {
-    const formatted =
-      typeof value === 'string' ? JSON.stringify(value) : String(value)
+    const formatted = typeof value === 'string' ? JSON.stringify(value) : String(value)
     const color =
       typeof value === 'string'
         ? 'var(--dsw-alias-state-success-primary, #10b981)'
@@ -400,7 +562,15 @@ function FallbackJsonNode(props: {
             ? 'var(--dsw-alias-state-warn-primary, #f59e0b)'
             : 'var(--dsw-alias-label-tertiary, #9ca3af)'
     return (
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, paddingLeft: depth * 14, lineHeight: 1.6 }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'baseline',
+          gap: 6,
+          paddingLeft: depth * 14,
+          lineHeight: 1.6,
+        }}
+      >
         {name !== undefined ? (
           <span style={{ color: 'var(--dsw-alias-label-secondary, inherit)' }}>{name}:</span>
         ) : null}
@@ -432,8 +602,21 @@ function FallbackJsonNode(props: {
   const summary = isArr ? `Array(${entries.length})` : `{${entries.length}}`
 
   return (
-    <div style={{ fontFamily: 'var(--dsw-font-family-mono, ui-monospace, SFMono-Regular, Menlo, monospace)', fontSize: 12 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingLeft: depth * 14, lineHeight: 1.6 }}>
+    <div
+      style={{
+        fontFamily: 'var(--dsw-font-family-mono, ui-monospace, SFMono-Regular, Menlo, monospace)',
+        fontSize: 12,
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          paddingLeft: depth * 14,
+          lineHeight: 1.6,
+        }}
+      >
         <button
           type="button"
           aria-expanded={open}
@@ -451,7 +634,9 @@ function FallbackJsonNode(props: {
           {open ? '▾' : '▸'}
         </button>
         {name !== undefined ? (
-          <span style={{ color: 'var(--dsw-alias-label-primary, inherit)', fontWeight: 500 }}>{name}:</span>
+          <span style={{ color: 'var(--dsw-alias-label-primary, inherit)', fontWeight: 500 }}>
+            {name}:
+          </span>
         ) : null}
         <span style={{ color: 'var(--dsw-alias-label-tertiary, rgba(128,128,128,0.85))' }}>
           {open ? (isArr ? '[' : '{') : summary}
@@ -470,7 +655,12 @@ function FallbackJsonNode(props: {
               copyLabel={copyLabel}
             />
           ))}
-          <div style={{ paddingLeft: depth * 14, color: 'var(--dsw-alias-label-tertiary, rgba(128,128,128,0.85))' }}>
+          <div
+            style={{
+              paddingLeft: depth * 14,
+              color: 'var(--dsw-alias-label-tertiary, rgba(128,128,128,0.85))',
+            }}
+          >
             {isArr ? ']' : '}'}
           </div>
         </div>
@@ -523,7 +713,12 @@ export function DshSearchIcon({ size = 14 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.3" />
-      <path d="M10.5 10.5L13.5 13.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+      <path
+        d="M10.5 10.5L13.5 13.5"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+      />
     </svg>
   )
 }
@@ -534,7 +729,13 @@ export function DshChevronDownIcon({ size = 14 }: { size?: number }) {
   }
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="M4 6.2L8 10.2L12 6.2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+      <path
+        d="M4 6.2L8 10.2L12 6.2"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   )
 }
@@ -545,7 +746,13 @@ export function DshChevronUpIcon({ size = 14 }: { size?: number }) {
   }
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="M4 9.8L8 5.8L12 9.8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+      <path
+        d="M4 9.8L8 5.8L12 9.8"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   )
 }
@@ -556,7 +763,13 @@ export function DshCheckIcon({ size = 13 }: { size?: number }) {
   }
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="M3.2 8.4L6.4 11.6L12.8 4.8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path
+        d="M3.2 8.4L6.4 11.6L12.8 4.8"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   )
 }
@@ -586,20 +799,7 @@ function FallbackToast(props: {
   holdMs?: number | undefined
   onDone: () => void
 }) {
-  const onDoneRef = useRef(props.onDone)
-  useEffect(() => {
-    onDoneRef.current = props.onDone
-  }, [props.onDone])
-
-  useEffect(() => {
-    const holdMs = props.holdMs ?? 3000
-    const timer = setTimeout(() => {
-      onDoneRef.current()
-    }, holdMs + 1000)
-    return () => {
-      clearTimeout(timer)
-    }
-  }, [props.holdMs])
+  useAutoDismissTimer(props.holdMs ?? 3000, props.onDone)
 
   if (typeof document === 'undefined') {
     return (
@@ -634,11 +834,25 @@ function FallbackToast(props: {
       }}
     >
       {props.tone === 'success' ? (
-        <span style={{ display: 'grid', placeItems: 'center', color: 'var(--dsw-alias-state-success-primary, #10b981)' }} aria-hidden="true">
+        <span
+          style={{
+            display: 'grid',
+            placeItems: 'center',
+            color: 'var(--dsw-alias-state-success-primary, #10b981)',
+          }}
+          aria-hidden="true"
+        >
           <DshCheckIcon size={15} />
         </span>
       ) : props.icon !== undefined ? (
-        <span style={{ display: 'grid', placeItems: 'center', color: 'var(--dsw-alias-state-warn-label, #f59e0b)' }} aria-hidden="true">
+        <span
+          style={{
+            display: 'grid',
+            placeItems: 'center',
+            color: 'var(--dsw-alias-state-warn-label, #f59e0b)',
+          }}
+          aria-hidden="true"
+        >
           {props.icon}
         </span>
       ) : null}
@@ -755,4 +969,254 @@ export function DshMenu(props: {
 }
 
 export const DshDisclosureRow = HostPrimitives.DisclosureRow
-export const DshAppsIcon = HostPrimitives.IconAppsAddOutlineRegular
+
+export function DshAppsIcon({ size = 14 }: { size?: number }) {
+  if (hasComponent(raw.IconAppsAddOutlineRegular)) {
+    return <HostPrimitives.IconAppsAddOutlineRegular size={size} />
+  }
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <rect
+        x="2.2"
+        y="2.2"
+        width="4.6"
+        height="4.6"
+        rx="1.1"
+        stroke="currentColor"
+        strokeWidth="1.3"
+      />
+      <rect
+        x="9.2"
+        y="2.2"
+        width="4.6"
+        height="4.6"
+        rx="1.1"
+        stroke="currentColor"
+        strokeWidth="1.3"
+      />
+      <rect
+        x="2.2"
+        y="9.2"
+        width="4.6"
+        height="4.6"
+        rx="1.1"
+        stroke="currentColor"
+        strokeWidth="1.3"
+      />
+      <path
+        d="M11.5 9.2V13.8M9.2 11.5H13.8"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
+export function DshStateDot(props: {
+  state: 'done' | 'ongoing' | 'error' | 'pending'
+  size?: number | undefined
+  appearance?: 'dot' | 'step' | undefined
+  className?: string | undefined
+}) {
+  if (hasComponent(raw.StateDot)) {
+    return <HostPrimitives.StateDot {...props} />
+  }
+  const sz = props.size ?? 8
+  const bg =
+    props.state === 'done'
+      ? 'var(--dsw-alias-state-success-primary, #10b981)'
+      : props.state === 'error'
+        ? 'var(--dsw-alias-state-error-primary, #ef4444)'
+        : props.state === 'ongoing'
+          ? 'var(--dsw-alias-brand-primary, #4d6bfe)'
+          : 'var(--dsw-alias-label-tertiary, #9ca3af)'
+  return (
+    <span
+      className={props.className}
+      data-state={props.state}
+      aria-hidden="true"
+      style={{
+        display: 'inline-block',
+        width: sz,
+        height: sz,
+        borderRadius: '50%',
+        background: bg,
+        flexShrink: 0,
+      }}
+    />
+  )
+}
+
+export function DshHoverCardGroup({ children }: { children: ReactNode }) {
+  if (hasComponent(raw.HoverCardGroup)) {
+    return <HostPrimitives.HoverCardGroup>{children}</HostPrimitives.HoverCardGroup>
+  }
+  return <>{children}</>
+}
+
+export function DshHoverCard(props: {
+  anchor: ReactElement
+  content: ReactNode
+  openDelayMs?: number | undefined
+  grouped?: boolean | undefined
+  inline?: boolean | undefined
+  fitContent?: boolean | undefined
+  fallbackTitle?: string | undefined
+}) {
+  if (hasComponent(raw.HoverCard)) {
+    return (
+      <HostPrimitives.HoverCard
+        anchor={props.anchor}
+        content={props.content}
+        openDelayMs={props.openDelayMs ?? 80}
+        grouped={props.grouped}
+        inline={props.inline}
+        fitContent={props.fitContent ?? true}
+        variant="compact"
+      />
+    )
+  }
+  return props.fallbackTitle ? (
+    <span title={props.fallbackTitle} style={{ display: 'contents' }}>
+      {props.anchor}
+    </span>
+  ) : (
+    props.anchor
+  )
+}
+
+export function DshImageLightbox(props: {
+  open: boolean
+  src: string
+  alt: string
+  dialogLabel: string
+  closeLabel: string
+  onClose: () => void
+}) {
+  if (!props.open || typeof document === 'undefined') return null
+  if (hasComponent(raw.ImageLightbox)) {
+    return (
+      <HostPrimitives.ImageLightbox
+        src={props.src}
+        alt={props.alt}
+        labels={{ dialog: props.dialogLabel, close: props.closeLabel }}
+        onClose={props.onClose}
+      />
+    )
+  }
+  return createPortal(
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={props.dialogLabel}
+      onClick={props.onClose}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 9999,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 24,
+        background: 'var(--dsw-alias-bg-mask-1, rgba(0, 0, 0, 0.72))',
+      }}
+    >
+      <img
+        src={props.src}
+        alt={props.alt}
+        onClick={(e) => e.stopPropagation()}
+        style={{ maxWidth: '92vw', maxHeight: '88vh', borderRadius: 10, objectFit: 'contain' }}
+      />
+    </div>,
+    document.body,
+  )
+}
+
+export function DshFileTypeIcon(props: { path: string; size?: number; className?: string }) {
+  if (hasComponent(raw.FileTypeIcon)) {
+    return (
+      <HostPrimitives.FileTypeIcon
+        path={props.path}
+        size={props.size ?? 14}
+        className={props.className}
+      />
+    )
+  }
+  const sz = props.size ?? 14
+  return (
+    <svg
+      width={sz}
+      height={sz}
+      viewBox="0 0 16 16"
+      fill="none"
+      aria-hidden="true"
+      className={props.className}
+    >
+      <path
+        d="M3.5 2.5H9.5L12.5 5.5V13.5H3.5V2.5Z"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinejoin="round"
+      />
+      <path d="M9 2.5V6H12.5" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+export function DshPathLabel(props: { path: string; className?: string }) {
+  if (hasComponent(raw.PathLabel)) {
+    return <HostPrimitives.PathLabel path={props.path} className={props.className} />
+  }
+  return (
+    <span className={props.className} title={props.path}>
+      {props.path}
+    </span>
+  )
+}
+
+export function DshLinkIcon(props: { href?: string; size?: number; className?: string }) {
+  if (hasComponent(raw.LinkIconRegular)) {
+    return (
+      <HostPrimitives.LinkIconRegular
+        kind="url"
+        href={props.href}
+        size={props.size ?? 14}
+        className={props.className}
+      />
+    )
+  }
+  const sz = props.size ?? 14
+  return (
+    <svg
+      width={sz}
+      height={sz}
+      viewBox="0 0 16 16"
+      fill="none"
+      aria-hidden="true"
+      className={props.className}
+    >
+      <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.3" />
+      <path
+        d="M2.5 8H13.5M8 2.2C9.6 3.9 9.6 12.1 8 13.8C6.4 12.1 6.4 3.9 8 2.2Z"
+        stroke="currentColor"
+        strokeWidth="1.2"
+      />
+    </svg>
+  )
+}
+
+export function DshTextShimmer(props: {
+  children: ReactNode
+  active?: boolean
+  className?: string
+}) {
+  if (hasComponent(raw.TextShimmer)) {
+    return (
+      <HostPrimitives.TextShimmer active={props.active ?? true} className={props.className}>
+        {props.children}
+      </HostPrimitives.TextShimmer>
+    )
+  }
+  return <span className={props.className}>{props.children}</span>
+}

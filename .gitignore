@@ -1,6 +1,7 @@
 node_modules/
 lib/
 .dsh-dev/
+.agents/
 *.log
 .DS_Store
 *.tgz

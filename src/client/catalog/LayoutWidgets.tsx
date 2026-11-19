@@ -2,7 +2,7 @@
  * Layout & typography A2UI 1.0 components (`Text`, `Card`, `Row`, `Column`,
  * `List`, `Divider`, `Tabs`, `Modal`).
  */
-import { useCallback, useContext, useEffect, useId, useState, type ReactNode } from 'react'
+import { useCallback, useContext, useId, useState, type CSSProperties, type ReactNode } from 'react'
 import {
   CardApi,
   ColumnApi,
@@ -12,7 +12,7 @@ import {
   RowApi,
   TabsApi,
 } from '@a2ui/web_core/v1_0'
-import { DshTextApi } from '../../shared/catalog-schema.ts'
+import { DshTextApi, GridApi } from '../../shared/catalog-schema.ts'
 import { useRuntimeMessages } from '../i18n.ts'
 import { DshMarkdown, DshModal, DshSegmentedTabs, type SegmentedTab } from '../ui/primitives.tsx'
 import css from './Catalog.module.css'
@@ -109,7 +109,7 @@ export function isHomogeneousStatRow(context: unknown): boolean {
           : undefined
     if (!childId) return false
     const child = componentsModel.get(childId)
-    if (child?.type !== 'Stat') return false
+    if (child?.type !== 'Stat' && child?.type !== 'MetricRing') return false
     const w = child.properties?.weight
     if (w !== undefined && w !== 1) return false
   }
@@ -200,6 +200,41 @@ export const DshListImpl = defineComponent<{
   )
 })
 
+const GRID_GAP_MAP: Record<string, number> = {
+  sm: 8,
+  md: 12,
+  lg: 16,
+}
+
+export const DshGridImpl = defineComponent<{
+  children?: unknown
+  columns?: number
+  gap?: 'sm' | 'md' | 'lg'
+  weight?: number
+}>(GridApi, function DshGrid({ props, buildChild }) {
+  const cols =
+    typeof props.columns === 'number' && props.columns >= 1 && props.columns <= 6
+      ? Math.trunc(props.columns)
+      : 3
+  const gapPx = GRID_GAP_MAP[props.gap ?? 'md'] ?? 12
+  return (
+    <div
+      className={css.responsiveGrid}
+      data-a2ui-grid=""
+      data-columns={cols}
+      style={
+        {
+          ...weightStyle(props.weight),
+          '--a2ui-grid-cols': cols,
+          gap: gapPx,
+        } as CSSProperties
+      }
+    >
+      {renderChildList(buildChild, props.children)}
+    </div>
+  )
+})
+
 export const DshDividerImpl = defineComponent<{
   axis?: 'horizontal' | 'vertical'
   weight?: number
@@ -273,11 +308,10 @@ export function DshModalView({
   const readOnly = useContext(SurfaceReadOnlyContext)
   const [open, setOpen] = useState(false)
 
-  useEffect(() => {
-    if (readOnly) {
-      setOpen(false)
-    }
-  }, [readOnly])
+  // Adjust state directly during render when transitioning to read-only (`rerender-derived-state-no-effect`)
+  if (readOnly && open) {
+    setOpen(false)
+  }
 
   const closeModal = useCallback(() => {
     setOpen(false)

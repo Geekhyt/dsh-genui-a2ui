@@ -1,9 +1,17 @@
 .root {
   box-sizing: border-box;
   width: calc(
-    100% - var(--dsh-composer-side-clearance, 16px) * 2 - var(--dsh-composer-dock-inset, 8px) * 4
+    100% -
+    var(--dsh-composer-side-clearance, 16px) *
+    2 -
+    var(--dsh-composer-dock-inset, 8px) *
+    4
   );
-  max-width: calc(var(--dsh-composer-card-max-width, 800px) - var(--dsh-composer-dock-inset, 8px) * 4);
+  max-width: calc(
+    var(--dsh-composer-card-max-width, 800px) -
+    var(--dsh-composer-dock-inset, 8px) *
+    4
+  );
   --dsw-elevation-stroke-color: var(--dsw-alias-border-l1, rgba(128, 128, 128, 0.22));
   border-radius: var(--dsw-radius-lg, 12px);
   background: var(--dsw-specific-menu, var(--dsw-alias-bg-layer-1, #f7f8fa));

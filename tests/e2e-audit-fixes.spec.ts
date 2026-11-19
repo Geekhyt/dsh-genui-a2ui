@@ -25,18 +25,8 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => ({
   Pill: undefined,
   SegmentedTabs: undefined,
   Tag: undefined,
-  Modal: ({
-    open,
-    title,
-    children,
-  }: {
-    open: boolean
-    title: string
-    children?: ReactNode
-  }) =>
-    open
-      ? createElement('div', { role: 'dialog', 'data-mock-modal': title }, children)
-      : null,
+  Modal: ({ open, title, children }: { open: boolean; title: string; children?: ReactNode }) =>
+    open ? createElement('div', { role: 'dialog', 'data-mock-modal': title }, children) : null,
   Menu: undefined,
   Toast: undefined,
   Tooltip: undefined,
@@ -214,7 +204,11 @@ describe('E2E audit fixes (Items 2–5): Callout/CheckBox layout, Modal & readOn
       if (!didOpenOnce && !readOnly) {
         didOpenOnce = true
         const triggers = findElements(tree, (el) => typeof el.props.onClickCapture === 'function')
-        ;(triggers[0]?.props.onClickCapture as ((e: { stopPropagation: () => void; preventDefault: () => void }) => void) | undefined)?.({
+        ;(
+          triggers[0]?.props.onClickCapture as
+            | ((e: { stopPropagation: () => void; preventDefault: () => void }) => void)
+            | undefined
+        )?.({
           stopPropagation: () => {},
           preventDefault: () => {},
         })
@@ -232,7 +226,9 @@ describe('E2E audit fixes (Items 2–5): Callout/CheckBox layout, Modal & readOn
     expect(activeOpenModalHtml).toContain('data-mock-modal')
     expect(activeOpenModalHtml).toContain('确认弹窗正文')
 
-    let capturedTriggerClick: ((e: { stopPropagation: () => void; preventDefault: () => void }) => void) | undefined
+    let capturedTriggerClick:
+      | ((e: { stopPropagation: () => void; preventDefault: () => void }) => void)
+      | undefined
     const readOnlyModalHtml = renderToStaticMarkup(
       createElement(
         SurfaceReadOnlyContext.Provider,
@@ -352,7 +348,9 @@ describe('E2E audit fixes (Items 2–5): Callout/CheckBox layout, Modal & readOn
     // 1. Table plain-text cell contract is documented in system prompt, skill preamble, and schema snippet
     expect(A2UI_SYSTEM_GUIDANCE).toContain('NEVER nest `Badge`/`Button` inside `rows`')
     expect(SKILL_PREAMBLE).toContain('`Table` cells are plain scalar text only')
-    expect(snippet).toContain('nested A2UI components such as Badge or Button are NOT supported inside Table cells')
+    expect(snippet).toContain(
+      'nested A2UI components such as Badge or Button are NOT supported inside Table cells',
+    )
 
     // 2. Skill preamble documents all 5 built-in `?check` signatures + Button `$path` gating
     expect(SKILL_PREAMBLE).toContain('## Client Validation Rules (`?check`)')
@@ -391,6 +389,8 @@ describe('E2E audit fixes (Items 2–5): Callout/CheckBox layout, Modal & readOn
     // Grab-to-pan cursor states and expanded 96vw x 94vh fullscreen viewport
     expect(cssSource).toMatch(/\[data-pannable="true"\][\s\S]*?cursor:\s*grab;/)
     expect(cssSource).toMatch(/\[data-dragging="true"\][\s\S]*?cursor:\s*grabbing;/)
-    expect(cssSource).toMatch(/\.mermaidFullscreenCard\s*\{[^}]*width:\s*96vw;[^}]*height:\s*94vh;/s)
+    expect(cssSource).toMatch(
+      /\.mermaidFullscreenCard\s*\{[^}]*width:\s*96vw;[^}]*height:\s*94vh;/s,
+    )
   })
 })

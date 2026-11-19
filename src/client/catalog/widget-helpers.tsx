@@ -1,13 +1,7 @@
 /**
  * Shared light-DOM React component helpers for the DSH A2UI 1.0 catalog.
  */
-import {
-  Fragment,
-  createContext,
-  type CSSProperties,
-  type FC,
-  type ReactNode,
-} from 'react'
+import { Fragment, createContext, type CSSProperties, type FC, type ReactNode } from 'react'
 import {
   createComponentImplementation,
   type ReactA2uiComponentProps,
@@ -43,7 +37,9 @@ export function defineComponent<Props>(
   api: ComponentApi,
   render: FC<ReactA2uiComponentProps<Props>>,
 ): ReactCatalogComponent {
-  return createComponentImplementation(api as never, render as never)
+  return Object.assign(createComponentImplementation(api as never, render as never), {
+    rawRender: render,
+  })
 }
 
 export function weightStyle(weight: number | undefined, minWidth = 0): CSSProperties | undefined {

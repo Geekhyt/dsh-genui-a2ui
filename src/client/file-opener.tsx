@@ -39,11 +39,7 @@ export function sessionFileAddress(sessionId: string, path: string): string {
  * Compute the official `dsh-resource://file/session/<sessionId>/<path>` URI
  * matching `@deepseek-ai/dsh-util-workspace-path`'s `fileAddressFor`.
  */
-export function fileAddressFor(
-  sessionId: string,
-  cwd: string | undefined,
-  path: string,
-): string {
+export function fileAddressFor(sessionId: string, cwd: string | undefined, path: string): string {
   const normalized = path.replace(/\\/g, '/')
   if (!isAbsoluteWorkspacePath(normalized)) {
     return sessionFileAddress(sessionId, normalized)
@@ -77,10 +73,7 @@ const DISALLOWED_SCHEME_RE = /^(?:https?|javascript|data|mailto|blob|vbscript):/
  * Parse a model-supplied `filePath` + optional `line` into a sanitized `{ path, line }`.
  * Supports inline `:42`, `:42:10`, or `#L42` line suffixes while preserving Windows drive letters.
  */
-export function parseFileTarget(
-  rawPath: unknown,
-  explicitLine?: unknown,
-): ParsedFileTarget | null {
+export function parseFileTarget(rawPath: unknown, explicitLine?: unknown): ParsedFileTarget | null {
   if (typeof rawPath !== 'string') return null
   const trimmed = rawPath.trim()
   if (trimmed === '' || trimmed.includes('\0')) return null

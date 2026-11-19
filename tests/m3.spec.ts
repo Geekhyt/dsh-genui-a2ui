@@ -9,13 +9,17 @@ import { apply } from '../src/index.ts'
 
 describe('M3: hardened openUrl & DSH local functions (copyText, sum, avg)', () => {
   it('allows explicit https/http/mailto URLs and blocks relative or javascript/file URLs', () => {
-    expect(parseSafeExternalUrl('https://a2ui.org/quickstart/')).toBe('https://a2ui.org/quickstart/')
+    expect(parseSafeExternalUrl('https://a2ui.org/quickstart/')).toBe(
+      'https://a2ui.org/quickstart/',
+    )
     expect(parseSafeExternalUrl('mailto:team@example.com')).toBe('mailto:team@example.com')
 
     expect(() => parseSafeExternalUrl('/api/internal')).toThrow(/Invalid or relative URL/)
     expect(() => parseSafeExternalUrl('javascript:alert(1)')).toThrow(/Unsupported URL scheme/)
     expect(() => parseSafeExternalUrl('file:///etc/passwd')).toThrow(/Unsupported URL scheme/)
-    expect(() => parseSafeExternalUrl('data:text/html,<h1>x</h1>')).toThrow(/Unsupported URL scheme/)
+    expect(() => parseSafeExternalUrl('data:text/html,<h1>x</h1>')).toThrow(
+      /Unsupported URL scheme/,
+    )
   })
 
   it('computes reactive sum and avg over bound arrays and compiles them in Express', () => {
@@ -44,7 +48,10 @@ describe('M3: hardened openUrl & DSH local functions (copyText, sum, avg)', () =
 describe('M3: /a2ui 1-click toggle & on/off command', () => {
   it('toggles on empty input and accepts explicit on / off arguments', async () => {
     let toggleHandler:
-      | ((inv: { agent?: { session?: { id?: string } }; rawInput: string }) => { kind: string; text?: string })
+      | ((inv: { agent?: { session?: { id?: string } }; rawInput: string }) => {
+          kind: string
+          text?: string
+        })
       | undefined
 
     const fakeCtx = {

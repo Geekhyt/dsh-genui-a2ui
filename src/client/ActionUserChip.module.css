@@ -14,8 +14,17 @@
   gap: 6px;
   padding: 4px 10px;
   border-radius: var(--dsw-radius-md, 8px);
-  background: color-mix(in srgb, var(--dsw-alias-brand-primary, #4d6bfe) 11%, var(--dsw-alias-bg-layer-2, transparent));
-  border: 0.5px solid color-mix(in srgb, var(--dsw-alias-brand-primary, #4d6bfe) 32%, var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.25)));
+  background: color-mix(
+    in srgb,
+    var(--dsw-alias-brand-primary, #4d6bfe) 11%,
+    var(--dsw-alias-bg-layer-2, transparent)
+  );
+  border: 0.5px solid
+    color-mix(
+      in srgb,
+      var(--dsw-alias-brand-primary, #4d6bfe) 32%,
+      var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.25))
+    );
   color: var(--dsw-alias-label-primary, inherit);
   font-size: 13px;
   line-height: 20px;

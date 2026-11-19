@@ -1,11 +1,13 @@
 /**
- * TanStack Table v9-backed `Table` component for `dsh-genui-a2ui`.
+ * TanStack Table v9-backed Enterprise `ProTable` component for `dsh-genui-a2ui`.
  *
- * Uses tree-shaken v9 `tableFeatures` (`globalFilteringFeature`, `rowSortingFeature`,
- * `rowPaginationFeature`) with DSH `Input` for instant keyword search and DSH `Button`
- * for pagination.
+ * Supports instant deferred search, sorting, pagination, tabular right-aligned
+ * numeric columns (including currency & percentage strings), 1-click CSV (UTF-8 BOM)
+ * & Markdown export (`exportable`), multi-row checkboxes & batch action (`selectable`),
+ * expandable inline row-detail drawer (`expandKey`), compact/standard density toggle,
+ * and numeric summary footers (`showSummary`).
  */
-import { memo, useMemo, useState } from 'react'
+import { Fragment, memo, useDeferredValue, useMemo, useState } from 'react'
 import {
   columnFilteringFeature,
   createColumnHelper,
@@ -25,8 +27,14 @@ import {
 import type { ActionDispatchOptions } from '@a2ui/web_core/v1_0'
 import type { RuntimeUiMessages } from '../../shared/i18n.ts'
 import { useRuntimeMessages } from '../i18n.ts'
-import { DshButton, DshInput, DshSearchIcon } from '../ui/primitives.tsx'
+import { DshButton, DshInput, DshSearchIcon, DshTag } from '../ui/primitives.tsx'
 import css from './Catalog.module.css'
+import {
+  computeTableNumericSummary,
+  detectNumericColumnKeys,
+  formatTableToCsv,
+  formatTableToMarkdown,
+} from './v4-helpers.ts'
 
 type RowRecord = Record<string, unknown>
 
@@ -48,6 +56,7 @@ const TABLE_FEATURES = tableFeatures({
 })
 
 const columnHelper = createColumnHelper<typeof TABLE_FEATURES, RowRecord>()
+const SEARCH_ICON_14 = <DshSearchIcon size={14} />
 
 export interface TableColumnInput {
   readonly key: string
@@ -62,6 +71,11 @@ export interface TableWidgetProps {
   readonly title?: string | undefined
   readonly searchable?: boolean | undefined
   readonly pageSize?: number | undefined
+  readonly exportable?: boolean | undefined
+  readonly selectable?: boolean | undefined
+  readonly batchLabel?: string | undefined
+  readonly showSummary?: boolean | undefined
+  readonly expandKey?: string | undefined
   readonly action?: ((options?: ActionDispatchOptions) => Promise<void>) | undefined
   readonly weight?: number | undefined
 }
@@ -88,40 +102,113 @@ function formatCellValue(value: unknown, msg: RuntimeUiMessages): string {
   return String(value)
 }
 
+function formatExpandDetail(value: unknown): string {
+  if (value === null || value === undefined) return ''
+  if (typeof value === 'string') return value
+  if (typeof value === 'object') return JSON.stringify(value, null, 2)
+  return String(value)
+}
+
+function copyToClipboardSafe(text: string): void {
+  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+    void navigator.clipboard.writeText(text).catch(() => {})
+  }
+}
+
+function triggerCsvDownload(csvText: string, baseTitle: string): void {
+  if (
+    typeof document === 'undefined' ||
+    typeof Blob === 'undefined' ||
+    typeof URL === 'undefined'
+  ) {
+    copyToClipboardSafe(csvText)
+    return
+  }
+  try {
+    const blob = new Blob([csvText], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const slug = baseTitle
+      .trim()
+      .replace(/[^\w\u4e00-\u9fa5-]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${slug || 'a2ui-table'}.csv`
+    a.style.display = 'none'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+  } catch {
+    copyToClipboardSafe(csvText)
+  }
+}
+
 export const TableWidget = memo(function TableWidget({
   rows: rawRows,
   columns: explicitCols,
   title,
   searchable = false,
   pageSize = 10,
+  exportable = false,
+  selectable = false,
+  batchLabel,
+  showSummary = false,
+  expandKey,
   action,
   weight,
 }: TableWidgetProps) {
   const msg = useRuntimeMessages()
   const data = useMemo(() => normalizeRows(rawRows), [rawRows])
   const [sorting, setSorting] = useState<SortingState>([])
-  const [globalFilter, setGlobalFilter] = useState('')
+  const [searchInput, setSearchInput] = useState('')
+  const globalFilter = useDeferredValue(searchInput)
+  const [selectedIndices, setSelectedIndices] = useState<ReadonlySet<number>>(() => new Set())
+  const [expandedIndices, setExpandedIndices] = useState<ReadonlySet<number>>(() => new Set())
+  const [compact, setCompact] = useState(false)
+  const [copiedMd, setCopiedMd] = useState(false)
 
   const inferredCols = useMemo<readonly TableColumnInput[]>(() => {
     if (explicitCols && explicitCols.length > 0) return explicitCols
     const keys = new Set<string>()
     for (const row of data.slice(0, 25)) {
-      for (const k of Object.keys(row)) keys.add(k)
+      for (const k of Object.keys(row)) {
+        if (expandKey && k === expandKey) continue
+        keys.add(k)
+      }
     }
     return [...keys].map((key) => ({ key, label: key, sortable: true }))
-  }, [explicitCols, data])
+  }, [explicitCols, data, expandKey])
+
+  const hasExpandColumn = useMemo(
+    () =>
+      Boolean(
+        expandKey &&
+          data.some((r) => {
+            const v = r[expandKey]
+            return v !== undefined && v !== null && v !== ''
+          }),
+      ),
+    [expandKey, data],
+  )
+
+  const numericKeySet = useMemo(
+    () => detectNumericColumnKeys(inferredCols, data),
+    [inferredCols, data],
+  )
 
   const columns = useMemo(
     () =>
       columnHelper.columns(
         inferredCols.map((col) => {
-          const isNumeric =
+          const isNumeric = numericKeySet.has(col.key)
+          const rawNumber =
             data.length > 0 &&
+            data.some((r) => typeof r[col.key] === 'number') &&
             data.every(
               (r) =>
                 r[col.key] === null || r[col.key] === undefined || typeof r[col.key] === 'number',
-            ) &&
-            data.some((r) => typeof r[col.key] === 'number')
+            )
           const wrapProse =
             !isNumeric &&
             data.slice(0, 40).some((r) => {
@@ -133,13 +220,13 @@ export const TableWidget = memo(function TableWidget({
             id: col.key,
             header: col.label,
             enableSorting: col.sortable !== false,
-            sortFn: isNumeric ? 'basic' : 'alphanumeric',
+            sortFn: rawNumber ? 'basic' : 'alphanumeric',
             meta: { align, isNumeric, wrapProse },
             cell: (info) => formatCellValue(info.getValue(), msg),
           })
         }),
       ),
-    [inferredCols, data, msg],
+    [inferredCols, numericKeySet, data, msg],
   )
 
   const table = useTable({
@@ -148,7 +235,7 @@ export const TableWidget = memo(function TableWidget({
     columns,
     state: { sorting, globalFilter },
     onSortingChange: setSorting,
-    onGlobalFilterChange: setGlobalFilter,
+    onGlobalFilterChange: setSearchInput,
     globalFilterFn: (row, _columnId, filterValue) => {
       const q = String(filterValue ?? '')
         .trim()
@@ -163,41 +250,189 @@ export const TableWidget = memo(function TableWidget({
     },
   })
 
-  const totalFiltered = table.getFilteredRowModel().rows.length
+  const filteredRows = table.getFilteredRowModel().rows
+  const pageRows = table.getRowModel().rows
+  const totalFiltered = filteredRows.length
   const pageCount = table.getPageCount()
   const pageIndex = table.state.pagination.pageIndex
+
+  const summaryMap = useMemo(
+    () =>
+      showSummary
+        ? computeTableNumericSummary(
+            inferredCols,
+            filteredRows.map((r) => r.original),
+            numericKeySet,
+          )
+        : null,
+    [showSummary, inferredCols, filteredRows, numericKeySet],
+  )
+
+  const allPageSelected =
+    selectable && pageRows.length > 0 && pageRows.every((r) => selectedIndices.has(r.index))
+  const selectedRowsList = useMemo(
+    () => data.filter((_, idx) => selectedIndices.has(idx)),
+    [data, selectedIndices],
+  )
+
+  const toggleRowIndex = (idx: number) => {
+    setSelectedIndices((prev) => {
+      const next = new Set(prev)
+      if (next.has(idx)) next.delete(idx)
+      else next.add(idx)
+      return next
+    })
+  }
+
+  const toggleExpandRow = (idx: number) => {
+    setExpandedIndices((prev) => {
+      const next = new Set(prev)
+      if (next.has(idx)) next.delete(idx)
+      else next.add(idx)
+      return next
+    })
+  }
+
+  const toggleSelectPage = () => {
+    setSelectedIndices((prev) => {
+      const next = new Set(prev)
+      if (allPageSelected) {
+        for (const r of pageRows) next.delete(r.index)
+      } else {
+        for (const r of pageRows) next.add(r.index)
+      }
+      return next
+    })
+  }
+
+  const handleCopyMarkdown = () => {
+    const md = formatTableToMarkdown(
+      inferredCols,
+      filteredRows.map((r) => r.original),
+      numericKeySet,
+    )
+    copyToClipboardSafe(md)
+    setCopiedMd(true)
+    setTimeout(() => setCopiedMd(false), 1300)
+  }
+
+  const handleExportCsv = () => {
+    const csv = formatTableToCsv(
+      inferredCols,
+      filteredRows.map((r) => r.original),
+    )
+    triggerCsvDownload(csv, title || 'table-export')
+  }
+
+  const handleBatchDispatch = () => {
+    if (!action || selectedRowsList.length === 0) return
+    void action({
+      metadata: {
+        extensions: {
+          dshSelection: {
+            source: 'tableBatch',
+            label: batchLabel || msg.tableBatchDefault,
+            value: `${selectedRowsList.length}`,
+            count: selectedRowsList.length,
+            selectedRows: selectedRowsList,
+          },
+        },
+      },
+    })
+  }
+
+  const showProControls = exportable || selectable
+  const showToolbar = Boolean(title || searchable || showProControls)
+  const colSpanTotal = Math.max(
+    1,
+    columns.length + (selectable ? 1 : 0) + (hasExpandColumn ? 1 : 0),
+  )
+
   const weightStyle =
     weight !== undefined
       ? { flexGrow: weight, flexBasis: 'var(--a2ui-flex-basis, 0px)', minWidth: 240 }
       : undefined
 
   return (
-    <div className={css.tableCard} style={weightStyle} data-a2ui-table="">
-      {title || searchable ? (
+    <div
+      className={css.tableCard}
+      style={weightStyle}
+      data-a2ui-table=""
+      data-density={compact ? 'compact' : 'standard'}
+    >
+      {showToolbar ? (
         <div className={css.tableToolbar}>
-          {title ? <span className={css.tableTitle}>{title}</span> : <span />}
-          {searchable ? (
-            <div className={css.tableSearch}>
-              <DshInput
-                icon={<DshSearchIcon size={14} />}
-                value={globalFilter}
-                onChange={(e) => {
-                  setGlobalFilter(e.target.value)
-                  table.setPageIndex(0)
-                }}
-                placeholder={msg.tableSearchPlaceholder}
-                aria-label={msg.tableSearchAria}
-              />
-            </div>
-          ) : null}
+          <div className={css.proTableLeftGroup}>
+            {title ? <span className={css.tableTitle}>{title}</span> : null}
+            {selectable && selectedRowsList.length > 0 ? (
+              <DshTag tone="info">{msg.tableSelectedCount(selectedRowsList.length)}</DshTag>
+            ) : null}
+          </div>
+
+          <div className={css.proTableRightGroup}>
+            {selectable && selectedRowsList.length > 0 && typeof action === 'function' ? (
+              <DshButton size="sm" variant="primary" onClick={handleBatchDispatch}>
+                {batchLabel || msg.tableBatchDefault}
+              </DshButton>
+            ) : null}
+
+            {searchable ? (
+              <div className={css.tableSearch}>
+                <DshInput
+                  icon={SEARCH_ICON_14}
+                  value={searchInput}
+                  onChange={(e) => {
+                    setSearchInput(e.target.value)
+                    table.setPageIndex(0)
+                  }}
+                  placeholder={msg.tableSearchPlaceholder}
+                  aria-label={msg.tableSearchAria}
+                />
+              </div>
+            ) : null}
+
+            {showProControls ? (
+              <div className={css.proTableToolBtns}>
+                <button
+                  type="button"
+                  className={css.diffCopyBtn}
+                  onClick={() => setCompact((v) => !v)}
+                >
+                  {compact ? msg.tableDensityCompact : msg.tableDensityStandard}
+                </button>
+                {exportable ? (
+                  <>
+                    <button type="button" className={css.diffCopyBtn} onClick={handleCopyMarkdown}>
+                      {copiedMd ? msg.copiedCheck : msg.tableCopyMarkdown}
+                    </button>
+                    <button type="button" className={css.diffCopyBtn} onClick={handleExportCsv}>
+                      {msg.tableExportCsv}
+                    </button>
+                  </>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
         </div>
       ) : null}
 
       <div className={css.tableScroll}>
-        <table className={css.table}>
+        <table className={compact ? `${css.table} ${css.tableCompact}` : css.table}>
           <thead>
             {table.getHeaderGroups().map((hg) => (
               <tr key={hg.id}>
+                {hasExpandColumn ? <th className={`${css.th} ${css.proExpandCell}`} /> : null}
+                {selectable ? (
+                  <th className={`${css.th} ${css.proCheckCell}`}>
+                    <input
+                      type="checkbox"
+                      checked={allPageSelected}
+                      onChange={toggleSelectPage}
+                      aria-label={msg.tableSelectAllAria}
+                      className={css.proCheckbox}
+                    />
+                  </th>
+                ) : null}
                 {hg.headers.map((header) => {
                   const meta = header.column.columnDef.meta
                   const canSort = header.column.getCanSort()
@@ -218,15 +453,19 @@ export const TableWidget = memo(function TableWidget({
             ))}
           </thead>
           <tbody>
-            {table.getRowModel().rows.length === 0 ? (
+            {pageRows.length === 0 ? (
               <tr>
-                <td className={css.emptyCell} colSpan={Math.max(1, columns.length)}>
+                <td className={css.emptyCell} colSpan={colSpanTotal}>
                   {msg.tableEmpty}
                 </td>
               </tr>
             ) : (
-              table.getRowModel().rows.map((row) => {
-                const clickable = typeof action === 'function'
+              pageRows.map((row) => {
+                const clickable = typeof action === 'function' && !selectable
+                const rowChecked = selectable && selectedIndices.has(row.index)
+                const detailText =
+                  hasExpandColumn && expandKey ? formatExpandDetail(row.original[expandKey]) : ''
+                const isExpanded = detailText !== '' && expandedIndices.has(row.index)
                 const triggerRow = () => {
                   if (!action) return
                   const firstKey = inferredCols[0]?.key
@@ -248,45 +487,106 @@ export const TableWidget = memo(function TableWidget({
                   })
                 }
                 return (
-                  <tr
-                    key={row.id}
-                    className={clickable ? css.trInteractive : undefined}
-                    tabIndex={clickable ? 0 : undefined}
-                    role={clickable ? 'button' : undefined}
-                    onClick={clickable ? triggerRow : undefined}
-                    onKeyDown={
-                      clickable
-                        ? (e) => {
-                            if (e.key === 'Enter' || e.key === ' ') {
-                              e.preventDefault()
-                              triggerRow()
+                  <Fragment key={row.id}>
+                    <tr
+                      className={
+                        rowChecked ? css.trSelected : clickable ? css.trInteractive : undefined
+                      }
+                      tabIndex={clickable ? 0 : undefined}
+                      role={clickable ? 'button' : undefined}
+                      onClick={clickable ? triggerRow : undefined}
+                      onKeyDown={
+                        clickable
+                          ? (e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault()
+                                triggerRow()
+                              }
                             }
-                          }
-                        : undefined
-                    }
-                  >
-                    {row.getAllCells().map((cell) => {
-                      const meta = cell.column.columnDef.meta
-                      const cellCls = meta?.isNumeric
-                        ? `${css.td} ${css.tdNum}`
-                        : meta?.wrapProse
-                          ? `${css.td} ${css.tdProse}`
-                          : `${css.td} ${css.tdNowrap}`
-                      return (
+                          : undefined
+                      }
+                    >
+                      {hasExpandColumn ? (
                         <td
-                          key={cell.id}
-                          className={cellCls}
-                          style={{ textAlign: meta?.align ?? 'left' }}
+                          className={`${css.td} ${css.proExpandCell}`}
+                          onClick={(e) => e.stopPropagation()}
                         >
-                          <table.FlexRender cell={cell} />
+                          {detailText !== '' ? (
+                            <button
+                              type="button"
+                              className={css.proExpandBtn}
+                              aria-expanded={isExpanded}
+                              aria-label={msg.tableExpandRowAria}
+                              onClick={() => toggleExpandRow(row.index)}
+                            >
+                              {isExpanded ? '▾' : '▸'}
+                            </button>
+                          ) : null}
                         </td>
-                      )
-                    })}
-                  </tr>
+                      ) : null}
+                      {selectable ? (
+                        <td
+                          className={`${css.td} ${css.proCheckCell}`}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={rowChecked}
+                            onChange={() => toggleRowIndex(row.index)}
+                            aria-label={msg.tableSelectRowAria(row.index + 1)}
+                            className={css.proCheckbox}
+                          />
+                        </td>
+                      ) : null}
+                      {row.getAllCells().map((cell) => {
+                        const meta = cell.column.columnDef.meta
+                        const cellCls = meta?.isNumeric
+                          ? `${css.td} ${css.tdNum}`
+                          : meta?.wrapProse
+                            ? `${css.td} ${css.tdProse}`
+                            : `${css.td} ${css.tdNowrap}`
+                        return (
+                          <td
+                            key={cell.id}
+                            className={cellCls}
+                            style={{ textAlign: meta?.align ?? 'left' }}
+                          >
+                            <table.FlexRender cell={cell} />
+                          </td>
+                        )
+                      })}
+                    </tr>
+                    {isExpanded ? (
+                      <tr className={css.proExpandTr}>
+                        <td colSpan={colSpanTotal} className={css.proExpandTd}>
+                          <pre className={css.proExpandPre}>{detailText}</pre>
+                        </td>
+                      </tr>
+                    ) : null}
+                  </Fragment>
                 )
               })
             )}
           </tbody>
+          {summaryMap && filteredRows.length > 0 ? (
+            <tfoot>
+              <tr className={css.proSummaryRow}>
+                {hasExpandColumn ? <td className={css.td} /> : null}
+                {selectable ? <td className={css.td} /> : null}
+                {inferredCols.map((col, idx) => (
+                  <td
+                    key={col.key}
+                    className={numericKeySet.has(col.key) ? `${css.td} ${css.tdNum}` : css.td}
+                    style={{ textAlign: numericKeySet.has(col.key) ? 'right' : 'left' }}
+                  >
+                    {idx === 0 && !summaryMap[col.key]
+                      ? msg.tableSummaryLabel(filteredRows.length)
+                      : (summaryMap[col.key] ?? '')}
+                  </td>
+                ))}
+              </tr>
+            </tfoot>
+          ) : null}
         </table>
       </div>
 

@@ -89,7 +89,12 @@ describe('M2: placement, dock, & superseded historical snapshots', () => {
               title: '预订已确认',
               placement: 'answer',
               surfaceIds: ['booking'],
-              messages: [{ version: '1.0', updateDataModel: { surfaceId: 'booking', path: '/ok', value: true } } as never],
+              messages: [
+                {
+                  version: '1.0',
+                  updateDataModel: { surfaceId: 'booking', path: '/ok', value: true },
+                } as never,
+              ],
             },
           },
         ],
@@ -206,7 +211,10 @@ describe('M2: A2UI 1-click on/off switch', () => {
     ).rejects.toThrow(/turned OFF/)
 
     sessions.setEnabled('sess-toggle', true)
-    const reenabledRes = await renderTool.execute({ ui: 'surface("b3")\nroot = Card(Text("重新开启"))' }, exec)
+    const reenabledRes = await renderTool.execute(
+      { ui: 'surface("b3")\nroot = Card(Text("重新开启"))' },
+      exec,
+    )
     expect(reenabledRes.surfaceIds).toEqual(['b3'])
   })
 })
@@ -291,7 +299,8 @@ describe('M2: resolveActiveAskCall & mock-llm DSL fixtures', () => {
                 callId: 'call_ask_live',
                 name: 'a2ui_ask',
                 args: {
-                  text: (k: string) => (k === 'title' ? '发布环境确认' : k === 'ui' ? deployUi : undefined),
+                  text: (k: string) =>
+                    k === 'title' ? '发布环境确认' : k === 'ui' ? deployUi : undefined,
                 },
               },
             },
@@ -344,6 +353,8 @@ describe('M2: resolveActiveAskCall & mock-llm DSL fixtures', () => {
     expect(sessions.compile('mock-showcase', m.SHOWCASE_ARCHITECTURE_UI!).length).toBeGreaterThan(0)
     expect(sessions.compile('mock-showcase', m.SHOWCASE_SIMULATOR_UI!).length).toBeGreaterThan(0)
     expect(sessions.compile('mock-showcase', m.SHOWCASE_ASK_DIFF_UI!).length).toBeGreaterThan(0)
-    expect(sessions.compile('mock-showcase', m.SHOWCASE_DOCK_PIPELINE_UI!).length).toBeGreaterThan(0)
+    expect(sessions.compile('mock-showcase', m.SHOWCASE_DOCK_PIPELINE_UI!).length).toBeGreaterThan(
+      0,
+    )
   })
 })

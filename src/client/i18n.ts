@@ -16,23 +16,41 @@ import {
   type UiLocale,
 } from '../shared/i18n.ts'
 
-function subscribeClientLocale(listener: () => void): () => void {
-  const unsubOverride = subscribeUiLocaleOverride(listener)
-  if (
-    typeof document === 'undefined' ||
-    typeof MutationObserver === 'undefined' ||
-    !document.documentElement
-  ) {
-    return unsubOverride
+const localeListeners = new Set<() => void>()
+let sharedLocaleObserver: MutationObserver | null = null
+let sharedOverrideUnsub: (() => void) | null = null
+
+function notifyLocaleListeners(): void {
+  for (const listener of localeListeners) {
+    listener()
   }
-  const observer = new MutationObserver(listener)
-  observer.observe(document.documentElement, {
-    attributes: true,
-    attributeFilter: ['lang'],
-  })
+}
+
+export function subscribeClientLocale(listener: () => void): () => void {
+  localeListeners.add(listener)
+  if (sharedOverrideUnsub === null) {
+    sharedOverrideUnsub = subscribeUiLocaleOverride(notifyLocaleListeners)
+  }
+  if (
+    sharedLocaleObserver === null &&
+    typeof document !== 'undefined' &&
+    typeof MutationObserver !== 'undefined' &&
+    document.documentElement
+  ) {
+    sharedLocaleObserver = new MutationObserver(notifyLocaleListeners)
+    sharedLocaleObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['lang'],
+    })
+  }
   return () => {
-    observer.disconnect()
-    unsubOverride()
+    localeListeners.delete(listener)
+    if (localeListeners.size === 0) {
+      sharedLocaleObserver?.disconnect()
+      sharedLocaleObserver = null
+      sharedOverrideUnsub?.()
+      sharedOverrideUnsub = null
+    }
   }
 }
 

@@ -11,7 +11,17 @@ describe('M1: dshSchemaCatalog with @a2ui/agent ExpressParser', () => {
     expect(json.catalogId).toBe(DSH_CATALOG_ID)
     const components = json.components as Record<string, unknown>
     expect(Object.keys(components)).toEqual(
-      expect.arrayContaining(['Text', 'Button', 'Card', 'Chart', 'Table', 'Stat', 'Progress', 'Badge', 'Code']),
+      expect.arrayContaining([
+        'Text',
+        'Button',
+        'Card',
+        'Chart',
+        'Table',
+        'Stat',
+        'Progress',
+        'Badge',
+        'Code',
+      ]),
     )
 
     const parser = new ExpressParser([dshSchemaCatalog])
@@ -19,13 +29,28 @@ describe('M1: dshSchemaCatalog with @a2ui/agent ExpressParser', () => {
     const messages = parts.flatMap((p) => (p.type === 'a2ui' ? p.a2ui : []))
     expect(messages.length).toBeGreaterThanOrEqual(1)
     const createMsg = messages.find((m) => 'createSurface' in m) as
-      | { createSurface: { surfaceId: string; catalogId: string; components?: Array<{ component: string }> } }
+      | {
+          createSurface: {
+            surfaceId: string
+            catalogId: string
+            components?: Array<{ component: string }>
+          }
+        }
       | undefined
     expect(createMsg?.createSurface.surfaceId).toBe('analytics')
     expect(createMsg?.createSurface.catalogId).toBe(DSH_CATALOG_ID)
     const compTypes = (createMsg?.createSurface.components ?? []).map((c) => c.component)
     expect(compTypes).toEqual(
-      expect.arrayContaining(['Chart', 'Table', 'Stat', 'Progress', 'Badge', 'Code', 'Tabs', 'Modal']),
+      expect.arrayContaining([
+        'Chart',
+        'Table',
+        'Stat',
+        'Progress',
+        'Badge',
+        'Code',
+        'Tabs',
+        'Modal',
+      ]),
     )
   })
 

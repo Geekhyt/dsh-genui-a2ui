@@ -16,9 +16,11 @@ vi.hoisted(() => {
 vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => ({
   Button: undefined,
   Checkbox: undefined,
+  Switch: undefined,
   Input: undefined,
   Pill: undefined,
   SegmentedTabs: undefined,
+  SegmentedControl: undefined,
   Tag: undefined,
   Modal: undefined,
   Menu: undefined,
@@ -27,6 +29,14 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => ({
   JsonTree: undefined,
   DisclosureRow: undefined,
   MarkdownText: undefined,
+  StateDot: undefined,
+  HoverCard: undefined,
+  HoverCardGroup: undefined,
+  ImageLightbox: undefined,
+  FileTypeIcon: undefined,
+  PathLabel: undefined,
+  LinkIconRegular: undefined,
+  TextShimmer: undefined,
   IconAppsAddOutlineRegular: undefined,
   IconSearchOutlineRegular: undefined,
 }))
@@ -51,16 +61,12 @@ import {
   stripUnsafeDirectives,
 } from '../src/client/mermaid-safe.ts'
 import { createGenerator, SurfaceSessions } from '../src/host/generator.ts'
-import {
-  CHART_KINDS,
-  DSH_COMPONENT_APIS,
-  dshSchemaCatalog,
-} from '../src/shared/catalog-schema.ts'
+import { CHART_KINDS, DSH_COMPONENT_APIS, dshSchemaCatalog } from '../src/shared/catalog-schema.ts'
 
-describe('Evolution v2: 32-Component Catalog Parity & Scope Governance', () => {
-  it('registers exact 32 components across Host schema catalog and Client React catalog with zero banned features', () => {
-    expect(DSH_COMPONENT_APIS).toHaveLength(32)
-    expect(DSH_REACT_COMPONENTS).toHaveLength(32)
+describe('Evolution v2–v5: 57-Component Catalog Parity & Scope Governance', () => {
+  it('registers exact 57 components across Host schema catalog and Client React catalog with zero banned features', () => {
+    expect(DSH_COMPONENT_APIS).toHaveLength(57)
+    expect(DSH_REACT_COMPONENTS).toHaveLength(57)
     expect(CHART_KINDS).toHaveLength(14)
 
     const schemaJson = dshSchemaCatalog.toJson()
@@ -80,7 +86,10 @@ describe('Evolution v2: 32-Component Catalog Parity & Scope Governance', () => {
     for (const [compName, compDef] of Object.entries(
       schemaJson.components as Record<string, { properties?: Record<string, unknown> }>,
     )) {
-      expect(compDef.properties?.visible, `${compName} should not define global visible`).toBeUndefined()
+      expect(
+        compDef.properties?.visible,
+        `${compName} should not define global visible`,
+      ).toBeUndefined()
       expect(compDef.properties?.when, `${compName} should not define global when`).toBeUndefined()
     }
   })
@@ -141,7 +150,10 @@ describe('Evolution v2: 14-Kind ECharts Option Builder', () => {
     const hBar = buildChartOption(
       {
         kind: 'bar',
-        data: [{ team: '核心研发', score: 94 }, { team: '平台架构', score: 88 }],
+        data: [
+          { team: '核心研发', score: 94 },
+          { team: '平台架构', score: 88 },
+        ],
         xField: 'team',
         yField: 'score',
         horizontal: true,
@@ -167,9 +179,11 @@ describe('Evolution v2: 14-Kind ECharts Option Builder', () => {
       },
       true,
     )
-    const scatterSeries = (bubble.series as Array<{
-      symbolSize?: (val: number[], params?: { dataIndex?: number }) => number
-    }>)[0]!
+    const scatterSeries = (
+      bubble.series as Array<{
+        symbolSize?: (val: number[], params?: { dataIndex?: number }) => number
+      }>
+    )[0]!
     expect(typeof scatterSeries.symbolSize).toBe('function')
     expect(scatterSeries.symbolSize!([10, 25, 100], { dataIndex: 0 })).toBeLessThan(
       scatterSeries.symbolSize!([30, 60, 900], { dataIndex: 1 }),
@@ -206,7 +220,9 @@ describe('Evolution v2: 14-Kind ECharts Option Builder', () => {
       },
       false,
     )
-    const treeData = (tree.series as Array<{ data: Array<{ name: string; children: unknown[] }> }>)[0]!.data
+    const treeData = (
+      tree.series as Array<{ data: Array<{ name: string; children: unknown[] }> }>
+    )[0]!.data
     expect(treeData).toHaveLength(2)
 
     // 5. Sankey with cycle (A -> B -> C -> A) breaks cycle cleanly instead of crashing ECharts
@@ -245,7 +261,10 @@ describe('Evolution v2: 14-Kind ECharts Option Builder', () => {
       {
         kind: 'graph',
         data: {
-          nodes: [{ name: 'Gateway', category: 'edge', value: 30 }, { name: 'DB', category: 'storage', value: 20 }],
+          nodes: [
+            { name: 'Gateway', category: 'edge', value: 30 },
+            { name: 'DB', category: 'storage', value: 20 },
+          ],
           links: [{ source: 'Gateway', target: 'DB', value: 120 }],
         },
       },
@@ -269,22 +288,29 @@ describe('Evolution v2: 14-Kind ECharts Option Builder', () => {
 
 describe('Evolution v2: Mermaid Sanitizer, Official sidebarRight File Opener & Helpers', () => {
   it('strips unsafe %%{init}%% directives, validates diagram kinds, repairs CJK labels, and enforces assertSafeSvg', () => {
-    const dirty = '%%{init: {"securityLevel": "loose"}}%%\nflowchart LR\n  A[网关 (Gateway): 入口] --> B[核心服务]'
+    const dirty =
+      '%%{init: {"securityLevel": "loose"}}%%\nflowchart LR\n  A[网关 (Gateway): 入口] --> B[核心服务]'
     const stripped = stripUnsafeDirectives(dirty)
     expect(stripped).not.toContain('securityLevel')
     expect(extractMermaidKind(stripped)).toBe('flowchart')
 
     expect(ensureFlowchartKind('A --> B')).toBe('graph TD\nA --> B')
-    expect(ensureFlowchartKind('sequenceDiagram\n  Alice->>Bob: Hi')).toBe('sequenceDiagram\n  Alice->>Bob: Hi')
+    expect(ensureFlowchartKind('sequenceDiagram\n  Alice->>Bob: Hi')).toBe(
+      'sequenceDiagram\n  Alice->>Bob: Hi',
+    )
 
     const repaired = repairMermaidSource(stripped)
     expect(repaired).toContain('A["网关 (Gateway): 入口"]')
     expect(repaired).toContain('B["核心服务"]')
 
-    expect(() => assertSafeSvg('<svg viewBox="0 0 100 40"><g><rect width="10" height="10"/></g></svg>')).not.toThrow()
+    expect(() =>
+      assertSafeSvg('<svg viewBox="0 0 100 40"><g><rect width="10" height="10"/></g></svg>'),
+    ).not.toThrow()
     expect(() => assertSafeSvg('<svg><script>alert(1)</script></svg>')).toThrow(/sanitization/)
     expect(() => assertSafeSvg('<svg onload="alert(1)"></svg>')).toThrow(/sanitization/)
-    expect(() => assertSafeSvg('<svg><a href="javascript:evil()">x</a></svg>')).toThrow(/sanitization/)
+    expect(() => assertSafeSvg('<svg><a href="javascript:evil()">x</a></svg>')).toThrow(
+      /sanitization/,
+    )
   })
 
   it('constructs exact official DSH dsh-resource://file addresses and opens files via sidebarRight.openResource', () => {
@@ -307,7 +333,9 @@ describe('Evolution v2: Mermaid Sanitizer, Official sidebarRight File Opener & H
 
     // End-to-end client apply() wiring with sidebarRight service
     const openedCalls: Array<{ address: string; options: unknown }> = []
-    let registeredTurnTailInject: ((sid: string) => { openWorkspaceFile?: (p: string, l?: number) => void }) | undefined
+    let registeredTurnTailInject:
+      | ((sid: string) => { openWorkspaceFile?: (p: string, l?: number) => void })
+      | undefined
 
     const fakeClientCtx = {
       slots: {
@@ -330,12 +358,16 @@ describe('Evolution v2: Mermaid Sanitizer, Official sidebarRight File Opener & H
         list: {
           getSnapshot: () => ({ byId: { 'sess-live': { cwd: '/workspace/dsh-genui-a2ui' } } }),
         },
-        binding: () => ({ session: { projections: { faceOf: () => ({ getSnapshot: () => undefined }) } } }),
+        binding: () => ({
+          session: { projections: { faceOf: () => ({ getSnapshot: () => undefined }) } },
+        }),
       },
       uiConversation: {
         events: { register: () => () => {} },
         userText: { register: () => () => {} },
-        binding: () => ({ target: () => ({ subscribe: () => () => {}, getSnapshot: () => undefined }) }),
+        binding: () => ({
+          target: () => ({ subscribe: () => () => {}, getSnapshot: () => undefined }),
+        }),
       },
       inject(deps: string[], cb: (inner: unknown) => void) {
         if (deps.includes('sidebarRight')) {

@@ -24,7 +24,8 @@ export function splitStatValueUnit(raw: unknown): SplitStatValue {
   if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(text) || /^\d{1,2}:\d{2}/.test(text)) {
     return { main: text, unit: '' }
   }
-  const match = /^([+-]?(?:[$¥€£]\s*)?\d[\d,]*(?:\.\d+)?)\s*([%‰℃°A-Za-z\u4e00-\u9fff/²³µμ]{1,8})$/.exec(text)
+  const match =
+    /^([+-]?(?:[$¥€£]\s*)?\d[\d,]*(?:\.\d+)?)\s*([%‰℃°A-Za-z\u4e00-\u9fff/²³µμ]{1,8})$/.exec(text)
   if (!match?.[1] || !match[2]) return { main: text, unit: '' }
   return { main: match[1].trim(), unit: match[2].trim() }
 }
@@ -108,8 +109,10 @@ function normalizeStatus(raw: unknown): FileChangeStatus | undefined {
   if (typeof raw !== 'string') return undefined
   const lower = raw.trim().toLowerCase()
   if (lower === 'added' || lower === 'add' || lower === 'a' || lower === 'new') return 'added'
-  if (lower === 'modified' || lower === 'mod' || lower === 'm' || lower === 'changed') return 'modified'
-  if (lower === 'deleted' || lower === 'del' || lower === 'd' || lower === 'removed') return 'deleted'
+  if (lower === 'modified' || lower === 'mod' || lower === 'm' || lower === 'changed')
+    return 'modified'
+  if (lower === 'deleted' || lower === 'del' || lower === 'd' || lower === 'removed')
+    return 'deleted'
   if (lower === 'renamed' || lower === 'ren' || lower === 'r' || lower === 'moved') return 'renamed'
   return undefined
 }
@@ -119,7 +122,10 @@ export function normalizeFileEntries(rawItems: unknown): NormalizedFileEntry[] {
   const out: NormalizedFileEntry[] = []
   for (const item of rawItems) {
     if (typeof item === 'string') {
-      const clean = item.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '').trim()
+      const clean = item
+        .replace(/\\/g, '/')
+        .replace(/^\/+|\/+$/g, '')
+        .trim()
       if (clean !== '') {
         const isDir = item.trim().endsWith('/')
         out.push({ path: clean, kind: isDir ? 'dir' : 'file', raw: { path: clean } })
@@ -128,12 +134,21 @@ export function normalizeFileEntries(rawItems: unknown): NormalizedFileEntry[] {
     }
     if (typeof item === 'object' && item !== null && !Array.isArray(item)) {
       const rec = item as Record<string, unknown>
-      const rawPath = typeof rec.path === 'string' ? rec.path : typeof rec.file === 'string' ? rec.file : ''
-      const clean = rawPath.replace(/\\/g, '/').replace(/^(?:\.\/)+/, '').replace(/\/+$/, '').trim()
+      const rawPath =
+        typeof rec.path === 'string' ? rec.path : typeof rec.file === 'string' ? rec.file : ''
+      const clean = rawPath
+        .replace(/\\/g, '/')
+        .replace(/^(?:\.\/)+/, '')
+        .replace(/\/+$/, '')
+        .trim()
       if (clean === '') continue
-      const explicitKind = rec.kind === 'dir' || rec.type === 'dir' || rawPath.trim().endsWith('/') ? 'dir' : 'file'
+      const explicitKind =
+        rec.kind === 'dir' || rec.type === 'dir' || rawPath.trim().endsWith('/') ? 'dir' : 'file'
       const status = normalizeStatus(rec.status)
-      const summary = typeof rec.summary === 'string' && rec.summary.trim() !== '' ? rec.summary.trim() : undefined
+      const summary =
+        typeof rec.summary === 'string' && rec.summary.trim() !== ''
+          ? rec.summary.trim()
+          : undefined
       const line =
         typeof rec.line === 'number' && Number.isFinite(rec.line) && rec.line >= 1
           ? Math.trunc(rec.line)

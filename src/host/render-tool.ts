@@ -87,7 +87,10 @@ export function readArgs(args: unknown): {
   const record = value as Record<string, unknown>
   return {
     ui: typeof record.ui === 'string' ? record.ui : undefined,
-    title: typeof record.title === 'string' && record.title.trim() !== '' ? record.title.trim() : undefined,
+    title:
+      typeof record.title === 'string' && record.title.trim() !== ''
+        ? record.title.trim()
+        : undefined,
     placement: normalizePlacement(record.placement),
   }
 }
@@ -115,7 +118,8 @@ export function isSubagentCall(exec: ToolExec | undefined): boolean {
   if (exec.parentCallId !== undefined) return true
   if (exec.agent?.isSubagent === true) return true
   if (exec.agent?.parent !== undefined && exec.agent?.parent !== null) return true
-  if (exec.agent?.session?.parentId !== undefined && exec.agent?.session?.parentId !== null) return true
+  if (exec.agent?.session?.parentId !== undefined && exec.agent?.session?.parentId !== null)
+    return true
   if (
     exec.agent?.session?.header?.parentSession !== undefined &&
     exec.agent?.session?.header?.parentSession !== null

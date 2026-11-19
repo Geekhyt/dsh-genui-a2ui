@@ -51,6 +51,15 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
     className?: string | undefined
   }): JSX.Element
 
+  export function Switch(props: {
+    checked: boolean
+    onChange: (next: boolean) => void
+    label: string
+    disabled?: boolean
+    title?: string | undefined
+    className?: string | undefined
+  }): JSX.Element
+
   export const Input: ForwardRefExoticComponent<
     {
       icon?: ReactNode
@@ -100,7 +109,15 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
     className?: string | undefined
   }): JSX.Element
 
-  export type TagTone = 'outline' | 'solid' | 'neutral' | 'quiet' | 'success' | 'info' | 'warning' | 'danger'
+  export type TagTone =
+    | 'outline'
+    | 'solid'
+    | 'neutral'
+    | 'quiet'
+    | 'success'
+    | 'info'
+    | 'warning'
+    | 'danger'
 
   export function Tag(props: {
     tone?: TagTone
@@ -210,11 +227,13 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
     label: string
     className?: string | undefined
     collapsedStringLines?: number
-    stringWrapping?: {
-      label: string
-      getDefault: () => boolean
-      setDefault: (wrapped: boolean) => void
-    } | undefined
+    stringWrapping?:
+      | {
+          label: string
+          getDefault: () => boolean
+          setDefault: (wrapped: boolean) => void
+        }
+      | undefined
     copyable?: boolean
     expandTopLevel?: boolean
     labels: JsonTreeLabels
@@ -258,6 +277,60 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
       labels: MarkdownLabels
       variant?: 'body' | 'compact'
       omitHtml?: boolean
+    }) => JSX.Element
+  >
+
+  export function StateDot(props: {
+    state: 'done' | 'ongoing' | 'error' | 'pending' | string
+    size?: number | undefined
+    appearance?: 'dot' | 'step' | undefined
+    className?: string | undefined
+  }): JSX.Element
+
+  export function HoverCardGroup(props: { children: ReactNode }): JSX.Element
+
+  export function HoverCard(props: {
+    anchor: ReactElement
+    content: ReactNode
+    openDelayMs?: number | undefined
+    disabled?: boolean | undefined
+    grouped?: boolean | undefined
+    copyText?: string | undefined
+    copyLabel?: string | undefined
+    copiedLabel?: string | undefined
+    variant?: 'compact' | 'default' | undefined
+    inline?: boolean | undefined
+    fitContent?: boolean | undefined
+  }): JSX.Element
+
+  export function ImageLightbox(props: {
+    src: string
+    alt: string
+    labels: { dialog: string; close: string }
+    onClose: () => void
+  }): ReactPortal
+
+  export function FileTypeIcon(props: {
+    path: string
+    size?: number | undefined
+    className?: string | undefined
+  }): JSX.Element
+
+  export function PathLabel(props: { path: string; className?: string | undefined }): JSX.Element
+
+  export function LinkIconRegular(props: {
+    kind: 'url' | 'folder' | 'code' | 'image' | 'document' | 'other'
+    href?: string | undefined
+    size?: number | undefined
+    className?: string | undefined
+  }): JSX.Element
+
+  export const TextShimmer: MemoExoticComponent<
+    (props: {
+      children: ReactNode
+      active?: boolean | undefined
+      className?: string | undefined
+      contentClassName?: string | undefined
     }) => JSX.Element
   >
 }

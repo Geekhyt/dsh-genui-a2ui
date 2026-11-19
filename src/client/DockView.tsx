@@ -31,6 +31,9 @@ export interface A2uiDockViewProps {
 }
 
 const NOOP_SUBSCRIBE = () => () => {}
+const APPS_ICON_14 = <DshAppsIcon size={14} />
+const CHEVRON_UP_14 = <DshChevronUpIcon size={14} />
+const CHEVRON_DOWN_14 = <DshChevronDownIcon size={14} />
 
 export const A2uiDockView = memo(function A2uiDockView({
   sessionId,
@@ -44,7 +47,7 @@ export const A2uiDockView = memo(function A2uiDockView({
     [chatStore],
   )
   const getChatSnapshot = useCallback(() => chatStore?.getSnapshot(), [chatStore])
-  const snapshot = useSyncExternalStore(subscribeChat, getChatSnapshot, () => undefined)
+  const snapshot = useSyncExternalStore(subscribeChat, getChatSnapshot, getChatSnapshot)
 
   const getUiState = useCallback(() => getDockUiState(sessionId), [sessionId])
   const uiState = useSyncExternalStore(subscribeDockUi, getUiState, () => getDockUiState(undefined))
@@ -81,7 +84,7 @@ export const A2uiDockView = memo(function A2uiDockView({
           data-a2ui-dock-toggle=""
         >
           <span className={css.leadIcon} aria-hidden="true">
-            <DshAppsIcon size={14} />
+            {APPS_ICON_14}
           </span>
           <span className={css.title}>{title}</span>
           <span className={css.tag}>{msg.dockTag}</span>
@@ -94,7 +97,7 @@ export const A2uiDockView = memo(function A2uiDockView({
             title={collapsed ? msg.dockExpand : msg.dockCollapse}
             onClick={toggleCollapsed}
           >
-            {collapsed ? <DshChevronUpIcon size={14} /> : <DshChevronDownIcon size={14} />}
+            {collapsed ? CHEVRON_UP_14 : CHEVRON_DOWN_14}
           </button>
           <button
             type="button"

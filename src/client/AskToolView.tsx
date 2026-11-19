@@ -13,7 +13,7 @@
  *    to `"已提交 · <action>"` / `"已跳过"` / `"等待超时"` (expandable to inspect the
  *    read-only snapshot and submitted JSON payload) once `phase === 'result'`.
  */
-import { memo, useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import { memo, useCallback, useMemo, useState, useSyncExternalStore } from 'react'
 import type { ActionPayload } from '@a2ui/web_core/v1_0'
 import type { AskAnswerInput } from '../shared/wire-types.ts'
 import dockCss from './DockView.module.css'
@@ -39,6 +39,7 @@ export interface A2uiAskToolViewProps extends ToolViewOwnerProps {
 }
 
 const NOOP_SUBSCRIBE = () => () => {}
+const APPS_ICON_14 = <DshAppsIcon size={14} />
 
 /** Active interactive `a2ui_ask` card pinned right above the composer while awaiting input. */
 export const A2uiAskDockView = memo(function A2uiAskDockView({
@@ -49,20 +50,19 @@ export const A2uiAskDockView = memo(function A2uiAskDockView({
 }: A2uiAskDockViewProps) {
   const msg = useShellMessages()
   const [submittingCallId, setSubmittingCallId] = useState<string | null>(null)
-  const [submitError, setSubmitError] = useState<string | null>(null)
+  const [errorState, setErrorState] = useState<{
+    readonly callId: string
+    readonly message: string
+  } | null>(null)
 
   const subscribe = useCallback(
     (listener: () => void) => (chatStore ? chatStore.subscribe(listener) : NOOP_SUBSCRIBE()),
     [chatStore],
   )
   const getSnapshot = useCallback(() => chatStore?.getSnapshot(), [chatStore])
-  const chatSnapshot = useSyncExternalStore(subscribe, getSnapshot, () => undefined)
+  const chatSnapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 
   const activeAsk = useMemo(() => resolveActiveAskCall(chatSnapshot), [chatSnapshot])
-
-  useEffect(() => {
-    setSubmitError(null)
-  }, [activeAsk?.callId])
 
   const streamingSnapshot = useLazyStreamingExpress(
     activeAsk !== null,
@@ -86,12 +86,14 @@ export const A2uiAskDockView = memo(function A2uiAskDockView({
 
   const activeCallId = activeAsk?.callId ?? ''
   const submitting = activeCallId !== '' && submittingCallId === activeCallId
+  const submitError =
+    activeCallId !== '' && errorState?.callId === activeCallId ? errorState.message : null
 
   const handleSurfaceAction = useCallback(
     (_formatted: string, raw: ActionPayload, dataModels: Record<string, unknown>) => {
       if (!activeCallId || submitting || submitAskAnswer === undefined) return
       setSubmittingCallId(activeCallId)
-      setSubmitError(null)
+      setErrorState(null)
       void submitAskAnswer({
         callId: activeCallId,
         action: raw.name,
@@ -104,12 +106,15 @@ export const A2uiAskDockView = memo(function A2uiAskDockView({
         (ok) => {
           if (!ok) {
             setSubmittingCallId(null)
-            setSubmitError(msg.askSubmitRetry)
+            setErrorState({ callId: activeCallId, message: msg.askSubmitRetry })
           }
         },
         (err: unknown) => {
           setSubmittingCallId(null)
-          setSubmitError(err instanceof Error ? err.message : msg.askSubmitFailed)
+          setErrorState({
+            callId: activeCallId,
+            message: err instanceof Error ? err.message : msg.askSubmitFailed,
+          })
         },
       )
     },
@@ -119,17 +124,20 @@ export const A2uiAskDockView = memo(function A2uiAskDockView({
   const handleSkip = useCallback(() => {
     if (!activeCallId || submitting || submitAskAnswer === undefined) return
     setSubmittingCallId(activeCallId)
-    setSubmitError(null)
+    setErrorState(null)
     void submitAskAnswer({ callId: activeCallId, skipped: true }).then(
       (ok) => {
         if (!ok) {
           setSubmittingCallId(null)
-          setSubmitError(msg.askSkipRetry)
+          setErrorState({ callId: activeCallId, message: msg.askSkipRetry })
         }
       },
       (err: unknown) => {
         setSubmittingCallId(null)
-        setSubmitError(err instanceof Error ? err.message : msg.askSkipFailed)
+        setErrorState({
+          callId: activeCallId,
+          message: err instanceof Error ? err.message : msg.askSkipFailed,
+        })
       },
     )
   }, [activeCallId, msg, submitAskAnswer, submitting])
@@ -150,7 +158,7 @@ export const A2uiAskDockView = memo(function A2uiAskDockView({
       <div className={dockCss.header}>
         <div className={dockCss.toggleBtn} style={{ cursor: 'default' }}>
           <span className={dockCss.leadIcon} aria-hidden="true">
-            <DshAppsIcon size={14} />
+            {APPS_ICON_14}
           </span>
           <span className={dockCss.title}>{title}</span>
           <span className={css.badgeAccent} data-a2ui-ask-waiting="">
@@ -210,6 +218,11 @@ export const A2uiAskToolView = memo(function A2uiAskToolView({
     [phase, block.isError, block.meta],
   )
 
+  const settledVisibleIds = useMemo(
+    () => (settledMeta ? new Set(settledMeta.surfaceIds) : undefined),
+    [settledMeta],
+  )
+
   const title = settledMeta?.title ?? argTitle ?? msg.askDefaultTitle
 
   // 1. Error / interrupted state
@@ -222,7 +235,7 @@ export const A2uiAskToolView = memo(function A2uiAskToolView({
     return (
       <div data-tool="a2ui_ask" data-state={stopped ? 'stopped' : 'error'}>
         <DshDisclosureRow
-          icon={<DshAppsIcon size={14} />}
+          icon={APPS_ICON_14}
           title={msg.askRowTitle}
           running={false}
           open={expanded && hasReason}
@@ -254,7 +267,7 @@ export const A2uiAskToolView = memo(function A2uiAskToolView({
     return (
       <div data-tool="a2ui_ask" data-state="active-in-dock">
         <DshDisclosureRow
-          icon={<DshAppsIcon size={14} />}
+          icon={APPS_ICON_14}
           title={msg.askRowTitle}
           running={true}
           open={false}
@@ -277,16 +290,17 @@ export const A2uiAskToolView = memo(function A2uiAskToolView({
       ? msg.askSkipped
       : settledMeta?.status === 'timed_out'
         ? msg.askTimedOut
-        : msg.askSubmittedWith(settledMeta?.userMessage ?? settledMeta?.action ?? msg.askDefaultAction)
+        : msg.askSubmittedWith(
+            settledMeta?.userMessage ?? settledMeta?.action ?? msg.askDefaultAction,
+          )
 
   const settledMessages = settledMeta?.messages ?? []
-  const settledVisibleIds = settledMeta ? new Set(settledMeta.surfaceIds) : undefined
   const canExpand = settledMessages.length > 0 || argUi.trim() !== ''
 
   return (
     <div data-tool="a2ui_ask" data-state={settledMeta?.status ?? 'answered'}>
       <DshDisclosureRow
-        icon={<DshAppsIcon size={14} />}
+        icon={APPS_ICON_14}
         title={msg.askRowTitle}
         running={false}
         open={expanded && canExpand}

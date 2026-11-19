@@ -1,15 +1,21 @@
 /**
  * Lazy-loaded ECharts `Chart` component for `dsh-genui-a2ui`.
  *
- * Keeps `echarts` completely out of `lib/client.js`: on first mount, fetches
- * `lib/client.echarts.js` via DSH's `require.async("./client.echarts.js")`,
- * displays a token-themed shimmer skeleton while loading, and binds click
- * drill-down events (`dshSelection`) + `ResizeObserver`.
+ * Keeps `echarts` completely out of `lib/client.js`: subscribes to
+ * `lib/client.echarts.js` via `useSyncExternalStore`, displays a token-themed
+ * shimmer skeleton while loading, memoizes options over primitive/data fields,
+ * and delegates imperative `<canvas>` + `ResizeObserver` bindings to `dom-hooks.ts`.
  */
-import { memo, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { ActionDispatchOptions } from '@a2ui/web_core/v1_0'
 import type { ChartKind } from '../../shared/catalog-schema.ts'
-import { loadEchartsChunk, type EchartsChunkModule } from '../chunk-loader.ts'
+import {
+  CHART_LOAD_ERROR_SENTINEL,
+  getEchartsChunkServerSnapshot,
+  getEchartsChunkSnapshot,
+  subscribeEchartsChunk,
+} from '../chunk-loader.ts'
+import { useEChartsMount, type EChartsClickParams } from '../dom-hooks.ts'
 import { useRuntimeMessages } from '../i18n.ts'
 import { useDarkTheme } from '../theme.ts'
 import css from './Catalog.module.css'
@@ -38,131 +44,134 @@ function sanitizeInlineText(input: unknown): string {
 }
 
 export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps) {
+  const {
+    kind,
+    data,
+    title,
+    xField,
+    yField,
+    seriesField,
+    sizeField,
+    stacked,
+    horizontal,
+    zoom,
+    height: rawHeight,
+    action,
+    weight,
+  } = props
+
   const dark = useDarkTheme()
   const msg = useRuntimeMessages()
-  const [chunk, setChunk] = useState<EchartsChunkModule | null>(null)
-  const [loadError, setLoadError] = useState<string | null>(null)
+  const { chunk, error: rawLoadError } = useSyncExternalStore(
+    subscribeEchartsChunk,
+    getEchartsChunkSnapshot,
+    getEchartsChunkServerSnapshot,
+  )
+  const loadError = rawLoadError === CHART_LOAD_ERROR_SENTINEL ? msg.chartLoadFailed : rawLoadError
+
   const [containerWidth, setContainerWidth] = useState<number | undefined>(undefined)
   const hostRef = useRef<HTMLDivElement | null>(null)
-  const chartRef = useRef<ReturnType<EchartsChunkModule['initChartInstance']> | null>(null)
-  const actionRef = useRef(props.action)
-  actionRef.current = props.action
+  const actionRef = useRef(action)
+  actionRef.current = action
 
   const rows = useMemo(() => {
-    if (!Array.isArray(props.data)) return []
-    return props.data.filter(
+    if (!Array.isArray(data)) return []
+    return data.filter(
       (item): item is Record<string, unknown> =>
         typeof item === 'object' && item !== null && !Array.isArray(item),
     )
-  }, [props.data])
+  }, [data])
   const rowsRef = useRef(rows)
   rowsRef.current = rows
 
-  useEffect(() => {
-    let cancelled = false
-    loadEchartsChunk().then(
-      (mod) => {
-        if (!cancelled) {
-          setChunk(mod)
-          setLoadError(null)
-        }
-      },
-      (err: unknown) => {
-        if (!cancelled) {
-          setLoadError(err instanceof Error ? err.message : msg.chartLoadFailed)
-        }
-      },
-    )
-    return () => {
-      cancelled = true
-    }
-  }, [msg.chartLoadFailed])
-
+  // Depend on explicit fields (`rerender-dependencies`) so parent object re-allocations
+  // never rebuild the ECharts option or reset canvas animations unnecessarily.
   const option = useMemo(() => {
     if (!chunk) return null
-    return chunk.buildChartOption(props, dark, containerWidth)
-  }, [chunk, props, dark, containerWidth])
-
-  const height = Math.min(640, Math.max(140, props.height ?? 260))
-
-  useEffect(() => {
-    if (!chunk) return
-    const el = hostRef.current
-    if (!el) return
-    const initialW = Math.round(el.clientWidth)
-    if (initialW > 0) setContainerWidth(initialW)
-    const instance = chunk.initChartInstance(el)
-    chartRef.current = instance
-
-    instance.on(
-      'click',
-      (params: {
-        readonly name?: unknown
-        readonly seriesName?: unknown
-        readonly value?: unknown
-        readonly dataIndex?: unknown
-      }) => {
-        if (!actionRef.current) return
-        const label = sanitizeInlineText(params?.name)
-        const series = sanitizeInlineText(params?.seriesName)
-        const idx =
-          typeof params?.dataIndex === 'number' && Number.isInteger(params.dataIndex)
-            ? params.dataIndex
-            : undefined
-        const row = idx !== undefined ? rowsRef.current[idx] : undefined
-        void actionRef.current({
-          metadata: {
-            extensions: {
-              dshSelection: {
-                source: 'chart',
-                ...(label ? { label } : {}),
-                ...(series ? { series } : {}),
-                ...(params?.value !== undefined ? { value: params.value } : {}),
-                ...(idx !== undefined ? { index: idx } : {}),
-                ...(row !== undefined ? { row } : {}),
-              },
-            },
-          },
-        })
+    return chunk.buildChartOption(
+      {
+        kind,
+        data,
+        title,
+        xField,
+        yField,
+        seriesField,
+        sizeField,
+        stacked,
+        horizontal,
+        zoom,
+        height: rawHeight,
       },
+      dark,
+      containerWidth,
     )
+  }, [
+    chunk,
+    kind,
+    data,
+    title,
+    xField,
+    yField,
+    seriesField,
+    sizeField,
+    stacked,
+    horizontal,
+    zoom,
+    rawHeight,
+    dark,
+    containerWidth,
+  ])
 
-    const ro =
-      typeof ResizeObserver !== 'undefined'
-        ? new ResizeObserver(() => {
-            const nextW = Math.round(el.clientWidth)
-            if (nextW > 0) {
-              setContainerWidth((prev) => {
-                if (prev === undefined) return nextW
-                const crossedCompact = prev < 400 !== nextW < 400
-                if (crossedCompact || Math.abs(nextW - prev) >= 16) return nextW
-                return prev
-              })
-            }
-            instance.resize()
-          })
-        : null
-    ro?.observe(el)
+  const height = Math.min(640, Math.max(140, rawHeight ?? 260))
 
-    return () => {
-      ro?.disconnect()
-      instance.dispose()
-      chartRef.current = null
-    }
-  }, [chunk])
+  const handleContainerWidth = useCallback((nextW: number) => {
+    setContainerWidth((prev) => {
+      if (prev === undefined) return nextW
+      const crossedCompact = prev < 400 !== nextW < 400
+      if (crossedCompact || Math.abs(nextW - prev) >= 16) return nextW
+      return prev
+    })
+  }, [])
 
-  useEffect(() => {
-    if (option && chartRef.current) {
-      chartRef.current.setOption(option, { notMerge: true })
-    }
-  }, [option])
+  const handlePointClick = useCallback((params: EChartsClickParams) => {
+    if (!actionRef.current) return
+    const label = sanitizeInlineText(params?.name)
+    const series = sanitizeInlineText(params?.seriesName)
+    const idx =
+      typeof params?.dataIndex === 'number' && Number.isInteger(params.dataIndex)
+        ? params.dataIndex
+        : undefined
+    const row = idx !== undefined ? rowsRef.current[idx] : undefined
+    void actionRef.current({
+      metadata: {
+        extensions: {
+          dshSelection: {
+            source: 'chart',
+            ...(label ? { label } : {}),
+            ...(series ? { series } : {}),
+            ...(params?.value !== undefined ? { value: params.value } : {}),
+            ...(idx !== undefined ? { index: idx } : {}),
+            ...(row !== undefined ? { row } : {}),
+          },
+        },
+      },
+    })
+  }, [])
+
+  useEChartsMount({
+    hostRef,
+    chunk,
+    option,
+    onPointClick: handlePointClick,
+    onContainerWidth: handleContainerWidth,
+  })
 
   const weightStyle =
-    props.weight !== undefined ? { flexGrow: props.weight, flexBasis: 0, minWidth: 220 } : undefined
+    weight !== undefined ? { flexGrow: weight, flexBasis: 0, minWidth: 220 } : undefined
 
   return (
-    <div className={css.chartCard} style={weightStyle} data-a2ui-chart={props.kind}>
-      {props.title ? <div className={css.chartTitle}>{sanitizeInlineText(props.title)}</div> : null}
+    <div className={css.chartCard} style={weightStyle} data-a2ui-chart={kind}>
+      {title ? <div className={css.chartTitle}>{sanitizeInlineText(title)}</div> : null}
       {loadError ? (
         <div className={css.emptyCell} role="status">
           {loadError}

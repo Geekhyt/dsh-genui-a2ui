@@ -59,5 +59,27 @@
         "noAssignInExpressions": "off"
       }
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["src/**/*.tsx"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "react": {
+                    "importNames": ["useEffect", "useLayoutEffect"],
+                    "message": "Business and UI .tsx components must not use useEffect/useLayoutEffect (vercel-react-best-practices: rerender-derived-state-no-effect, rerender-move-effect-to-event). Derive state in render, subscribe via useSyncExternalStore, or isolate imperative DOM/Canvas bindings in src/client/dom-hooks.ts."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
 }
