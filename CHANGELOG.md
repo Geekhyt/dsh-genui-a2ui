@@ -2,6 +2,31 @@
 
 All notable changes to `dsh-genui-a2ui` are documented in this file.
 
+## [0.3.0] - 2026-11-20
+
+### Added
+- **5 New Tier-1 ECharts 6 Chart Kinds (`14 → 19` Total)**:
+  - `combo`: Dual-axis bar + line charts via `y2Field` and `y2Label` (supports stacked primary bars, secondary line/rate series, zoom slider, and dynamic SLO reference lines).
+  - `waterfall`: Financial & variance attribution bridge charts with automatic cumulative base stacking, increase/decrease/total coloring, and collision-free bar value labels.
+  - `calendar`: GitHub-style daily activity & change-frequency calendar heatmaps with adaptive 3-tier month labels, sparse weekday labels, and square aspect clamping for 12-month views.
+  - `sunburst`: Multi-level hierarchical drill-down radial charts with tangential labels and theme-aware contrast halos.
+  - `parallel`: Multi-dimensional model/plan comparison parallel-coordinate charts with anti-truncation axis titles.
+- **Dynamic Threshold Reference Lines (`referenceLine` & `referenceLabel`)**:
+  - Supported across Cartesian charts (`bar`, `line`, `area`, `combo`, `waterfall`, `scatter`, `boxplot`, `candlestick`) with reactive `$/path` binding (e.g., dragging a `Slider` updates chart SLO lines in `0ms`).
+- **Repository Engineering & Visual Quality Rules (`AGENTS.md`)**:
+  - Codified the `306px`-first `@container` layout contract, `276px` ECharts compact anti-collision contract, pure-function SVG geometry testing, and dual-theme verification checklist.
+
+### Fixed
+- **30 Multi-Component Squeezing, Clipping & Text-Overlap Fixes Across All 57 Components & 19 Charts**:
+  - **`@container` Responsive Migration (`Catalog.module.css`)**: Added `container-type: inline-size` and `@container` narrow breakpoints across `ResponsiveGrid`, `KeyValue` (fixing `640px` tall single-char vertical collapse in 306px cards), `CheckCard`, `Schedule` (vertical stack below `440px`), `Segmented` (eliminating `+219px` right overflow), `Matrix`, `Comparison`, `ProTable`, `DiffView` split mode (keeping both `-` and `+` panes visible inside `306px` with `pre-wrap`), `LogViewer`, `Terminal`, `FileTree`, `Tree`, and `Mermaid`/`JsonTree` action toolbars (`flex-wrap: wrap` + `white-space: nowrap` buttons).
+  - **ECharts `276px` Compact Width Adaptation (`EChartsWidget.tsx`, `echarts-chunk.ts`)**: Wired live `containerWidth` into `buildChartOption` to eliminate label collisions across `horizontal bar` (`maxHBarLabelW` truncation, `splitNumber: 3`, top-floating `position: 'start'` vertical markLines), `waterfall` (smart `pickMarkLinePosition` + per-bar `inside`/`top` avoidance), `sunburst` (tangential labels + stroke halo), `parallel`, `radar`, `calendar`, `sankey` (stage-depth clamping + `hideOverlap`), `heatmap` (`grid.bottom: 58` visualMap clearance), `funnel`, `scatter`, `boxplot` (`interval: 0` wrapping), `candlestick` (proportional headroom), `treemap` (`overflow: 'break'`), and `graph` (deterministic `circular` layout when compact).
+  - **Custom SVG Geometry & Dual-Theme Parity**: Added `stackUnit` multi-line unit stacking (e.g. `12480 / req/s` in `68px` rings) and 3-decimal high-SLA precision (`99.995%`) on `MetricRing`, tightened `ServiceGraph` node widths (`114–156px`) with preserved edge-label spacing, relaxed `Schedule` `now`-line avoidance, allowed comma-delimited SVG data URIs in `Image`, omitted forced `width: '100%'` on weighted `Image` items, and added `colorScheme` dark/light parity to native `DateTimeInput` & `DateRange` inputs.
+
+### Changed
+- **Updated Bilingual Docs & Pixel-Identical Dark/Light Screenshots**:
+  - Added new `finops-waterfall-sunburst` and `sre-combo-calendar-slo` Dark & Light showcase screenshots, refreshed `store-operations-dashboard` screenshots, and expanded copy-pasteable prompt examples (`15 → 18`) across `README.md`, `README.en.md`, `docs/DETAIL.zh.md`, and `docs/DETAIL.md`.
+  - Expanded automated Vitest coverage to 19 suites / 81 tests (`tests/tier1-echarts.spec.ts`) and 24 scripted mock showcases (`showcase-1`–`showcase-24`).
+
 ## [0.2.1] - 2026-11-20
 
 ### Fixed

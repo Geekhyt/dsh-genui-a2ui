@@ -38,7 +38,7 @@ flowchart TB
   subgraph S3["阶段 3 · Client 四分包懒加载与原生 Light-DOM 槽位"]
     SHELL["冷启动轻量壳 lib/client.js (58.3 kB)"]
     RT["按需核心包 client.runtime.js (57 组件 + StreamingExpressSession)"]
-    EC["按需图表包 client.echarts.js (14 类 ECharts 6)"]
+    EC["按需图表包 client.echarts.js (19 类 ECharts 6)"]
     MM["按需架构图包 client.mermaid.js (Mermaid 11 严格沙箱)"]
     SLOTS["DSH 官方槽位 (turnTail / toolview / input.dock / input.left)"]
     SIDE["右侧边栏源码直达 sidebarRight.openResource"]
@@ -88,10 +88,10 @@ flowchart TB
 | 构建产物 | 原始体积 | Gzip 体积 | 职责与加载触发时机 |
 | :--- | :--- | :--- | :--- |
 | `lib/client.js` | **`58.3 kB`** | **`16.5 kB`** | 首屏冷启动轻量壳：注册 UI Slots、双语自适应、空会话原生轻提示与胶囊开关（构建与单测双重强制 `< 100 kB` 门禁）。 |
-| `lib/client.runtime.js` | `1.28 MB` | ~`345 kB` | 仅当对话中真正挂载 A2UI 卡片时才加载（含 `@a2ui/react`、57 组件目录、TanStack Table）。 |
-| `lib/client.echarts.js` | `790.7 kB` | `261.9 kB` | 仅当卡片使用 `Chart` 组件时按需加载 ECharts 6（按需注册 14 类图表模块）。 |
+| `lib/client.runtime.js` | `1.30 MB` | ~`348 kB` | 仅当对话中真正挂载 A2UI 卡片时才加载（含 `@a2ui/react`、57 组件目录、TanStack Table）。 |
+| `lib/client.echarts.js` | `871.8 kB` | ~`288 kB` | 仅当卡片使用 `Chart` 组件时按需加载 ECharts 6（按需注册 19 类图表、标线模块与 276px 紧凑自适应）。 |
 | `lib/client.mermaid.js` | `3.51 MB` | ~`943 kB` | 仅当卡片使用 `Mermaid` 组件时按需加载 Mermaid 11（强制 `securityLevel: "strict"` + SVG 净化 + LRU-64 缓存）。 |
-| `lib/index.js` | `726.1 kB` | `198.1 kB` | 自包含 Host ESM 产物（打包 `@a2ui/agent` 与同构 Zod 契约），用户安装时零运行时 npm 依赖。 |
+| `lib/index.js` | `727.8 kB` | `198.6 kB` | 自包含 Host ESM 产物（打包 `@a2ui/agent` 与同构 Zod 契约），用户安装时零运行时 npm 依赖。 |
 
 ---
 
@@ -162,7 +162,7 @@ flowchart TB
 
 | 组件 | Express 语法签名 | 技术说明 |
 | :--- | :--- | :--- |
-| `Chart` | `Chart(kind, data, title?, xField?, yField?, seriesField?, sizeField?, stacked?, horizontal?, zoom?, height?, action?)` | 14 种 `kind`：`bar`、`line`、`area`、`pie`、`scatter`、`radar`、`funnel`、`gauge`、`heatmap`、`treemap`、`sankey`、`boxplot`、`graph`、`candlestick`。 |
+| `Chart` | `Chart(kind, data, title?, xField?, yField?, y2Field?, seriesField?, sizeField?, referenceLine?, referenceLabel?, stacked?, horizontal?, zoom?, height?, action?)` | 19 种 `kind`：`bar`、`line`、`area`、`combo`、`waterfall`、`pie`、`scatter`、`radar`、`parallel`、`funnel`、`gauge`、`heatmap`、`calendar`、`treemap`、`sunburst`、`sankey`、`boxplot`、`graph`、`candlestick`。 |
 | `ServiceGraph` | `ServiceGraph(nodes, edges?, title?, direction?="LR"\|"TB", action?)` | 零依赖 DAG 拓扑图，支持健康度着色与上下游依赖高亮。 |
 | `Mermaid` | `Mermaid(code, title?, caption?)` | 支持 11 类图表及 `10%–2000%` 矢量缩放、漫游与全屏查看。 |
 | `Comparison` | `Comparison(options, rows, title?, action?)` | 多方案权衡矩阵（支持 `ok:` / `warn:` / `no:` 前缀与推荐列高亮）。 |
@@ -235,7 +235,7 @@ npm run typecheck
 # 构建 Host ESM + 4 个 Client 分包（自动校验首屏 < 500 kB 门禁）
 npm run build
 
-# 运行全部 18 个测试套件 / 76 项单元、React 架构最佳实践、契约与分包门禁测试
+# 运行全部 19 个测试套件 / 81 项单元、React 架构最佳实践、契约与分包门禁测试
 npm test
 
 # 核验与本机 DeepSeek Harness.app 内部 27 项模块导出及 Slots 的契约兼容性
@@ -260,3 +260,4 @@ node scripts/dev-env.mjs serve
 - `src/client/catalog/` —— 57 个 Light-DOM 原生组件与 23 个客户端函数的具体实现
 - `build/` —— `tsdown` 五目标构建预设与 DSH 宿主模块外部化配置
 - `scripts/` —— Host API 契约核验脚本（`check-host-api.mjs`）与隔离演示环境（`dev-env.mjs`、`mock-llm.mjs`）
+- `AGENTS.md` —— `306px` 半宽优先 `@container` 排版、ECharts `276px` 防碰撞契约与发版前视觉回归工程规范

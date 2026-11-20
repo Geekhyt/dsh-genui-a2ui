@@ -38,7 +38,7 @@ flowchart TB
   subgraph S3["Stage 3 · Client 4-Chunk Runtime & Native Light-DOM Slots"]
     SHELL["Cold-Boot Shell lib/client.js (58.3 kB)"]
     RT["Lazy Runtime client.runtime.js (57 Components + StreamingExpressSession)"]
-    EC["Lazy Chart Engine client.echarts.js (14 ECharts 6 Kinds)"]
+    EC["Lazy Chart Engine client.echarts.js (19 ECharts 6 Kinds)"]
     MM["Lazy Diagram Engine client.mermaid.js (Strict Sandbox Mermaid 11)"]
     SLOTS["Official DSH UI Slots (turnTail / toolview / input.dock / input.left)"]
     SIDE["Right Sidebar File Jump sidebarRight.openResource"]
@@ -88,10 +88,10 @@ flowchart TB
 | Bundle Target | Raw Size | Gzip Size | Role & Load Trigger |
 | :--- | :--- | :--- | :--- |
 | `lib/client.js` | **`58.3 kB`** | **`16.5 kB`** | Cold-boot shell: registers UI Slots, bilingual chrome, empty-session toast feedback, and composer pill (enforced by `< 100 kB` build & test gate). |
-| `lib/client.runtime.js` | `1.28 MB` | ~`345 kB` | Loaded on first A2UI surface mount (`@a2ui/react`, 57-component catalog, TanStack Table, React Aria). |
-| `lib/client.echarts.js` | `790.7 kB` | `261.9 kB` | Loaded only when a surface renders `Chart` (ECharts 6 modular registration for 14 chart kinds). |
+| `lib/client.runtime.js` | `1.30 MB` | ~`348 kB` | Loaded on first A2UI surface mount (`@a2ui/react`, 57-component catalog, TanStack Table, React Aria). |
+| `lib/client.echarts.js` | `871.8 kB` | ~`288 kB` | Loaded only when a surface renders `Chart` (ECharts 6 modular registration for 19 chart kinds, threshold markLines & 276px compact adaptation). |
 | `lib/client.mermaid.js` | `3.51 MB` | ~`943 kB` | Loaded only when a surface renders `Mermaid` (Mermaid 11 under `securityLevel: "strict"` + SVG sanitizer + LRU-64 cache). |
-| `lib/index.js` | `726.1 kB` | `198.1 kB` | Self-contained Host ESM bundle (`@a2ui/agent` + Zod catalog) — ships with zero runtime `dependencies`. |
+| `lib/index.js` | `727.8 kB` | `198.6 kB` | Self-contained Host ESM bundle (`@a2ui/agent` + Zod catalog) — ships with zero runtime `dependencies`. |
 
 ---
 
@@ -162,7 +162,7 @@ Every surface begins with `surface("snake_id")` (or `surface("snake_id", update=
 
 | Component | Express DSL Signature | Technical Notes |
 | :--- | :--- | :--- |
-| `Chart` | `Chart(kind, data, title?, xField?, yField?, seriesField?, sizeField?, stacked?, horizontal?, zoom?, height?, action?)` | 14 kinds: `"bar" \| "line" \| "area" \| "pie" \| "scatter" \| "radar" \| "funnel" \| "gauge" \| "heatmap" \| "treemap" \| "sankey" \| "boxplot" \| "graph" \| "candlestick"`. |
+| `Chart` | `Chart(kind, data, title?, xField?, yField?, y2Field?, seriesField?, sizeField?, referenceLine?, referenceLabel?, stacked?, horizontal?, zoom?, height?, action?)` | 19 kinds: `"bar" \| "line" \| "area" \| "combo" \| "waterfall" \| "pie" \| "scatter" \| "radar" \| "parallel" \| "funnel" \| "gauge" \| "heatmap" \| "calendar" \| "treemap" \| "sunburst" \| "sankey" \| "boxplot" \| "graph" \| "candlestick"`. |
 | `ServiceGraph` | `ServiceGraph(nodes, edges?, title?, direction?="LR"\|"TB", action?)` | Zero-dependency health-colored DAG with upstream/downstream highlighting. |
 | `Mermaid` | `Mermaid(code, title?, caption?)` | 11 diagram families with `10%–2000%` vector zoom, drag-to-pan, and fullscreen view. |
 | `Comparison` | `Comparison(options, rows, title?, action?)` | Multi-option trade-off matrix (`ok:` / `warn:` / `no:` cell prefixes & recommendation column). |
@@ -235,7 +235,7 @@ npm run typecheck
 # Build Host ESM + 4 Client CJS chunks (enforces cold-boot size gate)
 npm run build
 
-# Run all 18 Vitest suites / 76 unit, React best-practice, contract, and bundle tests
+# Run all 19 Vitest suites / 81 unit, React best-practice, contract, and bundle tests
 npm test
 
 # Verify compatibility against 27 installed DeepSeek Harness.app platform exports & slots
@@ -260,3 +260,4 @@ node scripts/dev-env.mjs serve
 - `src/client/catalog/` — Light-DOM React implementations of all 57 components & 23 functions
 - `build/` — `tsdown` 5-target build preset & DSH web platform externalizer
 - `scripts/` — Host API contract verifier (`check-host-api.mjs`) and isolated mock dev server (`dev-env.mjs`, `mock-llm.mjs`)
+- `AGENTS.md` — `306px`-first `@container` layout rules, ECharts `276px` compact anti-collision contract, and pre-ship visual QA checklist
