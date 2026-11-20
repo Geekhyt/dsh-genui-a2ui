@@ -2,7 +2,7 @@
  * Composer toolbar 1-click A2UI switch mounted in `conversation.input.left`.
  *
  * Single click toggles `dsh-genui-a2ui` between:
- * - `true` (ON): exposes `a2ui_render` and `a2ui_ask` (all 32 DSH + Basic components);
+ * - `true` (ON): exposes `a2ui_render` and `a2ui_ask` (all 57 DSH + Basic components);
  * - `false` (OFF): hides A2UI tools from the model's step toolSet (plain Markdown mode).
  *
  * Syncs with the Host via `session.command('/a2ui on|off')` (`recordInput: false`).
@@ -19,10 +19,10 @@ import {
   subscribeA2uiEnabled,
   subscribeCommandNotice,
 } from './persistence.ts'
+import css from './TierControl.module.css'
 import type { ChatExternalStore } from './ToolView.tsx'
 import { isChatTimelineActive, resolveLatestA2uiCommandState } from './turn-surfaces.ts'
 import { DshAppsIcon, DshToast, DshTooltip, DshWarningIcon } from './ui/primitives.tsx'
-import css from './TierControl.module.css'
 
 export interface A2uiTierControlProps {
   readonly sessionId?: string | undefined

@@ -379,6 +379,26 @@ function parseTokens(tokens: readonly Token[]): {
   return { ast: root }
 }
 
+const CALC_FUNCTION_ARITY: Readonly<Record<string, readonly [number, number]>> = {
+  pow: [2, 2],
+  sqrt: [1, 1],
+  exp: [1, 1],
+  ln: [1, 1],
+  log10: [1, 1],
+  log: [1, 2],
+  abs: [1, 1],
+  floor: [1, 1],
+  ceil: [1, 1],
+  round: [1, 2],
+  min: [1, Number.POSITIVE_INFINITY],
+  max: [1, Number.POSITIVE_INFINITY],
+  clamp: [3, 3],
+  pmt: [3, 3],
+  sin: [1, 1],
+  cos: [1, 1],
+  tan: [1, 1],
+}
+
 function validateAstSemantics(node: ExprNode, providedVars?: ReadonlySet<string>): string | null {
   switch (node.kind) {
     case 'num':
@@ -404,6 +424,16 @@ function validateAstSemantics(node: ExprNode, providedVars?: ReadonlySet<string>
     case 'call': {
       if (!ALLOWED_CALC_FUNCTIONS.has(node.fn)) {
         return `Unknown math function "${node.fn}(...)" in calc(); supported: ${[...ALLOWED_CALC_FUNCTIONS].join(', ')}.`
+      }
+      const arity = CALC_FUNCTION_ARITY[node.fn]
+      if (arity !== undefined && (node.args.length < arity[0] || node.args.length > arity[1])) {
+        const expected =
+          arity[0] === arity[1]
+            ? `${arity[0]}`
+            : Number.isFinite(arity[1])
+              ? `${arity[0]}–${arity[1]}`
+              : `>= ${arity[0]}`
+        return `calc() function "${node.fn}()" expects ${expected} argument(s), got ${node.args.length}.`
       }
       for (const arg of node.args) {
         const err = validateAstSemantics(arg, providedVars)
@@ -525,7 +555,7 @@ function evalAst(node: ExprNode, vars: Record<string, unknown>): number {
     case 'num':
       return node.value
     case 'var':
-      return coerceVarValue(vars[node.name])
+      return coerceVarValue(Object.hasOwn(vars, node.name) ? vars[node.name] : undefined)
     case 'unary': {
       const v = evalAst(node.arg, vars)
       if (node.op === '-') return -v

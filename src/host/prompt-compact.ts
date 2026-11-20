@@ -310,7 +310,7 @@ export function compactPromptSnippet(raw: string): string {
 
 /**
  * Produces a domain-scoped prompt snippet from the full raw SDK snippet:
- * - `'core'`: full grammar + 24 foundational components + 23 functions + domain sub-skill index
+ * - `'core'`: full grammar + 24 foundational components + 25 functions + domain sub-skill index
  * - `'analytics' | 'devops' | 'forms'`: laser-focused component signatures for that domain only
  */
 export function slicePromptSnippetByDomain(raw: string, domain: SkillDomain): string {

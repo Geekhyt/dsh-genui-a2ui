@@ -9,8 +9,9 @@
  * - `EntityHeader`: Enterprise object summary header (`DshStateDot` + monogram + tags + KPI strip)
  * - `Matrix`: Conditional-formatting heat cross-tabulation & RBAC permission matrix
  */
-import { useContext, useMemo, useState } from 'react'
+
 import type { ActionDispatchOptions } from '@a2ui/web_core/v1_0'
+import { useContext, useMemo, useState } from 'react'
 import {
   ApiEndpointApi,
   ApprovalCardApi,
@@ -43,15 +44,15 @@ import {
   normalizeScheduleItems,
   normalizeTerminalCommands,
   normalizeTrackerSlices,
-  tokenizeEndpointPath,
   type TrackerSliceStatus,
+  tokenizeEndpointPath,
 } from './v4-helpers.ts'
 import {
-  SurfaceReadOnlyContext,
+  type ChildRef,
   defineComponent,
   renderChildRef,
+  SurfaceReadOnlyContext,
   weightStyle,
-  type ChildRef,
 } from './widget-helpers.tsx'
 
 function copyToClipboardSafe(text: string): void {
@@ -1045,12 +1046,16 @@ export const DshMatrixImpl = defineComponent<{
       ? String(props.cornerLabel)
       : msg.matrixDefaultCorner
   const scale = props.colorScale ?? 'brand'
-  const baseColorVar =
-    scale === 'success'
-      ? 'var(--dsw-alias-state-success-primary, #10b981)'
-      : scale === 'warning'
-        ? 'var(--dsw-alias-state-warn-primary, #f59e0b)'
-        : 'var(--dsw-alias-state-info-primary, #3b82f6)'
+  const resolveCellColorVar = (intensityPct: number): string => {
+    if (scale === 'auto') {
+      if (intensityPct >= 66) return 'var(--dsw-alias-state-error-primary, #ef4444)'
+      if (intensityPct >= 34) return 'var(--dsw-alias-state-warn-primary, #f59e0b)'
+      return 'var(--dsw-alias-state-success-primary, #10b981)'
+    }
+    if (scale === 'success') return 'var(--dsw-alias-state-success-primary, #10b981)'
+    if (scale === 'warning') return 'var(--dsw-alias-state-warn-primary, #f59e0b)'
+    return 'var(--dsw-alias-state-info-primary, #3b82f6)'
+  }
 
   return (
     <div className={css.matrixCard} style={weightStyle(props.weight, 240)} data-a2ui-matrix="">
@@ -1087,7 +1092,7 @@ export const DshMatrixImpl = defineComponent<{
                     style={
                       cell.kind === 'number' && cell.intensityPct > 0
                         ? {
-                            background: `color-mix(in srgb, ${baseColorVar} ${cell.intensityPct}%, transparent)`,
+                            background: `color-mix(in srgb, ${resolveCellColorVar(cell.intensityPct)} ${cell.intensityPct}%, transparent)`,
                           }
                         : undefined
                     }

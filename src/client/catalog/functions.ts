@@ -12,18 +12,17 @@
 import {
   A2uiExpressionError,
   BASIC_FUNCTIONS,
-  FormatCurrencyApi,
-  FormatDateApi,
-  FormatNumberApi,
-  OpenUrlApi,
   createFormatCurrencyImplementation,
   createFormatDateImplementation,
   createFormatNumberImplementation,
   createFunctionImplementation,
+  FormatCurrencyApi,
+  FormatDateApi,
+  FormatNumberApi,
   type FunctionImplementation,
+  OpenUrlApi,
 } from '@a2ui/web_core/v1_0'
 import { evaluateCalcExpression } from '../../shared/calc-engine.ts'
-import { resolveClientLocale } from '../../shared/i18n.ts'
 import {
   AvgApi,
   CalcApi,
@@ -37,6 +36,7 @@ import {
   LtApi,
   SumApi,
 } from '../../shared/catalog-schema.ts'
+import { resolveClientLocale } from '../../shared/i18n.ts'
 
 type FunctionImplList = readonly FunctionImplementation[]
 
@@ -81,9 +81,14 @@ export function extractNumericValues(items: readonly unknown[], field?: string):
       field !== undefined && field !== '' && typeof item === 'object' && item !== null
         ? (item as Record<string, unknown>)[field]
         : item
-    const num = typeof candidate === 'number' ? candidate : Number(candidate)
-    if (Number.isFinite(num)) {
-      nums.push(num)
+    if (typeof candidate === 'number') {
+      if (Number.isFinite(candidate)) nums.push(candidate)
+    } else if (typeof candidate === 'string') {
+      const cleaned = candidate.replace(/,/g, '').trim()
+      if (cleaned !== '') {
+        const num = Number(cleaned)
+        if (Number.isFinite(num)) nums.push(num)
+      }
     }
   }
   return nums

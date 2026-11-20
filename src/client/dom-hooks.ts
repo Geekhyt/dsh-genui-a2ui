@@ -14,7 +14,7 @@
  *    `ResizeObserver`, non-passive `{ passive: false }` wheel listener, `Escape` keydown,
  *    and unmount window drag cleanup.
  */
-import { useCallback, useEffect, useLayoutEffect, useRef, type RefObject } from 'react'
+import { type RefObject, useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import type { EchartsChunkModule } from './chunk-loader.ts'
 
 const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect

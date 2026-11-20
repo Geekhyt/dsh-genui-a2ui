@@ -584,8 +584,31 @@ export function renderEvalHtmlReport(summaries) {
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>dsh-genui-a2ui · P1 LLM 生成评测基准报告 (${escapeHtml(primary.model)})</title>
-  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
   <style>
+    :root {
+      --background: #0d1117;
+      --foreground: #e6edf3;
+      --card: #161b22;
+      --card-border: #30363d;
+      --border: #30363d;
+      --secondary: #21262d;
+      --secondary-foreground: #c9d1d9;
+      --muted-foreground: #8b949e;
+      --primary: #58a6ff;
+      --primary-foreground: #0d1117;
+      --chart-1: #58a6ff;
+      --success: #3fb950;
+      --danger: #f85149;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif; background: var(--background); color: var(--foreground); line-height: 1.5; }
+    main { max-width: 1152px; margin: 0 auto; padding: 28px 20px; display: flex; flex-direction: column; gap: 20px; }
+    header, section { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 20px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--border); }
+    .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+    .flex { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .flt-btn { cursor: pointer; background: var(--secondary); color: var(--secondary-foreground); border: 1px solid var(--border); border-radius: 8px; padding: 4px 10px; font-size: 12px; }
     .flt-btn[aria-selected="true"] {
       background: var(--primary);
       color: var(--primary-foreground);

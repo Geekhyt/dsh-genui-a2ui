@@ -8,8 +8,9 @@
  * - `MetricRing`: Zero-chunk SVG radial progress/SLO ring card (~0 kB bundle cost)
  * - `ServiceGraph`: Live health-colored service/module dependency DAG with interactive node inspector
  */
-import { useContext, useDeferredValue, useId, useMemo, useState } from 'react'
+
 import type { ActionDispatchOptions } from '@a2ui/web_core/v1_0'
+import { useContext, useDeferredValue, useId, useMemo, useState } from 'react'
 import {
   ComparisonApi,
   KanbanApi,
@@ -35,20 +36,20 @@ import { FileOpenChip } from './FileOpenChip.tsx'
 import {
   buildServiceGraphLayout,
   computeMetricRingGeometry,
+  type KanbanPriority,
+  type LogLevel,
   normalizeComparisonData,
   normalizeKanbanColumns,
   normalizeLogEntries,
   normalizeSourceItems,
-  type KanbanPriority,
-  type LogLevel,
   type ServiceHealthStatus,
 } from './v3-helpers.ts'
 import {
-  SurfaceReadOnlyContext,
+  type ChildRef,
   defineComponent,
   renderChildRef,
+  SurfaceReadOnlyContext,
   weightStyle,
-  type ChildRef,
 } from './widget-helpers.tsx'
 
 function copyToClipboardSafe(text: string): void {
@@ -976,7 +977,7 @@ export const DshServiceGraphImpl = defineComponent<{
       data-a2ui-servicegraph=""
     >
       <div className={css.serviceGraphHeader}>
-        <span className={css.serviceGraphTitle}>{title || 'Service Topology'}</span>
+        <span className={css.serviceGraphTitle}>{title || msg.serviceGraphDefaultTitle}</span>
         <div className={css.serviceGraphLegend}>
           <span className={css.serviceLegendItem} data-status="healthy">
             <i /> {msg.serviceGraphHealthy}

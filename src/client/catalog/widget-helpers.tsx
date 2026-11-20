@@ -1,13 +1,14 @@
 /**
  * Shared light-DOM React component helpers for the DSH A2UI 1.0 catalog.
  */
-import { Fragment, createContext, type CSSProperties, type FC, type ReactNode } from 'react'
+
 import {
   createComponentImplementation,
   type ReactA2uiComponentProps,
   type ReactCatalogComponent,
 } from '@a2ui/react'
 import type { ComponentApi } from '@a2ui/web_core/v1_0'
+import { type CSSProperties, createContext, type FC, Fragment, type ReactNode } from 'react'
 
 export type ChildRef =
   | string

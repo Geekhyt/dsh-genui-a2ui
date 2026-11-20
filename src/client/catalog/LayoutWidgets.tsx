@@ -2,7 +2,7 @@
  * Layout & typography A2UI 1.0 components (`Text`, `Card`, `Row`, `Column`,
  * `List`, `Divider`, `Tabs`, `Modal`).
  */
-import { useCallback, useContext, useId, useState, type CSSProperties, type ReactNode } from 'react'
+
 import {
   CardApi,
   ColumnApi,
@@ -12,21 +12,22 @@ import {
   RowApi,
   TabsApi,
 } from '@a2ui/web_core/v1_0'
+import { type CSSProperties, type ReactNode, useCallback, useContext, useId, useState } from 'react'
 import { DshTextApi, GridApi } from '../../shared/catalog-schema.ts'
 import { useRuntimeMessages } from '../i18n.ts'
 import { DshMarkdown, DshModal, DshSegmentedTabs, type SegmentedTab } from '../ui/primitives.tsx'
 import css from './Catalog.module.css'
 import {
   ALIGN_MAP,
+  type ChildRef,
+  defineComponent,
   InsideButtonContext,
   JUSTIFY_MAP,
   ModalCloseContext,
-  SurfaceReadOnlyContext,
-  defineComponent,
   renderChildList,
   renderChildRef,
+  SurfaceReadOnlyContext,
   weightStyle,
-  type ChildRef,
 } from './widget-helpers.tsx'
 
 const HEADING_FONT_SIZES: Record<string, number> = {

@@ -10,17 +10,18 @@
 import {
   A2uiError,
   A2uiGenerator,
+  type A2uiRequestProcessor,
+  type AgentToRendererMessage,
   CatalogConfig,
   ExpressFormatFactory,
   ExpressPromptGenerator,
-  type A2uiRequestProcessor,
-  type AgentToRendererMessage,
   type InferenceFormat,
   type InferenceFormatFactory,
   type RendererState,
 } from '@a2ui/agent'
 
 type SchemaCatalogInput = ConstructorParameters<typeof CatalogConfig>[0]
+
 import { validateCalcExpression } from '../shared/calc-engine.ts'
 import { A2UI_LIMITS, ASK_TOOL, dshSchemaCatalog, RENDER_TOOL } from '../shared/catalog-schema.ts'
 import {
@@ -35,6 +36,7 @@ import {
   slicePromptSnippetByDomain,
 } from './prompt-compact.ts'
 
+export type { SkillDomain }
 export {
   ASK_TOOL,
   desugarExpressConcat,
@@ -43,7 +45,6 @@ export {
   preprocessExpressProgram,
   RENDER_TOOL,
 }
-export type { SkillDomain }
 
 /**
  * The SDK's Express output contract tells the model to wrap blocks in
@@ -99,7 +100,7 @@ const CAPABILITIES = {
   '1.0': { supportedCatalogIds: DEFAULT_CATALOGS.map((c) => c.id) },
 }
 
-/** Agent-lifetime generator backed by the 32-component DSH catalog. */
+/** Agent-lifetime generator backed by the 57-component DSH catalog. */
 export function createGenerator(
   catalogs: readonly SchemaCatalogInput[] = DEFAULT_CATALOGS,
 ): A2uiGenerator {
@@ -368,70 +369,60 @@ export class SurfaceSessions {
       )
     }
 
-    const prevState = this.states.get(sessionId)
-    let backup: RendererState | undefined
-    if (prevState !== undefined) {
-      try {
-        backup = structuredClone(prevState)
-      } catch {
-        backup = undefined
-      }
-    }
-
+    const hadPrevState = this.states.has(sessionId)
     const cleaned = preprocessExpressProgram(stripWrapping(ui))
-    let parts: ReturnType<A2uiRequestProcessor['parseResponse']>
-    try {
-      parts = this.processor(sessionId).parseResponse(cleaned, { wrapped: false })
-    } catch (firstErr) {
-      // Cross-restart hydration: if a resumed conversation patches an earlier surface via
-      // `surface("id", update=true)` after DSH restarted (when host memory is cold), seed the
-      // surface placeholder once and retry before treating it as an error.
-      const updateIds = extractUpdateSurfaceIds(cleaned)
-      const msgText = firstErr instanceof Error ? firstErr.message : ''
-      if (
-        firstErr instanceof A2uiError &&
-        updateIds.length > 0 &&
-        /not exist|not found|unknown surface|createSurface/i.test(msgText)
-      ) {
-        try {
-          const proc = this.processor(sessionId)
-          for (const id of updateIds) {
-            proc.parseResponse(`surface(${JSON.stringify(id)})\nroot = Text("")`, {
-              wrapped: false,
-            })
+
+    const runCompile = (): AgentToRendererMessage[] => {
+      let parts: ReturnType<A2uiRequestProcessor['parseResponse']>
+      try {
+        parts = this.processor(sessionId).parseResponse(cleaned, { wrapped: false })
+      } catch (firstErr) {
+        // Cross-restart hydration: if a resumed conversation patches an earlier surface via
+        // `surface("id", update=true)` after DSH restarted (when host memory is cold), seed the
+        // surface placeholder once and retry before treating it as an error.
+        const updateIds = extractUpdateSurfaceIds(cleaned)
+        const msgText = firstErr instanceof Error ? firstErr.message : ''
+        if (
+          firstErr instanceof A2uiError &&
+          updateIds.length > 0 &&
+          /not exist|not found|unknown surface|createSurface/i.test(msgText)
+        ) {
+          try {
+            const proc = this.processor(sessionId)
+            for (const id of updateIds) {
+              proc.parseResponse(`surface(${JSON.stringify(id)})\nroot = Text("")`, {
+                wrapped: false,
+              })
+            }
+            parts = proc.parseResponse(cleaned, { wrapped: false })
+          } catch (retryErr) {
+            enrichCompilerError(retryErr)
           }
-          parts = proc.parseResponse(cleaned, { wrapped: false })
-        } catch (retryErr) {
-          if (prevState === undefined) {
-            this.states.delete(sessionId)
-          } else if (backup !== undefined) {
-            this.states.set(sessionId, backup)
-          }
-          enrichCompilerError(retryErr)
+        } else {
+          enrichCompilerError(firstErr)
         }
-      } else {
-        if (prevState === undefined) {
-          this.states.delete(sessionId)
-        } else if (backup !== undefined) {
-          this.states.set(sessionId, backup)
-        }
-        enrichCompilerError(firstErr)
       }
+      const messages = parts.flatMap((part) => (part.type === 'a2ui' ? part.a2ui : []))
+      validateCompiledLimits(messages)
+      return messages
     }
-    const messages = parts.flatMap((part) => (part.type === 'a2ui' ? part.a2ui : []))
+
+    const prevState = this.states.get(sessionId)
+    if (prevState !== undefined) {
+      // RendererState holds catalog function references and cannot be structuredClone'd;
+      // use its built-in synchronous transaction frame so any parse or limit error rolls back
+      // cleanly without leaving orphaned surfaces that would break self-repair retries.
+      return prevState.transaction(runCompile)
+    }
 
     try {
-      validateCompiledLimits(messages)
+      return runCompile()
     } catch (err) {
-      if (prevState === undefined) {
+      if (!hadPrevState) {
         this.states.delete(sessionId)
-      } else if (backup !== undefined) {
-        this.states.set(sessionId, backup)
       }
       throw err
     }
-
-    return messages
   }
 
   /** Increment and return consecutive compile failure count for a session/tool channel. */

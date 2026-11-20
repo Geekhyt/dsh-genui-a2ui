@@ -5,15 +5,8 @@
  * fields stripped), supporting read-only historical snapshots, and forwarding
  * component actions back to the conversation session or `a2ui_ask` handler.
  */
-import {
-  memo,
-  useCallback,
-  useMemo,
-  useRef,
-  useState,
-  useSyncExternalStore,
-  type ReactNode,
-} from 'react'
+
+import type { AgentToRendererMessage } from '@a2ui/agent'
 import {
   A2uiSurface,
   MarkdownComponentContext,
@@ -21,13 +14,21 @@ import {
   type ReactCatalogComponent,
 } from '@a2ui/react'
 import {
-  MessageProcessor,
-  RELAXED_VALIDATION,
   type ActionPayload,
+  MessageProcessor,
   type ProcessableMessage,
+  RELAXED_VALIDATION,
   type SurfaceModel,
 } from '@a2ui/web_core/v1_0'
-import type { AgentToRendererMessage } from '@a2ui/agent'
+import {
+  memo,
+  type ReactNode,
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react'
 import { enrichActionWithSelection, formatActionMessage } from './action-protocol.ts'
 import { DSH_CLIENT_CATALOGS } from './catalog/index.ts'
 import {
@@ -39,16 +40,15 @@ import { useStreamingHeightStabilizer } from './dom-hooks.ts'
 import { ErrorBoundary } from './ErrorBoundary.tsx'
 import { FileOpenContext, type WorkspaceFileOpener } from './file-opener.tsx'
 import { useRuntimeMessages } from './i18n.ts'
-import { DshTextShimmer } from './ui/primitives.tsx'
 import {
   computeMessagesFingerprint,
   loadSurfaceDraft,
   sanitizeDataModel,
   saveSurfaceDraft,
 } from './persistence.ts'
-import { useDarkTheme } from './theme.ts'
-import { DshMarkdown } from './ui/primitives.tsx'
 import css from './SurfaceView.module.css'
+import { useDarkTheme } from './theme.ts'
+import { DshMarkdown, DshTextShimmer } from './ui/primitives.tsx'
 
 const ACTION_COOLDOWN_MS = 450
 const EMPTY_SURFACES: readonly SurfaceModel<ReactCatalogComponent>[] = Object.freeze([])
@@ -91,12 +91,14 @@ function collectObscuredPointers(surface: SurfaceModel<ReactCatalogComponent>): 
   return pointers
 }
 
-/** Read sanitized data models across all surfaces in a `MessageProcessor`. */
+/** Read sanitized data models across visible (or all) surfaces in a `MessageProcessor`. */
 export function readSanitizedDataModels(
   processor: MessageProcessor<ReactCatalogComponent>,
+  visibleSurfaceIds?: ReadonlySet<string>,
 ): Record<string, unknown> {
   const result: Record<string, unknown> = {}
   for (const surface of processor.getSurfaces().values()) {
+    if (visibleSurfaceIds !== undefined && !visibleSurfaceIds.has(surface.id)) continue
     const raw = surface.dataModel.get('/')
     const cleaned = sanitizeDataModel(raw, collectObscuredPointers(surface))
     if (Object.keys(cleaned).length > 0) {
@@ -152,6 +154,7 @@ export class SurfaceSessionStore {
   private streaming = false
   private sessionId: string | undefined = undefined
   private fingerprint = ''
+  private visibleSurfaceIds: ReadonlySet<string> | undefined = undefined
 
   private surfacesSnapshot: readonly SurfaceModel<ReactCatalogComponent>[] = []
   private appliedCount = 0
@@ -177,7 +180,7 @@ export class SurfaceSessionStore {
         if (now - this.lastActionAt < ACTION_COOLDOWN_MS) return
         this.lastActionAt = now
 
-        const dataModels = readSanitizedDataModels(this.processor)
+        const dataModels = readSanitizedDataModels(this.processor, this.visibleSurfaceIds)
         const cleanAction = enrichActionWithSelection(action)
         handler(formatActionMessage(cleanAction, dataModels), cleanAction, dataModels)
       },
@@ -265,6 +268,7 @@ export class SurfaceSessionStore {
     this.readOnly = options.readOnly
     this.sessionId = options.sessionId
     this.fingerprint = options.fingerprint
+    this.visibleSurfaceIds = options.visibleSurfaceIds
     this.onAction = options.onAction
 
     const prev = this.appliedPrefix

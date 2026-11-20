@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { createElement, useState, type ReactElement, type ReactNode } from 'react'
+import { createElement, type ReactElement, type ReactNode, useState } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 

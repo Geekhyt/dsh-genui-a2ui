@@ -3,7 +3,7 @@
  * Ant Design / Pro / X parity components (`NumberInput`, `MultiSelect`,
  * `DateRange`, `TreeSelect`, `CheckCard`, `Tree`, `Grid`).
  */
-import { normalizeSelectOptions, type NormalizedSelectOption } from './v3-helpers.ts'
+import { type NormalizedSelectOption, normalizeSelectOptions } from './v3-helpers.ts'
 
 /* ─────────────────────────── 1. NumberInput ─────────────────────────── */
 
@@ -69,14 +69,42 @@ export function computeDateRangeSpanDays(startStr: string, endStr: string): numb
   return Math.max(1, diffDays)
 }
 
+function parseLocalAnchorDate(anchorEndStr?: string): Date {
+  if (!anchorEndStr) return new Date()
+  const trimmed = anchorEndStr.trim()
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed)
+  if (dateOnly) {
+    return new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]))
+  }
+  const dateTimeLocal = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?$/.exec(trimmed)
+  if (dateTimeLocal) {
+    return new Date(
+      Number(dateTimeLocal[1]),
+      Number(dateTimeLocal[2]) - 1,
+      Number(dateTimeLocal[3]),
+      Number(dateTimeLocal[4]),
+      Number(dateTimeLocal[5]),
+      Number(dateTimeLocal[6] ?? 0),
+    )
+  }
+  const parsed = Date.parse(trimmed)
+  return Number.isNaN(parsed) ? new Date() : new Date(parsed)
+}
+
 export function buildDatePresetRange(
   days: number,
   enableTime: boolean,
   anchorEndStr?: string,
 ): { readonly start: string; readonly end: string } {
-  const parsedAnchor = anchorEndStr ? Date.parse(anchorEndStr) : Number.NaN
-  const endObj = Number.isNaN(parsedAnchor) ? new Date() : new Date(parsedAnchor)
-  const startObj = new Date(endObj.getTime() - Math.max(0, days - 1) * 86_400_000)
+  const endObj = parseLocalAnchorDate(anchorEndStr)
+  const startObj = new Date(
+    endObj.getFullYear(),
+    endObj.getMonth(),
+    endObj.getDate() - Math.max(0, days - 1),
+    endObj.getHours(),
+    endObj.getMinutes(),
+    endObj.getSeconds(),
+  )
   const fmt = (d: Date) => {
     const yyyy = d.getFullYear()
     const mm = String(d.getMonth() + 1).padStart(2, '0')

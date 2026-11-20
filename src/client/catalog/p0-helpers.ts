@@ -2,7 +2,7 @@
  * Pure, zero-DOM normalization & LCS line-diff helpers for P0 components
  * (`DiffView`, `Steps`, `KeyValue`).
  */
-import { resolveClientLocale, RUNTIME_MESSAGES, type UiLocale } from '../../shared/i18n.ts'
+import { RUNTIME_MESSAGES, resolveClientLocale, type UiLocale } from '../../shared/i18n.ts'
 import type { TagTone } from '../ui/primitives.tsx'
 
 export interface DiffLineOp {
@@ -274,7 +274,7 @@ export function normalizeKeyValueItems(raw: unknown, defaultCopyable = false): N
           : undefined
       const spanNum =
         typeof rec.span === 'number' && Number.isFinite(rec.span) && rec.span >= 1
-          ? Math.min(3, Math.trunc(rec.span))
+          ? Math.min(4, Math.trunc(rec.span))
           : undefined
       return {
         label,

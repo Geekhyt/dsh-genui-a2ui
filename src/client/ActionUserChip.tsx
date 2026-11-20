@@ -8,6 +8,7 @@
  * React `<div>`/`<pre>` inside `<span>` nesting warnings.
  */
 import { memo, useState } from 'react'
+import css from './ActionUserChip.module.css'
 import {
   A2UI_ACTION_NODE_ID,
   a2uiActionUserTextRule,
@@ -16,7 +17,6 @@ import {
 } from './action-protocol.ts'
 import { useShellMessages } from './i18n.ts'
 import { DshCheckIcon, DshChevronDownIcon, DshChevronUpIcon } from './ui/primitives.tsx'
-import css from './ActionUserChip.module.css'
 
 export {
   A2UI_ACTION_NODE_ID,

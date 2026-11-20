@@ -6,7 +6,7 @@
  * `referenceLine`, `horizontal`, `zoom`, and `sizeField`, deriving all colors
  * from DSH `--dsw-*` tokens.
  */
-import * as echarts from 'echarts/core'
+
 import {
   BarChart,
   BoxplotChart,
@@ -35,10 +35,11 @@ import {
   TooltipComponent,
   VisualMapComponent,
 } from 'echarts/components'
+import * as echarts from 'echarts/core'
 import { LabelLayout, LegacyGridContainLabel } from 'echarts/features'
 import { CanvasRenderer } from 'echarts/renderers'
 import type { ChartKind } from '../../shared/catalog-schema.ts'
-import { resolveClientLocale, RUNTIME_MESSAGES } from '../../shared/i18n.ts'
+import { RUNTIME_MESSAGES, resolveClientLocale } from '../../shared/i18n.ts'
 
 echarts.use([
   BarChart,
@@ -627,9 +628,16 @@ function buildChartOptionInternal(
       legend: {
         type: isCompact && items.length >= 4 ? 'scroll' : 'plain',
         bottom: 0,
+        left: isCompact ? 4 : 'center',
+        right: isCompact ? 4 : undefined,
         itemWidth: 10,
         itemHeight: 8,
-        itemGap: 8,
+        itemGap: isCompact ? 6 : 8,
+        pageButtonGap: isCompact ? 6 : undefined,
+        pageIconSize: isCompact ? 10 : undefined,
+        formatter: isCompact
+          ? (name: string) => (name.length > 7 ? `${name.slice(0, 6)}…` : name)
+          : undefined,
         textStyle: { color: theme.textSecondary, fontSize: 11 },
       },
       series: [
@@ -1029,8 +1037,14 @@ function buildChartOptionInternal(
             fontSize: isCompact ? 10 : 11.5,
             lineHeight: isCompact ? 13 : 15,
             fontWeight: 500,
-            overflow: 'break',
+            overflow: isCompact ? 'truncate' : 'break',
             ellipsis: '…',
+            formatter: isCompact
+              ? (params: { name?: unknown }) => {
+                  const text = sanitizeChartLabel(params.name)
+                  return text.length > 8 && text.includes(' ') ? text.replace(/\s+/g, '\n') : text
+                }
+              : undefined,
           },
           upperLabel: { show: false },
           data: treeData,
@@ -1245,8 +1259,8 @@ function buildChartOptionInternal(
           draggable: !useCircularCompact,
           top: useCircularCompact ? 22 : isCompact ? 16 : 12,
           bottom: categories.length > 1 ? (useCircularCompact ? 50 : isCompact ? 42 : 34) : 24,
-          left: useCircularCompact ? 48 : isCompact ? 32 : 18,
-          right: useCircularCompact ? 48 : isCompact ? 32 : 18,
+          left: useCircularCompact ? 44 : isCompact ? 32 : 18,
+          right: useCircularCompact ? 44 : isCompact ? 32 : 18,
           edgeSymbol: ['none', 'arrow'],
           edgeSymbolSize: [4, 8],
           force: useCircularCompact
@@ -1257,7 +1271,7 @@ function buildChartOptionInternal(
                 gravity: isCompact ? 0.22 : 0.1,
                 layoutAnimation: true,
               },
-          labelLayout: { hideOverlap: true },
+          labelLayout: useCircularCompact ? undefined : { hideOverlap: true },
           label: {
             show: true,
             position: isCompact ? 'bottom' : 'right',
@@ -1603,7 +1617,11 @@ function buildChartOptionInternal(
           : ''
     const estW = containerWidth !== undefined && containerWidth > 0 ? containerWidth : 520
     const barSlotW = Math.max(22, (estW - 56) / Math.max(1, rows.length))
-    const estPillW = Math.max(48, refText.length * 7.8 + 14)
+    let refTextPx = 18
+    for (const ch of refText) {
+      refTextPx += (ch.codePointAt(0) ?? 0) > 0xff ? 11.2 : 6.8
+    }
+    const estPillW = Math.max(48, refTextPx)
     const pillSpanBars = Math.min(rows.length, Math.max(2, Math.ceil(estPillW / barSlotW)))
 
     const overlapsRefBand = (idx: number, low: number, high: number): boolean => {
@@ -1641,14 +1659,18 @@ function buildChartOptionInternal(
 
     const incItems = incData.map((val, i) => {
       if (typeof val !== 'number') return val
-      const top = (baseData[i] ?? 0) + val
+      const bottom = baseData[i] ?? 0
+      const top = bottom + val
       if (showBarLabels && overlapsRefBand(i, top, top + ySpan * 0.085)) {
-        if (val >= ySpan * 0.1) {
+        const mid = bottom + val / 2
+        if (val >= ySpan * 0.1 && !overlapsRefBand(i, mid - ySpan * 0.04, mid + ySpan * 0.04)) {
           return { value: val, label: insideHaloLabel }
         }
-        const bottom = baseData[i] ?? 0
-        if (!overlapsRefBand(i, bottom - ySpan * 0.085, bottom)) {
+        if (!overlapsRefBand(i, bottom - ySpan * 0.085, bottom - ySpan * 0.015)) {
           return { value: val, label: { position: 'bottom' as const } }
+        }
+        if (val >= ySpan * 0.1) {
+          return { value: val, label: insideHaloLabel }
         }
       }
       return val
@@ -1683,7 +1705,7 @@ function buildChartOptionInternal(
           const title = sanitizeChartLabel(active.name)
           const sName = sanitizeChartLabel(active.seriesName)
           const sign = sName === localeMsg.chartWaterfallDecrease ? '-' : ''
-          return `${title}<br/>${sName}: ${sign}${sanitizeChartLabel(active.value)}`
+          return `${title}\n${sName}: ${sign}${sanitizeChartLabel(active.value)}`
         },
       },
       legend: {
@@ -1813,8 +1835,20 @@ function buildChartOptionInternal(
       lineKeys = extraNumeric.slice(0, 1)
     }
 
-    const barDataList = barKeys.map((k) => rows.map((r) => toNumber(r[k])))
-    const lineDataList = lineKeys.map((k) => rows.map((r) => toNumber(r[k])))
+    const alignSeriesByCategory = (fieldKey: string): number[] => {
+      if (categories.length === rows.length) {
+        return rows.map((r) => toNumber(r[fieldKey]))
+      }
+      const sums = new Map<string, number>()
+      for (const r of rows) {
+        const cat = sanitizeChartLabel(r[xKey])
+        sums.set(cat, (sums.get(cat) ?? 0) + toNumber(r[fieldKey]))
+      }
+      return categories.map((cat) => sums.get(cat) ?? 0)
+    }
+
+    const barDataList = barKeys.map((k) => alignSeriesByCategory(k))
+    const lineDataList = lineKeys.map((k) => alignSeriesByCategory(k))
     const refEdgeSeries =
       lineDataList.length > 0
         ? (lineDataList[0] ?? [])
@@ -2129,7 +2163,7 @@ function buildChartOptionInternal(
         formatter: (p: unknown) => {
           const val = (p as { value?: unknown })?.value
           if (Array.isArray(val) && val.length >= 2) {
-            return `${sanitizeChartLabel(val[0])}: <strong>${sanitizeChartLabel(val[1])}</strong>`
+            return `${sanitizeChartLabel(val[0])}: ${sanitizeChartLabel(val[1])}`
           }
           return ''
         },
@@ -2211,16 +2245,29 @@ function buildChartOptionInternal(
       }),
     }))
   } else {
-    series = yKeys.map((k) => ({
-      name: sanitizeChartLabel(k),
-      type: echartsType,
-      smooth: echartsType === 'line',
-      stack: stackKey,
-      areaStyle: isArea ? { opacity: 0.2 } : undefined,
-      barMaxWidth: 32,
-      itemStyle: props.kind === 'bar' ? { borderRadius: barRadius } : undefined,
-      data: rows.map((r) => toNumber(r[k])),
-    }))
+    series = yKeys.map((k) => {
+      let dataValues: number[]
+      if (categories.length === rows.length) {
+        dataValues = rows.map((r) => toNumber(r[k]))
+      } else {
+        const sums = new Map<string, number>()
+        for (const r of rows) {
+          const cat = sanitizeChartLabel(r[xKey])
+          sums.set(cat, (sums.get(cat) ?? 0) + toNumber(r[k]))
+        }
+        dataValues = categories.map((cat) => sums.get(cat) ?? 0)
+      }
+      return {
+        name: sanitizeChartLabel(k),
+        type: echartsType,
+        smooth: echartsType === 'line',
+        stack: stackKey,
+        areaStyle: isArea ? { opacity: 0.2 } : undefined,
+        barMaxWidth: 32,
+        itemStyle: props.kind === 'bar' ? { borderRadius: barRadius } : undefined,
+        data: dataValues,
+      }
+    })
   }
 
   const cartesianEdgeVals = props.stacked

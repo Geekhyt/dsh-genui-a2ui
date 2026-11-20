@@ -76,7 +76,7 @@ export function renderCatalogIcon(
   }
 
   const key = typeof nameProp === 'string' ? nameProp : 'info'
-  const path = ICON_PATHS[key] ?? ICON_PATHS.info!
+  const path = Object.hasOwn(ICON_PATHS, key) ? ICON_PATHS[key]! : ICON_PATHS.info!
   return (
     <span className={css.icon} style={weightStyle} role="img" aria-label={key}>
       <svg

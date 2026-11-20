@@ -62,3 +62,47 @@ export function normalizePlacement(raw: unknown): SurfacePlacement {
   }
   return 'answer'
 }
+
+const DANGEROUS_OBJECT_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
+
+/** Reject prototype-pollution keys when cloning/sanitizing untrusted JSON objects. */
+export function isDangerousObjectKey(key: string): boolean {
+  return DANGEROUS_OBJECT_KEYS.has(key)
+}
+
+const SECRET_SINGLE_WORDS = new Set(['password', 'passwd', 'pwd', 'secret'])
+const SECRET_TOKEN_PREFIXES = new Set([
+  'access',
+  'refresh',
+  'auth',
+  'bearer',
+  'id',
+  'session',
+  'api',
+  'oauth',
+  'csrf',
+  'jwt',
+  'secret',
+])
+
+/**
+ * Detect standalone and compound camelCase/snake_case/kebab-case credential keys
+ * (e.g. `userPassword`, `db_password`, `auth_token`, `clientSecret`, `bearerToken`,
+ * `apiKey`, `private_key`) without false-positives on metric keys like `promptTokens`.
+ */
+export function isSecretKey(key: string): boolean {
+  const words = key
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean)
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i]
+    if (!w) continue
+    if (SECRET_SINGLE_WORDS.has(w)) return true
+    if (w === 'apikey' || w === 'privatekey') return true
+    if (w === 'key' && i > 0 && (words[i - 1] === 'api' || words[i - 1] === 'private')) return true
+    if (w === 'token' && i > 0 && SECRET_TOKEN_PREFIXES.has(words[i - 1] ?? '')) return true
+  }
+  return false
+}

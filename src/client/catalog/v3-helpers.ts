@@ -799,14 +799,15 @@ export function buildServiceGraphLayout(
     })
   }
 
+  const maxNodeWCap = maxRank <= 2 ? 182 : 156
   const estimateNodeIdealW = (n: (typeof parsedNodes)[number]): number => {
-    const topW = 26 + estimateInlineTextPx(n.label, 6.2, 11.4)
+    const topW = 34 + estimateInlineTextPx(n.label, 7.6, 12.6)
     const bottomW =
-      16 +
-      estimateInlineTextPx(n.sublabel, 5.4, 10.2) +
+      18 +
+      estimateInlineTextPx(n.sublabel, 5.8, 10.6) +
       (n.sublabel && n.metric ? 6 : 0) +
-      estimateInlineTextPx(n.metric, 5.8, 10.2)
-    return Math.max(114, Math.min(156, Math.max(topW, bottomW)))
+      estimateInlineTextPx(n.metric, 6.0, 10.6)
+    return Math.max(118, Math.min(maxNodeWCap, Math.ceil(Math.max(topW, bottomW))))
   }
 
   let maxIdealNodeW = 114

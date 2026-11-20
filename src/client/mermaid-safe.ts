@@ -24,7 +24,10 @@ export const ALLOWED_MERMAID_KINDS = [
 ] as const
 
 const SVG_INJECTION_RE =
-  /<script|<iframe|<object|<embed|<applet|<meta|<base|[\s"'/]on[a-z]+\s*=|(?:javascript|vbscript)\s*:|data\s*:\s*text\/html/i
+  /<script|<iframe|<object|<embed|<applet|<meta|<base|(?:javascript|vbscript)\s*:|data\s*:\s*text\/html/i
+
+/** Match inline `on*="..."` attributes strictly inside HTML/SVG opening tags, never inside `<text>` content. */
+const TAG_EVENT_HANDLER_RE = /<(?:"[^"]*"|'[^']*'|[^'">])*\bon[a-z]+\s*=/i
 
 const OBFUSCATED_URI_RE = /(?:javascript|vbscript)\s*:|data\s*:\s*text\/html/i
 
@@ -43,7 +46,11 @@ function decodeHtmlNumericEntities(input: string): string {
 
 /** Reject any rendered SVG carrying script/embed tags, inline event handlers, or `javascript:`/`vbscript:` URIs. */
 export function assertSafeSvg(svg: string): void {
-  if (SVG_INJECTION_RE.test(svg) || OBFUSCATED_URI_RE.test(decodeHtmlNumericEntities(svg))) {
+  if (
+    SVG_INJECTION_RE.test(svg) ||
+    TAG_EVENT_HANDLER_RE.test(svg) ||
+    OBFUSCATED_URI_RE.test(decodeHtmlNumericEntities(svg))
+  ) {
     throw new Error('Mermaid SVG failed sanitization check; refusing to render')
   }
 }

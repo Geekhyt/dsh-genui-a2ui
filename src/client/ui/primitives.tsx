@@ -5,7 +5,7 @@
  * if a future DSH release renames or drops an individual primitive export, the fallback
  * implementation keeps every A2UI surface rendering cleanly with `--dsw-*` tokens.
  */
-import * as HostPrimitives from '@deepseek-ai/dsh-client-ui-primitives'
+
 import type {
   ButtonVariant,
   JsonTreeLabels,
@@ -15,13 +15,14 @@ import type {
   SegmentedTab,
   TagTone,
 } from '@deepseek-ai/dsh-client-ui-primitives'
+import * as HostPrimitives from '@deepseek-ai/dsh-client-ui-primitives'
 import {
-  forwardRef,
-  useState,
   type ButtonHTMLAttributes,
+  forwardRef,
   type InputHTMLAttributes,
   type ReactElement,
   type ReactNode,
+  useState,
 } from 'react'
 import { createPortal } from 'react-dom'
 import { SHELL_MESSAGES, type UiLocale } from '../../shared/i18n.ts'
@@ -318,7 +319,8 @@ export function DshSegmentedTabs<Value extends string = string>(props: {
   size?: 'sm' | 'md' | undefined
 }) {
   if (hasComponent(raw.SegmentedTabs)) {
-    return <>{HostPrimitives.SegmentedTabs(props)}</>
+    const HostTabs = HostPrimitives.SegmentedTabs
+    return <HostTabs {...props} />
   }
   return (
     <div
@@ -423,7 +425,8 @@ export function DshModal(props: {
   footer?: ReactNode
 }) {
   if (hasComponent(raw.Modal)) {
-    return HostPrimitives.Modal(props)
+    const HostModal = HostPrimitives.Modal
+    return <HostModal {...props} />
   }
   if (!props.open || typeof document === 'undefined') return null
   return createPortal(

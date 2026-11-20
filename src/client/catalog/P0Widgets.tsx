@@ -5,7 +5,7 @@
  * - `Callout`: Semantic alert banner (`info` | `success` | `warning` | `danger`) + optional nested `child`
  * - `KeyValue`: Structured attribute grid (accepts array or plain map + 1-click value copy)
  */
-import { useMemo, useState, type CSSProperties } from 'react'
+import { type CSSProperties, useMemo, useState } from 'react'
 import { CalloutApi, DiffViewApi, KeyValueApi, StepsApi } from '../../shared/catalog-schema.ts'
 import { parseFileTarget } from '../file-opener.tsx'
 import { useRuntimeMessages, useUiLocale } from '../i18n.ts'
@@ -18,7 +18,7 @@ import {
   normalizeStepItems,
   pairSplitDiffRows,
 } from './p0-helpers.ts'
-import { defineComponent, renderChildRef, weightStyle, type ChildRef } from './widget-helpers.tsx'
+import { type ChildRef, defineComponent, renderChildRef, weightStyle } from './widget-helpers.tsx'
 
 function copyToClipboardSafe(text: string): void {
   if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
@@ -301,7 +301,7 @@ export const DshKeyValueImpl = defineComponent<{
   )
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null)
   const cols =
-    typeof props.columns === 'number' && props.columns >= 1 && props.columns <= 3
+    typeof props.columns === 'number' && props.columns >= 1 && props.columns <= 4
       ? Math.trunc(props.columns)
       : 2
   const bordered = Boolean(props.bordered)

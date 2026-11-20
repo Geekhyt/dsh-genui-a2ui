@@ -1,4 +1,4 @@
-import { createElement, type ComponentType } from 'react'
+import { type ComponentType, createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -46,7 +46,7 @@ import {
   getCommandNotice,
   resetPersistenceForTests,
 } from '../src/client/persistence.ts'
-import { isChatTimelineActive, type ChatTargetSnapshot } from '../src/client/turn-surfaces.ts'
+import { type ChatTargetSnapshot, isChatTimelineActive } from '../src/client/turn-surfaces.ts'
 import {
   A2UI_SYSTEM_GUIDANCE,
   apply as applyHost,

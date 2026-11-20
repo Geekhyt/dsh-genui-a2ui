@@ -67,8 +67,8 @@ import {
   setA2uiEnabled,
 } from '../src/client/persistence.ts'
 import { SurfaceGroupView, SurfaceSessionStore } from '../src/client/SurfaceView.tsx'
-import { subscribeDarkTheme } from '../src/client/theme.ts'
 import { A2uiTierControl } from '../src/client/TierControl.tsx'
+import { subscribeDarkTheme } from '../src/client/theme.ts'
 import type { ChatTargetSnapshot } from '../src/client/turn-surfaces.ts'
 import { createGenerator, SurfaceSessions } from '../src/host/generator.ts'
 

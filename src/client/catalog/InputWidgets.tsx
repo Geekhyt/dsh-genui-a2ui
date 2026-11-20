@@ -2,16 +2,25 @@
  * Action & form input A2UI 1.0 components (`Button`, `TextField`, `CheckBox`,
  * `ChoicePicker`, `Slider`, `DateTimeInput`, `Select`, `Segmented`, `Switch`).
  */
+
 import {
+  type ActionDispatchOptions,
+  ButtonApi,
+  CheckBoxApi,
+  ChoicePickerApi,
+  DateTimeInputApi,
+  SliderApi,
+  TextFieldApi,
+} from '@a2ui/web_core/v1_0'
+import {
+  type ReactNode,
   useContext,
   useDeferredValue,
   useId,
   useMemo,
   useRef,
   useState,
-  type ReactNode,
 } from 'react'
-import { createPortal } from 'react-dom'
 import {
   Label as AriaLabel,
   Radio as AriaRadio,
@@ -21,22 +30,15 @@ import {
   SliderThumb as AriaSliderThumb,
   SliderTrack as AriaSliderTrack,
 } from 'react-aria-components'
-import {
-  ButtonApi,
-  CheckBoxApi,
-  ChoicePickerApi,
-  DateTimeInputApi,
-  SliderApi,
-  TextFieldApi,
-  type ActionDispatchOptions,
-} from '@a2ui/web_core/v1_0'
+import { createPortal } from 'react-dom'
 import { SegmentedApi, SelectApi, SwitchApi } from '../../shared/catalog-schema.ts'
 import { useRuntimeMessages } from '../i18n.ts'
 import { useDarkTheme } from '../theme.ts'
 import {
+  type ButtonVariant,
   DshButton,
-  DshCheckIcon,
   DshCheckbox,
+  DshCheckIcon,
   DshChevronDownIcon,
   DshInput,
   DshMenu,
@@ -45,21 +47,20 @@ import {
   DshSegmentedControl,
   DshSwitch,
   DshTooltip,
-  type ButtonVariant,
 } from '../ui/primitives.tsx'
 import css from './Catalog.module.css'
 import { normalizeSelectOptions } from './v3-helpers.ts'
 import {
-  InsideButtonContext,
-  ModalCloseContext,
-  SurfaceReadOnlyContext,
-  SurfaceValidationContext,
-  computeClampedPopoverBox,
-  defineComponent,
-  renderChildRef,
-  weightStyle,
   type ChildRef,
   type ClampedPopoverBox,
+  computeClampedPopoverBox,
+  defineComponent,
+  InsideButtonContext,
+  ModalCloseContext,
+  renderChildRef,
+  SurfaceReadOnlyContext,
+  SurfaceValidationContext,
+  weightStyle,
 } from './widget-helpers.tsx'
 
 export function DshButtonView({
@@ -781,9 +782,7 @@ export function DshSegmentedView({
   const showError = !readOnly && (touched || submitAttempted) && props.isValid === false
   const err = showError ? props.validationErrors?.[0] : undefined
 
-  if (segOptions.length === 0) return null
-
-  const segMinW = useMemo(() => {
+  const { segMinW, totalEstW } = useMemo(() => {
     let total = 14
     for (const opt of segOptions) {
       let w = 34
@@ -792,8 +791,18 @@ export function DshSegmentedView({
       }
       total += w
     }
-    return Math.max(160, Math.min(260, Math.ceil(total)))
+    return {
+      totalEstW: Math.ceil(total),
+      segMinW: Math.max(160, Math.min(260, Math.ceil(total))),
+    }
   }, [segOptions])
+
+  if (segOptions.length === 0) return null
+
+  // Host `SegmentedControl` uses a single-row sliding indicator; when many or long
+  // labels would wrap inside a 306px half-width card, render a native wrapping pill
+  // grid where each active button highlights itself cleanly without row overlap.
+  const useWrapGrid = segOptions.length >= 4 || totalEstW > 270
 
   return (
     <div className={css.field} style={weightStyle(props.weight, segMinW)} data-a2ui-segmented="">
@@ -803,20 +812,55 @@ export function DshSegmentedView({
           {err ? <span className={css.errorText}>{err}</span> : null}
         </div>
       ) : null}
-      <div className={css.segmentedHostWrap}>
-        <DshSegmentedControl
-          id={segId}
-          value={activeVal}
-          options={segOptions}
-          label={label || msg.segmentedAria}
-          disabled={readOnly}
-          onChange={(next) => {
-            if (readOnly) return
-            setTouched(true)
-            props.setValue?.(next)
-          }}
-        />
-      </div>
+      {useWrapGrid ? (
+        <div className={css.segmentedWrapOuter}>
+          <div
+            id={segId}
+            role="radiogroup"
+            aria-label={label || msg.segmentedAria}
+            className={css.segmentedWrapGroup}
+            data-disabled={readOnly ? 'true' : 'false'}
+          >
+            {segOptions.map((opt) => {
+              const active = opt.value === activeVal
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  disabled={readOnly}
+                  title={opt.title ?? opt.label}
+                  className={css.segmentedWrapBtn}
+                  data-active={active ? 'true' : 'false'}
+                  onClick={() => {
+                    if (readOnly) return
+                    setTouched(true)
+                    props.setValue?.(opt.value)
+                  }}
+                >
+                  {opt.label}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      ) : (
+        <div className={css.segmentedHostWrap}>
+          <DshSegmentedControl
+            id={segId}
+            value={activeVal}
+            options={segOptions}
+            label={label || msg.segmentedAria}
+            disabled={readOnly}
+            onChange={(next) => {
+              if (readOnly) return
+              setTouched(true)
+              props.setValue?.(next)
+            }}
+          />
+        </div>
+      )}
     </div>
   )
 }

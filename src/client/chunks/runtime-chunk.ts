@@ -1,11 +1,12 @@
 /**
  * Self-contained DSH lazy chunk (`lib/client.runtime.js`) encapsulating the
  * A2UI 1.0 core runtime (`@a2ui/web_core`, `@a2ui/react`, `@a2ui/agent` streaming
- * parser, React Aria controls, TanStack Table, and all 32 light-DOM component
+ * parser, React Aria controls, TanStack Table, and all 57 light-DOM component
  * wrappers — while keeping `echarts` and `mermaid` in their own chunks).
  */
-import { injectBasicCatalogStyles } from '@a2ui/web_core/v1_0'
+
 import { injectStyles, removeStyles } from '@a2ui/react/styles'
+import { injectBasicCatalogStyles } from '@a2ui/web_core/v1_0'
 
 let stylesInstalled = false
 
@@ -39,8 +40,8 @@ export function cleanupA2uiRuntimeStyles(): void {
 ensureA2uiRuntimeStyles()
 
 export {
-  SurfaceGroupView,
   type SurfaceActionCallback,
+  SurfaceGroupView,
   type SurfaceGroupViewProps,
 } from '../SurfaceView.tsx'
-export { StreamingExpressSession, type StreamingCompileSnapshot } from '../streaming.ts'
+export { type StreamingCompileSnapshot, StreamingExpressSession } from '../streaming.ts'

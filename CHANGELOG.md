@@ -2,6 +2,32 @@
 
 All notable changes to `dsh-genui-a2ui` are documented in this file.
 
+## [0.4.1] - 2026-11-21
+
+### Fixed
+- **Core Runtime Stability, State Rollback & Security Hardening**:
+  - **Transactional `RendererState` Rollback (`src/host/generator.ts`)**: Replaced failing `structuredClone(prevState)` with `@a2ui/agent`'s native synchronous `RendererState.transaction()` frame so post-parse validation errors roll back cleanly instead of stranding surfaces and breaking multi-turn self-repair retries (`Surface ... already exists.`).
+  - **Rules of Hooks Fix in `Segmented` (`src/client/catalog/InputWidgets.tsx`)**: Moved `useMemo` above the empty-options early return to prevent React Hooks mismatch crashes during progressive streaming or `update=true` transitions.
+  - **Scoped `a2ui_ask` Data Model Serialization (`src/client/AskToolView.tsx`, `src/client/SurfaceView.tsx`)**: Filtered `priorMessages` and `readSanitizedDataModels(...)` by `visibleSurfaceIds` so submitting a small approval card no longer serializes unrelated historical dashboard/table datasets into `/a2ui-answer`.
+  - **`/a2ui-answer` & `PendingAskRegistry` Lifecycle Hardening (`src/index.ts`, `src/host/ask-tool.ts`)**: Validated `/a2ui-answer` JSON payloads as non-null plain objects, rejected superseded duplicate `callId` promises instead of leaving them dangling, and wired `asks.disposeAll()` into plugin disposal cleanup.
+  - **Prototype Pollution, Secret Redaction & CSV/Mermaid Security (`src/shared/constants.ts`, `src/client/persistence.ts`, `src/client/mermaid-safe.ts`, `src/client/catalog/v4-helpers.ts`, `src/client/file-opener.tsx`, `src/shared/calc-engine.ts`)**:
+    - Blocked `__proto__`, `constructor`, and `prototype` via `Object.defineProperty` across both host and client sanitizers, and upgraded secret-key redaction to catch compound camelCase/snake_case credentials (`userPassword`, `db_password`, `auth_token`, `clientSecret`, `bearerToken`, `openaiApiKey`) while preserving metric keys (`promptTokens`).
+    - Scoped Mermaid `assertSafeSvg` event-handler checks strictly to opening tag headers (`TAG_EVENT_HANDLER_RE`) so diagrams containing technical text like `online = true` or `once = 1` render cleanly.
+    - Hardened CSV export (`escapeCsvCell`) against formula/DDE injection (`=`, `@`, `\t`, `\r`, non-numeric `+/-`) while preserving signed percentages (`+14.2%`, `-4.2%`), blocked `file:` URIs in `parseFileTarget`, added `Object.hasOwn` lookups in `icons.tsx` and `calc-engine.ts`, and validated built-in function arity in `calc()`.
+- **ECharts & Narrow-Container Visual QA Fixes (Verified Dark & Light)**:
+  - **ECharts `richText` Tooltips (`src/client/chunks/echarts-chunk.ts`)**: Replaced raw HTML `<br/>` in `waterfall` and `<strong>` in `calendar` tooltip formatters with plain `\n` / text formatting compatible with `renderMode: 'richText'`.
+  - **Waterfall `markLine` Avoidance, Compact `Graph` Labels, `Treemap` Wrapping & Duplicate `xField` Alignment (`src/client/chunks/echarts-chunk.ts`, `src/client/catalog/Catalog.module.css`)**: Added CJK-aware pill width estimation and bar-midpoint collision checks so `waterfall` bar labels (`+110`) clear reference pills (`目标 ¥680w`); disabled node-level `labelLayout.hideOverlap` on compact circular `graph` charts so all node/edge labels (`Prompt Cache`, `2ms`) stay visible in Dark Mode; added word-preserving compact `treemap` wrapping (`A2UI / 渲染 / 16w`), compact `pie`/`funnel` legend truncation, `text-wrap: balance` chart headers, and category-deduplicated aggregation for duplicate `xField` rows.
+  - **306px Widget Layout & Ergonomics (`InputWidgets.tsx`, `Catalog.module.css`, `AntdParityWidgets.tsx`, `v3-helpers.ts`, `v4-helpers.ts`, `v5-helpers.ts`, `P0Widgets.tsx`, `EnterpriseWidgets.tsx`, `TableWidget.tsx`, `EChartsWidget.tsx`, `DockView.module.css`, `primitives.tsx`)**:
+    - Upgraded wide/4-item `Segmented` controls to a `@container (max-width: 440px)` 2×2 pill grid, eliminating 3-row sliding-pill overlap at `306px`.
+    - Fixed `NumberInput` focused draft editing (allowing backspacing to empty and typing leading `-`), UTC-negative timezone anchor drift in `DateRange` presets, `sum`/`avg` treating `null`/`""`/booleans as `0`/`1`, `KeyValue` `columns`/`span=4`, `ApiEndpoint` array-shaped `headers` in copied `cURL`, `Matrix` `colorScale="auto"` semantic coloring, and `EChartsWidget` vertical `Column` flex basis.
+    - Tightened half-width `Matrix` cells (`showcase-13`), expanded 3-rank `ServiceGraph` node caps (`showcase-7`), increased `a2ui_ask` dock bottom clearance (`showcase-4`), rendered `HostPrimitives.SegmentedTabs` & `Modal` via JSX, added LRU-200 eviction to `dock`/`tier` `localStorage` maps, evicted transient Mermaid chunk-load errors on unmount, localized remaining `aria-label`/fallback strings, removed redundant `role="button"` on `Table` `<tr>` rows, and upgraded `scripts/mock-llm.mjs` media fixtures to a valid 2s H.264 MP4 + 5s WAV.
+- **Isomorphic Express Preprocessing & Offline Eval Report (`src/shared/express-preprocess.ts`, `src/client/streaming.ts`, `scripts/eval-llm.mjs`)**:
+  - Moved `express-preprocess.ts` to `src/shared/` (re-exported from `src/host/express-preprocess.ts`) so `StreamingExpressSession` shares the same `+` concat, `lookup`, and chained `calc()` lowering passes as the Host compiler, while sharing `ALLOWED_CALC_FUNCTIONS` (`sin`/`cos`/`tan`), bounding multi-occurrence `calc()` expansion, and deduplicating repeated `cond` keys.
+  - Inlined standalone CSS into `scripts/eval-llm.mjs` HTML reports for 100% offline viewing and cleaned up all 43 `biome check` import-ordering diagnostics.
+
+### Changed
+- Added `tests/audit-fixes-v041.spec.ts` (+12 regression tests), expanding Vitest coverage to **23 suites / 106 tests** (`lib/client.js = 59.5 kB / 16.7 kB gzip`, `0` Biome/Lint/TS diagnostics).
+
 ## [0.4.0] - 2026-11-20
 
 ### Added

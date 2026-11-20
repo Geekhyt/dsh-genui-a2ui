@@ -6,7 +6,11 @@
  * - `Mermaid`: Lazy-loaded Mermaid diagram renderer (`securityLevel: "strict"` + `assertSafeSvg`
  *   + LRU-64 SVG external store + `10%–2000%` lossless vector zoom)
  */
+
+import type { ActionDispatchOptions } from '@a2ui/web_core/v1_0'
 import {
+  type CSSProperties,
+  type MouseEvent as ReactMouseEvent,
   useCallback,
   useContext,
   useId,
@@ -14,11 +18,8 @@ import {
   useRef,
   useState,
   useSyncExternalStore,
-  type CSSProperties,
-  type MouseEvent as ReactMouseEvent,
 } from 'react'
 import { createPortal } from 'react-dom'
-import type { ActionDispatchOptions } from '@a2ui/web_core/v1_0'
 import { AccordionApi, FileTreeApi, JsonTreeApi, MermaidApi } from '../../shared/catalog-schema.ts'
 import {
   getMermaidDiagramServerSnapshot,
@@ -26,7 +27,7 @@ import {
   MERMAID_RENDER_ERROR_SENTINEL,
   subscribeMermaidDiagram,
 } from '../chunk-loader.ts'
-import { useMermaidViewportDom, type PendingMermaidZoomAnchor } from '../dom-hooks.ts'
+import { type PendingMermaidZoomAnchor, useMermaidViewportDom } from '../dom-hooks.ts'
 import { useFileOpener } from '../file-opener.tsx'
 import { useRuntimeMessages } from '../i18n.ts'
 import { prepareMermaidSvg } from '../mermaid-safe.ts'
@@ -43,11 +44,11 @@ import {
 import css from './Catalog.module.css'
 import { buildFileTree, type FileChangeStatus, type FileTreeNode } from './stat-file-helpers.ts'
 import {
-  SurfaceReadOnlyContext,
+  type ChildRef,
   defineComponent,
   renderChildRef,
+  SurfaceReadOnlyContext,
   weightStyle,
-  type ChildRef,
 } from './widget-helpers.tsx'
 
 function copyToClipboardSafe(text: string): void {

@@ -2,7 +2,7 @@
  * Official DSH dynamic chunk loader & external stores (`require.async("./client.<name>.js")`).
  *
  * - `client.runtime.js`: A2UI 1.0 core, streaming parser, & light-DOM widgets
- * - `client.echarts.js`: 14-kind ECharts visualization engine
+ * - `client.echarts.js`: 19-kind ECharts visualization engine
  * - `client.mermaid.js`: Mermaid architecture/sequence/state diagram engine + LRU-64 SVG cache
  *
  * Exposes `useSyncExternalStore`-ready `subscribe*` / `get*Snapshot` contracts so UI
@@ -308,6 +308,11 @@ export function subscribeMermaidDiagram(
       if (pendingTimer !== undefined) {
         clearTimeout(pendingTimer)
         mermaidTimersByKey.delete(key)
+      }
+      // Do not permanently trap transient chunk-load / render failures across remounts
+      const cached = mermaidDiagramCache.get(key)
+      if (cached !== undefined && cached.error !== null) {
+        mermaidDiagramCache.delete(key)
       }
     }
   }

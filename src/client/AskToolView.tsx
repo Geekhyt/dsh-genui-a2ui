@@ -13,8 +13,9 @@
  *    to `"已提交 · <action>"` / `"已跳过"` / `"等待超时"` (expandable to inspect the
  *    read-only snapshot and submitted JSON payload) once `phase === 'result'`.
  */
-import { memo, useCallback, useMemo, useState, useSyncExternalStore } from 'react'
+
 import type { ActionPayload } from '@a2ui/web_core/v1_0'
+import { memo, useCallback, useMemo, useState, useSyncExternalStore } from 'react'
 import type { AskAnswerInput } from '../shared/wire-types.ts'
 import dockCss from './DockView.module.css'
 import type { WorkspaceFileOpener } from './file-opener.tsx'
@@ -22,7 +23,12 @@ import { useShellMessages } from './i18n.ts'
 import { LazySurfaceGroupView, useLazyStreamingExpress } from './LazySurfaceGroupView.tsx'
 import css from './SurfaceView.module.css'
 import type { ChatExternalStore, ToolViewOwnerProps } from './ToolView.tsx'
-import { parseAskMeta, resolveActiveAskCall, resolveSessionMessages } from './turn-surfaces.ts'
+import {
+  filterMessagesBySurfaceIds,
+  parseAskMeta,
+  resolveActiveAskCall,
+  resolveSessionMessages,
+} from './turn-surfaces.ts'
 import { DshAppsIcon, DshButton, DshDisclosureRow } from './ui/primitives.tsx'
 
 export interface A2uiAskDockViewProps {
@@ -71,18 +77,24 @@ export const A2uiAskDockView = memo(function A2uiAskDockView({
     activeAsk?.callId ?? 'ask',
   )
 
-  const priorMessages = useMemo(() => resolveSessionMessages(chatSnapshot), [chatSnapshot])
+  const liveVisibleIds = useMemo(() => {
+    const ids = streamingSnapshot?.surfaceIds ?? []
+    return ids.length > 0 ? new Set(ids) : undefined
+  }, [streamingSnapshot])
+
+  const priorMessages = useMemo(
+    () =>
+      liveVisibleIds !== undefined
+        ? filterMessagesBySurfaceIds(resolveSessionMessages(chatSnapshot), liveVisibleIds)
+        : [],
+    [chatSnapshot, liveVisibleIds],
+  )
 
   const liveMessages = useMemo(() => {
     const current = streamingSnapshot?.messages ?? []
     if (priorMessages.length === 0) return current
     return [...priorMessages, ...current]
   }, [priorMessages, streamingSnapshot])
-
-  const liveVisibleIds = useMemo(() => {
-    const ids = streamingSnapshot?.surfaceIds ?? []
-    return ids.length > 0 ? new Set(ids) : undefined
-  }, [streamingSnapshot])
 
   const activeCallId = activeAsk?.callId ?? ''
   const submitting = activeCallId !== '' && submittingCallId === activeCallId

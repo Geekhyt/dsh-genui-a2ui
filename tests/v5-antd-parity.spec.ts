@@ -64,7 +64,6 @@ import {
 } from '../src/client/catalog/BasicWidgets.tsx'
 import { dshReactCatalog } from '../src/client/catalog/index.ts'
 import { normalizeKeyValueItems } from '../src/client/catalog/p0-helpers.ts'
-import { computeClampedPopoverBox } from '../src/client/catalog/widget-helpers.tsx'
 import {
   buildDatePresetRange,
   clampAndStepNumber,
@@ -76,6 +75,7 @@ import {
   normalizeHierarchyTree,
   normalizeMultiSelectMergedOptions,
 } from '../src/client/catalog/v5-helpers.ts'
+import { computeClampedPopoverBox } from '../src/client/catalog/widget-helpers.tsx'
 import { SurfaceGroupView } from '../src/client/SurfaceView.tsx'
 import { createGenerator, SurfaceSessions } from '../src/host/generator.ts'
 import { DSH_COMPONENT_APIS, dshSchemaCatalog } from '../src/shared/catalog-schema.ts'

@@ -271,11 +271,16 @@ export function buildEndpointCurl(params: {
     `curl -X ${params.method.toUpperCase()} ${shellEscapeSingle(`${origin}${cleanPath}`)}`,
   ]
 
-  if (
-    typeof params.headers === 'object' &&
-    params.headers !== null &&
-    !Array.isArray(params.headers)
-  ) {
+  if (Array.isArray(params.headers)) {
+    for (const item of params.headers) {
+      if (typeof item !== 'object' || item === null) continue
+      const rec = item as Record<string, unknown>
+      const name = String(rec.name ?? rec.key ?? '').trim()
+      if (!name) continue
+      const val = String(rec.value ?? rec.example ?? '')
+      parts.push(`-H ${shellEscapeSingle(`${name}: ${val}`)}`)
+    }
+  } else if (typeof params.headers === 'object' && params.headers !== null) {
     for (const [k, v] of Object.entries(params.headers as Record<string, unknown>)) {
       parts.push(`-H ${shellEscapeSingle(`${k}: ${String(v ?? '')}`)}`)
     }
@@ -606,8 +611,11 @@ export interface ProTableColumnDescriptor {
   readonly label: string
 }
 
+const CSV_FORMULA_PREFIX_RE = /^(?:[=@\t\r]|[+-](?!\d))/
+
 function escapeCsvCell(raw: unknown): string {
-  const s = raw === undefined || raw === null ? '' : String(raw)
+  const rawStr = raw === undefined || raw === null ? '' : String(raw)
+  const s = CSV_FORMULA_PREFIX_RE.test(rawStr) ? `'${rawStr}` : rawStr
   if (/[",\r\n]/.test(s)) {
     return `"${s.replace(/"/g, '""')}"`
   }

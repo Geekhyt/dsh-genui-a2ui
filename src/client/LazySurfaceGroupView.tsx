@@ -7,13 +7,13 @@ import { memo, useCallback, useMemo, useRef, useSyncExternalStore } from 'react'
 import {
   getLoadedRuntimeChunk,
   getRuntimeChunkServerSnapshot,
-  subscribeRuntimeChunk,
   type RuntimeChunkModule,
+  subscribeRuntimeChunk,
 } from './chunk-loader.ts'
 import { useShellMessages } from './i18n.ts'
-import type { StreamingCompileSnapshot, StreamingExpressSession } from './streaming.ts'
-import type { SurfaceGroupViewProps } from './SurfaceView.tsx'
 import css from './SurfaceView.module.css'
+import type { SurfaceGroupViewProps } from './SurfaceView.tsx'
+import type { StreamingCompileSnapshot, StreamingExpressSession } from './streaming.ts'
 
 const SKELETON_BLOCK = <div className={css.skeletonBlock} />
 

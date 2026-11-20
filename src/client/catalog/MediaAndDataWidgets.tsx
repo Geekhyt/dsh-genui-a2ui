@@ -2,15 +2,16 @@
  * Media (`Icon`, `Image`, `Video`, `AudioPlayer`) and DSH data visualization
  * components (`Stat`, `Progress`, `Badge`, `Code`, `Chart`, `Table`).
  */
-import { useContext, useId, useMemo, useState } from 'react'
-import { ProgressBar as AriaProgressBar } from 'react-aria-components'
+
 import {
+  type ActionDispatchOptions,
   AudioPlayerApi,
   IconApi,
   ImageApi,
   VideoApi,
-  type ActionDispatchOptions,
 } from '@a2ui/web_core/v1_0'
+import { useContext, useId, useMemo, useState } from 'react'
+import { ProgressBar as AriaProgressBar } from 'react-aria-components'
 import {
   BadgeApi,
   ChartApi,
@@ -23,7 +24,7 @@ import { parseFileTarget } from '../file-opener.tsx'
 import { useRuntimeMessages } from '../i18n.ts'
 import { DshCodeBlock, DshImageLightbox, DshTag, type TagTone } from '../ui/primitives.tsx'
 import css from './Catalog.module.css'
-import { EChartsWidget, type ChartKind } from './EChartsWidget.tsx'
+import { type ChartKind, EChartsWidget } from './EChartsWidget.tsx'
 import { FileOpenChip } from './FileOpenChip.tsx'
 import { renderCatalogIcon } from './icons.tsx'
 import {
@@ -31,12 +32,12 @@ import {
   normalizeSparklinePoints,
   splitStatValueUnit,
 } from './stat-file-helpers.ts'
-import { TableWidget, type TableColumnInput } from './TableWidget.tsx'
+import { type TableColumnInput, TableWidget } from './TableWidget.tsx'
 import {
-  InsideButtonContext,
-  SurfaceReadOnlyContext,
   defineComponent,
+  InsideButtonContext,
   isSafeMediaUrl,
+  SurfaceReadOnlyContext,
   weightStyle,
 } from './widget-helpers.tsx'
 

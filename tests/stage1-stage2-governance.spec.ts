@@ -16,11 +16,11 @@ import {
 import { StreamingExpressSession } from '../src/client/streaming.ts'
 import {
   A2UI_SURFACE_NODE_KIND,
+  type ChatTargetSnapshot,
   filterMessagesBySurfaceIds,
   resolveDockBatch,
   resolveLatestA2uiCommandState,
   resolveTurnTailBatch,
-  type ChatTargetSnapshot,
 } from '../src/client/turn-surfaces.ts'
 import { createGenerator, SurfaceSessions } from '../src/host/generator.ts'
 import { apply, GOLDEN_CALCULATOR_EXAMPLE } from '../src/index.ts'

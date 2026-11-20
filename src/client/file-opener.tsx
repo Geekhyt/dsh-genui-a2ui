@@ -67,7 +67,7 @@ export interface ParsedFileTarget {
   readonly line?: number | undefined
 }
 
-const DISALLOWED_SCHEME_RE = /^(?:https?|javascript|data|mailto|blob|vbscript):/i
+const DISALLOWED_SCHEME_RE = /^(?:https?|file|javascript|data|mailto|blob|vbscript):/i
 
 /**
  * Parse a model-supplied `filePath` + optional `line` into a sanitized `{ path, line }`.

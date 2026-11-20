@@ -1,9 +1,9 @@
-import { describe, expect, it } from 'vitest'
 import { ExpressParser } from '@a2ui/agent'
-import { createGenerator, SurfaceSessions } from '../src/host/generator.ts'
-import { DSH_CATALOG_ID, dshSchemaCatalog } from '../src/shared/catalog-schema.ts'
+import { describe, expect, it } from 'vitest'
 // @ts-expect-error plain ESM helper script
 import { ANALYTICS_UPDATE_UI, BOOKING_UI, DASHBOARD_UI } from '../scripts/mock-llm.mjs'
+import { createGenerator, SurfaceSessions } from '../src/host/generator.ts'
+import { DSH_CATALOG_ID, dshSchemaCatalog } from '../src/shared/catalog-schema.ts'
 
 describe('M1: dshSchemaCatalog with @a2ui/agent ExpressParser', () => {
   it('serializes cleanly to A2UI v1.0 catalog JSON and compiles DSH extension components', () => {

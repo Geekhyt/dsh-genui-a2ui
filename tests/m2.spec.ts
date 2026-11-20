@@ -18,10 +18,10 @@ import {
 } from '../src/client/persistence.ts'
 import {
   A2UI_SURFACE_NODE_KIND,
+  type ChatTargetSnapshot,
   resolveActiveAskCall,
   resolveDockBatch,
   resolveTurnTailBatch,
-  type ChatTargetSnapshot,
 } from '../src/client/turn-surfaces.ts'
 import { createAskTool, PendingAskRegistry } from '../src/host/ask-tool.ts'
 import { createGenerator, SurfaceSessions } from '../src/host/generator.ts'

@@ -24,8 +24,8 @@ import { ANSWER_COMMAND, TIER_COMMAND } from './shared/catalog-schema.ts'
 import { HOST_MESSAGES, resolveHostLocale } from './shared/i18n.ts'
 import type { AskAnswerInput } from './shared/wire-types.ts'
 
-export { ANSWER_COMMAND, DOMAIN_SKILL_META, SKILL_DOMAINS, TIER_COMMAND }
 export type { SkillDomain }
+export { ANSWER_COMMAND, DOMAIN_SKILL_META, SKILL_DOMAINS, TIER_COMMAND }
 
 export const name = 'dsh-genui-a2ui'
 export const inject: string[] = []
@@ -550,12 +550,20 @@ export function apply(ctx: Context, config: Config = {}): void {
             if (trimmed === '') {
               return { kind: 'error', text: msg.missingPayload }
             }
-            let payload: AskAnswerInput
+            let rawPayload: unknown
             try {
-              payload = JSON.parse(trimmed) as AskAnswerInput
+              rawPayload = JSON.parse(trimmed)
             } catch {
               return { kind: 'error', text: msg.invalidPayloadJson }
             }
+            if (
+              typeof rawPayload !== 'object' ||
+              rawPayload === null ||
+              Array.isArray(rawPayload)
+            ) {
+              return { kind: 'error', text: msg.invalidPayloadJson }
+            }
+            const payload = rawPayload as AskAnswerInput
             const sid = sessionIdOf({ agent })
             const settled = asks.settle(sid, payload)
             if (!settled) {
@@ -567,6 +575,22 @@ export function apply(ctx: Context, config: Config = {}): void {
       'dsh-genui-a2ui: /a2ui-answer command',
     )
   })
+
+  if (typeof ctx.effect === 'function') {
+    ctx.effect(
+      () => () => {
+        asks.disposeAll()
+      },
+      'dsh-genui-a2ui: pending asks cleanup',
+    )
+  } else {
+    ctx.on(
+      'dispose' as never,
+      (() => {
+        asks.disposeAll()
+      }) as never,
+    )
+  }
 
   ctx.on(
     'session/disposed' as never,

@@ -24,6 +24,7 @@ import {
   a2uiActionUserTextRule,
 } from './ActionUserChip.tsx'
 import { A2uiAskDockView, A2uiAskToolView } from './AskToolView.tsx'
+import { getLoadedRuntimeChunk } from './chunk-loader.ts'
 import { A2uiDockView } from './DockView.tsx'
 import {
   fileAddressFor,
@@ -31,9 +32,8 @@ import {
   resolveSessionPath,
   type WorkspaceFileOpener,
 } from './file-opener.tsx'
-import type { SurfaceActionCallback } from './SurfaceView.tsx'
-import { getLoadedRuntimeChunk } from './chunk-loader.ts'
 import { publishCommandNotice, setA2uiEnabled, setFallbackDefaultEnabled } from './persistence.ts'
+import type { SurfaceActionCallback } from './SurfaceView.tsx'
 import { mountPluginCssSheets, unmountPluginCssSheets } from './style-lifecycle.ts'
 import { A2uiTierControl } from './TierControl.tsx'
 import { A2uiToolView, type ChatExternalStore } from './ToolView.tsx'

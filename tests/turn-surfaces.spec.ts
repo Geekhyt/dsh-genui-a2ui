@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest'
 import {
   A2UI_SURFACE_NODE_KIND,
   a2uiSurfaceNodeDefinition,
+  type ChatTargetSnapshot,
   isTurnClosedForCall,
   parseRenderMeta,
   resolveTurnTailBatch,
-  type ChatTargetSnapshot,
 } from '../src/client/turn-surfaces.ts'
 
 describe('turn-surfaces projection', () => {

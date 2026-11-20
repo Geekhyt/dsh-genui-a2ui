@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest'
 import { ExpressPromptGenerator } from '@a2ui/agent'
 import { basicCatalog } from '@a2ui/web_core/v1_0'
+import { describe, expect, it } from 'vitest'
 import {
   createGenerator,
   RENDER_TOOL,

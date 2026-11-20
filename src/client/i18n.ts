@@ -7,9 +7,9 @@
  */
 import { useSyncExternalStore } from 'react'
 import {
-  resolveClientLocale,
   RUNTIME_MESSAGES,
   type RuntimeUiMessages,
+  resolveClientLocale,
   SHELL_MESSAGES,
   type ShellUiMessages,
   subscribeUiLocaleOverride,
@@ -64,7 +64,7 @@ export function useShellMessages(): ShellUiMessages {
   return SHELL_MESSAGES[useUiLocale()]
 }
 
-/** Runtime & 32-widget catalog bilingual UI strings (`lib/client.runtime.js`). */
+/** Runtime & 57-widget catalog bilingual UI strings (`lib/client.runtime.js`). */
 export function useRuntimeMessages(): RuntimeUiMessages {
   return RUNTIME_MESSAGES[useUiLocale()]
 }

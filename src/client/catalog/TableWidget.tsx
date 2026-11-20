@@ -7,7 +7,8 @@
  * expandable inline row-detail drawer (`expandKey`), compact/standard density toggle,
  * and numeric summary footers (`showSummary`).
  */
-import { Fragment, memo, useDeferredValue, useMemo, useState } from 'react'
+
+import type { ActionDispatchOptions } from '@a2ui/web_core/v1_0'
 import {
   columnFilteringFeature,
   createColumnHelper,
@@ -18,13 +19,13 @@ import {
   globalFilteringFeature,
   rowPaginationFeature,
   rowSortingFeature,
+  type SortingState,
   sortFn_alphanumeric,
   sortFn_basic,
   tableFeatures,
   useTable,
-  type SortingState,
 } from '@tanstack/react-table'
-import type { ActionDispatchOptions } from '@a2ui/web_core/v1_0'
+import { Fragment, memo, useDeferredValue, useMemo, useState } from 'react'
 import type { RuntimeUiMessages } from '../../shared/i18n.ts'
 import { useRuntimeMessages } from '../i18n.ts'
 import { DshButton, DshInput, DshSearchIcon, DshTag } from '../ui/primitives.tsx'
@@ -183,9 +184,11 @@ export const TableWidget = memo(function TableWidget({
   const [compact, setCompact] = useState(false)
   const [copiedMd, setCopiedMd] = useState(false)
   const [prevCrossFilter, setPrevCrossFilter] = useState(activeCrossFilter)
+  const [prevNormalizedData, setPrevNormalizedData] = useState(normalizedData)
 
-  if (prevCrossFilter !== activeCrossFilter) {
+  if (prevCrossFilter !== activeCrossFilter || prevNormalizedData !== normalizedData) {
     setPrevCrossFilter(activeCrossFilter)
+    setPrevNormalizedData(normalizedData)
     if (pagination.pageIndex !== 0) {
       setPagination((prev) => ({ ...prev, pageIndex: 0 }))
     }
@@ -544,7 +547,6 @@ export const TableWidget = memo(function TableWidget({
                         rowChecked ? css.trSelected : clickable ? css.trInteractive : undefined
                       }
                       tabIndex={clickable ? 0 : undefined}
-                      role={clickable ? 'button' : undefined}
                       onClick={clickable ? triggerRow : undefined}
                       onKeyDown={
                         clickable

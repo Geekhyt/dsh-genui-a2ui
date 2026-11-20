@@ -10,6 +10,7 @@
  */
 import { A2uiError, type AgentToRendererMessage } from '@a2ui/agent'
 import { A2UI_LIMITS } from '../shared/catalog-schema.ts'
+import { isDangerousObjectKey, isSecretKey } from '../shared/constants.ts'
 import { HOST_MESSAGES, resolveHostLocale } from '../shared/i18n.ts'
 import type { AskAnswerInput, AskMeta } from '../shared/wire-types.ts'
 import { ASK_TOOL, type SurfaceSessions } from './generator.ts'
@@ -20,9 +21,6 @@ export type { AskAnswerInput, AskMeta }
 export const DEFAULT_ASK_TIMEOUT_SECONDS = 180
 const MAX_TIMEOUT_SECONDS = 2_147_483
 
-const SECRET_KEY_RE =
-  /^(?:password|passwd|pwd|secret|api[_-]?key|access[_-]?token|refresh[_-]?token|private[_-]?key)$/i
-
 export function sanitizePayloadObject(value: unknown): Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return {}
   const clean = (node: unknown, depth: number): unknown => {
@@ -31,9 +29,16 @@ export function sanitizePayloadObject(value: unknown): Record<string, unknown> {
     if (typeof node === 'object' && node !== null) {
       const out: Record<string, unknown> = {}
       for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
-        if (SECRET_KEY_RE.test(k)) continue
+        if (isDangerousObjectKey(k) || isSecretKey(k)) continue
         const next = clean(v, depth + 1)
-        if (next !== undefined) out[k] = next
+        if (next !== undefined) {
+          Object.defineProperty(out, k, {
+            value: next,
+            enumerable: true,
+            writable: true,
+            configurable: true,
+          })
+        }
       }
       return out
     }
@@ -112,8 +117,7 @@ export class PendingAskRegistry {
     const mapKey = this.keyOf(sessionId, callId)
     const existing = this.entries.get(mapKey)
     if (existing !== undefined) {
-      existing.cleanup()
-      this.entries.delete(mapKey)
+      existing.reject(new Error(`a2ui_ask "${callId}" superseded by a newer call`))
     }
 
     return new Promise<AskSettlement>((resolve, reject) => {
@@ -207,6 +211,15 @@ export class PendingAskRegistry {
         this.entries.delete(key)
         entry.reject(new Error(`session "${sessionId}" disposed`))
       }
+    }
+  }
+
+  /** Cancel and clean up all pending asks across all sessions on plugin disposal. */
+  disposeAll(): void {
+    for (const [key, entry] of this.entries.entries()) {
+      entry.cleanup()
+      this.entries.delete(key)
+      entry.reject(new Error('dsh-genui-a2ui plugin disposed'))
     }
   }
 }

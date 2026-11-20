@@ -7,7 +7,10 @@
  * - `CheckCard`: AntD Pro `<CheckCard.Group>` visual option cards & `@ant-design/x` `<Prompts>` action cards
  * - `Tree`: AntD `<Tree>` & APM trace waterfall hierarchy with proportional `sharePct` bars
  */
+
+import type { ActionDispatchOptions } from '@a2ui/web_core/v1_0'
 import {
+  type CSSProperties,
   Fragment,
   useContext,
   useDeferredValue,
@@ -15,10 +18,8 @@ import {
   useMemo,
   useRef,
   useState,
-  type CSSProperties,
 } from 'react'
 import { createPortal } from 'react-dom'
-import type { ActionDispatchOptions } from '@a2ui/web_core/v1_0'
 import {
   CheckCardApi,
   DateRangeApi,
@@ -46,18 +47,18 @@ import {
   computeDateRangeSpanDays,
   filterHierarchyTree,
   findBreadcrumbByValue,
+  type NormalizedHierarchyNode,
   normalizeCheckCardOptions,
   normalizeHierarchyTree,
   normalizeMultiSelectMergedOptions,
-  type NormalizedHierarchyNode,
 } from './v5-helpers.ts'
 import {
-  SurfaceReadOnlyContext,
-  SurfaceValidationContext,
+  type ClampedPopoverBox,
   computeClampedPopoverBox,
   defineComponent,
+  SurfaceReadOnlyContext,
+  SurfaceValidationContext,
   weightStyle,
-  type ClampedPopoverBox,
 } from './widget-helpers.tsx'
 
 const SEARCH_ICON_14 = <DshSearchIcon size={14} />
@@ -84,6 +85,8 @@ export const DshNumberInputImpl = defineComponent<{
   const readOnly = useContext(SurfaceReadOnlyContext)
   const { submitAttempted } = useContext(SurfaceValidationContext)
   const [touched, setTouched] = useState(false)
+  const [focused, setFocused] = useState(false)
+  const [draft, setDraft] = useState('')
 
   const numVal = Number(props.value)
   const safeVal = Number.isFinite(numVal) ? numVal : (props.min ?? 0)
@@ -107,6 +110,7 @@ export const DshNumberInputImpl = defineComponent<{
       max: props.max,
       step,
     })
+    if (focused) setDraft(String(next))
     props.setValue?.(next)
   }
 
@@ -139,17 +143,25 @@ export const DshNumberInputImpl = defineComponent<{
           {prefix ? <span className={css.numberAffix}>{prefix}</span> : null}
           <input
             id={inputId}
-            type="number"
+            type="text"
+            inputMode="decimal"
+            role="spinbutton"
+            aria-valuenow={safeVal}
+            aria-valuemin={props.min}
+            aria-valuemax={props.max}
             className={css.numberBareInput}
-            value={safeVal}
-            min={props.min}
-            max={props.max}
-            step={step}
+            value={focused ? draft : String(safeVal)}
             disabled={readOnly}
             aria-invalid={showError || undefined}
+            onFocus={() => {
+              setFocused(true)
+              setDraft(String(safeVal))
+            }}
             onBlur={() => {
+              setFocused(false)
               setTouched(true)
-              let clamped = safeVal
+              const parsed = Number.parseFloat(draft.trim())
+              let clamped = Number.isFinite(parsed) ? parsed : safeVal
               if (typeof props.min === 'number') clamped = Math.max(props.min, clamped)
               if (typeof props.max === 'number') clamped = Math.min(props.max, clamped)
               if (clamped !== safeVal) props.setValue?.(clamped)
@@ -157,9 +169,15 @@ export const DshNumberInputImpl = defineComponent<{
             onChange={(e) => {
               if (readOnly) return
               setTouched(true)
-              const parsed = Number.parseFloat(e.target.value)
-              if (!Number.isFinite(parsed)) return
-              props.setValue?.(parsed)
+              const rawText = e.target.value
+              if (!/^-?\d*\.?\d*$/.test(rawText.trim())) return
+              setDraft(rawText)
+              const trimmed = rawText.trim()
+              if (trimmed === '' || trimmed === '-' || trimmed === '.' || trimmed === '-.') return
+              const parsed = Number(trimmed)
+              if (Number.isFinite(parsed)) {
+                props.setValue?.(parsed)
+              }
             }}
           />
           {unit ? <span className={css.numberAffix}>{unit}</span> : null}
@@ -322,7 +340,7 @@ export const DshMultiSelectImpl = defineComponent<{
                     <button
                       type="button"
                       className={css.multiTagRemove}
-                      aria-label={`Remove ${labelMap.get(val) ?? val}`}
+                      aria-label={msg.multiSelectRemoveTagAria(labelMap.get(val) ?? val)}
                       onClick={(e) => {
                         e.stopPropagation()
                         toggleValue(val)
@@ -505,7 +523,7 @@ export const DshDateRangeImpl = defineComponent<{
           style={{ colorScheme: dark ? 'dark' : 'light' }}
           value={normStart}
           disabled={readOnly}
-          aria-label="Start date"
+          aria-label={msg.dateRangeStartAria}
           onChange={(e) => {
             if (readOnly) return
             const nextS = e.target.value
@@ -524,7 +542,7 @@ export const DshDateRangeImpl = defineComponent<{
           style={{ colorScheme: dark ? 'dark' : 'light' }}
           value={normEnd}
           disabled={readOnly}
-          aria-label="End date"
+          aria-label={msg.dateRangeEndAria}
           onChange={(e) => {
             if (readOnly) return
             const nextE = e.target.value
@@ -902,6 +920,7 @@ function GeneralTreeBranch(props: {
 }) {
   const { node, depth, expandedDepth, treeMode, toggledMap, forceExpandAll, onToggle, onSelect } =
     props
+  const msg = useRuntimeMessages()
   const isBranch = node.children.length > 0
   const baseOpen = treeMode === 'all' ? true : treeMode === 'none' ? false : depth < expandedDepth
   const isOpen = forceExpandAll || (toggledMap.get(node.id) ?? baseOpen)
@@ -926,7 +945,7 @@ function GeneralTreeBranch(props: {
             type="button"
             className={css.treeCaretBtn}
             onClick={() => onToggle(node.id, isOpen)}
-            aria-label="Toggle branch"
+            aria-label={msg.treeToggleBranchAria}
           >
             {isOpen ? '▾' : '▸'}
           </button>

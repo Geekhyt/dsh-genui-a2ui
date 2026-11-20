@@ -9,14 +9,23 @@
  * 3. Client A2UI on/off switch preference synced with `/a2ui on|off`.
  */
 
+import { isDangerousObjectKey, isSecretKey } from '../shared/constants.ts'
+
 export const DRAFTS_STORAGE_KEY = 'dsh-a2ui:drafts:v1'
 export const DOCK_STORAGE_KEY = 'dsh-a2ui:dock:v1'
 export const ENABLED_STORAGE_KEY = 'dsh-a2ui:tier:v1'
 export const MAX_DRAFT_ENTRIES = 200
 const MAX_SINGLE_DRAFT_CHARS = 32_768
 
-const SECRET_KEY_RE =
-  /^(?:password|passwd|pwd|secret|api[_-]?key|access[_-]?token|refresh[_-]?token|private[_-]?key)$/i
+function pruneRecordLru<T>(map: Record<string, T>, maxEntries: number): Record<string, T> {
+  const keys = Object.keys(map)
+  if (keys.length <= maxEntries) return map
+  const trimmed: Record<string, T> = {}
+  for (const k of keys.slice(keys.length - maxEntries)) {
+    trimmed[k] = map[k]!
+  }
+  return trimmed
+}
 
 interface DraftEntry {
   readonly key: string
@@ -132,11 +141,18 @@ export function sanitizeDataModel(
     if (typeof node === 'object' && node !== null) {
       const out: Record<string, unknown> = {}
       for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
-        if (SECRET_KEY_RE.test(k)) continue
+        if (isDangerousObjectKey(k) || isSecretKey(k)) continue
         const childPath = currentPath === '/' ? `/${k}` : `${currentPath}/${k}`
         if (blocked.has(childPath)) continue
         const cleaned = walk(v, childPath, depth + 1)
-        if (cleaned !== undefined) out[k] = cleaned
+        if (cleaned !== undefined) {
+          Object.defineProperty(out, k, {
+            value: cleaned,
+            enumerable: true,
+            writable: true,
+            configurable: true,
+          })
+        }
       }
       return out
     }
@@ -297,20 +313,20 @@ export function setDockCollapsed(sessionId: string, collapsed: boolean): void {
   if (!sessionId) return
   const prev = readDockMap()
   const cur = prev[sessionId] ?? DEFAULT_DOCK_STATE
-  writeDockMap({
-    ...prev,
-    [sessionId]: { ...cur, collapsed },
-  })
+  const next = { ...prev }
+  delete next[sessionId]
+  next[sessionId] = { ...cur, collapsed }
+  writeDockMap(pruneRecordLru(next, MAX_DRAFT_ENTRIES))
 }
 
 export function dismissDockAtSeq(sessionId: string, seq: number): void {
   if (!sessionId) return
   const prev = readDockMap()
   const cur = prev[sessionId] ?? DEFAULT_DOCK_STATE
-  writeDockMap({
-    ...prev,
-    [sessionId]: { ...cur, dismissedSeq: seq },
-  })
+  const next = { ...prev }
+  delete next[sessionId]
+  next[sessionId] = { ...cur, dismissedSeq: seq }
+  writeDockMap(pruneRecordLru(next, MAX_DRAFT_ENTRIES))
 }
 
 // ---------------------------------------------------------------------------
@@ -396,9 +412,14 @@ export function setA2uiEnabled(
     }
   }
   const prev = readEnabledStore()
+  const nextBySession = { ...prev.bySession }
+  if (sessionId) {
+    delete nextBySession[sessionId]
+    nextBySession[sessionId] = enabled
+  }
   const next: EnabledStoreShape = {
     defaultEnabled: enabled,
-    bySession: sessionId ? { ...prev.bySession, [sessionId]: enabled } : { ...prev.bySession },
+    bySession: pruneRecordLru(nextBySession, MAX_DRAFT_ENTRIES),
   }
   const serialized = JSON.stringify(next)
   if (serialized === cachedEnabledRaw) return

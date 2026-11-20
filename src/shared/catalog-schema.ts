@@ -12,7 +12,7 @@
  * `NumberInput`, `MultiSelect`, `DateRange`, `TreeSelect`, `CheckCard`, `Tree`,
  * `Grid`) — 57 components total.
  */
-import { z } from 'zod'
+
 import {
   ActionSchema,
   AudioPlayerApi,
@@ -20,12 +20,14 @@ import {
   ButtonApi,
   CardApi,
   Catalog,
+  type CatalogApi,
   CheckBoxApi,
   CheckRuleSchema,
   ChildListSchema,
   ChildSchema,
   ChoicePickerApi,
   ColumnApi,
+  type ComponentApi,
   DateTimeInputApi,
   DividerApi,
   DynamicBooleanSchema,
@@ -33,52 +35,51 @@ import {
   DynamicStringListSchema,
   DynamicStringSchema,
   DynamicValueSchema,
+  type FunctionApi,
   IconApi,
   ImageApi,
   ListApi,
   ModalApi,
   RowApi,
   SliderApi,
+  spec,
   TabsApi,
   TextFieldApi,
   VideoApi,
   WeightSchema,
-  spec,
-  type CatalogApi,
-  type ComponentApi,
-  type FunctionApi,
 } from '@a2ui/web_core/v1_0'
+import { z } from 'zod'
 
 import {
   A2UI_LIMITS,
+  type A2uiEnabled,
   ANSWER_COMMAND,
   ASK_TOOL,
   BASIC_CATALOG_ID,
   CHART_KINDS,
+  type ChartKind,
   DSH_CATALOG_ID,
   normalizePlacement,
   RENDER_TOOL,
   SURFACE_PLACEMENTS,
-  TIER_COMMAND,
-  type A2uiEnabled,
-  type ChartKind,
   type SurfacePlacement,
+  TIER_COMMAND,
 } from './constants.ts'
 
 export {
   A2UI_LIMITS,
+  type A2uiEnabled,
   ANSWER_COMMAND,
   ASK_TOOL,
   BASIC_CATALOG_ID,
   CHART_KINDS,
+  type ChartKind,
   DSH_CATALOG_ID,
   normalizePlacement,
   RENDER_TOOL,
   SURFACE_PLACEMENTS,
-  TIER_COMMAND,
-  type A2uiEnabled,
-  type ChartKind,
   type SurfacePlacement,
+  TIER_COMMAND,
 }
 
 export const ChartApi = {
@@ -1865,7 +1866,7 @@ export const DSH_CATALOG_INSTRUCTIONS = [
   'For form & calculator controls bound to $/paths, prefer `NumberInput(label, $/num, min?=..., max?=..., step?=..., unit?=...)`, `MultiSelect(label, options, $/tags, allowCreate?=false)`, `DateRange(label, $/start, $/end, presets?=true)`, `TreeSelect(label, nodes, $/choice)`, `CheckCard(label, options, $/choice)`, `Segmented(label, options, $/mode)`, `Select(label, options, $/choice)`, and `Switch(label, $/enabled)`.',
   'For quantitative visualizations, prefer `Chart(kind, $/data, xField=..., yField=..., y2Field?=..., referenceLine?=..., title=...)` across its 19 kinds (`bar`, `line`, `area`, `pie`, `scatter`, `radar`, `funnel`, `gauge`, `heatmap`, `treemap`, `sankey`, `boxplot`, `graph`, `candlestick`, `waterfall`, `combo`, `sunburst`, `parallel`, `calendar`); for architecture/flow/sequence/state/ER/Gantt diagrams, prefer `Mermaid(code, title=...)`; for live health-colored service/module dependency DAGs, prefer `ServiceGraph($/nodes, $/edges, title=...)`.',
   'For multi-option trade-off matrices, prefer `Comparison($/options, $/rows, title=...)`; for >= 4 tabular rows, prefer `Table($/rows, searchable=true, expandKey?=...)`; for hierarchical org/OKR/APM trace trees, prefer `Tree($/nodes, title=...)`; for sprint/remediation lanes, prefer `Kanban($/columns, title=...)`; for research citations or workspace code evidence, prefer `SourceList($/sources, title=...)`.',
-  'For workspace file trees or change summaries, prefer `FileTree($/files, title=...)`; for config/code review, prefer `DiffView($/before, $/after, title=..., filePath?=...)` or `Code(code, language=..., filePath?=...)`; for diagnostic logs & stack traces, prefer `LogViewer($/entries, title=...)`; for chronological incident/release streams, prefer `Timeline(items=[...], title=...)`; for progressive disclosure, prefer `Accordion(items=[...])`; for multi-stage plans, prefer `Steps($/stages, current=...)`; for risk warnings, prefer `Callout(title, message, tone=...)`; for clickable follow-up suggestion cards, prefer `CheckCard(label, options, action=action("follow_up"))`.',
+  'For workspace file trees or change summaries, prefer `FileTree($/files, title=...)`; for config/code review, prefer `DiffView($/before, $/after, title=..., filePath?=...)` or `Code(code, language=..., filePath?=...)`; for diagnostic logs & stack traces, prefer `LogViewer($/entries, title=...)`; for chronological incident/release streams, prefer `Timeline(items=[...], title=...)`; for progressive disclosure, prefer `Accordion(items=[...])`; for multi-stage plans, prefer `Steps($/stages, current=...)`; for risk warnings, prefer `Callout(title, message, tone=...)`; for clickable follow-up suggestion cards, prefer `CheckCard(label, options, action=Event("follow_up"))`.',
   'Never fabricate real external state: if using illustrative numbers, mark them clearly in titles or captions; never claim an action has executed before receiving `[a2ui-action]`.',
 ].join('\n')
 

@@ -6,8 +6,9 @@
  * shimmer skeleton while loading, memoizes options over primitive/data fields,
  * and delegates imperative `<canvas>` + `ResizeObserver` bindings to `dom-hooks.ts`.
  */
-import { memo, useCallback, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+
 import type { ActionDispatchOptions } from '@a2ui/web_core/v1_0'
+import { memo, useCallback, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { ChartKind } from '../../shared/catalog-schema.ts'
 import {
   CHART_LOAD_ERROR_SENTINEL,
@@ -15,7 +16,7 @@ import {
   getEchartsChunkSnapshot,
   subscribeEchartsChunk,
 } from '../chunk-loader.ts'
-import { useEChartsMount, type EChartsClickParams } from '../dom-hooks.ts'
+import { type EChartsClickParams, useEChartsMount } from '../dom-hooks.ts'
 import { useRuntimeMessages } from '../i18n.ts'
 import { useDarkTheme } from '../theme.ts'
 import css from './Catalog.module.css'
@@ -230,7 +231,9 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
   }
 
   const weightStyle =
-    weight !== undefined ? { flexGrow: weight, flexBasis: 0, minWidth: 220 } : undefined
+    weight !== undefined
+      ? { flexGrow: weight, flexBasis: 'var(--a2ui-flex-basis, 0px)', minWidth: 220 }
+      : undefined
   const showActions = Boolean(exportable && chunk && !loadError)
   const showHeader = Boolean(title || activeSelected || showActions)
   const isInteractive = Boolean(onSelectChange || action)

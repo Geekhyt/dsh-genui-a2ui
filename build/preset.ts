@@ -15,13 +15,14 @@
  * - CSS (global + `*.module.css`) is compiled by lightningcss and injected as a
  *   `<style data-plugin>` tag that the loader removes on unload.
  */
-import { readFile, utimes } from 'node:fs/promises'
+
 import { existsSync } from 'node:fs'
-import { dirname, isAbsolute, resolve } from 'node:path'
+import { readFile, utimes } from 'node:fs/promises'
 import { builtinModules, createRequire } from 'node:module'
+import { dirname, isAbsolute, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { UserConfig } from 'tsdown'
 import { transform } from 'lightningcss'
+import type { UserConfig } from 'tsdown'
 import { PLATFORM_MODULES } from './web-platform.ts'
 
 const CSS_VIRTUAL_PREFIX = '\0dsh-css:'

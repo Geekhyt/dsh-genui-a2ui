@@ -7,8 +7,9 @@
  * (`openStream({ wrapped: false })`), emitting progressive `createSurface`,
  * `updateComponents`, and `updateDataModel` messages in real time.
  */
-import { ExpressParser, type AgentToRendererMessage } from '@a2ui/agent'
+import { type AgentToRendererMessage, ExpressParser } from '@a2ui/agent'
 import { dshSchemaCatalog } from '../shared/catalog-schema.ts'
+import { preprocessExpressProgram } from '../shared/express-preprocess.ts'
 
 const LEADING_WRAP_RE = /^\s*(?:<a2ui>\s*|```[\w-]*[ \t]*\r?\n)/i
 const TRAILING_WRAP_RE = /(?:\s*<\/a2ui>|\r?\n?[ \t]*```)\s*$/i
@@ -80,9 +81,23 @@ export class StreamingExpressSession {
 
   /** Advance to the latest `ui` string prefix and return all progressive messages so far. */
   advance(rawUi: string, final = false): StreamingCompileSnapshot {
-    const clean = normalizeStreamingProgram(rawUi)
-    if (clean === '') {
+    const rawClean = normalizeStreamingProgram(rawUi)
+    if (rawClean === '') {
       return { messages: this.messages, surfaceIds: [...this.surfaceIdSet], error: null }
+    }
+    // Preprocess completed lines (or the full program when `final=true`) so progressive
+    // streaming matches host-side concat/lookup/chained-calc lowering without choking on
+    // a partially streamed trailing token.
+    let clean: string
+    if (final) {
+      clean = preprocessExpressProgram(rawClean)
+    } else {
+      const lastNl = rawClean.lastIndexOf('\n')
+      if (lastNl >= 0) {
+        clean = `${preprocessExpressProgram(rawClean.slice(0, lastNl))}\n${rawClean.slice(lastNl + 1)}`
+      } else {
+        clean = rawClean
+      }
     }
     if (!clean.startsWith(this.fed) || (this.closed && clean !== this.fed)) {
       this.reset(true)
