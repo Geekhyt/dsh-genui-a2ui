@@ -1,10 +1,3 @@
-/**
- * `a2ui_render`: the model-facing render tool.
- *
- * Plain `ToolDefinition` object (the shape `defineTool` returns) so the host
- * half imports no harness module at runtime. The browser toolview reads the
- * compiled wire messages and placement from the result's `meta` (`presentationMeta`).
- */
 import { A2uiError, type AgentToRendererMessage } from '@a2ui/agent'
 import { A2UI_LIMITS, normalizePlacement, type SurfacePlacement } from '../shared/catalog-schema.ts'
 import type { RenderMeta } from '../shared/wire-types.ts'
@@ -12,7 +5,6 @@ import { RENDER_TOOL, type SurfaceSessions } from './generator.ts'
 
 export { normalizePlacement, type RenderMeta }
 
-/** What `execute` returns; `meta` for the browser is derived from it. */
 export interface RenderValue {
   readonly status: 'rendered'
   readonly title: string | null
@@ -59,7 +51,6 @@ const PARAMETERS = {
   additionalProperties: false,
 } as const
 
-/** Read `{ ui, title, placement }` defensively: tool bridges have been seen double-encoding args. */
 export function readArgs(args: unknown): {
   ui: string | undefined
   title: string | undefined
@@ -140,7 +131,6 @@ function describePlacement(placement: SurfacePlacement): string {
   }
 }
 
-/** Build the tool definition bound to the plugin's session states. */
 export function createRenderTool(sessions: SurfaceSessions) {
   return {
     name: RENDER_TOOL,

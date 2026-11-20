@@ -28,15 +28,12 @@ describe('P1 Real LLM Generation & Self-Repair Eval Suite', () => {
     expect(positives.length).toBe(23)
     expect(negatives.length).toBe(5)
 
-    // Covers a2ui_ask blocking wizard and persistent dock placement
     expect(EVAL_BENCHMARK_CASES.some((c) => c.expectedTool === 'a2ui_ask')).toBe(true)
     expect(EVAL_BENCHMARK_CASES.some((c) => c.expectedPlacement === 'dock')).toBe(true)
 
-    // Covers all 4 P0 skill domains
     const domainsCovered = new Set(positives.map((c) => c.expectedDomain).filter(Boolean))
     expect([...domainsCovered].sort()).toEqual(['analytics', 'core', 'devops', 'forms'])
 
-    // Every expected component name is a real registered catalog component
     const allRegistered = new Set(Object.values(SKILL_DOMAINS).flat())
     for (const c of positives) {
       for (const comp of c.expectedAnyComponents ?? []) {
@@ -48,7 +45,6 @@ describe('P1 Real LLM Generation & Self-Repair Eval Suite', () => {
   it('classifies real SurfaceSessions.compile() failures into deterministic error taxonomy buckets', () => {
     const sessions = createEvalSession()
 
-    // 1. Expression assigned to $/path -> EXPR_IN_DATA_MODEL
     const exprRes = gradeToolAttempt(
       sessions,
       'err-expr',
@@ -59,7 +55,6 @@ describe('P1 Real LLM Generation & Self-Repair Eval Suite', () => {
     expect(exprRes.compiledOk).toBe(false)
     expect(exprRes.errorBucket).toBe('EXPR_IN_DATA_MODEL')
 
-    // 2. Unknown hallucinated component -> UNKNOWN_COMPONENT
     const unkRes = gradeToolAttempt(
       sessions,
       'err-unk',
@@ -70,7 +65,6 @@ describe('P1 Real LLM Generation & Self-Repair Eval Suite', () => {
     expect(unkRes.compiledOk).toBe(false)
     expect(unkRes.errorBucket).toBe('UNKNOWN_COMPONENT')
 
-    // 3. Invalid prop key (`latencyMs` instead of `latency`) -> INVALID_PROP_OR_ARG
     const propRes = gradeToolAttempt(
       sessions,
       'err-prop',
@@ -81,7 +75,6 @@ describe('P1 Real LLM Generation & Self-Repair Eval Suite', () => {
     expect(propRes.compiledOk).toBe(false)
     expect(propRes.errorBucket).toBe('INVALID_PROP_OR_ARG')
 
-    // 4. Direct classifier checks for remaining buckets
     expect(classifyCompileError('Invalid calc() formula AST depth exceeded')).toBe(
       'CALC_SAFETY_OR_SYNTAX',
     )
@@ -93,7 +86,6 @@ describe('P1 Real LLM Generation & Self-Repair Eval Suite', () => {
     )
     expect(classifyCompileError('Syntax error: unexpected token ```')).toBe('SYNTAX_OR_FENCE')
 
-    // 5. Quote-safe `+` string concatenation auto-desugars to `concat([...])` and compiles cleanly!
     const plusAutoFixed = gradeToolAttempt(
       sessions,
       'ok-plus-concat',
@@ -104,7 +96,6 @@ describe('P1 Real LLM Generation & Self-Repair Eval Suite', () => {
     expect(plusAutoFixed.compiledOk).toBe(true)
     expect(plusAutoFixed.usedComponents).toEqual(expect.arrayContaining(['Card', 'Stat']))
 
-    // Bare numeric `+` (no string literal / format*) is NOT desugared and still returns helpful calc() tip
     const bareMathErr = gradeToolAttempt(
       sessions,
       'err-bare-math',
@@ -151,7 +142,6 @@ describe('P1 Real LLM Generation & Self-Repair Eval Suite', () => {
     const posCase = EVAL_BENCHMARK_CASES[0]!
     const negCase = EVAL_BENCHMARK_CASES.find((c) => c.expectedTool === 'none')!
 
-    // Case 1: fails on attempt 1, recovers on attempt 2
     const bad1 = gradeToolAttempt(
       sessions,
       'agg-1a',
@@ -177,7 +167,6 @@ describe('P1 Real LLM Generation & Self-Repair Eval Suite', () => {
     expect(r1.usedComponents).toEqual(expect.arrayContaining(['Card', 'Column', 'Stat', 'Chart']))
     expect(r1.usedChartKinds).toEqual(['bar'])
 
-    // Case 2: negative control properly stays in Markdown (no UI call)
     const negAttempt = gradeToolAttempt(sessions, 'agg-neg', 1, 'none')
     const r2 = finalizeCaseResult(negCase, [negAttempt], [], {
       promptTokens: 2900,
@@ -204,7 +193,6 @@ describe('P1 Real LLM Generation & Self-Repair Eval Suite', () => {
   })
 
   it('desugars JS + string concatenation and folds nested cond(eq(...)) + chained calc() under depth 5', () => {
-    // 1. desugarExpressConcat preserves calc("a + b") and quotes while rewriting formatNumber(x) + " GB"
     const rawConcat =
       'surface("s_cat")\n$/n = 4\ntotal = calc("n + 2", { n: $/n })\nroot = Card(Stat("VRAM", formatNumber(total) + " GB", caption="A + B"))'
     const desugared = desugarExpressConcat(rawConcat)
@@ -212,19 +200,16 @@ describe('P1 Real LLM Generation & Self-Repair Eval Suite', () => {
     expect(desugared).toContain('caption="A + B"')
     expect(desugared).toContain('concat([formatNumber(total), " GB"])')
 
-    // 2. foldNestedCondToLookup collapses 3-level cond(eq(...)) chain to depth-1 lookup()
     const rawCond =
       'vram = cond(eq($/tier, "l40s"), 48, cond(eq($/tier, "a800"), 80, cond(eq($/tier, "h800"), 80, 96)))'
     const folded = foldNestedCondToLookup(rawCond)
     expect(folded).toBe('vram = lookup($/tier, { "l40s": 48, "a800": 80, "h800": 80 }, 96)')
 
-    // 3. Runtime computeConcat & computeLookup (including single-select ChoicePicker array unwrap)
     expect(computeConcat(['¥', 120, ' 万'])).toBe('¥120 万')
     expect(computeLookup('h800', { l40s: 48, h800: 80 }, 96)).toBe(80)
     expect(computeLookup(['a800'], { l40s: 48, a800: 80 }, 96)).toBe(80)
     expect(computeLookup('unknown', { l40s: 48 }, 96)).toBe(96)
 
-    // 4. Multi-step chained calculator (including inline calc() inside KeyValue) compiles under MAX_FUNC_CALL_DEPTH = 5
     const chainedDsl = [
       'surface("cloud_vm_cost")',
       '$/vcpu = 8',
@@ -252,7 +237,6 @@ describe('P1 Real LLM Generation & Self-Repair Eval Suite', () => {
     const res = gradeToolAttempt(sessions, 'chained-calc', 1, 'a2ui_render', chainedDsl)
     expect(res.compiledOk).toBe(true)
 
-    // 5. calc-engine allows 4-level parenthesized expressions while still guarding genuine deep nesting (>36)
     const okFormula = validateCalcExpression(
       '((c * 42 + m * 9.5) - ((c * 42 + m * 9.5) * r)) * 12',
       new Set(['c', 'm', 'r']),

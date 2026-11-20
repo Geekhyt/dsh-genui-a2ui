@@ -1,13 +1,3 @@
-/**
- * `a2ui_ask`: blocking in-turn interactive question/form tool.
- *
- * Unlike `a2ui_render` (which renders a display/action card and lets the turn
- * finish immediately), `a2ui_ask` suspends tool execution inside the current
- * turn until the user clicks a `Button` action (or skips) in `AskToolView`.
- * The browser dispatches `/a2ui-answer <json>` via `session.command(...)`
- * (`recordInput: false`), resolving the pending tool call with structured
- * `{ action, userMessage, context, dataModels }` without opening an extra turn.
- */
 import { A2uiError, type AgentToRendererMessage } from '@a2ui/agent'
 import { A2UI_LIMITS } from '../shared/catalog-schema.ts'
 import { isDangerousObjectKey, isSecretKey } from '../shared/constants.ts'
@@ -83,7 +73,6 @@ interface PendingEntry {
   cleanup(): void
 }
 
-/** Coordinates in-flight `a2ui_ask` tool executions with `/a2ui-answer` RPC commands. */
 export class PendingAskRegistry {
   private readonly entries = new Map<string, PendingEntry>()
 
@@ -166,7 +155,6 @@ export class PendingAskRegistry {
     })
   }
 
-  /** Settle a pending `a2ui_ask` call from the `/a2ui-answer` command handler. */
   settle(sessionId: string, input: AskAnswerInput): boolean {
     let target: PendingEntry | undefined
     if (input.callId !== undefined && input.callId !== '') {
@@ -203,7 +191,6 @@ export class PendingAskRegistry {
     return true
   }
 
-  /** Cancel and clean up all pending asks for a disposed session. */
   forgetSession(sessionId: string): void {
     for (const [key, entry] of this.entries.entries()) {
       if (entry.sessionId === sessionId) {
@@ -214,7 +201,6 @@ export class PendingAskRegistry {
     }
   }
 
-  /** Cancel and clean up all pending asks across all sessions on plugin disposal. */
   disposeAll(): void {
     for (const [key, entry] of this.entries.entries()) {
       entry.cleanup()

@@ -1,16 +1,3 @@
-/**
- * Official `uiConversation` projection for settled `a2ui_render` calls.
- *
- * Mirrors the architecture of `@deepseek-ai/dsh-client-ui-plan`: each settled
- * `a2ui_render` tool result produces a `visibility: "hidden"` Chat Node of kind
- * `a2ui-surface` anchored at its `seq` and `location`. That gives:
- * - replay/refresh/fork safety with zero custom side-stores;
- * - cross-turn `surface("id", update=true)` continuity across `answer`, `inline`,
- *   and `dock` placements;
- * - automatic `superseded: true` detection for historical turn cards whose
- *   surfaces were updated in a later turn (preventing stale re-submissions);
- * - reactive `resolveDockBatch` for the persistent `conversation.input.dock` panel.
- */
 import type { AgentToRendererMessage } from '@a2ui/agent'
 import {
   ASK_TOOL,
@@ -49,7 +36,6 @@ function extractSurfaceIds(messages: readonly AgentToRendererMessage[]): string[
   return [...ids]
 }
 
-/** Validate and normalize `presentationMeta` from an `a2ui_render` `tool/result`. */
 export function parseRenderMeta(meta: unknown): RenderMeta | null {
   if (!isRecord(meta)) return null
   if (meta.kind !== undefined && meta.kind !== 'dsh-a2ui') return null
@@ -71,7 +57,6 @@ export function parseRenderMeta(meta: unknown): RenderMeta | null {
   }
 }
 
-/** Validate and normalize `presentationMeta` from an `a2ui_ask` `tool/result`. */
 export function parseAskMeta(meta: unknown): AskMeta | null {
   if (!isRecord(meta) || meta.kind !== 'dsh-a2ui-ask' || meta.version !== 1) return null
   if (!Array.isArray(meta.messages) || meta.messages.length === 0) return null
@@ -156,7 +141,6 @@ function extractSettledFromResult(
   }
 }
 
-/** Definition registered with `ctx.uiConversation.events.register(...)`. */
 export const a2uiSurfaceNodeDefinition = {
   kind: A2UI_SURFACE_NODE_KIND,
   target: 'chat',
@@ -216,7 +200,6 @@ export const a2uiSurfaceNodeDefinition = {
   },
 }
 
-/** Minimal shape of DSH's Chat target snapshot we inspect. */
 export interface ChatTargetSnapshot {
   readonly order?: readonly string[]
   readonly nodes: {
@@ -231,11 +214,6 @@ export interface ChatTargetSnapshot {
   }
 }
 
-/**
- * Mirrors `@deepseek-ai/dsh-client-ui-chat` `chatViewDefinition.isActive`:
- * `ChatView` (and its `GenericCommandCard` rows) stays unmounted while a session
- * is blank or contains only `command` log nodes.
- */
 export function isChatTimelineActive(snapshot: ChatTargetSnapshot | undefined): boolean {
   if (snapshot === undefined) return false
   if (Array.isArray(snapshot.order) && typeof snapshot.nodes.get === 'function') {
@@ -247,7 +225,6 @@ export function isChatTimelineActive(snapshot: ChatTargetSnapshot | undefined): 
   return false
 }
 
-/** Whether the turn owning a given `callId` has already closed (`turn/end` arrived). */
 export function isTurnClosedForCall(
   snapshot: ChatTargetSnapshot | undefined,
   callId: string,
@@ -283,7 +260,6 @@ function collectOrderedCalls(snapshot: ChatTargetSnapshot | undefined): readonly
   return calls
 }
 
-/** Retain only A2UI wire messages targeting a surface ID in `allowedIds`. */
 export function filterMessagesBySurfaceIds(
   messages: readonly AgentToRendererMessage[],
   allowedIds: ReadonlySet<string>,
@@ -304,7 +280,6 @@ export function filterMessagesBySurfaceIds(
   return out
 }
 
-/** All settled A2UI wire messages in the session in ascending sequence order. */
 export function resolveSessionMessages(
   snapshot: ChatTargetSnapshot | undefined,
 ): AgentToRendererMessage[] {
@@ -316,21 +291,12 @@ export interface TurnTailBatch {
   readonly visibleSurfaceIds: ReadonlySet<string>
   readonly messages: readonly AgentToRendererMessage[]
   readonly latestSeq: number
-  /** True when every visible surface in this turn has been updated/replaced in a later turn. */
   readonly superseded: boolean
 }
 
 const turnTailMemo = new Map<string, { sig: string; batch: TurnTailBatch }>()
 const MAX_TURN_TAIL_MEMO = 256
 
-/**
- * Compute the post-answer (`placement === 'answer'`) A2UI surface batch for `turnNumber`.
- *
- * - Replays only prior messages targeting `visibleSurfaceIds` (`turn <= turnNumber`) so
- *   `update=true` works across turns while avoiding O(T^2) hidden SurfaceModel accumulation.
- * - Memoizes batch references by structural signature so later streaming text tokens
- *   trigger 0 re-renders on settled historical cards.
- */
 export function resolveTurnTailBatch(
   snapshot: ChatTargetSnapshot | undefined,
   turnNumber: number,
@@ -419,11 +385,6 @@ export interface DockBatch {
 
 let lastDockMemo: { sig: string; batch: DockBatch } | null = null
 
-/**
- * Compute the persistent workspace dock batch (`placement === 'dock'`) across
- * the entire session. Later `update=true` calls targeting a docked surface ID
- * update the docked surface in place and advance `latestSeq`.
- */
 export function resolveDockBatch(snapshot: ChatTargetSnapshot | undefined): DockBatch | null {
   const allCalls = collectOrderedCalls(snapshot)
   if (allCalls.length === 0) return null
@@ -463,14 +424,12 @@ export function resolveDockBatch(snapshot: ChatTargetSnapshot | undefined): Dock
   return batch
 }
 
-/** Parse whether a localized `/a2ui` command outcome text indicates ON or OFF. */
 export function parseA2uiEnabledFromStatusText(text: string): boolean | null {
   if (text.includes('已开启') || /\benabled\b/i.test(text)) return true
   if (text.includes('已关闭') || /\bdisabled\b/i.test(text)) return false
   return null
 }
 
-/** Detect the latest settled `/a2ui` slash-command outcome in the chat stream for UI pill sync. */
 export function resolveLatestA2uiCommandState(
   snapshot: ChatTargetSnapshot | undefined,
 ): { readonly seq: number; readonly enabled: boolean } | null {
@@ -515,11 +474,6 @@ interface RawToolCallRoot {
   }
 }
 
-/**
- * Resolve an in-flight `a2ui_ask` tool call (`preparing` or `start`) from the
- * live Chat target snapshot so it can pop open above the composer (`conversation.input.dock`),
- * remaining visible even when DSH's `stepGrouping: "collapsed"` hides the process group.
- */
 export function resolveActiveAskCall(
   snapshot: ChatTargetSnapshot | undefined,
 ): ActiveAskCall | null {

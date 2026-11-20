@@ -1,12 +1,3 @@
-/**
- * Composer toolbar 1-click A2UI switch mounted in `conversation.input.left`.
- *
- * Single click toggles `dsh-genui-a2ui` between:
- * - `true` (ON): exposes `a2ui_render` and `a2ui_ask` (all 57 DSH + Basic components);
- * - `false` (OFF): hides A2UI tools from the model's step toolSet (plain Markdown mode).
- *
- * Syncs with the Host via `session.command('/a2ui on|off')` (`recordInput: false`).
- */
 import { memo, useCallback, useMemo, useState, useSyncExternalStore } from 'react'
 import { useShellMessages } from './i18n.ts'
 import {
@@ -70,10 +61,6 @@ export const A2uiTierControl = memo(function A2uiTierControl({
   const chatActive = useMemo(() => isChatTimelineActive(chatSnapshot), [chatSnapshot])
   const latestCommand = useMemo(() => resolveLatestA2uiCommandState(chatSnapshot), [chatSnapshot])
 
-  // Purely derive effective toggle state & blank-session notice visibility without `useEffect`.
-  // Note: Do NOT auto-fire `syncHostEnabled` on session mount — `session.command('/a2ui ...')`
-  // appends a visible command log row in DSH, and Host already persists `defaultEnabled` in
-  // `~/.dsh/dsh-genui-a2ui-state.json`. Only dispatch `/a2ui` when the user clicks the toggle button.
   const enabled = resolveEffectiveA2uiEnabled(sessionId, latestCommand)
   const visibleNotice = notice !== null && !chatActive ? notice : null
 

@@ -17,7 +17,6 @@ vi.hoisted(() => {
   }
 })
 
-// Render Modal inline in headless SSR tests when `open` is true so portal state is directly inspectable.
 vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => ({
   Button: undefined,
   Checkbox: undefined,
@@ -60,7 +59,6 @@ import {
   SKILL_PREAMBLE,
 } from '../src/index.ts'
 
-/** Walk a React element tree rendered by a stateless/hook test harness to inspect props & handlers. */
 function findElements(
   node: unknown,
   predicate: (el: ReactElement<Record<string, unknown>>) => boolean,
@@ -88,16 +86,13 @@ describe('E2E audit fixes (Items 2–5): Callout/CheckBox layout, Modal & readOn
       'utf8',
     )
 
-    // 1. Callout clips internal rows and refuses vertical flex shrinking
     expect(cssSource).toMatch(/\.callout\s*\{[^}]*flex-shrink:\s*0;[^}]*overflow:\s*hidden;/s)
     expect(cssSource).toMatch(/\.calloutTopRow\s*\{[^}]*min-width:\s*0;/s)
     expect(cssSource).toMatch(/\.calloutTitle\s*\{[^}]*overflow-wrap:\s*anywhere;/s)
 
-    // 2. Column keeps vertical flex-basis at auto (`--a2ui-flex-basis: auto`) while Row uses 0px
     expect(cssSource).toMatch(/\.row\s*\{[^}]*--a2ui-flex-basis:\s*0px;/s)
     expect(cssSource).toMatch(/\.column\s*\{[^}]*--a2ui-flex-basis:\s*auto;/s)
 
-    // 3. CheckBox hugs its label (`align-items: flex-start`) and preserves a non-zero minWidth (140px) when weighted
     expect(cssSource).toMatch(/\.checkboxField\s*\{[^}]*align-items:\s*flex-start;/s)
     const html = renderToStaticMarkup(
       createElement(DshCheckBoxView, {
@@ -113,7 +108,6 @@ describe('E2E audit fixes (Items 2–5): Callout/CheckBox layout, Modal & readOn
   })
 
   it('Item 3: closes open Modals on action dispatch or readOnly transition, and disables controls on historical snapshots', () => {
-    // 1. SSR verification: readOnly disables Button, TextField, CheckBox, and Modal trigger
     const readOnlyMarkup = renderToStaticMarkup(
       createElement(
         SurfaceReadOnlyContext.Provider,
@@ -156,12 +150,10 @@ describe('E2E audit fixes (Items 2–5): Callout/CheckBox layout, Modal & readOn
 
     expect(readOnlyMarkup).toContain('data-readonly="true"')
     expect(readOnlyMarkup).toContain('aria-disabled="true"')
-    // All 3 interactive inputs/buttons must be disabled, and validation error hidden in read-only snapshot
     expect((readOnlyMarkup.match(/disabled=""/g) ?? []).length).toBeGreaterThanOrEqual(3)
     expect(readOnlyMarkup).not.toContain('Required check failed')
     expect(readOnlyMarkup).not.toContain('data-mock-modal')
 
-    // 2. Action Button inside Modal invokes ModalCloseContext immediately upon dispatching action
     let actionCalls = 0
     let modalClosed = 0
 
@@ -184,7 +176,6 @@ describe('E2E audit fixes (Items 2–5): Callout/CheckBox layout, Modal & readOn
             },
             buildChild: () => '确认执行',
           }) as ReactElement<{ onClick?: () => void }>
-          // Simulate user clicking the confirmation button inside the open modal
           el.props.onClick?.()
           return el
         }),
@@ -194,7 +185,6 @@ describe('E2E audit fixes (Items 2–5): Callout/CheckBox layout, Modal & readOn
     expect(actionCalls).toBe(1)
     expect(modalClosed).toBe(1)
 
-    // 3. Modal open when active -> automatically closes when surface flips to readOnly
     let didOpenOnce = false
     function OpenModalProbe({ readOnly }: { readOnly: boolean }) {
       const tree = DshModalView({
@@ -256,7 +246,6 @@ describe('E2E audit fixes (Items 2–5): Callout/CheckBox layout, Modal & readOn
   })
 
   it('Item 4: hides initial Required check failed errors until field blur or submit attempt', () => {
-    // 1. Untouched initial render: zero red error text even when `isValid === false`
     const initialHtml = renderToStaticMarkup(
       createElement(DshTextFieldView, {
         props: {
@@ -271,7 +260,6 @@ describe('E2E audit fixes (Items 2–5): Callout/CheckBox layout, Modal & readOn
     expect(initialHtml).not.toContain('Required check failed')
     expect(initialHtml).not.toContain('aria-invalid')
 
-    // 2. Submit attempt (including clicking a validation-disabled Button wrapper) reveals errors immediately
     let submitAttemptedFlag = false
     const markSubmitAttempted = () => {
       submitAttemptedFlag = true
@@ -317,7 +305,6 @@ describe('E2E audit fixes (Items 2–5): Callout/CheckBox layout, Modal & readOn
     expect(afterSubmitAttemptHtml).toContain('Required check failed')
     expect(afterSubmitAttemptHtml).toContain('aria-invalid="true"')
 
-    // 3. Blur on TextField transitions `touched` to true and renders error on re-render
     function BlurTriggerProbe() {
       const [triggered, setTriggered] = useState(false)
       const tree = DshTextFieldView({
@@ -345,14 +332,12 @@ describe('E2E audit fixes (Items 2–5): Callout/CheckBox layout, Modal & readOn
     const sessions = new SurfaceSessions(createGenerator())
     const snippet = sessions.promptSnippet()
 
-    // 1. Table plain-text cell contract is documented in system prompt, skill preamble, and schema snippet
     expect(A2UI_SYSTEM_GUIDANCE).toContain('NEVER nest `Badge`/`Button` inside `rows`')
     expect(SKILL_PREAMBLE).toContain('`Table` cells are plain scalar text only')
     expect(snippet).toContain(
       'nested A2UI components such as Badge or Button are NOT supported inside Table cells',
     )
 
-    // 2. Skill preamble documents all 5 built-in `?check` signatures + Button `$path` gating
     expect(SKILL_PREAMBLE).toContain('## Client Validation Rules (`?check`)')
     expect(SKILL_PREAMBLE).toContain('?required(')
     expect(SKILL_PREAMBLE).toContain('?email(')
@@ -360,7 +345,6 @@ describe('E2E audit fixes (Items 2–5): Callout/CheckBox layout, Modal & readOn
     expect(SKILL_PREAMBLE).toContain('?length(')
     expect(SKILL_PREAMBLE).toContain('?numeric(')
 
-    // 3. GOLDEN_VALIDATED_FORM_EXAMPLE compiles cleanly with checks on TextField, Slider, CheckBox, and Button
     const compiled = sessions.compile('sess-validated-form', GOLDEN_VALIDATED_FORM_EXAMPLE)
     expect(compiled.length).toBeGreaterThan(0)
     const wireJson = JSON.stringify(compiled)
@@ -379,14 +363,12 @@ describe('E2E audit fixes (Items 2–5): Callout/CheckBox layout, Modal & readOn
       'utf8',
     )
 
-    // Vector width/height variables replace non-standard CSS `zoom` property
     expect(widgetSource).not.toContain('zoom: `${')
     expect(widgetSource).toContain("'--mermaid-zoom-w'")
     expect(widgetSource).toContain("'--mermaid-zoom-h'")
     expect(cssSource).toContain('width: var(--mermaid-zoom-w);')
     expect(cssSource).toContain('height: var(--mermaid-zoom-h);')
 
-    // Grab-to-pan cursor states and expanded 96vw x 94vh fullscreen viewport
     expect(cssSource).toMatch(/\[data-pannable="true"\][\s\S]*?cursor:\s*grab;/)
     expect(cssSource).toMatch(/\[data-dragging="true"\][\s\S]*?cursor:\s*grabbing;/)
     expect(cssSource).toMatch(

@@ -1,8 +1,3 @@
-/**
- * Accessible workspace file path chip / right-sidebar open button shared by
- * `Code`, `DiffView`, `LogViewer`, and `SourceList`, powered by DSH's native
- * `FileTypeIcon` and `PathLabel` primitives.
- */
 import { parseFileTarget, useFileOpener } from '../file-opener.tsx'
 import { useRuntimeMessages } from '../i18n.ts'
 import { DshFileTypeIcon, DshPathLabel } from '../ui/primitives.tsx'

@@ -1,11 +1,4 @@
 #!/usr/bin/env node
-/**
- * Drift check against the installed DeepSeek Harness Desktop `app.asar`.
- *
- * Scans the unpacked ASAR payload in pure Node (no external CLI required) to
- * verify that every `PLATFORM_MODULES` key, `@deepseek-ai/dsh-client-ui-primitives`
- * export, and client UI slot name `dsh-genui-a2ui` relies on is present in the host.
- */
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 

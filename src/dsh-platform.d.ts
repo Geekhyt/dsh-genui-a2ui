@@ -1,9 +1,3 @@
-/**
- * Ambient types for the DSH browser platform modules shared via
- * `window.__ModuleLoader__` (`PLATFORM_MODULES`).
- *
- * Verified against `@deepseek-ai/dsh-client-ui-primitives@0.2.2-rc.1`.
- */
 declare module '@deepseek-ai/dsh-client-ui-primitives' {
   import type {
     ButtonHTMLAttributes,

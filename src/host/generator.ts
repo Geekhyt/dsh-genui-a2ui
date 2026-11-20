@@ -1,12 +1,3 @@
-/**
- * A2UI generation core for the host half: catalog, the tool-channel Express
- * prompt, safety limits, on/off switch state, and per-session renderer state.
- *
- * The model never writes `<a2ui>` blocks into its reply. It passes the A2UI
- * Express program as the `ui` argument of `a2ui_render` or `a2ui_ask`; the host
- * compiles and validates it with the official SDK against the session's
- * RendererState, so `surface("id", update=true)` updates an earlier surface in place.
- */
 import {
   A2uiError,
   A2uiGenerator,
@@ -46,13 +37,6 @@ export {
   RENDER_TOOL,
 }
 
-/**
- * The SDK's Express output contract tells the model to wrap blocks in
- * `<a2ui>` sentinel tags inside its reply. In this host the program travels as
- * a tool argument instead, so that one paragraph is swapped for the tool
- * contract. `tests/prompt.spec.ts` fails if an SDK upgrade changes the
- * paragraph, so the swap can never silently stop applying.
- */
 export const SENTINEL_PARAGRAPH =
   /IMPORTANT: You MUST always surround the entire A2UI Express block with the literal sentinel tags[^\n]*\n/
 
@@ -62,7 +46,6 @@ export const TOOL_CONTRACT = [
   '',
 ].join('\n')
 
-/** Express prompt generator with the tool-channel output contract. */
 class ToolChannelPromptGenerator extends ExpressPromptGenerator {
   override generateBaseRules(): string {
     const base = super.generateBaseRules()
@@ -71,7 +54,6 @@ class ToolChannelPromptGenerator extends ExpressPromptGenerator {
   }
 }
 
-/** Express everywhere, except the prompt speaks about the tool argument. */
 class ToolChannelFormatFactory implements InferenceFormatFactory {
   private readonly inner = new ExpressFormatFactory()
   createFormat(
@@ -100,7 +82,6 @@ const CAPABILITIES = {
   '1.0': { supportedCatalogIds: DEFAULT_CATALOGS.map((c) => c.id) },
 }
 
-/** Agent-lifetime generator backed by the 57-component DSH catalog. */
 export function createGenerator(
   catalogs: readonly SchemaCatalogInput[] = DEFAULT_CATALOGS,
 ): A2uiGenerator {
@@ -148,7 +129,6 @@ function validateCalcCallsInNode(node: unknown): void {
         providedVars = new Set<string>()
       } else if (typeof rawVars === 'object' && !Array.isArray(rawVars)) {
         const varsRec = rawVars as Record<string, unknown>
-        // Skip static key check only if `vars` itself is a dynamic $/path or @call expression
         if (
           !('@path' in varsRec) &&
           !('path' in varsRec) &&
@@ -295,7 +275,6 @@ function validateCompiledLimits(messages: readonly AgentToRendererMessage[]): vo
   }
 }
 
-/** Session-scoped renderer state & on/off switch controller. */
 export class SurfaceSessions {
   private readonly states = new Map<string, RendererState>()
   private readonly enabledBySession = new Map<string, boolean>()
@@ -309,31 +288,22 @@ export class SurfaceSessions {
     this.defaultEnabled = initialEnabled
   }
 
-  /** Whether A2UI tools are enabled for `sessionId` (falls back to `defaultEnabled`). */
   isEnabled(sessionId: string): boolean {
     return this.enabledBySession.get(sessionId) ?? this.defaultEnabled
   }
 
-  /** Set the enabled state for one session. */
   setEnabled(sessionId: string, enabled: boolean): void {
     this.enabledBySession.set(sessionId, enabled)
   }
 
-  /** Set the default enabled state inherited by sessions without an explicit override. */
   setDefaultEnabled(enabled: boolean): void {
     this.defaultEnabled = enabled
   }
 
-  /** Raw SDK prompt snippet before P0 compaction (useful for telemetry & regression tests). */
   rawPromptSnippet(): string {
     return this.generator.createProcessor(CAPABILITIES).promptSnippet
   }
 
-  /**
-   * Compacted Express prompt snippet for the DSH catalog.
-   * - Omit `domain` for the full compacted 57-component catalog (legacy fallback & verification).
-   * - Pass `'core' | 'analytics' | 'devops' | 'forms'` for lightweight domain-scoped skills.
-   */
   promptSnippet(domain?: SkillDomain): string {
     const raw = this.rawPromptSnippet()
     return domain === undefined
@@ -350,11 +320,6 @@ export class SurfaceSessions {
     return this.generator.createProcessor(CAPABILITIES, undefined, { state })
   }
 
-  /**
-   * Compile one Express program for a session.
-   * - Throws a plain `Error` if A2UI is turned off for the session.
-   * - Throws `A2uiError` (rolling back `RendererState`) on syntax/schema/limit failure.
-   */
   compile(sessionId: string, ui: string): AgentToRendererMessage[] {
     if (!this.isEnabled(sessionId)) {
       throw new Error(
@@ -377,9 +342,6 @@ export class SurfaceSessions {
       try {
         parts = this.processor(sessionId).parseResponse(cleaned, { wrapped: false })
       } catch (firstErr) {
-        // Cross-restart hydration: if a resumed conversation patches an earlier surface via
-        // `surface("id", update=true)` after DSH restarted (when host memory is cold), seed the
-        // surface placeholder once and retry before treating it as an error.
         const updateIds = extractUpdateSurfaceIds(cleaned)
         const msgText = firstErr instanceof Error ? firstErr.message : ''
         if (
@@ -409,9 +371,6 @@ export class SurfaceSessions {
 
     const prevState = this.states.get(sessionId)
     if (prevState !== undefined) {
-      // RendererState holds catalog function references and cannot be structuredClone'd;
-      // use its built-in synchronous transaction frame so any parse or limit error rolls back
-      // cleanly without leaving orphaned surfaces that would break self-repair retries.
       return prevState.transaction(runCompile)
     }
 
@@ -425,7 +384,6 @@ export class SurfaceSessions {
     }
   }
 
-  /** Increment and return consecutive compile failure count for a session/tool channel. */
   recordCompileFailure(sessionId: string, channel: 'render' | 'ask'): number {
     const entry = this.failuresBySession.get(sessionId) ?? { render: 0, ask: 0 }
     const next =
@@ -436,7 +394,6 @@ export class SurfaceSessions {
     return next[channel]
   }
 
-  /** Reset consecutive compile failure count for a session/tool channel. */
   clearCompileFailures(sessionId: string, channel?: 'render' | 'ask'): void {
     if (channel === undefined) {
       this.failuresBySession.delete(sessionId)
@@ -460,7 +417,6 @@ export class SurfaceSessions {
   }
 }
 
-/** Tolerate `<a2ui>` tags or a markdown fence around the program. */
 export function stripWrapping(ui: string): string {
   let text = ui.trim()
   const tag = /^<a2ui>\s*([\s\S]*?)\s*<\/a2ui>$/.exec(text)

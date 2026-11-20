@@ -1,0 +1,37 @@
+import type { Server } from 'node:http'
+
+export declare const BOOKING_UI: string
+export declare const UPDATE_UI: string
+export declare const DASHBOARD_UI: string
+export declare const ANALYTICS_UPDATE_UI: string
+export declare const DEPLOY_ASK_UI: string
+export declare const DOCK_MONITOR_UI: string
+export declare const DOCK_MONITOR_UPDATE_UI: string
+export declare const INLINE_SUMMARY_UI: string
+export declare const SHOWCASE_EXECUTIVE_UI: string
+export declare const SHOWCASE_STORE_OPS_UI: string
+export declare const SHOWCASE_ARCHITECTURE_UI: string
+export declare const SHOWCASE_SIMULATOR_UI: string
+export declare const SHOWCASE_ASK_DIFF_UI: string
+export declare const SHOWCASE_DOCK_PIPELINE_UI: string
+export declare const SHOWCASE_SRE_APM_UI: string
+export declare const SHOWCASE_ENTERPRISE_PROTABLE_UI: string
+export declare const SHOWCASE_ANTD_CAPACITY_UI: string
+export declare const SHOWCASE_RISK_RUNBOOK_UI: string
+export declare const SHOWCASE_COMPARISON_SOURCES_UI: string
+export declare const SHOWCASE_API_RING_DATERANGE_UI: string
+export declare const SHOWCASE_KANBAN_TIMELINE_MATRIX_UI: string
+export declare const SHOWCASE_MARKET_CANDLE_UI: string
+export declare const SHOWCASE_ACCORDION_MODAL_UI: string
+export declare const SHOWCASE_FINOPS_WATERFALL_SUNBURST_UI: string
+export declare const SHOWCASE_SRE_COMBO_CALENDAR_UI: string
+export declare const SHOWCASE_LLM_PARALLEL_BENCHMARK_UI: string
+export declare const SHOWCASE_COMPOSITION_STRESS_UI: string
+export declare const SHOWCASE_ALL_FORMS_MEDIA_UI: string
+export declare const SHOWCASE_NARROW_WIDGET_TORTURE_UI: string
+export declare const SHOWCASE_ECHARTS_REMAINING8_TORTURE_UI: string
+export declare const SHOWCASE_EXTREME_EDGE_TORTURE_A_UI: string
+export declare const SHOWCASE_EXTREME_EDGE_TORTURE_B_UI: string
+export declare const SHOWCASE_P2_CROSSFILTER_UI: string
+
+export declare function startMockLlmServer(port?: number): Promise<{ server: Server; port: number }>

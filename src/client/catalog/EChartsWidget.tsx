@@ -1,12 +1,3 @@
-/**
- * Lazy-loaded ECharts `Chart` component for `dsh-genui-a2ui`.
- *
- * Keeps `echarts` completely out of `lib/client.js`: subscribes to
- * `lib/client.echarts.js` via `useSyncExternalStore`, displays a token-themed
- * shimmer skeleton while loading, memoizes options over primitive/data fields,
- * and delegates imperative `<canvas>` + `ResizeObserver` bindings to `dom-hooks.ts`.
- */
-
 import type { ActionDispatchOptions } from '@a2ui/web_core/v1_0'
 import { memo, useCallback, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { ChartKind } from '../../shared/catalog-schema.ts'
@@ -116,8 +107,6 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
     [data, exportable],
   )
 
-  // Depend on explicit fields (`rerender-dependencies`) so parent object re-allocations
-  // never rebuild the ECharts option or reset canvas animations unnecessarily.
   const option = useMemo(() => {
     if (!chunk) return null
     return chunk.buildChartOption(

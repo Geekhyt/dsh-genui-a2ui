@@ -1,12 +1,3 @@
-/**
- * 4 New A2UI 1.0 Declarative Components (`Accordion`, `JsonTree`, `FileTree`, `Mermaid`):
- * - `Accordion`: Multi-section collapsible container over `ChildSchema` flat IDs
- * - `JsonTree`: Structured JSON inspector bridging `HostPrimitives.JsonTree`
- * - `FileTree`: Workspace directory & change-impact tree with DSH right-sidebar file jump
- * - `Mermaid`: Lazy-loaded Mermaid diagram renderer (`securityLevel: "strict"` + `assertSafeSvg`
- *   + LRU-64 SVG external store + `10%–2000%` lossless vector zoom)
- */
-
 import type { ActionDispatchOptions } from '@a2ui/web_core/v1_0'
 import {
   type CSSProperties,
@@ -81,8 +72,6 @@ const FOLDER_CLOSED_GLYPH = (
     />
   </svg>
 )
-
-/* ─────────────────────────── 1. Accordion ─────────────────────────── */
 
 interface AccordionItemInput {
   readonly title?: unknown
@@ -185,8 +174,6 @@ export const DshAccordionImpl = defineComponent<{
   )
 })
 
-/* ─────────────────────────── 2. JsonTree ─────────────────────────── */
-
 export const DshJsonTreeImpl = defineComponent<{
   data?: unknown
   title?: unknown
@@ -208,9 +195,7 @@ export const DshJsonTreeImpl = defineComponent<{
       copyToClipboardSafe(JSON.stringify(props.data ?? null, null, 2))
       setCopiedAll(true)
       setTimeout(() => setCopiedAll(false), 1300)
-    } catch {
-      // Ignore circular structure
-    }
+    } catch {}
   }
 
   return (
@@ -236,8 +221,6 @@ export const DshJsonTreeImpl = defineComponent<{
     </div>
   )
 })
-
-/* ─────────────────────────── 3. FileTree ─────────────────────────── */
 
 const STATUS_META: Record<FileChangeStatus, { code: string; tone: TagTone }> = {
   added: { code: 'A', tone: 'success' },
@@ -396,8 +379,6 @@ export const DshFileTreeImpl = defineComponent<{
   )
 })
 
-/* ─────────────────────────── 4. Mermaid ─────────────────────────── */
-
 export const MERMAID_ZOOM_MIN = 10
 export const MERMAID_ZOOM_MAX = 2000
 export const MERMAID_ZOOM_STEP = 25
@@ -462,7 +443,6 @@ export function DshMermaidView({ props }: { props: MermaidWidgetProps }) {
   const [fullscreen, setFullscreen] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
 
-  // Adjust fullscreen state directly during render when transitioning to read-only (`rerender-derived-state-no-effect`)
   if (readOnly && fullscreen) {
     setFullscreen(false)
   }
@@ -588,8 +568,6 @@ export function DshMermaidView({ props }: { props: MermaidWidgetProps }) {
 
   const handleWheelZoom = useCallback(
     (e: globalThis.WheelEvent, inDialog: boolean) => {
-      // Inline card: require Ctrl/Cmd (or trackpad pinch) so chat timeline scroll is never hijacked.
-      // Fullscreen viewer: wheel zooms directly at pointer (drag pans the canvas).
       if (!inDialog && !e.ctrlKey && !e.metaKey) return
       e.preventDefault()
       e.stopPropagation()
@@ -868,8 +846,6 @@ export function DshMermaidView({ props }: { props: MermaidWidgetProps }) {
             data-a2ui-mermaid-svg=""
             data-zoomed={isManualZoom ? 'true' : 'false'}
             style={stageZoomStyle}
-            // Safe: `renderMermaidDiagram` enforces `securityLevel: 'strict'`, strips `%%{init}%%`
-            // directives, and passes the rendered markup through `DOMPurify` + `assertSafeSvg(svg)`.
             dangerouslySetInnerHTML={{ __html: preparedSvg.markup }}
           />
         ) : (

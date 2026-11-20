@@ -1,12 +1,3 @@
-/**
- * Self-contained ECharts lazy chunk (`lib/client.echarts.js`).
- *
- * Loaded on demand via `require.async("./client.echarts.js")` only when a
- * surface mounts `<Chart>`. Supports all 19 chart kinds plus `y2Field`,
- * `referenceLine`, `horizontal`, `zoom`, and `sizeField`, deriving all colors
- * from DSH `--dsw-*` tokens.
- */
-
 import {
   BarChart,
   BoxplotChart,
@@ -211,7 +202,6 @@ function extractBoxplotFive(
   return [ordered[0]!, ordered[1]!, ordered[2]!, ordered[3]!, ordered[4]!]
 }
 
-/** Break accidental cycles so ECharts Sankey never throws on cyclic graph edges. */
 function filterAcyclicLinks<T extends { source: string; target: string }>(
   links: readonly T[],
 ): T[] {
@@ -465,11 +455,6 @@ function extractCategoryAxisLabels(option: Record<string, unknown>): readonly st
   return null
 }
 
-/**
- * Post-processes any built ECharts option when `selected` is non-empty, dimming
- * non-selected bars/slices/nodes (`opacity: 0.30`) and accenting the active item
- * so Chart ↔ Table cross-filtering has immediate in-canvas visual feedback.
- */
 function applyCrossFilterSelection(
   option: echarts.EChartsCoreOption,
   rawSelected: string | undefined,
@@ -516,7 +501,6 @@ function applyCrossFilterSelection(
     }
 
     if ((type === 'bar' || type === 'line') && Array.isArray(s.data) && categories) {
-      // Skip waterfall transparent helper series
       if (
         typeof s.itemStyle === 'object' &&
         s.itemStyle !== null &&
@@ -611,7 +595,6 @@ function buildChartOptionInternal(
     textStyle: { color: theme.textPrimary, fontSize: 12 },
   }
 
-  /* ── 1 & 2: Pie & Funnel ── */
   if (props.kind === 'pie' || props.kind === 'funnel') {
     const items = rows.map((r) => ({
       name: sanitizeChartLabel(r[xKey] ?? r.name ?? r.label),
@@ -705,7 +688,6 @@ function buildChartOptionInternal(
     }
   }
 
-  /* ── 3: Gauge ── */
   if (props.kind === 'gauge') {
     const first = rows[0] ?? {}
     const val = toNumber(first[primaryY] ?? first.value ?? 0)
@@ -731,7 +713,6 @@ function buildChartOptionInternal(
     }
   }
 
-  /* ── 4: Radar ── */
   if (props.kind === 'radar') {
     const maxVal = Math.max(100, ...rows.flatMap((r) => yKeys.map((k) => toNumber(r[k]))))
     const indicator = rows.map((r) => ({
@@ -811,7 +792,6 @@ function buildChartOptionInternal(
     }
   }
 
-  /* ── 5: Heatmap ── */
   if (props.kind === 'heatmap') {
     const sample = rows[0] ?? {}
     const sampleKeys = Object.keys(sample)
@@ -892,7 +872,6 @@ function buildChartOptionInternal(
     }
   }
 
-  /* ── 6 & 6b: Treemap & Sunburst ── */
   if (props.kind === 'treemap' || props.kind === 'sunburst') {
     const treeData = buildHierarchyTree(rows, props, xKey, primaryY)
     const borderCol = dark ? '#18181b' : '#ffffff'
@@ -1053,7 +1032,6 @@ function buildChartOptionInternal(
     }
   }
 
-  /* ── 7: Sankey ── */
   if (props.kind === 'sankey') {
     const srcField = props.xField ?? 'source'
     const tgtField = props.seriesField ?? 'target'
@@ -1091,7 +1069,6 @@ function buildChartOptionInternal(
         : 190
     const rightPadding = Math.min(maxPad, Math.max(76, Math.ceil(maxRightLabelPx + 20)))
 
-    // Compute topological stage depth so intermediate-column labels stay inside the inter-column gap
     const depthOf = new Map<string, number>()
     for (const n of nodeNames) depthOf.set(n, 0)
     for (let pass = 0; pass < nodeNames.length; pass++) {
@@ -1152,7 +1129,6 @@ function buildChartOptionInternal(
     }
   }
 
-  /* ── 8: Graph (Topology / Dependency Network) ── */
   if (props.kind === 'graph') {
     let nodes: Record<string, unknown>[] = []
     let links: Record<string, unknown>[] = []
@@ -1303,7 +1279,6 @@ function buildChartOptionInternal(
     }
   }
 
-  /* ── 9: Boxplot ── */
   if (props.kind === 'boxplot') {
     const categories = rows.map((r) => sanitizeChartLabel(r[xKey] ?? r.name ?? r.label))
     const boxData = rows.map((r) => extractBoxplotFive(r))
@@ -1394,7 +1369,6 @@ function buildChartOptionInternal(
     }
   }
 
-  /* ── 10: Candlestick (ECharts order: [open, close, lowest, highest]) ── */
   if (props.kind === 'candlestick') {
     const dateField = props.xField ?? 'date'
     const categories = rows.map((r) =>
@@ -1459,7 +1433,6 @@ function buildChartOptionInternal(
     }
   }
 
-  /* ── 11: Scatter / Bubble (`sizeField`) ── */
   if (props.kind === 'scatter') {
     const numericX = typeof rows[0]?.[xKey] === 'number'
     const sizeKey = props.sizeField
@@ -1529,7 +1502,6 @@ function buildChartOptionInternal(
     }
   }
 
-  /* ── 12: Waterfall (Bridge / Variance Decomposition) ── */
   if (props.kind === 'waterfall') {
     const localeMsg = RUNTIME_MESSAGES[resolveClientLocale()]
     const valField =
@@ -1599,9 +1571,6 @@ function buildChartOptionInternal(
     const showBarLabels = rows.length <= 8
     const barLabelFontSize = isCompact ? 9.5 : 10.5
 
-    // Per-bar collision avoidance when a referenceLine + pill is active:
-    // - Total/Increase 'top' labels overlapping the dashed line or pill move 'inside' (if tall enough)
-    // - Decrease 'bottom' labels overlapping the dashed line or pill flip to 'top'
     const refVal =
       props.referenceLine !== undefined && Number.isFinite(props.referenceLine)
         ? props.referenceLine
@@ -1807,7 +1776,6 @@ function buildChartOptionInternal(
     }
   }
 
-  /* ── 13: Combo (Dual-Axis Left Bar + Right Line) ── */
   if (props.kind === 'combo') {
     const categories = [...new Set(rows.map((r) => sanitizeChartLabel(r[xKey])))]
     const explicitY2 =
@@ -1963,7 +1931,6 @@ function buildChartOptionInternal(
     }
   }
 
-  /* ── 14: Parallel Coordinates (Multi-Metric Physical Scale Benchmark) ── */
   if (props.kind === 'parallel') {
     const sample = rows[0] ?? {}
     const dimKeys =
@@ -2075,7 +2042,6 @@ function buildChartOptionInternal(
     }
   }
 
-  /* ── 15: Calendar Heatmap (GitHub-Style Daily Activity Strip) ── */
   if (props.kind === 'calendar') {
     const dateField = props.xField ?? 'date'
     const valField =
@@ -2217,7 +2183,6 @@ function buildChartOptionInternal(
     }
   }
 
-  /* ── 16, 17 & 18: Cartesian Bar / Line / Area (+ `horizontal`, `stacked`, `zoom`, `referenceLine`) ── */
   const categories = [...new Set(rows.map((r) => sanitizeChartLabel(r[xKey])))]
   const echartsType = props.kind === 'bar' ? 'bar' : 'line'
   const isArea = props.kind === 'area'

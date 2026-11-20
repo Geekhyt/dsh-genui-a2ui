@@ -1,15 +1,3 @@
-/**
- * 8 v4 Vercel / Tremor & Enterprise B2B A2UI 1.0 Components:
- * - `Tracker`: Tremor-style SLA uptime slice strip (`DshHoverCard` + `DshStateDot`) & multi-segment category bar
- * - `Terminal`: Vercel Geist / DSH DevOps command & execution receipt card (pure executable command copy)
- * - `ApprovalCard`: Enterprise high-risk change gate with blast-radius checklist & `DshSwitch` confirmation gate
- * - `ApiEndpoint`: Scalar/Stripe-style HTTP API contract & JSON request/response workbench (`DshJsonTree`)
- * - `Schedule`: Linear-style horizontal Gantt / maintenance-window timeline bar chart
- * - `Result`: AntD/Stripe-style operation receipt & guided empty-state card (with `ChildSchema` slot)
- * - `EntityHeader`: Enterprise object summary header (`DshStateDot` + monogram + tags + KPI strip)
- * - `Matrix`: Conditional-formatting heat cross-tabulation & RBAC permission matrix
- */
-
 import type { ActionDispatchOptions } from '@a2ui/web_core/v1_0'
 import { useContext, useMemo, useState } from 'react'
 import {
@@ -60,8 +48,6 @@ function copyToClipboardSafe(text: string): void {
     void navigator.clipboard.writeText(text).catch(() => {})
   }
 }
-
-/* ─────────────────────────── 1. Tracker ─────────────────────────── */
 
 export const DshTrackerImpl = defineComponent<{
   data?: unknown
@@ -220,8 +206,6 @@ export const DshTrackerImpl = defineComponent<{
   )
 })
 
-/* ─────────────────────────── 2. Terminal ─────────────────────────── */
-
 export const DshTerminalImpl = defineComponent<{
   commands?: unknown
   title?: unknown
@@ -310,8 +294,6 @@ export const DshTerminalImpl = defineComponent<{
     </div>
   )
 })
-
-/* ─────────────────────────── 3. ApprovalCard ─────────────────────────── */
 
 export const DshApprovalCardImpl = defineComponent<{
   title?: unknown
@@ -485,8 +467,6 @@ export const DshApprovalCardImpl = defineComponent<{
   )
 })
 
-/* ─────────────────────────── 4. ApiEndpoint ─────────────────────────── */
-
 export const DshApiEndpointImpl = defineComponent<{
   method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS'
   path?: unknown
@@ -657,8 +637,6 @@ export const DshApiEndpointImpl = defineComponent<{
   )
 })
 
-/* ─────────────────────────── 5. Schedule ─────────────────────────── */
-
 export const DshScheduleImpl = defineComponent<{
   items?: unknown
   title?: unknown
@@ -794,8 +772,6 @@ export const DshScheduleImpl = defineComponent<{
   )
 })
 
-/* ─────────────────────────── 6. Result ─────────────────────────── */
-
 export const DshResultImpl = defineComponent<{
   status: 'success' | 'info' | 'warning' | 'error' | 'empty'
   title?: unknown
@@ -887,8 +863,6 @@ export const DshResultImpl = defineComponent<{
     </div>
   )
 })
-
-/* ─────────────────────────── 7. EntityHeader ─────────────────────────── */
 
 export const DshEntityHeaderImpl = defineComponent<{
   title?: unknown
@@ -1008,8 +982,6 @@ export const DshEntityHeaderImpl = defineComponent<{
     </div>
   )
 })
-
-/* ─────────────────────────── 8. Matrix ─────────────────────────── */
 
 export const DshMatrixImpl = defineComponent<{
   rows?: unknown

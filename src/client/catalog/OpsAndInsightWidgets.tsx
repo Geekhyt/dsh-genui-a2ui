@@ -1,14 +1,3 @@
-/**
- * 7 v3 A2UI 1.0 Engineering, Decision & Observability Components:
- * - `Comparison`: Side-by-side option trade-off matrix with recommended column & selection action
- * - `LogViewer`: Diagnostic log & stack-trace console with level pills, deferred search, and sidebar file jump
- * - `Timeline`: Chronological incident/audit stream with status dots, collapsible details, and nested `ChildSchema`
- * - `Kanban`: Multi-lane task/remediation board with priority badges and card drill-down action
- * - `SourceList`: Numbered RAG/web citation & workspace code evidence list with relevance bars
- * - `MetricRing`: Zero-chunk SVG radial progress/SLO ring card (~0 kB bundle cost)
- * - `ServiceGraph`: Live health-colored service/module dependency DAG with interactive node inspector
- */
-
 import type { ActionDispatchOptions } from '@a2ui/web_core/v1_0'
 import { useContext, useDeferredValue, useId, useMemo, useState } from 'react'
 import {
@@ -104,8 +93,6 @@ const EXTERNAL_ARROW_GLYPH = (
     />
   </svg>
 )
-
-/* ─────────────────────────── 1. Comparison ─────────────────────────── */
 
 export const DshComparisonImpl = defineComponent<{
   options?: unknown
@@ -255,8 +242,6 @@ export const DshComparisonImpl = defineComponent<{
     </div>
   )
 })
-
-/* ─────────────────────────── 2. LogViewer ─────────────────────────── */
 
 const LOG_LEVEL_TONE: Record<LogLevel, TagTone> = {
   error: 'danger',
@@ -463,8 +448,6 @@ export const DshLogViewerImpl = defineComponent<{
   )
 })
 
-/* ─────────────────────────── 3. Timeline ─────────────────────────── */
-
 interface TimelineItemInput {
   readonly time?: unknown
   readonly title?: unknown
@@ -582,8 +565,6 @@ export const DshTimelineImpl = defineComponent<{
     </div>
   )
 })
-
-/* ─────────────────────────── 4. Kanban ─────────────────────────── */
 
 const PRIORITY_TONE: Record<KanbanPriority, TagTone> = {
   high: 'danger',
@@ -718,8 +699,6 @@ export const DshKanbanImpl = defineComponent<{
   )
 })
 
-/* ─────────────────────────── 5. SourceList ─────────────────────────── */
-
 export const DshSourceListImpl = defineComponent<{
   items?: unknown
   title?: unknown
@@ -815,8 +794,6 @@ export const DshSourceListImpl = defineComponent<{
     </div>
   )
 })
-
-/* ─────────────────────────── 6. MetricRing ─────────────────────────── */
 
 export const DshMetricRingImpl = defineComponent<{
   label?: unknown
@@ -916,8 +893,6 @@ export const DshMetricRingImpl = defineComponent<{
     </div>
   )
 })
-
-/* ─────────────────────────── 7. ServiceGraph ─────────────────────────── */
 
 export const DshServiceGraphImpl = defineComponent<{
   nodes?: unknown

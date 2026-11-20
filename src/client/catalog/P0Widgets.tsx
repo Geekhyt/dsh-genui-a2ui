@@ -1,10 +1,3 @@
-/**
- * P0 DSH-native DevOps, review, and workflow components:
- * - `DiffView`: LCS line-by-line diff viewer (Unified & Split modes + copy toolbar)
- * - `Steps`: Multi-stage workflow stepper / incident timeline (`vertical` & `horizontal`)
- * - `Callout`: Semantic alert banner (`info` | `success` | `warning` | `danger`) + optional nested `child`
- * - `KeyValue`: Structured attribute grid (accepts array or plain map + 1-click value copy)
- */
 import { type CSSProperties, useMemo, useState } from 'react'
 import { CalloutApi, DiffViewApi, KeyValueApi, StepsApi } from '../../shared/catalog-schema.ts'
 import { parseFileTarget } from '../file-opener.tsx'
@@ -25,8 +18,6 @@ function copyToClipboardSafe(text: string): void {
     void navigator.clipboard.writeText(text).catch(() => {})
   }
 }
-
-/* ─────────────────────────── 1. DiffView ─────────────────────────── */
 
 export const DshDiffViewImpl = defineComponent<{
   before?: unknown
@@ -141,8 +132,6 @@ export const DshDiffViewImpl = defineComponent<{
   )
 })
 
-/* ─────────────────────────── 2. Steps ─────────────────────────── */
-
 export const DshStepsImpl = defineComponent<{
   items?: unknown
   current?: unknown
@@ -188,8 +177,6 @@ export const DshStepsImpl = defineComponent<{
     </div>
   )
 })
-
-/* ─────────────────────────── 3. Callout ─────────────────────────── */
 
 const CHEVRON_UP_13 = <DshChevronUpIcon size={13} />
 const CHEVRON_DOWN_13 = <DshChevronDownIcon size={13} />
@@ -283,8 +270,6 @@ export const DshCalloutImpl = defineComponent<{
     </div>
   )
 })
-
-/* ─────────────────────────── 4. KeyValue ─────────────────────────── */
 
 export const DshKeyValueImpl = defineComponent<{
   items?: unknown

@@ -1,10 +1,3 @@
-/**
- * Reactive DSH client locale hooks (`html[lang]`), mirroring `src/client/theme.ts`.
- *
- * DeepSeek Harness `LocaleRuntime` syncs the active UI language onto
- * `document.documentElement.lang` (`"zh-CN"` vs `"en"`). Observing that attribute
- * updates every A2UI chrome label live without reloading the window.
- */
 import { useSyncExternalStore } from 'react'
 import {
   RUNTIME_MESSAGES,
@@ -54,17 +47,14 @@ export function subscribeClientLocale(listener: () => void): () => void {
   }
 }
 
-/** Reactively track DSH UI language (`'zh'` | `'en'`). */
 export function useUiLocale(): UiLocale {
   return useSyncExternalStore(subscribeClientLocale, resolveClientLocale, resolveClientLocale)
 }
 
-/** Shell-level bilingual UI strings (`lib/client.js`). */
 export function useShellMessages(): ShellUiMessages {
   return SHELL_MESSAGES[useUiLocale()]
 }
 
-/** Runtime & 57-widget catalog bilingual UI strings (`lib/client.runtime.js`). */
 export function useRuntimeMessages(): RuntimeUiMessages {
   return RUNTIME_MESSAGES[useUiLocale()]
 }

@@ -78,14 +78,12 @@ describe('M3: /a2ui 1-click toggle & on/off command', () => {
 
     const agent = { session: { id: 'sess-cmd' } }
 
-    // Empty input toggles ON -> OFF -> ON
     const r1 = toggleHandler!({ agent, rawInput: '' })
     expect(r1).toEqual({ kind: 'success', text: 'A2UI 生成式界面已关闭' })
 
     const r2 = toggleHandler!({ agent, rawInput: '' })
     expect(r2).toEqual({ kind: 'success', text: 'A2UI 生成式界面已开启' })
 
-    // Explicit `off` / `on`
     expect(toggleHandler!({ agent, rawInput: 'off' })).toEqual({
       kind: 'success',
       text: 'A2UI 生成式界面已关闭',
@@ -95,7 +93,6 @@ describe('M3: /a2ui 1-click toggle & on/off command', () => {
       text: 'A2UI 生成式界面已开启',
     })
 
-    // Unknown argument rejected cleanly
     expect(toggleHandler!({ agent, rawInput: 'invalid' }).kind).toBe('error')
   })
 })

@@ -55,7 +55,6 @@ describe('a2ui_render host tool', () => {
       tool.execute({ ui: 'surface("main", update=true)\nroot = NonExistentWidget(foo=1)' }, exec),
     ).rejects.toThrow(/rejected/)
 
-    // Session state was rolled back cleanly: a subsequent valid update still succeeds!
     const recovered = await tool.execute(
       { ui: 'surface("main", update=true)\n$/ok = "recovered"' },
       exec,

@@ -1,22 +1,4 @@
 #!/usr/bin/env node
-/**
- * Scripted OpenAI-compatible SSE mock LLM server for M0, M1, & M2 verification.
- *
- * - Answers title-generation calls (or when A2UI tier is `off` so `a2ui_render`
- *   is omitted from `tools`) with pure text.
- * - Streams tool-call argument JSON in configurable small chunks so progressive
- *   60fps rendering in `tool.call.toolview` can be observed.
- * - Scenarios:
- *   1. Default (`"预订"` / normal message): `BOOKING_UI` + `[a2ui-action]` -> `UPDATE_UI`
- *      (verifies `[a2ui-action]` user bubble chip + Turn 1 `superseded` read-only card).
- *   2. `"dashboard"` / `"看板"`: `DASHBOARD_UI` + `[a2ui-action]` -> `ANALYTICS_UPDATE_UI`.
- *   3. `"ask"` / `"向导"` / `"部署"`: `a2ui_ask` (`DEPLOY_ASK_UI`) blocking inside the
- *      same turn -> resolves with `{ status, action, context }` -> replies in-turn!
- *   4. `"dock"` / `"工作台"` / `"监控"`: `a2ui_render` (`placement: "dock"`, `DOCK_MONITOR_UI`)
- *      pinned above the composer + `[a2ui-action]` (`surface="pipeline"`) -> `DOCK_MONITOR_UPDATE_UI`.
- *   5. `"inline"` / `"内嵌"`: `a2ui_render` (`placement: "inline"`, `INLINE_SUMMARY_UI`).
- *   6. `"test-error"`: `BROKEN_UI` -> compiler rejection -> `HEALED_UI`.
- */
 import { createServer } from 'node:http'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -1318,7 +1300,6 @@ export function startMockLlmServer(port = PORT) {
             latestTurnUserParts.unshift(candidate)
           }
         } else if (lastAnyUserIdx >= 0) {
-          // Stop once we step before the contiguous block of user messages for this turn
           break
         }
       }
@@ -1650,9 +1631,7 @@ export function startMockLlmServer(port = PORT) {
             )
             return
           }
-        } catch {
-          // Fall through
-        }
+        } catch {}
       }
 
       const reply = isShowcase1
@@ -1719,7 +1698,6 @@ export function startMockLlmServer(port = PORT) {
     }
 
     if (req.method === 'GET' && req.url === '/alert.mp3') {
-      // Valid 5.0s silent RIFF/WAVE sample with permissive CORS headers for local AudioPlayer QA
       const dataLen = 40000
       const wavBytes = Buffer.alloc(44 + dataLen)
       wavBytes.write('RIFF', 0)
@@ -1748,7 +1726,6 @@ export function startMockLlmServer(port = PORT) {
     }
 
     if (req.method === 'GET' && req.url === '/demo.mp4') {
-      // Valid 2.0s 320x180 H.264 MP4 frame with permissive CORS headers for local Video QA
       const mp4Bytes = Buffer.from(
         'AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAQkbW9vdgAAAGxtdmhkAAAAAAAAAAAAAAAAAAAD6AAAB9AAAQAAAQAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAA050cmFrAAAAXHRraGQAAAADAAAAAAAAAAAAAAABAAAAAAAAB9AAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAABAAAAAAUAAAAC0AAAAAAAkZWR0cwAAABxlbHN0AAAAAAAAAAEAAAfQAAAIAAABAAAAAALGbWRpYQAAACBtZGhkAAAAAAAAAAAAAAAAAAAoAAAAUABVxAAAAAAALWhkbHIAAAAAAAAAAHZpZGUAAAAAAAAAAAAAAABWaWRlb0hhbmRsZXIAAAACcW1pbmYAAAAUdm1oZAAAAAEAAAAAAAAAAAAAACRkaW5mAAAAHGRyZWYAAAAAAAAAAQAAAAx1cmwgAAAAAQAAAjFzdGJsAAAAwXN0c2QAAAAAAAAAAQAAALFhdmMxAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAUAAtABIAAAASAAAAAAAAAABFUxhdmM2Mi4yOC4xMDAgbGlieDI2NAAAAAAAAAAAAAAAGP//AAAAN2F2Y0MBZAAM/+EAGmdkAAys2UFBn58BEAAAAwAQAAADAUDxQplgAQAGaOvjxMhM/fj4AAAAABBwYXNwAAAAAQAAAAEAAAAUYnRydAAAAAAAABEUAAAAAAAAABhzdHRzAAAAAAAAAAEAAAAUAAAEAAAAABRzdHNzAAAAAAAAAAEAAAABAAAAqGN0dHMAAAAAAAAAEwAAAAEAAAgAAAAAAQAAFAAAAAABAAAIAAAAAAEAAAAAAAAAAQAABAAAAAABAAAUAAAAAAEAAAgAAAAAAQAAAAAAAAABAAAEAAAAAAEAABQAAAAAAQAACAAAAAABAAAAAAAAAAEAAAQAAAAAAQAAFAAAAAABAAAIAAAAAAEAAAAAAAAAAQAABAAAAAABAAAQAAAAAAIAAAQAAAAAHHN0c2MAAAAAAAAAAQAAAAEAAAAUAAAAAQAAAGRzdHN6AAAAAAAAAAAAAAAUAAAC+QAAABIAAAAPAAAADwAAAA8AAAAYAAAAEQAAAA8AAAAPAAAAGAAAABEAAAAPAAAADwAAABgAAAARAAAADwAAAA8AAAAYAAAAEQAAAA8AAAAUc3RjbwAAAAAAAAABAAAEVAAAAGJ1ZHRhAAAAWm1ldGEAAAAAAAAAIWhkbHIAAAAAAAAAAG1kaXJhcHBsAAAAAAAAAAAAAAAALWlsc3QAAAAlqXRvbwAAAB1kYXRhAAAAAQAAAABMYXZmNjIuMTIuMTAwAAAACGZyZWUAAARNbWRhdAAAArAGBf//rNxF6b3m2Ui3lizYINkj7u94MjY0IC0gY29yZSAxNjUgcjMyMjIgYjM1NjA1YSAtIEguMjY0L01QRUctNCBBVkMgY29kZWMgLSBDb3B5bGVmdCAyMDAzLTIwMjUgLSBodHRwOi8vd3d3LnZpZGVvbGFuLm9yZy94MjY0Lmh0bWwgLSBvcHRpb25zOiBjYWJhYz0xIHJlZj0zIGRlYmxvY2s9MTotMzotMyBhbmFseXNlPTB4MzoweDExMyBtZT1oZXggc3VibWU9NyBwc3k9MSBwc3lfcmQ9Mi4wMDowLjcwIG1peGVkX3JlZj0xIG1lX3JhbmdlPTE2IGNocm9tYV9tZT0xIHRyZWxsaXM9MSA4eDhkY3Q9MSBjcW09MCBkZWFkem9uZT0yMSwxMSBmYXN0X3Bza2lwPTEgY2hyb21hX3FwX29mZnNldD0tNCB0aHJlYWRzPTYgbG9va2FoZWFkX3RocmVhZHM9MSBzbGljZWRfdGhyZWFkcz0wIG5yPTAgZGVjaW1hdGU9MSBpbnRlcmxhY2VkPTAgYmx1cmF5X2NvbXBhdD0wIGNvbnN0cmFpbmVkX2ludHJhPTAgYmZyYW1lcz0zIGJfcHlyYW1pZD0yIGJfYWRhcHQ9MSBiX2JpYXM9MCBkaXJlY3Q9MSB3ZWlnaHRiPTEgb3Blbl9nb3A9MCB3ZWlnaHRwPTIga2V5aW50PTI1MCBrZXlpbnRfbWluPTEwIHNjZW5lY3V0PTQwIGludHJhX3JlZnJlc2g9MCByY19sb29rYWhlYWQ9NDAgcmM9Y3JmIG1idHJlZT0xIGNyZj0yMy4wIHFjb21wPTAuNjAgcXBtaW49MCBxcG1heD02OSBxcHN0ZXA9NCBpcF9yYXRpbz0xLjQwIGFxPTE6MS4yMACAAAAAQWWIhAAUzn/+7Np+BTbNtvnsge9xSS3K6mnpiZ2Lm+kpHAEHGeuz1gAR/we/nrQJMmWe1Aj4AABTgm1lgITKa8aXAAAADkGaJGxBTOf+1oywABEwAAAAC0GeQniCOc8AACyhAAAACwGeYXRBDOcAAFTAAAAACwGeY2pBDOcAAFTBAAAAFEGaaEmoQWiZTAgpnP/+1oywABExAAAADUGehkURLBHOfwAALKEAAAALAZ6ldEEM5wAAVMEAAAALAZ6nakEM5wAAVMAAAAAUQZqsSahBbJlMCCec//61KoAAQsAAAAANQZ7KRRUsEc5/AAAsoQAAAAsBnul0QQznAABUwAAAAAsBnutqQQznAABUwAAAABRBmvBJqEFsmUwIJZz//rUqgABCwQAAAA1Bnw5FFSwRzn8AACyhAAAACwGfLXRBDOcAAFTBAAAACwGfL2pBDOcAAFTAAAAAFEGbM0moQWyZTAghnP/+qlUAAIWAAAAADUGfUUUVLBDOfwAAVMEAAAALAZ9yakEM5wAAVMA=',
         'base64',

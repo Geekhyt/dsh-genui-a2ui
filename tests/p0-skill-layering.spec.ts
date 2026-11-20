@@ -38,7 +38,6 @@ describe('P0 Prompt Compaction & Domain-Scoped Skill Layering', () => {
     const raw = sessions.rawPromptSnippet()
     const compact = sessions.promptSnippet()
 
-    // Every single `• ComponentName(...)` line from the upstream generator must appear verbatim
     const rawSigLines = raw.match(/^• [A-Z][A-Za-z0-9]+\([^\n]+$/gm) ?? []
     expect(rawSigLines).toHaveLength(57)
 
@@ -46,7 +45,6 @@ describe('P0 Prompt Compaction & Domain-Scoped Skill Layering', () => {
       expect(compact, `Missing signature in compact full snippet: ${sig}`).toContain(sig)
     }
 
-    // Deduplicated `weight` boilerplate (57x repeated prose -> 0 occurrences + 1 header note)
     const rawWeightLines = raw.match(/^ {2}- weight: The relative weight of this component/gm) ?? []
     const compactWeightLines =
       compact.match(/^ {2}- weight: The relative weight of this component/gm) ?? []
@@ -54,7 +52,6 @@ describe('P0 Prompt Compaction & Domain-Scoped Skill Layering', () => {
     expect(compactWeightLines.length).toBe(0)
     expect(compact).toContain('direct child of `Row` or `Column`')
 
-    // All 19 ECharts kinds remain enumerated
     const chartKinds = [
       'bar',
       'line',
@@ -81,7 +78,6 @@ describe('P0 Prompt Compaction & Domain-Scoped Skill Layering', () => {
       expect(analytics).toContain(`'${kind}'`)
     }
 
-    // All 23 functions remain documented in core & compact full
     const core = slicePromptSnippetByDomain(raw, 'core')
     for (const fnName of [
       'calc(',
@@ -128,7 +124,6 @@ describe('P0 Prompt Compaction & Domain-Scoped Skill Layering', () => {
       for (const comp of SKILL_DOMAINS[domain]) {
         expect(slices[domain]).toContain(`• ${comp}(`)
       }
-      // Verify no foreign component signature leaks into this domain's positional signature list
       const sigMatches = slices[domain].match(/^• ([A-Z][A-Za-z0-9]+)\(/gm) ?? []
       expect(sigMatches).toHaveLength(ownSet.size)
       for (const m of sigMatches) {
@@ -137,11 +132,9 @@ describe('P0 Prompt Compaction & Domain-Scoped Skill Layering', () => {
       }
     }
 
-    // Core skill points to the 3 domain sub-skills
     expect(slices.core).toContain('a2ui-analytics')
     expect(slices.core).toContain('a2ui-devops')
     expect(slices.core).toContain('a2ui-forms')
-    // Compacting twice is idempotent in length (no double header notes or corruption)
     expect(compactPromptSnippet(raw).length).toBeLessThan(raw.length)
   })
 
@@ -150,17 +143,13 @@ describe('P0 Prompt Compaction & Domain-Scoped Skill Layering', () => {
     const raw = sessions.rawPromptSnippet()
     const telemetry = measureSkillTelemetry(raw, SKILL_PREAMBLE.length)
 
-    // Compact full 57-component catalog drops >= 25% vs raw full
     expect(telemetry.fullSavingsPct).toBeGreaterThanOrEqual(25)
-    // Core `a2ui` skill drops >= 65% vs legacy ~73.5k monolithic skill
     expect(telemetry.domains.core.chars).toBeLessThan(25_000)
     expect(telemetry.domains.core.estTokens).toBeLessThan(6_600)
-    // Each specialized domain sub-skill stays ultra-lean (< 12k chars / < 3.2k tokens)
     expect(telemetry.domains.analytics.chars).toBeLessThan(12_000)
     expect(telemetry.domains.devops.chars).toBeLessThan(12_000)
     expect(telemetry.domains.forms.chars).toBeLessThan(8_000)
 
-    // Every skill description stays concise (< 320 chars) and carries the availability guard
     for (const domain of ['core', 'analytics', 'devops', 'forms'] as const) {
       const desc = DOMAIN_SKILL_META[domain].description
       expect(desc.length).toBeLessThan(320)

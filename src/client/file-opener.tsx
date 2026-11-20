@@ -1,11 +1,3 @@
-/**
- * Official DSH Workspace File-Opening Bridge (`dsh-resource://file/session/<sessionId>/<path>`).
- *
- * Implements the exact URI encoding contract of `@deepseek-ai/dsh-util-workspace-path`
- * and exposes `FileOpenContext` so `Code`, `DiffView`, and `FileTree` can open
- * workspace files in DSH's right sidebar (`sidebarRight.openResource`) without
- * DOM hacks or ad-hoc IPC.
- */
 import { createContext, useContext } from 'react'
 
 const FILE_ADDRESS_PREFIX = 'dsh-resource://file/'
@@ -35,10 +27,6 @@ export function sessionFileAddress(sessionId: string, path: string): string {
   return `${FILE_ADDRESS_PREFIX}session/${encodeSegment(sessionId)}/${encodePath(normalized)}`
 }
 
-/**
- * Compute the official `dsh-resource://file/session/<sessionId>/<path>` URI
- * matching `@deepseek-ai/dsh-util-workspace-path`'s `fileAddressFor`.
- */
 export function fileAddressFor(sessionId: string, cwd: string | undefined, path: string): string {
   const normalized = path.replace(/\\/g, '/')
   if (!isAbsoluteWorkspacePath(normalized)) {
@@ -54,7 +42,6 @@ export function fileAddressFor(sessionId: string, cwd: string | undefined, path:
   return sessionFileAddress(sessionId, normalized)
 }
 
-/** Resolve a relative path against a session's active `workingDirectory` when available. */
 export function resolveSessionPath(workingDir: string | undefined, path: string): string {
   const normalized = path.replace(/\\/g, '/').replace(/^(?:\.\/)+/, '')
   if (!workingDir || isAbsoluteWorkspacePath(normalized)) return normalized
@@ -69,10 +56,6 @@ export interface ParsedFileTarget {
 
 const DISALLOWED_SCHEME_RE = /^(?:https?|file|javascript|data|mailto|blob|vbscript):/i
 
-/**
- * Parse a model-supplied `filePath` + optional `line` into a sanitized `{ path, line }`.
- * Supports inline `:42`, `:42:10`, or `#L42` line suffixes while preserving Windows drive letters.
- */
 export function parseFileTarget(rawPath: unknown, explicitLine?: unknown): ParsedFileTarget | null {
   if (typeof rawPath !== 'string') return null
   const trimmed = rawPath.trim()
@@ -87,7 +70,6 @@ export function parseFileTarget(rawPath: unknown, explicitLine?: unknown): Parse
     cleanPath = hashMatch[1]
     inferredLine = Number(hashMatch[2])
   } else {
-    // Match trailing `:line` or `:line:col`, avoiding bare `C:` Windows drive prefix.
     const colonMatch = /^(.+?):(\d+)(?::\d+)?$/.exec(cleanPath)
     if (colonMatch?.[1] && colonMatch[2] && !/^[A-Za-z]$/.test(colonMatch[1])) {
       cleanPath = colonMatch[1]

@@ -24,18 +24,14 @@ describe('P2: Chart <-> ProTable Cross-Filtering, Chart Export & Streaming', () 
       { id: 4, region: '华南', revenue: 205 },
     ]
 
-    // Empty filter returns original rows untouched
     expect(filterTableRowsByField(rows, 'region', '')).toHaveLength(4)
 
-    // Exact match takes precedence so "US" does not accidentally match "US-West"
     const usOnly = filterTableRowsByField(rows, 'region', 'us')
     expect(usOnly.map((r) => r.id)).toEqual([1])
 
-    // Substring fallback handles Sankey/annotated labels like "华东 310w"
     const eastFromLabel = filterTableRowsByField(rows, 'region', '华东 310w')
     expect(eastFromLabel.map((r) => r.id)).toEqual([3])
 
-    // Omitted filterField scans all columns
     const anyCol = filterTableRowsByField(rows, undefined, '华南')
     expect(anyCol.map((r) => r.id)).toEqual([4])
   })

@@ -1,14 +1,3 @@
-/**
- * Hardened A2UI 1.0 renderer functions + DSH-native semantic primitives (`M3`).
- *
- * Kept intentionally minimal and orthogonal to uphold A2UI's declarative philosophy:
- * - Hardens `openUrl` (rejects relative URLs, `javascript:`, `file:`, `data:`, and non-gesture calls).
- * - Action helper: `copyText(text)`.
- * - Array aggregates: `sum(items, field?)`, `avg(items, field?)`.
- * - Single numeric formula gateway: `calc(expr, vars?, decimals?)` (validated statically on Host).
- * - Minimal UI branching primitives: `cond(condition, truthy, falsy)`, `eq(a, b)`, `gt(a, b)`,
- *   `lt(a, b)`, `includes(items, value)`.
- */
 import {
   A2uiExpressionError,
   BASIC_FUNCTIONS,
@@ -40,7 +29,6 @@ import { resolveClientLocale } from '../../shared/i18n.ts'
 
 type FunctionImplList = readonly FunctionImplementation[]
 
-/** Validate an external URL strictly without resolving relative paths against the DSH origin. */
 export function parseSafeExternalUrl(rawInput: unknown): string {
   if (typeof rawInput !== 'string' || rawInput.trim() === '') {
     throw new A2uiExpressionError('openUrl requires a non-empty absolute URL', 'openUrl')

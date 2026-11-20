@@ -1,12 +1,3 @@
-/**
- * Reversible browser stylesheet lifecycle for `dsh-genui-a2ui`.
- *
- * Pairs with `cssInlinePlugin` in `build/preset.ts` so every `<style data-plugin>`
- * injected by main or lazy chunks is cleanly detached on Cordis plugin dispose
- * and deterministically restored if the plugin is re-enabled without reloading
- * the Electron / Web window.
- */
-
 export interface PluginCssRegistry {
   mounted: boolean
   sheets: Map<string, string>

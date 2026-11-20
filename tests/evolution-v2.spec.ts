@@ -77,12 +77,10 @@ describe('Evolution v2–v5: 57-Component Catalog Parity & Scope Governance', ()
     expect(schemaNames).toEqual(
       expect.arrayContaining(['Accordion', 'JsonTree', 'FileTree', 'Mermaid']),
     )
-    // Explicitly excluded items must NOT exist
     expect(schemaNames).not.toContain('Plot')
     expect(schemaNames).not.toContain('Quiz')
     expect(CHART_KINDS).not.toContain('wordCloud')
 
-    // No global `visible` / `when` conditional visibility prop added to components
     for (const [compName, compDef] of Object.entries(
       schemaJson.components as Record<string, { properties?: Record<string, unknown> }>,
     )) {
@@ -146,7 +144,6 @@ describe('Evolution v2–v5: 57-Component Catalog Parity & Scope Governance', ()
 
 describe('Evolution v2: 14-Kind ECharts Option Builder', () => {
   it('builds valid ECharts options for heatmap, treemap, cyclic sankey, boxplot, graph, candlestick, bubble scatter & horizontal bar', () => {
-    // 1. Horizontal Bar + DataZoom
     const hBar = buildChartOption(
       {
         kind: 'bar',
@@ -165,7 +162,6 @@ describe('Evolution v2: 14-Kind ECharts Option Builder', () => {
     expect((hBar.xAxis as { type: string }).type).toBe('value')
     expect(Array.isArray(hBar.dataZoom)).toBe(true)
 
-    // 2. Bubble Scatter with sizeField
     const bubble = buildChartOption(
       {
         kind: 'scatter',
@@ -189,7 +185,6 @@ describe('Evolution v2: 14-Kind ECharts Option Builder', () => {
       scatterSeries.symbolSize!([30, 60, 900], { dataIndex: 1 }),
     )
 
-    // 3. Heatmap 2D matrix
     const heat = buildChartOption(
       {
         kind: 'heatmap',
@@ -206,7 +201,6 @@ describe('Evolution v2: 14-Kind ECharts Option Builder', () => {
     expect(heat.visualMap).toBeDefined()
     expect((heat.series as Array<{ type: string }>)[0]?.type).toBe('heatmap')
 
-    // 4. Treemap hierarchy
     const tree = buildChartOption(
       {
         kind: 'treemap',
@@ -225,7 +219,6 @@ describe('Evolution v2: 14-Kind ECharts Option Builder', () => {
     )[0]!.data
     expect(treeData).toHaveLength(2)
 
-    // 5. Sankey with cycle (A -> B -> C -> A) breaks cycle cleanly instead of crashing ECharts
     const sankey = buildChartOption(
       {
         kind: 'sankey',
@@ -240,7 +233,6 @@ describe('Evolution v2: 14-Kind ECharts Option Builder', () => {
     const sankeyLinks = (sankey.series as Array<{ links: unknown[] }>)[0]!.links
     expect(sankeyLinks).toHaveLength(2)
 
-    // 6. Boxplot from raw sample arrays
     const box = buildChartOption(
       {
         kind: 'boxplot',
@@ -256,7 +248,6 @@ describe('Evolution v2: 14-Kind ECharts Option Builder', () => {
     expect(boxData[0]).toEqual([12, 15, 18, 22, 35])
     expect(boxData[1]).toEqual([20, 28, 34, 45, 62])
 
-    // 7. Graph topology (both edge rows and { nodes, links })
     const graph = buildChartOption(
       {
         kind: 'graph',
@@ -273,7 +264,6 @@ describe('Evolution v2: 14-Kind ECharts Option Builder', () => {
     expect((graph.series as Array<{ type: string; data: unknown[] }>)[0]?.type).toBe('graph')
     expect((graph.series as Array<{ data: unknown[] }>)[0]?.data).toHaveLength(2)
 
-    // 8. Candlestick OHLC ([open, close, low, high])
     const kline = buildChartOption(
       {
         kind: 'candlestick',
@@ -331,7 +321,6 @@ describe('Evolution v2: Mermaid Sanitizer, Official sidebarRight File Opener & H
     expect(parseFileTarget('https://example.com/app.ts')).toBeNull()
     expect(parseFileTarget('javascript:alert(1)')).toBeNull()
 
-    // End-to-end client apply() wiring with sidebarRight service
     const openedCalls: Array<{ address: string; options: unknown }> = []
     let registeredTurnTailInject:
       | ((sid: string) => { openWorkspaceFile?: (p: string, l?: number) => void })
@@ -422,7 +411,6 @@ describe('Evolution v2: Mermaid Sanitizer, Official sidebarRight File Opener & H
     expect(geom?.linePath.startsWith('M')).toBe(true)
     expect(geom?.linePath).not.toContain('NaN')
 
-    // Constant series must not divide by zero
     const flatGeom = buildSparklineGeometry([42, 42, 42])
     expect(flatGeom?.linePath).not.toContain('NaN')
 

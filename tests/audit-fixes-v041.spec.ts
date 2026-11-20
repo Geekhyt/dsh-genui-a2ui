@@ -102,11 +102,9 @@ describe('Full Repo Audit & Visual QA Regression Suite (v0.4.1)', () => {
 
   it('H-2: SurfaceSessions.compile rolls back RendererState cleanly via transaction on post-parse validation failure', () => {
     const sessions = new SurfaceSessions(createGenerator(), true)
-    // Turn 1: create initial surface so RendererState exists for this session
     const first = sessions.compile('sess-rollback', 'surface("base")\nroot = Text("ok")')
     expect(first.length).toBeGreaterThan(0)
 
-    // Turn 2 (attempt 1): parses validly into RendererState, then fails validateCompiledLimits (unbound calc var)
     const badUi = [
       'surface("new_calc")',
       '$/a = 10',
@@ -114,7 +112,6 @@ describe('Full Repo Audit & Visual QA Regression Suite (v0.4.1)', () => {
     ].join('\n')
     expect(() => sessions.compile('sess-rollback', badUi)).toThrow(/missingVar|Unbound/i)
 
-    // Turn 2 (self-repair retry): reusing surface("new_calc") must succeed instead of "already exists"
     const fixedUi = [
       'surface("new_calc")',
       '$/a = 10',
@@ -169,7 +166,6 @@ describe('Full Repo Audit & Visual QA Regression Suite (v0.4.1)', () => {
     reg.disposeAll()
     await expect(secondPromise).rejects.toThrow(/disposed/i)
 
-    // Verify /a2ui-answer null returns structured error instead of throwing TypeError
     let answerHandler: ((args: { agent: unknown; rawInput: string }) => unknown) | undefined
     const fakeCtx = {
       inject: (deps: string[], fn: (c: unknown) => void) => {
@@ -201,7 +197,6 @@ describe('Full Repo Audit & Visual QA Regression Suite (v0.4.1)', () => {
   })
 
   it('M-1, V-2, V-3, V-4, V-7 & L-4: ECharts richText tooltips, waterfall pill avoidance, compact graph labels, treemap wrap, and duplicate xField alignment', () => {
-    // Waterfall: plain newline tooltip (no <br/>) + Bar 3 (+110) avoids 目标 ¥680w pill
     const wfOpt = buildChartOption(
       {
         kind: 'waterfall',
@@ -228,11 +223,9 @@ describe('Full Repo Audit & Visual QA Regression Suite (v0.4.1)', () => {
     const wfTip = wfOpt.tooltip.formatter([{ name: '缓存降本', seriesName: '增长', value: 65 }])
     expect(wfTip).not.toContain('<br')
     expect(wfTip).toContain('\n')
-    // Bar 2 (+165) stays inside; Bar 3 (+110) moves to bottom so it never overlaps 目标 ¥680w
     expect(wfOpt.series[2]?.data[1]).toMatchObject({ value: 165, label: { position: 'inside' } })
     expect(wfOpt.series[2]?.data[2]).toMatchObject({ value: 110, label: { position: 'bottom' } })
 
-    // Calendar: plain text tooltip (no <strong>)
     const calOpt = buildChartOption(
       {
         kind: 'calendar',
@@ -247,7 +240,6 @@ describe('Full Repo Audit & Visual QA Regression Suite (v0.4.1)', () => {
     expect(calTip).toBe('2026-10-29: 26')
     expect(calTip).not.toContain('<strong')
 
-    // Compact Graph: never hides node labels via labelLayout.hideOverlap
     const graphOpt = buildChartOption(
       {
         kind: 'graph',
@@ -264,7 +256,6 @@ describe('Full Repo Audit & Visual QA Regression Suite (v0.4.1)', () => {
     ) as { series: Array<{ labelLayout?: unknown }> }
     expect(graphOpt.series[0]?.labelLayout).toBeUndefined()
 
-    // Compact Treemap: breaks on whitespace rather than mid-word ASCII
     const treeOpt = buildChartOption(
       {
         kind: 'treemap',
@@ -280,7 +271,6 @@ describe('Full Repo Audit & Visual QA Regression Suite (v0.4.1)', () => {
     expect(treeOpt.series[0]?.label.overflow).toBe('truncate')
     expect(treeOpt.series[0]?.label.formatter({ name: 'A2UI 渲染 16w' })).toBe('A2UI\n渲染\n16w')
 
-    // Duplicate xField rows align length strictly to unique categories
     const dupBar = buildChartOption(
       {
         kind: 'bar',
@@ -365,7 +355,6 @@ describe('Full Repo Audit & Visual QA Regression Suite (v0.4.1)', () => {
     )
     expect(folded).toBe('lookup($/k, { "a": 1, "b": 3 }, 0)')
 
-    // Multi-occurrence expansion guard stays bounded
     const heavy = [
       'a = calc("x + y + z + x * y + y * z + x * z + 100 + 200 + 300", { x: $/x, y: $/y, z: $/z })',
       'b = calc("a + a + a + a + a + a + a + a + a + a + a + a", { a: a })',
@@ -373,7 +362,6 @@ describe('Full Repo Audit & Visual QA Regression Suite (v0.4.1)', () => {
     const flattened = flattenChainedCalc(heavy)
     expect(flattened.length).toBeLessThan(700)
 
-    // StreamingExpressSession preprocesses `+` concat on completed lines
     const stream = new StreamingExpressSession()
     const snap = stream.advance(
       'surface("s")\n$/n = 42\nroot = Text(formatNumber($/n, 0) + " req/s")\n',
@@ -382,7 +370,6 @@ describe('Full Repo Audit & Visual QA Regression Suite (v0.4.1)', () => {
     expect(snap.error).toBeNull()
     expect(snap.surfaceIds).toContain('s')
 
-    // calc arity validation & file: scheme block
     expect(validateCalcExpression('pmt(0.01)')).toMatch(/expects 3 argument/i)
     expect(parseFileTarget('file:///etc/passwd')).toBeNull()
   })

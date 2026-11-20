@@ -101,22 +101,18 @@ describe('M2: placement, dock, & superseded historical snapshots', () => {
       },
     }
 
-    // Turn 1: shows only `booking` (`inline_step` is excluded from turnTail), and `superseded` is true because Turn 3 updated `booking`!
     const t1 = resolveTurnTailBatch(snapshot, 1)
     expect(t1).not.toBeNull()
     expect([...t1!.visibleSurfaceIds]).toEqual(['booking'])
     expect(t1!.superseded).toBe(true)
 
-    // Turn 2: only had a `dock` call -> `resolveTurnTailBatch` returns null!
     expect(resolveTurnTailBatch(snapshot, 2)).toBeNull()
 
-    // Turn 3: latest version of `booking` -> `superseded` is false!
     const t3 = resolveTurnTailBatch(snapshot, 3)
     expect(t3).not.toBeNull()
     expect([...t3!.visibleSurfaceIds]).toEqual(['booking'])
     expect(t3!.superseded).toBe(false)
 
-    // Dock batch contains `pipeline` at `latestSeq: 20`.
     const dock = resolveDockBatch(snapshot)
     expect(dock).not.toBeNull()
     expect([...dock!.visibleSurfaceIds]).toEqual(['pipeline'])

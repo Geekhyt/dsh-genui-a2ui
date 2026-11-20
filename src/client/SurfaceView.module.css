@@ -1,5 +1,4 @@
 .card {
-  /* Map A2UI v1.0 CSS custom properties onto DSH `--dsw-*` design tokens */
   --a2ui-color-background: var(--dsw-alias-bg-base, #ffffff);
   --a2ui-color-on-background: var(--dsw-alias-label-primary, #1f2329);
   --a2ui-color-surface: var(--dsw-alias-bg-layer-1, #f7f8fa);

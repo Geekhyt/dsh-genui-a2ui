@@ -132,7 +132,6 @@ describe('Evolution v3: 10 New A2UI 1.0 Components (42 Total)', () => {
     const used = (createMsg?.createSurface.components ?? []).map((c) => c.component)
     expect(used).toEqual(expect.arrayContaining([...V3_NAMES, 'Badge']))
 
-    // Verify SSR renderToStaticMarkup succeeds cleanly with zero getServerSnapshot errors
     const envelopes = compiled.flatMap((part) => ('a2ui' in part ? part.a2ui : [part]))
     const html = renderToStaticMarkup(
       createElement(SurfaceGroupView, {
@@ -196,7 +195,6 @@ describe('Evolution v3: 10 New A2UI 1.0 Components (42 Total)', () => {
       'success',
     )
 
-    // Cyclic graph A -> B -> C -> A must terminate cleanly and mark one back-edge
     const cyclic = buildServiceGraphLayout(
       [
         { id: 'a', label: 'Gateway' },
@@ -214,7 +212,6 @@ describe('Evolution v3: 10 New A2UI 1.0 Components (42 Total)', () => {
     expect(cyclic.edges).toHaveLength(3)
     expect(cyclic.edges.some((e) => e.isBackEdge)).toBe(true)
 
-    // Long CJK/ASCII edge labels in LR mode automatically widen the inter-rank gap so text is never occluded by node boxes
     const lrWideLabel = buildServiceGraphLayout(
       [
         { id: 'checkout', label: 'Checkout API' },
@@ -228,8 +225,6 @@ describe('Evolution v3: 10 New A2UI 1.0 Components (42 Total)', () => {
     const e0 = lrWideLabel.edges[0]!
     expect(n1.x - (n0.x + n0.width)).toBeGreaterThanOrEqual(e0.labelWidth + 24)
 
-    // Cyclic LR & TB graphs, skip-level edges (A -> B -> C + A -> C), X-crossings, and single-column TB wide labels
-    // must keep 100% of nodes & edge label pills strictly inside positive SVG bounds and collision-free.
     const assertGraphCollisionFree = (layout: ReturnType<typeof buildServiceGraphLayout>) => {
       for (const n of layout.nodes) {
         expect(n.x).toBeGreaterThanOrEqual(12)
@@ -307,7 +302,6 @@ describe('Evolution v3: 10 New A2UI 1.0 Components (42 Total)', () => {
       ),
     )
 
-    // Small MetricRing with long value + unit scales center font down to fit inside inner ring stroke
     const smallBusyRing = computeMetricRingGeometry({
       value: 99.95,
       max: 100,

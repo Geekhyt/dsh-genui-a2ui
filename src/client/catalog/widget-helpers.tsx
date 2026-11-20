@@ -1,7 +1,3 @@
-/**
- * Shared light-DOM React component helpers for the DSH A2UI 1.0 catalog.
- */
-
 import {
   createComponentImplementation,
   type ReactA2uiComponentProps,
@@ -18,10 +14,8 @@ export type ChildRef =
 
 export const InsideButtonContext = createContext(false)
 
-/** True when the enclosing surface is in read-only / historical snapshot mode. */
 export const SurfaceReadOnlyContext = createContext(false)
 
-/** Provided inside `DshModal` body so action buttons can close the enclosing dialog upon dispatch. */
 export const ModalCloseContext = createContext<(() => void) | null>(null)
 
 export interface SurfaceValidationContextValue {
@@ -55,10 +49,6 @@ export interface ClampedPopoverBox {
   readonly maxHeight: number
 }
 
-/**
- * Compute viewport-clamped fixed coordinates for portal dropdowns (`Select`, `MultiSelect`, `TreeSelect`)
- * so narrow right-aligned columns or short viewports never clip the popover off-screen.
- */
 export function computeClampedPopoverBox(
   rect: {
     readonly top: number

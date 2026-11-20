@@ -1,8 +1,3 @@
-/**
- * Layout & typography A2UI 1.0 components (`Text`, `Card`, `Row`, `Column`,
- * `List`, `Divider`, `Tabs`, `Modal`).
- */
-
 import {
   CardApi,
   ColumnApi,
@@ -309,7 +304,6 @@ export function DshModalView({
   const readOnly = useContext(SurfaceReadOnlyContext)
   const [open, setOpen] = useState(false)
 
-  // Adjust state directly during render when transitioning to read-only (`rerender-derived-state-no-effect`)
   if (readOnly && open) {
     setOpen(false)
   }

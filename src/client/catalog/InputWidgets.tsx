@@ -1,8 +1,3 @@
-/**
- * Action & form input A2UI 1.0 components (`Button`, `TextField`, `CheckBox`,
- * `ChoicePicker`, `Slider`, `DateTimeInput`, `Select`, `Segmented`, `Switch`).
- */
-
 import {
   type ActionDispatchOptions,
   ButtonApi,
@@ -799,9 +794,6 @@ export function DshSegmentedView({
 
   if (segOptions.length === 0) return null
 
-  // Host `SegmentedControl` uses a single-row sliding indicator; when many or long
-  // labels would wrap inside a 306px half-width card, render a native wrapping pill
-  // grid where each active button highlights itself cleanly without row overlap.
   const useWrapGrid = segOptions.length >= 4 || totalEstW > 270
 
   return (

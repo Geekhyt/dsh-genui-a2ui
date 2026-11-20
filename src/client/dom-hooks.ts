@@ -1,29 +1,8 @@
-/**
- * Low-level browser DOM / Canvas / Observer adapter hooks (`src/client/dom-hooks.ts`).
- *
- * Architectural boundary (`vercel-react-best-practices`):
- * Business and widget `.tsx` components are strictly forbidden from importing or calling
- * `useEffect` / `useLayoutEffect`. State derivation, state resets on prop/ID changes,
- * external store subscriptions (`useSyncExternalStore`), and user-action side effects
- * belong in render expressions, stores, or event handlers — never in effects.
- *
- * Only genuinely non-React imperative browser APIs live in this file:
- * 1. `useAutoDismissTimer` — portal fallback toast timeout cleanup on unmount
- * 2. `useEChartsMount` — imperative ECharts `<canvas>` instance + `ResizeObserver`
- * 3. `useMermaidViewportDom` — pre-paint zoom-to-cursor scrollport anchor (`useLayoutEffect`),
- *    `ResizeObserver`, non-passive `{ passive: false }` wheel listener, `Escape` keydown,
- *    and unmount window drag cleanup.
- */
 import { type RefObject, useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import type { EchartsChunkModule } from './chunk-loader.ts'
 
 const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect
 
-/**
- * Imperative auto-dismiss timer for `FallbackToast` when Host `Toast` primitive is absent.
- * Stores latest `onDone` in a ref during render (`advanced-event-handler-refs`) so callback
- * identity changes never restart the countdown timer.
- */
 export function useAutoDismissTimer(holdMs: number, onDone: () => void): void {
   const onDoneRef = useRef(onDone)
   onDoneRef.current = onDone
@@ -46,14 +25,9 @@ export interface EChartsClickParams {
 }
 
 export interface EChartsMountHandle {
-  /** Export the live ECharts canvas as a high-DPI 2x PNG download. Returns false if unavailable. */
   readonly exportPng: (filename: string, backgroundColor: string) => boolean
 }
 
-/**
- * Imperative ECharts `<canvas>` lifecycle, `ResizeObserver`, option synchronization,
- * and 1-click high-DPI PNG export handle.
- */
 export function useEChartsMount(params: {
   readonly hostRef: RefObject<HTMLDivElement | null>
   readonly chunk: EchartsChunkModule | null
@@ -144,14 +118,6 @@ export interface PendingMermaidZoomAnchor {
   readonly cursorInVpY: number
 }
 
-/**
- * Imperative DOM bindings for `<Mermaid>` lossless vector viewport:
- * - Pre-paint `scrollLeft`/`scrollTop` cursor anchor compensation (`useIsomorphicLayoutEffect`)
- * - `ResizeObserver` overflow & Fit-% measurement
- * - Non-passive `{ passive: false }` wheel listener (required to `preventDefault()` Ctrl+wheel browser zoom)
- * - Window `Escape` listener while fullscreen modal is open
- * - Unmount window drag listener teardown
- */
 export function useMermaidViewportDom(params: {
   readonly inlineViewportRef: RefObject<HTMLDivElement | null>
   readonly inlineStageRef: RefObject<HTMLDivElement | null>
@@ -292,13 +258,6 @@ export function useMermaidViewportDom(params: {
   }, [activeFullscreen, canZoom, dialogViewportRef, inlineViewportRef])
 }
 
-/**
- * High-water-mark height stabilizer for actively streaming A2UI surfaces.
- *
- * While `streaming === true`, locks `min-height` to the maximum observed height so
- * incremental Express compilation frames never collapse/flicker or jump the chat
- * scrollport backwards. Releases `min-height` immediately once streaming settles.
- */
 export function useStreamingHeightStabilizer(
   hostRef: RefObject<HTMLElement | null>,
   streaming: boolean,

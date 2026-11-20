@@ -1,9 +1,3 @@
-/**
- * Barrel registry assembling all 57 DSH-native light-DOM React component
- * implementations from domain-focused modules (`LayoutWidgets`, `InputWidgets`,
- * `MediaAndDataWidgets`, `P0Widgets`, `ExtendedWidgets`, `OpsAndInsightWidgets`,
- * `EnterpriseWidgets`, and `AntdParityWidgets`).
- */
 import type { ReactCatalogComponent } from '@a2ui/react'
 import {
   DshCheckCardImpl,
@@ -134,7 +128,6 @@ export {
   DshVideoImpl,
 }
 
-/** Complete list of all 57 DSH-native React component implementations. */
 export const DSH_REACT_COMPONENTS: readonly ReactCatalogComponent[] = [
   DshTextImpl,
   DshImageImpl,

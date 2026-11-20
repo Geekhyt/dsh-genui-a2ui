@@ -1,18 +1,8 @@
-/**
- * Pure data helpers for upgraded `Stat` (value/unit split + inline SVG sparkline)
- * and `FileTree` (flat list -> hierarchical directory/file tree).
- */
-
 export interface SplitStatValue {
   readonly main: string
   readonly unit: string
 }
 
-/**
- * Split a formatted KPI string like `"99.95%"`, `"142 ms"`, `"+18.4%"`, `"1.63 MB"`,
- * or `"32.5万元"` into `{ main, unit }` for baseline typographic alignment, while
- * leaving dates (`"2026-11-12"`), ratios (`"3/5"`), or plain text (`"健康"`) intact.
- */
 export function splitStatValueUnit(raw: unknown): SplitStatValue {
   if (raw === null || raw === undefined) return { main: '', unit: '' }
   if (typeof raw === 'number') {
@@ -20,7 +10,6 @@ export function splitStatValueUnit(raw: unknown): SplitStatValue {
   }
   const text = String(raw).trim()
   if (text === '') return { main: '', unit: '' }
-  // Skip ISO dates or clock times (`2026-11-12`, `14:30:00`).
   if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(text) || /^\d{1,2}:\d{2}/.test(text)) {
     return { main: text, unit: '' }
   }

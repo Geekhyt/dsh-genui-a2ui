@@ -1,21 +1,3 @@
-/**
- * tsdown preset for a DSH UI plugin:
- * - Node half (`lib/index.js`, ESM)
- * - Main browser entry (`lib/client.js`, `< 50 kB`, gated `< 500 kB`)
- * - Self-contained package-local browser chunks (`lib/client.runtime.js`,
- *   `lib/client.echarts.js`, `lib/client.mermaid.js`) loaded on demand through
- *   DSH's official `require.async("./client.<name>.js")` protocol
- *   (`window.__ModuleLoader__.load({ id, chunk, factory })`).
- *
- * - Platform modules (react, cordis, ui-slots, ui-primitives, …) stay external
- *   and resolve from the shell's frozen module table;
- * - Heavy engines (`@a2ui/*`, `echarts`, `mermaid`) are forbidden in `lib/client.js`
- *   and isolated in their dedicated self-contained chunks so zero relative sync
- *   `require("./client.*.js")` edges can ever form between chunks;
- * - CSS (global + `*.module.css`) is compiled by lightningcss and injected as a
- *   `<style data-plugin>` tag that the loader removes on unload.
- */
-
 import { existsSync } from 'node:fs'
 import { readFile, utimes } from 'node:fs/promises'
 import { builtinModules, createRequire } from 'node:module'
@@ -31,13 +13,10 @@ const NODE_STUB_ID = '\0dsh-node-empty'
 
 const NODE_BUILTINS = new Set([...builtinModules, ...builtinModules.map((m) => `node:${m}`)])
 
-/** Wire/type layers a client bundle may inline (no shared runtime identity). */
 const INLINE_SAFE = /^@deepseek-ai\/dsh-(host-apiproxy|session|llm|tools|brand)(\/|$)/
 
-/** Visualization engines forbidden outside their dedicated lazy chunks. */
 const HEAVY_VIZ_ONLY = /^(echarts|zrender|mermaid|dagre-d3-es|cytoscape|katex)(\/|$)/
 
-/** Heavy A2UI / parser runtimes forbidden in the cold-boot `lib/client.js` entry. */
 const RUNTIME_CHUNK_ONLY =
   /^(@a2ui\/(web_core|react|agent)|antlr4ng|@tanstack\/react-table|react-aria-components)(\/|$)/
 
@@ -54,11 +33,9 @@ export const CLIENT_EXTERNALS: readonly string[] = [...PLATFORM_MODULES]
 const NODE_ENV = JSON.stringify(process.env.NODE_ENV ?? 'production')
 
 export interface PluginBuildOptions {
-  /** Extra Node-side externals (cordis + node built-ins are always external). */
   readonly libExternal?: readonly (string | RegExp)[]
 }
 
-/** Build host ESM, self-contained lazy client chunks, and main client entry. */
 export function pluginBuild(id: string, options: PluginBuildOptions = {}): UserConfig[] {
   return [
     hostConfig(id, options.libExternal ?? []),
@@ -99,8 +76,6 @@ function sharedBrowserPlugins(
 ) {
   return [
     {
-      // Force browser-native Web Crypto UUID (`uuid/dist/esm-browser/index.js`) and stub
-      // unreachable Node built-ins (`@a2ui/agent` barrel re-exports `FileSystemCatalogProvider`).
       name: 'dsh-client-node-stub',
       resolveId(source: string, importer?: string) {
         if (source === 'uuid') return UUID_BROWSER_ENTRY
@@ -125,8 +100,6 @@ function sharedBrowserPlugins(
       },
     },
     {
-      // Cross-plugin value imports either duplicate a runtime instance or ask
-      // the module table for something it cannot answer: fail the build.
       name: 'dsh-client-bundle-purity',
       resolveId(source: string) {
         if (options.forbidVizEngines && HEAVY_VIZ_ONLY.test(source)) {
@@ -208,7 +181,6 @@ function clientChunkConfig(
           }
         },
         async writeBundle() {
-          // Ensure main `lib/client.js` mtime advances if a chunk rebuilds after it.
           const mainEntry = resolve('lib/client.js')
           if (existsSync(mainEntry)) {
             const now = new Date()

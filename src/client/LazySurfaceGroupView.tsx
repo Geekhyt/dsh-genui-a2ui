@@ -1,8 +1,3 @@
-/**
- * Lightweight lazy bridge for `SurfaceGroupView` and `StreamingExpressSession`
- * so the main `lib/client.js` startup bundle stays ultra-small (`< 50 kB`) and
- * only loads `lib/client.runtime.js` when an A2UI surface is mounted or streamed.
- */
 import { memo, useCallback, useMemo, useRef, useSyncExternalStore } from 'react'
 import {
   getLoadedRuntimeChunk,

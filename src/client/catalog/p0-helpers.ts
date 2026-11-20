@@ -1,7 +1,3 @@
-/**
- * Pure, zero-DOM normalization & LCS line-diff helpers for P0 components
- * (`DiffView`, `Steps`, `KeyValue`).
- */
 import { RUNTIME_MESSAGES, resolveClientLocale, type UiLocale } from '../../shared/i18n.ts'
 import type { TagTone } from '../ui/primitives.tsx'
 
@@ -28,7 +24,6 @@ function splitLines(raw: string): string[] {
   return raw.split(/\r?\n/)
 }
 
-/** Deterministic LCS line diff with O(N) prefix/suffix trimming and matrix size guard. */
 export function computeLineDiff(beforeText: string, afterText: string): DiffSummary {
   const a = splitLines(beforeText)
   const b = splitLines(afterText)
@@ -59,7 +54,6 @@ export function computeLineDiff(beforeText: string, afterText: string): DiffSumm
   const m = midB.length
 
   if (n === 0 && m === 0) {
-    // Only common lines
   } else if (n * m > 160_000) {
     for (let i = 0; i < n; i++) {
       removed++
@@ -125,7 +119,6 @@ export function computeLineDiff(beforeText: string, afterText: string): DiffSumm
   return { ops, added, removed }
 }
 
-/** Pair consecutive remove/add hunks for side-by-side (`split`) rendering. */
 export function pairSplitDiffRows(ops: readonly DiffLineOp[]): SplitDiffRow[] {
   const rows: SplitDiffRow[] = []
   let idx = 0

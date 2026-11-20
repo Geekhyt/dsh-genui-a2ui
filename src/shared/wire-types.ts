@@ -1,14 +1,6 @@
-/**
- * Isomorphic wire & presentation metadata types shared between the Host tools
- * (`a2ui_render`, `a2ui_ask`) and the Browser projections/views.
- *
- * Kept strictly `import type`-only so `src/client/` never imports `src/host/`
- * and zero runtime bytes are added to `lib/client.js`.
- */
 import type { AgentToRendererMessage } from '@a2ui/agent'
 import type { SurfacePlacement } from './constants.ts'
 
-/** Result meta produced by `a2ui_render` (`presentationMeta`) and consumed by client projections. */
 export interface RenderMeta {
   readonly kind: 'dsh-a2ui'
   readonly version: 1
@@ -18,7 +10,6 @@ export interface RenderMeta {
   readonly messages: AgentToRendererMessage[]
 }
 
-/** Payload sent from `AskToolView` / `AskDockView` to `/a2ui-answer` to settle an in-flight `a2ui_ask`. */
 export interface AskAnswerInput {
   readonly callId?: string | undefined
   readonly skipped?: boolean | undefined
@@ -30,7 +21,6 @@ export interface AskAnswerInput {
   readonly dataModels?: Record<string, unknown> | undefined
 }
 
-/** Result meta produced by `a2ui_ask` (`presentationMeta`) and consumed by client projections. */
 export interface AskMeta {
   readonly kind: 'dsh-a2ui-ask'
   readonly version: 1

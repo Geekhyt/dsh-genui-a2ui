@@ -10,7 +10,6 @@ interface ErrorBoundaryState {
   readonly error: Error | null
 }
 
-/** Per-card containment boundary so a surface error never crashes the DSH timeline. */
 export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   override state: ErrorBoundaryState = { error: null }
 

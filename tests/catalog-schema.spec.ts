@@ -1,6 +1,5 @@
 import { ExpressParser } from '@a2ui/agent'
 import { describe, expect, it } from 'vitest'
-// @ts-expect-error plain ESM helper script
 import { ANALYTICS_UPDATE_UI, BOOKING_UI, DASHBOARD_UI } from '../scripts/mock-llm.mjs'
 import { createGenerator, SurfaceSessions } from '../src/host/generator.ts'
 import { DSH_CATALOG_ID, dshSchemaCatalog } from '../src/shared/catalog-schema.ts'

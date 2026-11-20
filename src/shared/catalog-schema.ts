@@ -1,18 +1,3 @@
-/**
- * Isomorphic A2UI 1.0 catalog schema shared by the Node Host (`@a2ui/agent`)
- * and the Browser Client (`@a2ui/react` + `@a2ui/web_core`).
- *
- * Zero DOM, zero React, zero Lit element imports: includes all 18 official
- * A2UI v1.0 Basic Catalog component contracts plus 39 DSH-native extensions
- * (`Chart`, `Table`, `Stat`, `Progress`, `Badge`, `Code`, `DiffView`, `Steps`,
- * `Callout`, `KeyValue`, `Accordion`, `JsonTree`, `FileTree`, `Mermaid`,
- * `Select`, `Segmented`, `Switch`, `Comparison`, `LogViewer`, `Timeline`,
- * `Kanban`, `SourceList`, `MetricRing`, `ServiceGraph`, `Tracker`, `Terminal`,
- * `ApprovalCard`, `ApiEndpoint`, `Schedule`, `Result`, `EntityHeader`, `Matrix`,
- * `NumberInput`, `MultiSelect`, `DateRange`, `TreeSelect`, `CheckCard`, `Tree`,
- * `Grid`) — 57 components total.
- */
-
 import {
   ActionSchema,
   AudioPlayerApi,
@@ -1590,7 +1575,6 @@ export const GridApi = {
   ),
 } satisfies ComponentApi
 
-/** Standard 18 ComponentApi contracts from the A2UI 1.0 Basic Catalog (with tolerant DshTextApi). */
 export const BASIC_COMPONENT_APIS: readonly ComponentApi[] = [
   DshTextApi,
   ImageApi,
@@ -1612,7 +1596,6 @@ export const BASIC_COMPONENT_APIS: readonly ComponentApi[] = [
   DateTimeInputApi,
 ]
 
-/** DSH-native extended ComponentApi contracts (39 components). */
 export const DSH_EXTENDED_COMPONENT_APIS: readonly ComponentApi[] = [
   ChartApi,
   TableApi,
@@ -1655,17 +1638,11 @@ export const DSH_EXTENDED_COMPONENT_APIS: readonly ComponentApi[] = [
   GridApi,
 ]
 
-/** Ordered list of all 57 ComponentApi contracts in the DSH A2UI 1.0 catalog. */
 export const DSH_COMPONENT_APIS: readonly ComponentApi[] = [
   ...BASIC_COMPONENT_APIS,
   ...DSH_EXTENDED_COMPONENT_APIS,
 ]
 
-// ---------------------------------------------------------------------------
-// DSH-Native Local Renderer Functions (M3)
-// ---------------------------------------------------------------------------
-
-/** Copy a resolved text value to the system clipboard on user action (`action=copyText(...)`). */
 export const CopyTextApi = {
   name: 'copyText' as const,
   returnType: 'void' as const,
@@ -1678,7 +1655,6 @@ export const CopyTextApi = {
   ),
 } satisfies FunctionApi
 
-/** Reactive numeric sum across a bound array (`sum(items=$/rows, field="q2")`). */
 export const SumApi = {
   name: 'sum' as const,
   returnType: 'number' as const,
@@ -1693,7 +1669,6 @@ export const SumApi = {
   ),
 } satisfies FunctionApi
 
-/** Reactive numeric average across a bound array (`avg(items=$/rows, field="q2")`). */
 export const AvgApi = {
   name: 'avg' as const,
   returnType: 'number' as const,
@@ -1708,7 +1683,6 @@ export const AvgApi = {
   ),
 } satisfies FunctionApi
 
-/** Zero-latency algebraic formula evaluator (`calc(expr="p * r * (1+r)^n / ((1+r)^n - 1)", vars={ p: $/p, r: $/r, n: $/n }, decimals=2)`). */
 export const CalcApi = {
   name: 'calc' as const,
   returnType: 'number' as const,
@@ -1736,7 +1710,6 @@ export const CalcApi = {
   ),
 } satisfies FunctionApi
 
-/** Reactive equality comparator (`eq(a, b)`), unwrapping single-item ChoicePicker arrays automatically. */
 export const EqApi = {
   name: 'eq' as const,
   returnType: 'boolean' as const,
@@ -1751,7 +1724,6 @@ export const EqApi = {
   ),
 } satisfies FunctionApi
 
-/** Reactive strict greater-than (`gt(a, b)`). */
 export const GtApi = {
   name: 'gt' as const,
   returnType: 'boolean' as const,
@@ -1765,7 +1737,6 @@ export const GtApi = {
   ),
 } satisfies FunctionApi
 
-/** Reactive strict less-than (`lt(a, b)`). */
 export const LtApi = {
   name: 'lt' as const,
   returnType: 'boolean' as const,
@@ -1779,7 +1750,6 @@ export const LtApi = {
   ),
 } satisfies FunctionApi
 
-/** Reactive membership check (`includes(items=$/addons, value="cdn")`). */
 export const IncludesApi = {
   name: 'includes' as const,
   returnType: 'boolean' as const,
@@ -1794,7 +1764,6 @@ export const IncludesApi = {
   ),
 } satisfies FunctionApi
 
-/** Reactive ternary selector (`cond(condition=..., truthy="通过", falsy="超标")`). */
 export const CondApi = {
   name: 'cond' as const,
   returnType: 'any' as const,
@@ -1811,7 +1780,6 @@ export const CondApi = {
   ),
 } satisfies FunctionApi
 
-/** Reactive string concatenation (`concat([formatNumber(v), " GB"])`). */
 export const ConcatApi = {
   name: 'concat' as const,
   returnType: 'string' as const,
@@ -1827,7 +1795,6 @@ export const ConcatApi = {
   ),
 } satisfies FunctionApi
 
-/** Reactive map lookup (`lookup($/tier, { "l40s": 1, "a800": 2 }, 4)`). */
 export const LookupApi = {
   name: 'lookup' as const,
   returnType: 'any' as const,
@@ -1870,7 +1837,6 @@ export const DSH_CATALOG_INSTRUCTIONS = [
   'Never fabricate real external state: if using illustrative numbers, mark them clearly in titles or captions; never claim an action has executed before receiving `[a2ui-action]`.',
 ].join('\n')
 
-/** Schema-only catalog consumed by `@a2ui/agent` on the Host and `StreamingExpressSession` on the Client. */
 export const dshSchemaCatalog: CatalogApi = new Catalog(
   DSH_CATALOG_ID,
   '1.0',

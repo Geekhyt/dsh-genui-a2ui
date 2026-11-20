@@ -70,10 +70,11 @@
   "scripts": {
     "build": "node --no-warnings ./node_modules/tsdown/dist/run.mjs --config-loader native",
     "prepack": "npm run build",
-    "lint": "biome lint .",
+    "lint": "biome lint . && node scripts/check-no-comments.mjs",
     "format": "biome format --write .",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
+    "check:comments": "node scripts/check-no-comments.mjs",
     "check:host-api": "node scripts/check-host-api.mjs",
     "eval:llm": "node --no-warnings --use-env-proxy --experimental-transform-types scripts/eval-llm.mjs",
     "dev:env": "node scripts/dev-env.mjs",

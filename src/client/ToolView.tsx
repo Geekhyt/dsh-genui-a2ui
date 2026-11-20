@@ -1,14 +1,3 @@
-/**
- * Keyed `tool.call.toolview` entry for `a2ui_render`.
- *
- * Placement-aware lifecycle:
- * - `answer` (default): progressive live surface while the turn is open; collapses
- *   into a 1-line summary row once `turn/end` arrives (when `TurnTailView` takes over).
- * - `dock`: progressive preview while streaming; collapses immediately upon `result`
- *   into `"已固定至底部工作台 · <title>"` because `DockView` pins it above the composer.
- * - `inline`: stays inside the tool stream (`DisclosureRow` open by default).
- * - `isError`: compact `DisclosureRow` with compiler diagnostics for model self-healing.
- */
 import { memo, useCallback, useMemo, useState, useSyncExternalStore } from 'react'
 import { normalizePlacement } from '../shared/constants.ts'
 import { parseFileTarget, type WorkspaceFileOpener } from './file-opener.tsx'
@@ -132,7 +121,6 @@ export const A2uiToolView = memo(function A2uiToolView({
   const msg = useShellMessages()
   const title = settledMeta?.title ?? argTitle ?? 'A2UI'
 
-  // 1. Error / interrupted state -> compact DisclosureRow with diagnostics
   if (phase === 'result' && block.isError) {
     const stopped = block.error?.code === 'interrupted'
     const reason = (block.content ?? [])
@@ -168,8 +156,6 @@ export const A2uiToolView = memo(function A2uiToolView({
     )
   }
 
-  // 2. Dock placement: once settled (`phase === 'result'`), `DockView` renders it above the composer,
-  // so collapse immediately into a crisp 1-line dock receipt.
   if (placement === 'dock' && phase === 'result') {
     const hasSource = argUi.trim() !== ''
     return (
@@ -201,8 +187,6 @@ export const A2uiToolView = memo(function A2uiToolView({
     )
   }
 
-  // 3. Inline placement once settled -> keep interactive surface inside the tool DisclosureRow
-  //    (both while the turn is open and after it closes, since TurnTailView ignores `inline`).
   if (placement === 'inline' && phase === 'result' && settledMeta !== null) {
     return (
       <div data-tool="a2ui_render" data-placement="inline" data-state="inline-settled">
@@ -235,10 +219,6 @@ export const A2uiToolView = memo(function A2uiToolView({
     )
   }
 
-  // 4. Streaming (`preparing` or `start`), or standalone fallback without `chatStore` ->
-  //    render progressive live surface (with shimmer skeleton before `root` arrives).
-  //    Once `phase === 'result'` with `chatStore` present, `TurnTailView` immediately owns
-  //    `placement="answer"`, so we collapse into the 1-line receipt below with zero dual-mount!
   if (phase !== 'result' || (chatStore === undefined && !turnClosed)) {
     return (
       <div
@@ -259,8 +239,6 @@ export const A2uiToolView = memo(function A2uiToolView({
     )
   }
 
-  // 5. Settled `answer` (`TurnTailView` renders the permanent card below the reply) ->
-  //    show a clean 1-line process summary row inside the collapsible turn-process log.
   const hasSource = argUi.trim() !== ''
   return (
     <div data-tool="a2ui_render" data-placement={placement} data-state="ok">

@@ -1,14 +1,3 @@
-/**
- * Browser-side persistence and reactive UI state for `dsh-genui-a2ui`:
- * 1. LRU-200 form/data-model draft store in `localStorage` (`dsh-a2ui:drafts:v1`),
- *    keyed by `sessionId + surfaceId + messageFingerprint`, with secret/obscured
- *    fields stripped before storage.
- * 2. Per-session Dock panel state (`collapsed` + `dismissedSeq`) so docked
- *    surfaces remember their collapse state and re-open automatically when a
- *    newer `update=true` or docked render arrives.
- * 3. Client A2UI on/off switch preference synced with `/a2ui on|off`.
- */
-
 import { isDangerousObjectKey, isSecretKey } from '../shared/constants.ts'
 
 export const DRAFTS_STORAGE_KEY = 'dsh-a2ui:drafts:v1'
@@ -50,9 +39,7 @@ function readStorage(storageKey: string): string | null {
     if (typeof window !== 'undefined' && window.localStorage) {
       return window.localStorage.getItem(storageKey)
     }
-  } catch {
-    // Fall back to in-memory map in restricted sandboxes / Node tests without localStorage.
-  }
+  } catch {}
   return memoryFallback.get(storageKey) ?? null
 }
 
@@ -62,12 +49,9 @@ function writeStorage(storageKey: string, value: string): void {
     if (typeof window !== 'undefined' && window.localStorage) {
       window.localStorage.setItem(storageKey, value)
     }
-  } catch {
-    // Ignore quota / sandbox errors; in-memory fallback remains consistent.
-  }
+  } catch {}
 }
 
-/** Reset all persisted state (used in unit tests). */
 export function resetPersistenceForTests(): void {
   memoryFallback.clear()
   fallbackDefaultEnabled = true
@@ -87,15 +71,12 @@ export function resetPersistenceForTests(): void {
       window.localStorage.removeItem(DOCK_STORAGE_KEY)
       window.localStorage.removeItem(ENABLED_STORAGE_KEY)
     }
-  } catch {
-    // Ignore
-  }
+  } catch {}
   notifyListeners(dockListeners)
   notifyListeners(enabledListeners)
   notifyListeners(commandNoticeListeners)
 }
 
-/** Fast deterministic FNV-1a 32-bit hex fingerprint over compiled messages. */
 export function computeMessagesFingerprint(messages: readonly unknown[]): string {
   let raw = ''
   try {
@@ -117,11 +98,6 @@ function normalizePointerPath(pointer: string): string {
   return trimmed.startsWith('/') ? trimmed : `/${trimmed}`
 }
 
-/**
- * Deep-clone a surface data model while stripping:
- * - any JSON Pointer path bound to an `obscured` `TextField`, and
- * - any key matching common credential/secret names.
- */
 export function sanitizeDataModel(
   value: unknown,
   obscuredPointers?: ReadonlySet<string>,
@@ -189,7 +165,6 @@ function writeDraftList(entries: DraftEntry[]): void {
   writeStorage(DRAFTS_STORAGE_KEY, JSON.stringify(entries))
 }
 
-/** Load a previously saved user-edited surface data model (updates LRU order on hit). */
 export function loadSurfaceDraft(
   sessionId: string,
   surfaceId: string,
@@ -201,7 +176,6 @@ export function loadSurfaceDraft(
   const idx = entries.findIndex((e) => e.key === targetKey)
   if (idx < 0) return null
   const hit = entries[idx]!
-  // Promote to MRU end when not already at tail
   if (idx !== entries.length - 1) {
     entries.splice(idx, 1)
     entries.push({ ...hit, updatedAt: Date.now() })
@@ -210,7 +184,6 @@ export function loadSurfaceDraft(
   return hit.data
 }
 
-/** Save a sanitized surface data model into the LRU-200 store. */
 export function saveSurfaceDraft(
   sessionId: string,
   surfaceId: string,
@@ -242,14 +215,9 @@ export function saveSurfaceDraft(
   writeDraftList(entries)
 }
 
-/** Return the current count of persisted surface drafts (for diagnostics/tests). */
 export function countSurfaceDrafts(): number {
   return readDraftList().length
 }
-
-// ---------------------------------------------------------------------------
-// Reactive Dock UI State (per-session collapse + dismissed sequence watermark)
-// ---------------------------------------------------------------------------
 
 const dockListeners = new Set<() => void>()
 const DEFAULT_DOCK_STATE: DockUiEntry = Object.freeze({ collapsed: false, dismissedSeq: -1 })
@@ -260,9 +228,7 @@ function notifyListeners(listeners: ReadonlySet<() => void>): void {
   for (const fn of listeners) {
     try {
       fn()
-    } catch {
-      // Ignore subscriber errors
-    }
+    } catch {}
   }
 }
 
@@ -280,9 +246,7 @@ function readDockMap(): Record<string, DockUiEntry> {
       cachedDockMap = parsed as Record<string, DockUiEntry>
       return cachedDockMap
     }
-  } catch {
-    // Ignore
-  }
+  } catch {}
   cachedDockMap = {}
   return cachedDockMap
 }
@@ -329,20 +293,12 @@ export function dismissDockAtSeq(sessionId: string, seq: number): void {
   writeDockMap(pruneRecordLru(next, MAX_DRAFT_ENTRIES))
 }
 
-// ---------------------------------------------------------------------------
-// Reactive Client Switch Store (`enabled: boolean`)
-// ---------------------------------------------------------------------------
-
 const enabledListeners = new Set<() => void>()
 const lastAppliedCommandSeqBySession = new Map<string, number>()
 let fallbackDefaultEnabled = true
 let cachedEnabledRaw: string | null | undefined
 let cachedEnabledStore: EnabledStoreShape = { defaultEnabled: true, bySession: {} }
 
-/**
- * Configure the client-side fallback `defaultEnabled` used when `localStorage`
- * has not yet recorded an explicit user toggle.
- */
 export function setFallbackDefaultEnabled(enabled: boolean): void {
   if (fallbackDefaultEnabled === enabled) return
   fallbackDefaultEnabled = enabled
@@ -429,10 +385,6 @@ export function setA2uiEnabled(
   notifyListeners(enabledListeners)
 }
 
-/**
- * Purely derive the effective `enabled` state for `sessionId` by combining `localStorage`
- * with any newer `/a2ui` slash-command node in the chat transcript (`rerender-derived-state-no-effect`).
- */
 export function resolveEffectiveA2uiEnabled(
   sessionId: string | undefined,
   latestCommand: { readonly seq: number; readonly enabled: boolean } | null,
@@ -447,9 +399,6 @@ export function resolveEffectiveA2uiEnabled(
   return getA2uiEnabled(sessionId)
 }
 
-/**
- * Persist a newly observed `/a2ui` command watermark from an external store subscription.
- */
 export function reconcileLatestA2uiCommand(
   sessionId: string | undefined,
   latestCommand: { readonly seq: number; readonly enabled: boolean } | null,
@@ -460,10 +409,6 @@ export function reconcileLatestA2uiCommand(
   if (latestCommand.seq <= watermark) return
   setA2uiEnabled(sessionId, latestCommand.enabled, latestCommand.seq)
 }
-
-// ---------------------------------------------------------------------------
-// Ephemeral Blank-Session Slash-Command Feedback (`/a2ui status|on|off`)
-// ---------------------------------------------------------------------------
 
 export interface A2uiCommandNotice {
   readonly seq: number

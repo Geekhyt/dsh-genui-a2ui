@@ -1,18 +1,3 @@
-/**
- * Official DSH dynamic chunk loader & external stores (`require.async("./client.<name>.js")`).
- *
- * - `client.runtime.js`: A2UI 1.0 core, streaming parser, & light-DOM widgets
- * - `client.echarts.js`: 19-kind ECharts visualization engine
- * - `client.mermaid.js`: Mermaid architecture/sequence/state diagram engine + LRU-64 SVG cache
- *
- * Exposes `useSyncExternalStore`-ready `subscribe*` / `get*Snapshot` contracts so UI
- * components subscribe declaratively without `useEffect` (`vercel-react-best-practices`).
- *
- * In the bundled DSH client (`__DSH_BUNDLED_CLIENT__ === true`), invokes the
- * package-scoped `require.async` supplied by `window.__ModuleLoader__.load`.
- * In Node / Vitest (`__DSH_BUNDLED_CLIENT__` undefined), falls back to standard
- * dynamic `import()` against the local TypeScript modules.
- */
 import type * as EchartsChunk from './chunks/echarts-chunk.ts'
 import type * as MermaidChunk from './chunks/mermaid-chunk.ts'
 import type * as RuntimeChunk from './chunks/runtime-chunk.ts'
@@ -34,15 +19,9 @@ function notifySet(listeners: ReadonlySet<() => void>): void {
   for (const fn of listeners) {
     try {
       fn()
-    } catch {
-      // Ignore subscriber errors
-    }
+    } catch {}
   }
 }
-
-// ---------------------------------------------------------------------------
-// 1. Runtime Chunk External Store (`lib/client.runtime.js`)
-// ---------------------------------------------------------------------------
 
 let runtimeModuleSync: RuntimeChunkModule | null = null
 let runtimePromise: Promise<RuntimeChunkModule> | null = null
@@ -94,10 +73,6 @@ export function subscribeRuntimeChunk(enabled: boolean, listener: () => void): (
     runtimeListeners.delete(listener)
   }
 }
-
-// ---------------------------------------------------------------------------
-// 2. ECharts Chunk External Store (`lib/client.echarts.js`)
-// ---------------------------------------------------------------------------
 
 export interface EchartsChunkSnapshot {
   readonly chunk: EchartsChunkModule | null
@@ -155,18 +130,12 @@ export function loadEchartsChunk(): Promise<EchartsChunkModule> {
 export function subscribeEchartsChunk(listener: () => void): () => void {
   echartsListeners.add(listener)
   if (echartsModuleSync === null && echartsPromise === null) {
-    loadEchartsChunk().catch(() => {
-      // Snapshot already records error and notifies subscribers.
-    })
+    loadEchartsChunk().catch(() => {})
   }
   return () => {
     echartsListeners.delete(listener)
   }
 }
-
-// ---------------------------------------------------------------------------
-// 3. Mermaid Chunk & LRU-64 Diagram Render Store (`lib/client.mermaid.js`)
-// ---------------------------------------------------------------------------
 
 export interface MermaidDiagramSnapshot {
   readonly svg: string | null
@@ -261,7 +230,6 @@ export function subscribeMermaidDiagram(
   }
   set.add(listener)
 
-  // Promote LRU position on active subscription hit
   const existing = mermaidDiagramCache.get(key)
   if (existing !== undefined) {
     mermaidDiagramCache.delete(key)
@@ -309,7 +277,6 @@ export function subscribeMermaidDiagram(
         clearTimeout(pendingTimer)
         mermaidTimersByKey.delete(key)
       }
-      // Do not permanently trap transient chunk-load / render failures across remounts
       const cached = mermaidDiagramCache.get(key)
       if (cached !== undefined && cached.error !== null) {
         mermaidDiagramCache.delete(key)
@@ -318,7 +285,6 @@ export function subscribeMermaidDiagram(
   }
 }
 
-/** Seed or clear Mermaid SVG LRU cache (used in unit tests). */
 export function seedMermaidDiagramCacheForTests(code: string, dark: boolean, svg: string): void {
   storeMermaidSnapshot(mermaidCacheKey(code, dark), {
     svg,

@@ -1,14 +1,3 @@
-/**
- * P1 Real LLM Generation & Self-Repair Eval Suite for `dsh-genui-a2ui`.
- *
- * Provides:
- * 1. 28 realistic natural-language benchmark cases spanning Analytics/BI, Calculators/Forms,
- *    DevOps/SRE/HITL, Update-in-Place constraints, and Negative Markdown-only routing controls.
- * 2. Real Host compiler grading (`SurfaceSessions.compile`) with 8-bucket error taxonomy.
- * 3. Summary aggregation: 0-repair first-pass rate, post-repair rate, routing precision/recall,
- *    component/chart usage heatmap, and P0 Scoped vs. Legacy Monolithic token comparison.
- */
-
 import type { AgentToRendererMessage } from '@a2ui/agent'
 import { createGenerator, type SkillDomain, SurfaceSessions } from './generator.ts'
 import { SKILL_DOMAINS } from './prompt-compact.ts'
@@ -112,9 +101,7 @@ export interface EvalSummary {
   readonly results: readonly EvalCaseResult[]
 }
 
-/** 28 benchmark cases covering all 4 skill domains, constraints, and Markdown-only negative controls. */
 export const EVAL_BENCHMARK_CASES: readonly EvalCase[] = [
-  // --- 1. Analytics & BI (6) ---
   {
     id: 'bi-01-funnel-sankey-radar',
     title: '全链路转化桑基 + 五维雷达大盘',
@@ -182,7 +169,6 @@ export const EVAL_BENCHMARK_CASES: readonly EvalCase[] = [
     expectedAnyChartKinds: ['gauge', 'candlestick', 'boxplot'],
   },
 
-  // --- 2. Interactive Calculators & Advanced Forms (5) ---
   {
     id: 'form-01-loan-calc',
     title: '零延迟房贷/算力成本实时测算器',
@@ -235,7 +221,6 @@ export const EVAL_BENCHMARK_CASES: readonly EvalCase[] = [
     expectedAnyComponents: ['DateRange', 'MetricRing', 'ApiEndpoint'],
   },
 
-  // --- 3. DevOps, SRE & Human-in-the-Loop (6) ---
   {
     id: 'ops-01-sre-topology-trace-log',
     title: '微服务健康拓扑 + Trace 瀑布树 + 堆栈日志',
@@ -298,7 +283,6 @@ export const EVAL_BENCHMARK_CASES: readonly EvalCase[] = [
     expectedAnyComponents: ['Kanban', 'Timeline', 'Matrix', 'Result'],
   },
 
-  // --- 4. Protocol & Grammar Edge Constraints (3) ---
   {
     id: 'edge-01-table-plain-scalar',
     title: 'Table 纯标量单元格约束（禁止嵌套 Badge）',
@@ -332,7 +316,6 @@ export const EVAL_BENCHMARK_CASES: readonly EvalCase[] = [
     expectedAnyComponents: ['Accordion', 'KeyValue', 'Modal', 'Button'],
   },
 
-  // --- 5. Negative Controls — Must Stay in Concise Markdown (5) ---
   {
     id: 'neg-01-concept-qa',
     title: '负例：纯概念解释（不应调 UI）',
@@ -370,7 +353,6 @@ export const EVAL_BENCHMARK_CASES: readonly EvalCase[] = [
     expectedTool: 'none',
   },
 
-  // --- 6. Additional Coverage & Media/Governance (3) ---
   {
     id: 'cov-01-cluster-governance-protable',
     title: '专属集群头 + 20 日 SLA 条 + 边框描述表 + 展开 ProTable',
@@ -404,7 +386,6 @@ export const EVAL_BENCHMARK_CASES: readonly EvalCase[] = [
   },
 ]
 
-/** Classifies a raw `SurfaceSessions.compile()` error string into a structured taxonomy bucket. */
 export function classifyCompileError(errorMessage: string): CompileErrorBucket {
   const msg = errorMessage.toLowerCase()
   if (
@@ -459,7 +440,6 @@ export function classifyCompileError(errorMessage: string): CompileErrorBucket {
   return 'OTHER_VALIDATION'
 }
 
-/** Extracts rendered component types and Chart kinds from compiled A2UI wire messages. */
 export function extractCompiledArtifacts(messages: readonly AgentToRendererMessage[]): {
   readonly components: readonly string[]
   readonly chartKinds: readonly string[]
@@ -497,7 +477,6 @@ export function extractCompiledArtifacts(messages: readonly AgentToRendererMessa
   }
 }
 
-/** Compiles one candidate UI tool call against the real Host `SurfaceSessions` compiler. */
 export function gradeToolAttempt(
   sessions: SurfaceSessions,
   sessionId: string,
@@ -545,7 +524,6 @@ export function gradeToolAttempt(
   }
 }
 
-/** Finalizes grading for a single benchmark case across its 1..3 attempts. */
 export function finalizeCaseResult(
   testCase: EvalCase,
   attempts: readonly EvalTurnRecord[],
@@ -616,7 +594,6 @@ export function finalizeCaseResult(
   }
 }
 
-/** Aggregates all per-case Eval results into headline KPIs, component heatmaps, and error taxonomy. */
 export function aggregateEvalSummary(
   results: readonly EvalCaseResult[],
   meta: {
@@ -727,7 +704,6 @@ export function aggregateEvalSummary(
   }
 }
 
-/** Creates an isolated compiler session for running eval turns without mutating global state. */
 export function createEvalSession(): SurfaceSessions {
   return new SurfaceSessions(createGenerator(), true)
 }

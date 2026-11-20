@@ -156,7 +156,6 @@ describe('Issue 1 & Issue 2 regression suite: dynamic skill unregistration and b
     const agentC = { session: { id: 'sess-c' } }
     const subAgent = { session: { id: 'sess-sub', header: { parentSession: 'sess-a' } } }
 
-    // 1. Default ON: main agent gets all 4 domain-scoped candidates + definitions; subagent gets 0 candidates
     const initialList = await registeredProvider!.list({ cwd: '/repo', scope: agentA })
     expect(initialList).toHaveLength(DOMAIN_SKILL_NAMES.length)
     expect(initialList.map((c) => c.name)).toEqual([...DOMAIN_SKILL_NAMES])
@@ -187,10 +186,6 @@ describe('Issue 1 & Issue 2 regression suite: dynamic skill unregistration and b
       await registeredProvider!.get(initialList[1]!, { cwd: '/repo', scope: subAgent }),
     ).toBeUndefined()
 
-    // 2. Explicitly pin Session A ON, then run `/a2ui off` in Session B:
-    //    - invalidates SkillRegistry cache synchronously
-    //    - removes all 4 domain skills from Session B, unscoped catalog, and new Session C
-    //    - preserves explicit ON override for Session A until Session A is disposed or toggled
     const beforeInval = invalidateCount
     tierCommandDef!.handler({ agent: agentA, rawInput: 'on' })
     expect(invalidateCount).toBe(beforeInval + 1)
@@ -217,7 +212,6 @@ describe('Issue 1 & Issue 2 regression suite: dynamic skill unregistration and b
     for (const fn of disposedListeners) fn({ id: 'sess-a' })
     expect(await registeredProvider!.list({ cwd: '/repo', scope: agentA })).toEqual([])
 
-    // 3. Re-enabling via `/a2ui on` restores tool, system prompt, and all 4 scoped skill entries
     const onRes = tierCommandDef!.handler({ agent: agentB, rawInput: 'on' })
     expect(onRes).toEqual({ kind: 'success', text: 'A2UI 生成式界面已开启' })
     expect(renderWhen?.({ agent: agentB })).toBe(true)
@@ -226,7 +220,6 @@ describe('Issue 1 & Issue 2 regression suite: dynamic skill unregistration and b
       DOMAIN_SKILL_NAMES.length,
     )
 
-    // 4. Cold start with `defaultEnabled: false` exposes 0 skills from boot
     let coldProvider: typeof registeredProvider
     applyHost(
       {
@@ -316,7 +309,6 @@ describe('Issue 1 & Issue 2 regression suite: dynamic skill unregistration and b
         }
       | undefined
 
-    // Blank session: has only a `command` node (matching DSH Empty Hero view where ChatView stays unmounted)
     const blankNodes = new Map([
       [
         'cmd-1',
@@ -336,7 +328,6 @@ describe('Issue 1 & Issue 2 regression suite: dynamic skill unregistration and b
       nodes: blankNodes,
     })
 
-    // Active session: has a `user` turn node (ChatView is mounted and already renders GenericCommandCard)
     const activeNodes = new Map<string, { kind: string; anchorSeq: number; data: unknown }>([
       ['user-1', { kind: 'user', anchorSeq: 1, data: {} }],
       [
@@ -423,7 +414,6 @@ describe('Issue 1 & Issue 2 regression suite: dynamic skill unregistration and b
       for (const fn of commandExecutedListeners) fn(sid, cmd, res)
     }
 
-    // 1. Blank session `/a2ui status` -> publishes visible notice + reconciles enabled pill state
     expect(getA2uiEnabled('sess-blank')).toBe(true)
     emitCommandExecuted('sess-blank', 'a2ui', {
       kind: 'success',
@@ -444,7 +434,6 @@ describe('Issue 1 & Issue 2 regression suite: dynamic skill unregistration and b
     expect(blankHtml).toContain('data-a2ui-toast="success"')
     expect(blankHtml).toContain('A2UI 生成式界面已关闭')
 
-    // 2. Blank session invalid argument -> surfaces error Toast and dismisses cleanly
     emitCommandExecuted('sess-blank', 'a2ui', {
       kind: 'error',
       text: '无效参数 "bad"，可选值：on | off | status（或不传参直接切换）',
@@ -458,14 +447,12 @@ describe('Issue 1 & Issue 2 regression suite: dynamic skill unregistration and b
     dismissCommandNotice('sess-blank')
     expect(getCommandNotice('sess-blank')).toBeNull()
 
-    // 3. Unrelated slash commands are ignored
     emitCommandExecuted('sess-blank', 'compact', {
       kind: 'success',
       text: 'Compacted',
     })
     expect(getCommandNotice('sess-blank')).toBeNull()
 
-    // 4. Active session (ChatView already mounted) -> reconciles enabled state, no duplicate Toast
     setUiLocaleOverride('en')
     emitCommandExecuted('sess-active', 'a2ui', {
       kind: 'success',

@@ -1,10 +1,3 @@
-/**
- * Self-contained DSH lazy chunk (`lib/client.runtime.js`) encapsulating the
- * A2UI 1.0 core runtime (`@a2ui/web_core`, `@a2ui/react`, `@a2ui/agent` streaming
- * parser, React Aria controls, TanStack Table, and all 57 light-DOM component
- * wrappers — while keeping `echarts` and `mermaid` in their own chunks).
- */
-
 import { injectStyles, removeStyles } from '@a2ui/react/styles'
 import { injectBasicCatalogStyles } from '@a2ui/web_core/v1_0'
 
@@ -17,14 +10,10 @@ export function ensureA2uiRuntimeStyles(): void {
   stylesInstalled = true
   try {
     injectBasicCatalogStyles(document)
-  } catch {
-    // Non-browser test environments without CSSStyleSheet / adoptedStyleSheets fall back gracefully.
-  }
+  } catch {}
   try {
     injectStyles()
-  } catch {
-    // Ignore head injection errors in non-DOM contexts.
-  }
+  } catch {}
 }
 
 export function cleanupA2uiRuntimeStyles(): void {
@@ -32,9 +21,7 @@ export function cleanupA2uiRuntimeStyles(): void {
   stylesInstalled = false
   try {
     removeStyles()
-  } catch {
-    // Ignore teardown errors if document is already gone.
-  }
+  } catch {}
 }
 
 ensureA2uiRuntimeStyles()

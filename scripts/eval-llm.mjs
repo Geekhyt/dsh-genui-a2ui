@@ -1,17 +1,4 @@
 #!/usr/bin/env node
-/**
- * P1 Real LLM & Offline Eval Runner for `dsh-genui-a2ui`.
- *
- * Usage:
- *   # 1. Offline deterministic CI benchmark (0 API cost, tests all 28 cases + A/B token comparison):
- *   npm run eval:llm -- --mode=mock --strategy=both --html=.dsh-dev/eval-report.html
- *
- *   # 2. Live DeepSeek-V3 / DeepSeek-R1 / OpenAI-compatible benchmark:
- *   DEEPSEEK_API_KEY=sk-... npm run eval:llm -- --mode=live --model=deepseek-chat --strategy=both --html=.dsh-dev/eval-live.html
- *
- *   # 3. Inspect all 28 cases without executing:
- *   npm run eval:llm -- --dry-run
- */
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import {
@@ -111,7 +98,6 @@ function buildSkillLibrary(sessions, strategy) {
   return { listText: lines.join('\n'), skills }
 }
 
-/** Deterministic offline fixture responses + 3 realistic first-pass error -> self-repair probes. */
 const MOCK_FIXTURES = {
   'bi-01-funnel-sankey-radar': { ui: SHOWCASE_EXECUTIVE_UI, skills: ['a2ui-analytics'] },
   'bi-02-finops-waterfall-sunburst': {
@@ -136,7 +122,6 @@ const MOCK_FIXTURES = {
     skills: ['a2ui-forms', 'a2ui-analytics'],
   },
   'form-05-api-daterange-rings': {
-    // Realistic first-pass mistake (`latencyMs` instead of `latency`) -> self-repairs on attempt 2!
     firstPassBadUi: [
       'surface("api_bad")',
       'root = Card(ApiEndpoint("POST", "/v1/quota", latencyMs=34))',
@@ -176,7 +161,6 @@ const MOCK_FIXTURES = {
     skills: ['a2ui-analytics'],
   },
   'edge-01-table-plain-scalar': {
-    // Realistic first-pass mistake (hallucinated unknown component `StatusPill`) -> self-repairs on attempt 2!
     firstPassBadUi: ['surface("svc_table_bad")', 'root = Card(StatusPill("healthy"))'].join('\n'),
     ui: [
       'surface("svc_health_table")',
@@ -193,7 +177,6 @@ const MOCK_FIXTURES = {
     skills: ['a2ui-analytics'],
   },
   'edge-02-calc-local-variable': {
-    // Realistic first-pass mistake (`calc(...)` assigned directly to `$/monthly`) -> self-repairs on attempt 2!
     firstPassBadUi: [
       'surface("cloud_calc_bad")',
       '$/cpu = 8',
@@ -255,7 +238,6 @@ async function runMockCase(testCase, strategy) {
   const promptTokens = basePromptTokens + Math.round(skillChars / 3.8)
   const attempts = []
 
-  // Inject realistic first-pass error probes on 3 designated edge cases to exercise self-repair diagnostics
   if (fix.firstPassBadUi) {
     attempts.push(
       gradeToolAttempt(
@@ -508,7 +490,6 @@ function escapeHtml(s) {
     .replace(/"/g, '&quot;')
 }
 
-/** Generates a self-contained interactive HTML Eval Report (A/B Scoped vs. Monolithic). */
 export function renderEvalHtmlReport(summaries) {
   const primary = summaries.find((s) => s.strategy === 'scoped') ?? summaries[0]
   const baseline = summaries.find((s) => s.strategy === 'monolithic')

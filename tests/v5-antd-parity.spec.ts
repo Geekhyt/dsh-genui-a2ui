@@ -416,7 +416,6 @@ describe('Evolution v5: Ant Design 5.x / AntD Pro / AntD X Parity (57 Components
     expect(trackerHtml).toContain('gap:1px')
     expect(trackerHtml).toContain('minmax(1.5px, 1fr)')
 
-    // Default SSR viewport is 1024x800; a narrow right-edge trigger at left=910 must shift left so left+width <= 1016
     const clamped = computeClampedPopoverBox(
       { top: 120, bottom: 156, left: 910, width: 100 },
       { minWidth: 240, estHeight: 260 },

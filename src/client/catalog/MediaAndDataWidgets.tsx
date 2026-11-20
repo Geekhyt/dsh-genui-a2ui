@@ -1,8 +1,3 @@
-/**
- * Media (`Icon`, `Image`, `Video`, `AudioPlayer`) and DSH data visualization
- * components (`Stat`, `Progress`, `Badge`, `Code`, `Chart`, `Table`).
- */
-
 import {
   type ActionDispatchOptions,
   AudioPlayerApi,

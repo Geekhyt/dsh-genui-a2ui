@@ -1,13 +1,3 @@
-/**
- * Isomorphic, zero-`eval` algebraic evaluator & static validator for `calc(expr, vars?, decimals?)`.
- *
- * Shared by:
- * - **Host (`src/host/generator.ts`)**: statically validates formula syntax, function whitelist,
- *   and `vars` variable bindings at compile time so typos fail fast and self-repair in-turn.
- * - **Client (`src/client/catalog/functions.ts`)**: evaluates pre-parsed cached ASTs at 0ms
- *   during 60fps `Slider` / `ChoicePicker` interactions while keeping A2UI wire `funcDepth = 1`.
- */
-
 const MAX_EXPR_LENGTH = 2_048
 const MAX_TOKENS = 512
 const MAX_AST_DEPTH = 36
@@ -444,10 +434,6 @@ function validateAstSemantics(node: ExprNode, providedVars?: ReadonlySet<string>
   }
 }
 
-/**
- * Compile-time validator for `calc(expr, vars?, decimals?)`.
- * Returns `null` when valid, or an actionable error message when invalid.
- */
 export function validateCalcExpression(
   expr: string,
   providedVars?: ReadonlySet<string>,
@@ -622,10 +608,6 @@ function evalAst(node: ExprNode, vars: Record<string, unknown>): number {
   }
 }
 
-/**
- * Evaluate an algebraic formula string safely against `vars`, optionally rounding to `decimals`.
- * Returns `0` for malformed expressions, NaN, Infinity, or division by zero.
- */
 export function evaluateCalcExpression(expr: unknown, vars?: unknown, decimals?: unknown): number {
   if (typeof expr !== 'string' || expr.trim() === '') return 0
   const ast = getCompiledAst(expr.trim())

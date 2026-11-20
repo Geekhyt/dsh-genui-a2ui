@@ -1,9 +1,3 @@
-/**
- * Pure, zero-DOM data normalizers and deterministic SVG layout helpers for the
- * 10 v3 A2UI 1.0 components (`Select`, `Segmented`, `Switch`, `Comparison`,
- * `LogViewer`, `Timeline`, `Kanban`, `SourceList`, `MetricRing`, `ServiceGraph`).
- */
-
 export interface NormalizedSelectOption {
   readonly value: string
   readonly label: string
@@ -45,8 +39,6 @@ export function normalizeSelectOptions(raw: unknown): readonly NormalizedSelectO
   }
   return out
 }
-
-/* ─────────────────────────── Comparison ─────────────────────────── */
 
 export interface NormalizedComparisonOption {
   readonly key: string
@@ -155,8 +147,6 @@ export function normalizeComparisonData(
   return { options, rows }
 }
 
-/* ─────────────────────────── LogViewer ─────────────────────────── */
-
 export type LogLevel = 'error' | 'warn' | 'info' | 'debug'
 
 export interface NormalizedLogEntry {
@@ -245,8 +235,6 @@ export function normalizeLogEntries(raw: unknown): readonly NormalizedLogEntry[]
   })
   return out
 }
-
-/* ─────────────────────────── Kanban ─────────────────────────── */
 
 export type KanbanLaneTone = 'neutral' | 'info' | 'warning' | 'success' | 'danger'
 export type KanbanPriority = 'high' | 'medium' | 'low'
@@ -344,8 +332,6 @@ export function normalizeKanbanColumns(raw: unknown): readonly NormalizedKanbanC
   return cols
 }
 
-/* ─────────────────────────── SourceList ─────────────────────────── */
-
 export interface NormalizedSourceItem {
   readonly id: string
   readonly index: number
@@ -428,8 +414,6 @@ export function normalizeSourceItems(raw: unknown): readonly NormalizedSourceIte
   })
   return items
 }
-
-/* ─────────────────────────── MetricRing ─────────────────────────── */
 
 export type MetricRingTone = 'brand' | 'success' | 'warning' | 'danger'
 
@@ -530,8 +514,6 @@ export function computeMetricRingGeometry(params: {
     stackUnit,
   }
 }
-
-/* ─────────────────────────── ServiceGraph ─────────────────────────── */
 
 export type ServiceHealthStatus = 'healthy' | 'warning' | 'error' | 'unknown'
 
@@ -727,7 +709,6 @@ export function buildServiceGraphLayout(
     }
   }
 
-  // Cycle-safe DFS back-edge detection + longest-path topological rank assignment
   const visitState = new Map<string, 0 | 1 | 2>()
   const backEdgeKeys = new Set<string>()
   const dfs = (u: string) => {
@@ -772,7 +753,6 @@ export function buildServiceGraphLayout(
     else layers.set(r, [n])
   }
 
-  // Single-pass barycenter ordering per rank to reduce edge crossings
   const orderInLayer = new Map<string, number>()
   const rank0 = layers.get(0) ?? []
   rank0.forEach((n, idx) => {
@@ -832,8 +812,6 @@ export function buildServiceGraphLayout(
   const TB_RANK_GAP = hasTbForwardLabel ? 64 : 56
   const SIBLING_GAP = direction === 'LR' ? 18 : 20
 
-  // Compute adaptive horizontal rank gaps in LR mode so long ASCII/CJK edge labels
-  // never collide with or get occluded by adjacent node boxes.
   const lrRankGaps = new Array<number>(Math.max(0, maxRank)).fill(52)
   if (direction === 'LR' && maxRank > 0) {
     for (const e of parsedEdges) {
@@ -1175,8 +1153,6 @@ export function buildServiceGraphLayout(
     })
   })
 
-  // Normalize canvas bounding box so every node, curve sample, and edge label pill
-  // stays strictly inside [PAD_X..width-PAD_X, PAD_Y..height-PAD_Y] with zero SVG clipping.
   let minX = Number.POSITIVE_INFINITY
   let minY = Number.POSITIVE_INFINITY
   let maxX = Number.NEGATIVE_INFINITY

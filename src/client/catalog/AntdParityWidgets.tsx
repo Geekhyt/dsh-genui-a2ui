@@ -1,13 +1,3 @@
-/**
- * 6 Phase v5 Ant Design 5.x, Ant Design Pro & Ant Design X Parity Components:
- * - `NumberInput`: AntD `InputNumber` precision numeric stepper (`−`/`+` + prefix/unit + numeric `$/path`)
- * - `MultiSelect`: AntD `Select(mode="multiple" | "tags")` collapsible tag-pill dropdown & custom tag creator
- * - `DateRange`: AntD `RangePicker` start/end range selector with B2B quick presets & span counter
- * - `TreeSelect`: AntD `TreeSelect` / `Cascader` hierarchical breadcrumb dropdown selector
- * - `CheckCard`: AntD Pro `<CheckCard.Group>` visual option cards & `@ant-design/x` `<Prompts>` action cards
- * - `Tree`: AntD `<Tree>` & APM trace waterfall hierarchy with proportional `sharePct` bars
- */
-
 import type { ActionDispatchOptions } from '@a2ui/web_core/v1_0'
 import {
   type CSSProperties,
@@ -64,8 +54,6 @@ import {
 const SEARCH_ICON_14 = <DshSearchIcon size={14} />
 const CHEVRON_DOWN_14 = <DshChevronDownIcon size={14} />
 const CHECK_ICON_12 = <DshCheckIcon size={12} />
-
-/* ─────────────────────────── 1. NumberInput ─────────────────────────── */
 
 export const DshNumberInputImpl = defineComponent<{
   label?: unknown
@@ -195,8 +183,6 @@ export const DshNumberInputImpl = defineComponent<{
     </div>
   )
 })
-
-/* ─────────────────────────── 2. MultiSelect ─────────────────────────── */
 
 export const DshMultiSelectImpl = defineComponent<{
   label?: unknown
@@ -452,8 +438,6 @@ export const DshMultiSelectImpl = defineComponent<{
   )
 })
 
-/* ─────────────────────────── 3. DateRange ─────────────────────────── */
-
 export const DshDateRangeImpl = defineComponent<{
   label?: unknown
   start?: unknown
@@ -556,8 +540,6 @@ export const DshDateRangeImpl = defineComponent<{
     </div>
   )
 })
-
-/* ─────────────────────────── 4. TreeSelect ─────────────────────────── */
 
 function TreeSelectOptionBranch(props: {
   readonly node: NormalizedHierarchyNode
@@ -776,8 +758,6 @@ export const DshTreeSelectImpl = defineComponent<{
   )
 })
 
-/* ─────────────────────────── 5. CheckCard ─────────────────────────── */
-
 export const DshCheckCardImpl = defineComponent<{
   label?: unknown
   options?: unknown
@@ -905,8 +885,6 @@ export const DshCheckCardImpl = defineComponent<{
     </div>
   )
 })
-
-/* ─────────────────────────── 6. Tree ─────────────────────────── */
 
 function GeneralTreeBranch(props: {
   readonly node: NormalizedHierarchyNode

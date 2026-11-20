@@ -1,12 +1,3 @@
-/**
- * Permanent post-answer A2UI surface card mounted in `conversation.chat.turnTail`.
- *
- * Once a turn finishes (`turn/end`), DSH collapses the turn's process rows (`Took Ns ⌄`).
- * Rendering settled `placement="answer"` A2UI surfaces in `turnTail` places them directly
- * beneath the assistant's prose reply, keeping them visible across future turns and
- * history replay. When a later turn updates the surface via `update=true`, the older
- * turn's snapshot automatically transitions to `readOnly` (`superseded = true`).
- */
 import { memo, useCallback, useMemo, useSyncExternalStore } from 'react'
 import type { WorkspaceFileOpener } from './file-opener.tsx'
 import { useShellMessages } from './i18n.ts'

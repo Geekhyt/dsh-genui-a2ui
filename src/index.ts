@@ -1,16 +1,3 @@
-/**
- * dsh-genui-a2ui host half.
- *
- * - registers the `tool:a2ui` system-prompt section (answer-topology trigger rule
- *   + 1-step Fast-Path Express micro-grammar; emits 0 tokens when A2UI is OFF);
- * - registers the `a2ui` skill dynamically (full 57-component Express grammar, form
- *   inputs, validation checks, and reactive functions; unregistered when A2UI is OFF);
- * - registers the `a2ui_render` tool (`answer` | `inline` | `dock` placements);
- * - registers the `a2ui_ask` blocking interactive question/form tool;
- * - registers `/a2ui` (`on` | `off` | `status` | toggle switch) and `/a2ui-answer`
- *   (in-turn settlement RPC for `a2ui_ask`, `recordInput: false`).
- * @module dsh-genui-a2ui
- */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -32,7 +19,6 @@ export const inject: string[] = []
 
 export interface Config {
   readonly defaultEnabled?: boolean | undefined
-  /** Optional JSON file path to persist `/a2ui on|off` across Host restarts (`null` disables). */
   readonly stateFile?: string | null | undefined
 }
 
@@ -89,9 +75,7 @@ export function writePersistedEnabled(stateFile: string | null, enabled: boolean
       JSON.stringify({ defaultEnabled: enabled, updatedAt: new Date().toISOString() }, null, 2),
       'utf8',
     )
-  } catch {
-    // Ignore read-only filesystem errors gracefully
-  }
+  } catch {}
 }
 
 interface ToolsService {
@@ -179,7 +163,6 @@ interface CommandsService {
 }
 
 export const SYSTEM_PROMPT_SECTION_NAME = 'tool:a2ui'
-/** Placed right after `DELIVERABLE_FILE_REFERENCES` (9000) to preserve built-in KV-cache prefix. */
 export const SYSTEM_PROMPT_SECTION_ORDER = 9200
 
 export const SKILL_NAME = DOMAIN_SKILL_META.core.name
@@ -292,7 +275,6 @@ export const GOLDEN_VALIDATED_FORM_EXAMPLE = [
   ']))',
 ].join('\n')
 
-/** Guidance prepended to the core `a2ui` grammar skill. */
 export const SKILL_PREAMBLE = `# Interactive UI with A2UI (Core Grammar, Controls & Validation)
 
 Placements & tools:

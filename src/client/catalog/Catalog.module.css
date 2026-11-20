@@ -1,5 +1,3 @@
-/* DSH-native A2UI 1.0 component styles — exclusively consuming --dsw-* tokens. */
-
 .row {
   --a2ui-flex-basis: 0px;
   display: flex;
@@ -35,7 +33,6 @@
   flex: 1 1 220px;
 }
 
-/* Keep inline controls centered when Row uses default A2UI 1.0 align="stretch" (piercing <a2ui-react-*> display:contents hosts). */
 .row[data-align="stretch"] > .badgeWrap,
 .row[data-align="stretch"] > * > .badgeWrap,
 .row[data-align="stretch"] > .icon,
@@ -45,12 +42,6 @@
   align-self: center;
 }
 
-/*
- * A2UI-compliant responsive KPI strip adaptation:
- * Activated strictly when DshRow detects >=2 homogeneous Stat children in SurfaceModel
- * with no custom unequal weights (e.g. weight=2 vs weight=1). Pierces @a2ui/react's
- * <a2ui-react-stat style="display: contents"> host element so grid items stretch cleanly.
- */
 .row[data-kpi-grid="true"] {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -197,7 +188,6 @@
   height: 100%;
 }
 
-/* Form controls */
 .field {
   display: flex;
   flex-direction: column;
@@ -277,7 +267,6 @@
   border-color: var(--dsw-focus-ring-color, var(--dsw-alias-brand-primary, #3b82f6));
 }
 
-/* ChoicePicker */
 .choiceGroup {
   display: flex;
   flex-direction: column;
@@ -331,7 +320,6 @@
   background: var(--dsw-alias-brand-primary, #3b82f6);
 }
 
-/* React Aria Slider */
 .slider {
   display: flex;
   flex-direction: column;
@@ -399,7 +387,6 @@
   box-shadow: 0 0 0 3px var(--dsw-focus-ring-color, rgba(59, 130, 246, 0.35));
 }
 
-/* React Aria ProgressBar */
 .progress {
   display: flex;
   flex-direction: column;
@@ -448,7 +435,6 @@
   background: var(--dsw-alias-state-error-primary, #ef4444);
 }
 
-/* Tabs & Modal */
 .tabsWrap {
   display: flex;
   flex-direction: column;
@@ -465,7 +451,6 @@
   display: inline-flex;
 }
 
-/* Stat KPI card */
 .statCard {
   display: flex;
   flex-direction: column;
@@ -516,7 +501,6 @@
   overflow-wrap: anywhere;
 }
 
-/* TanStack Table */
 .tableCard {
   display: flex;
   flex-direction: column;
@@ -645,7 +629,6 @@
   gap: 6px;
 }
 
-/* ECharts container */
 .chartCard {
   display: flex;
   flex-direction: column;
@@ -781,8 +764,6 @@
   width: 100%;
   min-height: 160px;
 }
-
-/* ─────────────────────────── P0: DiffView ─────────────────────────── */
 
 .diffCard {
   border: 1px solid var(--dsw-alias-border-l1, rgba(128, 128, 128, 0.2));
@@ -993,8 +974,6 @@
   }
 }
 
-/* ─────────────────────────── P0: Steps ─────────────────────────── */
-
 .stepsWrap {
   display: flex;
   flex-direction: column;
@@ -1140,8 +1119,6 @@
   color: var(--dsw-alias-label-secondary, inherit);
 }
 
-/* ─────────────────────────── P0: Callout ─────────────────────────── */
-
 .callout {
   position: relative;
   box-sizing: border-box;
@@ -1237,8 +1214,6 @@
   font-size: 12.5px;
   color: var(--dsw-alias-label-secondary, inherit);
 }
-
-/* ─────────────────────────── P0: KeyValue ─────────────────────────── */
 
 .kvCard {
   display: flex;
@@ -1340,8 +1315,6 @@
   line-height: 1.35;
 }
 
-/* ─────────────────────────── Lazy Chunk Skeleton ─────────────────────────── */
-
 @keyframes a2uiShimmer {
   0% {
     background-position: 200% 0;
@@ -1370,8 +1343,6 @@
   position: relative;
 }
 
-/* ─────────────────────────── Stat Unit & Sparkline ─────────────────────────── */
-
 .statUnit {
   font-size: 12.5px;
   font-weight: 500;
@@ -1395,8 +1366,6 @@
   height: 26px;
   overflow: visible;
 }
-
-/* ─────────────────────────── Code Header & Workspace File Chip ─────────────────────────── */
 
 .codeWrap {
   display: flex;
@@ -1466,8 +1435,6 @@
   opacity: 0.85;
   flex-shrink: 0;
 }
-
-/* ─────────────────────────── Accordion ─────────────────────────── */
 
 .accordion {
   display: flex;
@@ -1539,8 +1506,6 @@
   min-width: 0;
 }
 
-/* ─────────────────────────── JsonTree ─────────────────────────── */
-
 .jsonTreeCard {
   display: flex;
   flex-direction: column;
@@ -1573,8 +1538,6 @@
   max-height: 400px;
   overflow-y: auto;
 }
-
-/* ─────────────────────────── FileTree ─────────────────────────── */
 
 .fileTreeCard {
   display: flex;
@@ -1698,8 +1661,6 @@
   font-variant-numeric: tabular-nums;
   color: var(--dsw-alias-label-tertiary, rgba(128, 128, 128, 0.8));
 }
-
-/* ─────────────────────────── Mermaid ─────────────────────────── */
 
 .mermaidCard {
   display: flex;
@@ -1880,8 +1841,6 @@
   color: var(--dsw-alias-label-tertiary, rgba(128, 128, 128, 0.82));
   border-top: 1px solid var(--dsw-alias-border-l1, rgba(128, 128, 128, 0.1));
 }
-
-/* ─────────────────────────── Select / Switch ─────────────────────────── */
 
 .selectMenuHost {
   display: flex;
@@ -2154,8 +2113,6 @@
   line-height: 1.4;
 }
 
-/* ─────────────────────────── Comparison ─────────────────────────── */
-
 .comparisonCard {
   display: flex;
   flex-direction: column;
@@ -2328,8 +2285,6 @@
     min-width: 78px;
   }
 }
-
-/* ─────────────────────────── LogViewer ─────────────────────────── */
 
 .logCard {
   display: flex;
@@ -2518,8 +2473,6 @@
   gap: 8px;
 }
 
-/* ─────────────────────────── Timeline ─────────────────────────── */
-
 .timelineCard {
   display: flex;
   flex-direction: column;
@@ -2687,8 +2640,6 @@
   min-width: 0;
 }
 
-/* ─────────────────────────── Kanban ─────────────────────────── */
-
 .kanbanBoardWrap {
   display: flex;
   flex-direction: column;
@@ -2849,8 +2800,6 @@
   color: var(--dsw-alias-label-tertiary, rgba(128, 128, 128, 0.75));
 }
 
-/* ─────────────────────────── SourceList ─────────────────────────── */
-
 .sourceListCard {
   display: flex;
   flex-direction: column;
@@ -2992,8 +2941,6 @@
   color: var(--dsw-alias-label-secondary, rgba(128, 128, 128, 0.9));
 }
 
-/* ─────────────────────────── MetricRing ─────────────────────────── */
-
 .metricRingCard {
   display: flex;
   align-items: center;
@@ -3080,8 +3027,6 @@
   font-size: 11.5px;
   color: var(--dsw-alias-label-secondary, rgba(128, 128, 128, 0.84));
 }
-
-/* ─────────────────────────── ServiceGraph ─────────────────────────── */
 
 .serviceGraphCard {
   display: flex;
@@ -3335,8 +3280,6 @@
   color: var(--dsw-alias-label-tertiary, rgba(128, 128, 128, 0.84));
 }
 
-/* ─────────────────────────── ProTable Enhancements ─────────────────────────── */
-
 .proTableLeftGroup,
 .proTableRightGroup,
 .proTableToolBtns {
@@ -3375,8 +3318,6 @@
   background: var(--dsw-alias-bg-layer-2, rgba(128, 128, 128, 0.06));
   font-weight: 600;
 }
-
-/* ─────────────────────────── Tracker (Uptime & Category) ─────────────────────────── */
 
 .trackerCard {
   display: flex;
@@ -3557,8 +3498,6 @@
   color: var(--dsw-alias-label-tertiary, rgba(128, 128, 128, 0.85));
 }
 
-/* ─────────────────────────── Terminal ─────────────────────────── */
-
 .terminalCard {
   display: flex;
   flex-direction: column;
@@ -3710,8 +3649,6 @@
   color: var(--dsw-alias-state-error-primary, #ef4444);
 }
 
-/* ─────────────────────────── ApprovalCard ─────────────────────────── */
-
 .approvalCard {
   display: flex;
   flex-direction: column;
@@ -3806,8 +3743,6 @@
   justify-content: flex-end;
   gap: 8px;
 }
-
-/* ─────────────────────────── ApiEndpoint ─────────────────────────── */
 
 .apiCard {
   display: flex;
@@ -3952,8 +3887,6 @@
 .apiParamDesc {
   color: var(--dsw-alias-label-secondary, inherit);
 }
-
-/* ─────────────────────────── Schedule ─────────────────────────── */
 
 .scheduleCard {
   display: flex;
@@ -4160,8 +4093,6 @@
   pointer-events: none;
 }
 
-/* ─────────────────────────── Result ─────────────────────────── */
-
 .resultCard {
   display: flex;
   flex-direction: column;
@@ -4255,8 +4186,6 @@
 .resultActionWrap {
   margin-top: 4px;
 }
-
-/* ─────────────────────────── EntityHeader ─────────────────────────── */
 
 .entityHeaderCard {
   display: flex;
@@ -4364,8 +4293,6 @@
   color: var(--dsw-alias-label-primary, inherit);
 }
 
-/* ─────────────────────────── Matrix ─────────────────────────── */
-
 .matrixCard {
   display: flex;
   flex-direction: column;
@@ -4469,9 +4396,6 @@
   }
 }
 
-/* ─────────────────────────── Phase v5: AntD / AntD Pro / AntD X Parity ─────────────────────────── */
-
-/* 1. KeyValue Bordered Mode (AntD <Descriptions bordered>) */
 .kvCardBordered {
   gap: 0;
   border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.22));
@@ -4561,7 +4485,6 @@
   overflow-wrap: anywhere;
 }
 
-/* 2. ProTable Expandable Row Drawer (AntD Table expandable) */
 .proExpandCell {
   width: 30px;
   min-width: 30px;
@@ -4616,7 +4539,6 @@
   overflow-x: auto;
 }
 
-/* 3. Responsive Equal-Width Multi-Row CSS Grid (AntD <Row>/<Col>) */
 .responsiveGrid {
   display: grid;
   grid-template-columns: repeat(var(--a2ui-grid-cols, 3), minmax(0, 1fr));
@@ -4646,7 +4568,6 @@
   }
 }
 
-/* 4. NumberInput (AntD InputNumber Precision Stepper) */
 .numberStepperBox {
   display: inline-flex;
   align-items: stretch;
@@ -4739,7 +4660,6 @@
   margin: 0;
 }
 
-/* 5. MultiSelect (AntD Select mode="multiple" | "tags") */
 .multiSelectMeta {
   display: inline-flex;
   align-items: center;
@@ -4839,7 +4759,6 @@
   color: var(--dsw-alias-state-error-primary, #ef4444);
 }
 
-/* 6. DateRange (AntD RangePicker + Quick Presets) */
 .dateRangeCard {
   display: flex;
   flex-direction: column;
@@ -4895,7 +4814,6 @@
   flex-shrink: 0;
 }
 
-/* 7. TreeSelect (AntD TreeSelect / Cascader) */
 .treeSelectRow {
   display: flex;
   align-items: center;
@@ -4972,7 +4890,6 @@
   white-space: nowrap;
 }
 
-/* 8. CheckCard (AntD Pro CheckCard.Group & AntD X Prompts) */
 .checkCardField {
   container-type: inline-size;
 }
@@ -5097,7 +5014,6 @@
   color: var(--dsw-alias-label-secondary, rgba(128, 128, 128, 0.88));
 }
 
-/* 9. Tree (AntD Tree & APM Trace Waterfall Hierarchy) */
 .treeSearchHeader {
   padding: 8px 12px;
   border-bottom: 1px solid var(--dsw-alias-border-l1, rgba(128, 128, 128, 0.14));

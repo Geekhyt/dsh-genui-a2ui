@@ -183,7 +183,6 @@ describe('Vercel React Best Practices architecture & zero-business-useEffect gov
     ;(globalThis as Record<string, unknown>).MutationObserver = FakeMutationObserver
 
     try {
-      // 1. 20 concurrent `useDarkTheme` subscribers share ONE single MutationObserver
       let darkNotifications = 0
       const darkUnsubs = Array.from({ length: 20 }, () =>
         subscribeDarkTheme(() => {
@@ -201,7 +200,6 @@ describe('Vercel React Best Practices architecture & zero-business-useEffect gov
       darkUnsubs[19]!()
       expect(disconnectedObservers).toBe(1)
 
-      // 2. 20 concurrent `useUiLocale` subscribers share ONE single MutationObserver
       let localeNotifications = 0
       const localeUnsubs = Array.from({ length: 20 }, () =>
         subscribeClientLocale(() => {
@@ -230,8 +228,6 @@ describe('Vercel React Best Practices architecture & zero-business-useEffect gov
       '<svg id="cached-m1" viewBox="0 0 420 160"><g class="node"><rect width="80" height="32"/></g></svg>',
     )
 
-    // Note: SSR uses `getMermaidDiagramServerSnapshot` (shimmer skeleton for hydration parity);
-    // verify bounded LRU-64 eviction on the client store directly:
     for (let i = 0; i < MAX_MERMAID_CACHE_ENTRIES + 12; i++) {
       seedMermaidDiagramCacheForTests(
         `flowchart LR\n  N${i} --> M${i}`,
@@ -241,7 +237,6 @@ describe('Vercel React Best Practices architecture & zero-business-useEffect gov
     }
     expect(countMermaidDiagramCacheEntries()).toBe(MAX_MERMAID_CACHE_ENTRIES)
 
-    // Empty code renders empty placeholder cleanly with zero effects
     const emptyHtml = renderToStaticMarkup(
       createElement(DshMermaidView, { props: { code: '   ' } }),
     )
@@ -266,7 +261,6 @@ describe('Vercel React Best Practices architecture & zero-business-useEffect gov
     const fp = computeMessagesFingerprint(compiled)
     saveSurfaceDraft('sess-frame1', 'order_form', fp, { customer: '已保存草稿客户' })
 
-    // 1. Client Frame-1 store reconciliation (including StrictMode double-render idempotence)
     const store = new SurfaceSessionStore()
     const reconcileOpts = {
       streaming: false,
@@ -281,9 +275,6 @@ describe('Vercel React Best Practices architecture & zero-business-useEffect gov
     expect(store.getSurfaces()).toHaveLength(1)
     expect(store.getSurfaces()[0]!.dataModel.get('/customer')).toBe('已保存草稿客户')
 
-    // Mutate in-memory model (including obscured TextField pointer), then simulate StrictMode 2nd render:
-    // - live edit must NOT be clobbered
-    // - `/customPin` bound to `variant="obscured"` MUST be stripped before hitting `localStorage`!
     const unsub = store.subscribe(() => {})
     store.getSurfaces()[0]!.dataModel.set('/customer', '用户新输入')
     store.getSurfaces()[0]!.dataModel.set('/customPin', '998877-secret-pin')
@@ -292,7 +283,6 @@ describe('Vercel React Best Practices architecture & zero-business-useEffect gov
     expect(store.getSurfaces()[0]!.dataModel.get('/customer')).toBe('用户新输入')
     expect(loadSurfaceDraft('sess-frame1', 'order_form', fp)).toEqual({ customer: '用户新输入' })
 
-    // Non-extension surface replacement increments `generation` cleanly (resetting deferred submitAttempted without useEffect)
     const replacement = sessions.compile(
       'sess-frame1-next',
       'surface("next_form")\nroot = Card(Text("下一步"))',
@@ -305,7 +295,6 @@ describe('Vercel React Best Practices architecture & zero-business-useEffect gov
     expect(store.getSurfaces().map((s) => s.id)).toEqual(['next_form'])
     unsub()
 
-    // 2. SSR safety: `SurfaceGroupView` renders clean container shell without `@a2ui/react` getServerSnapshot crash
     const ssrHtml = renderToStaticMarkup(
       createElement(SurfaceGroupView, {
         messages: compiled as never,
@@ -339,7 +328,6 @@ describe('Vercel React Best Practices architecture & zero-business-useEffect gov
       }
     }
 
-    // 1. Cold session with `/a2ui off` at seq=4 renders `data-enabled="false"` on Frame 1
     const offHtml = renderToStaticMarkup(
       createElement(A2uiTierControl, {
         sessionId: 'sess-watermark',
@@ -348,7 +336,6 @@ describe('Vercel React Best Practices architecture & zero-business-useEffect gov
     )
     expect(offHtml).toContain('data-enabled="false"')
 
-    // 2. User clicks the 1-click pill (`setA2uiEnabled` at watermark seq=4) -> overrides seq=4 to ON!
     setA2uiEnabled('sess-watermark', true, 4)
     const toggledOnHtml = renderToStaticMarkup(
       createElement(A2uiTierControl, {
@@ -358,7 +345,6 @@ describe('Vercel React Best Practices architecture & zero-business-useEffect gov
     )
     expect(toggledOnHtml).toContain('data-enabled="true"')
 
-    // 3. Subsequent `/a2ui off` typed at seq=5 (> 4) takes precedence on Frame 1!
     const newerCommandOffHtml = renderToStaticMarkup(
       createElement(A2uiTierControl, {
         sessionId: 'sess-watermark',

@@ -1,12 +1,3 @@
-/**
- * Beautifies `[a2ui-action]` protocol user messages via DSH's official
- * `ctx.uiConversation.userText.register` + `conversation.user.text.node` slot.
- *
- * NOTE: `UserText` in `@deepseek-ai/dsh-client-ui-conversation` wraps rendered
- * nodes inside `<HoverCardGroup as="span">`, so every DOM node rendered here
- * intentionally uses phrasing/inline-valid tags (`<span>`, `<button>`) to avoid
- * React `<div>`/`<pre>` inside `<span>` nesting warnings.
- */
 import { memo, useState } from 'react'
 import css from './ActionUserChip.module.css'
 import {

@@ -1,12 +1,3 @@
-/**
- * Progressive A2UI Express compiler for live `preparing` tool-call previews.
- *
- * While the model streams `a2ui_render({ ui: "..." })`, DSH's `PartialArguments`
- * exposes the growing decoded prefix via `block.args.text('ui')`. This session
- * feeds only the newly appended suffix into `@a2ui/agent`'s `ExpressResponseStream`
- * (`openStream({ wrapped: false })`), emitting progressive `createSurface`,
- * `updateComponents`, and `updateDataModel` messages in real time.
- */
 import { type AgentToRendererMessage, ExpressParser } from '@a2ui/agent'
 import { dshSchemaCatalog } from '../shared/catalog-schema.ts'
 import { preprocessExpressProgram } from '../shared/express-preprocess.ts'
@@ -14,7 +5,6 @@ import { preprocessExpressProgram } from '../shared/express-preprocess.ts'
 const LEADING_WRAP_RE = /^\s*(?:<a2ui>\s*|```[\w-]*[ \t]*\r?\n)/i
 const TRAILING_WRAP_RE = /(?:\s*<\/a2ui>|\r?\n?[ \t]*```)\s*$/i
 
-/** Strip optional `<a2ui>` sentinel or markdown fence prefix/suffix during streaming. */
 export function normalizeStreamingProgram(raw: string): string {
   return raw.replace(LEADING_WRAP_RE, '').replace(TRAILING_WRAP_RE, '')
 }
@@ -46,7 +36,6 @@ function extractUpdateIds(program: string): string[] {
   return ids
 }
 
-/** Stateful incremental compiler for one streaming `ui` argument. */
 export class StreamingExpressSession {
   private readonly parser = new ExpressParser([dshSchemaCatalog])
   private stream = this.parser.openStream({ wrapped: false })
@@ -58,16 +47,13 @@ export class StreamingExpressSession {
 
   private closed = false
 
-  /** Reset stream state (used when an unwrapped prefix changes non-monotonically). */
   reset(preserveSeeds = false): void {
     this.stream = this.parser.openStream({ wrapped: false })
     if (preserveSeeds && this.seededUpdateIds.size > 0) {
       for (const id of this.seededUpdateIds) {
         try {
           this.stream.feed(`surface(${JSON.stringify(id)})\nroot = Text("")\n`)
-        } catch {
-          // Ignore seed failure
-        }
+        } catch {}
       }
     } else if (!preserveSeeds) {
       this.seededUpdateIds.clear()
@@ -79,15 +65,11 @@ export class StreamingExpressSession {
     this.closed = false
   }
 
-  /** Advance to the latest `ui` string prefix and return all progressive messages so far. */
   advance(rawUi: string, final = false): StreamingCompileSnapshot {
     const rawClean = normalizeStreamingProgram(rawUi)
     if (rawClean === '') {
       return { messages: this.messages, surfaceIds: [...this.surfaceIdSet], error: null }
     }
-    // Preprocess completed lines (or the full program when `final=true`) so progressive
-    // streaming matches host-side concat/lookup/chained-calc lowering without choking on
-    // a partially streamed trailing token.
     let clean: string
     if (final) {
       clean = preprocessExpressProgram(rawClean)
@@ -134,7 +116,6 @@ export class StreamingExpressSession {
             this.lastError = retryErr instanceof Error ? retryErr.message : String(retryErr)
           }
         } else {
-          // Incomplete or mid-token invalid syntax during streaming retains the last good messages.
           this.lastError = msg
         }
       }

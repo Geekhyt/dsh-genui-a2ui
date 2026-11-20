@@ -143,8 +143,6 @@ function installFakeDom() {
 
 describe('OSS Readiness: Reversible Style Lifecycle & Mermaid Viewport Ergonomics', () => {
   it('cleanly detaches plugin & A2UI structural styles on dispose and restores them on hot re-enable', async () => {
-    // Pre-import the lazy runtime module in Node before installing our minimal DOM stub
-    // so react-aria's top-level browser focus monkeypatch stays dormant in Node.
     await loadRuntimeChunk()
     const dom = installFakeDom()
     try {
@@ -171,7 +169,6 @@ describe('OSS Readiness: Reversible Style Lifecycle & Mermaid Viewport Ergonomic
         },
       })
 
-      // 1. Initial plugin mount + lazy runtime chunk load
       applyClient(makeCtx() as never)
       await loadRuntimeChunk()
 
@@ -181,13 +178,11 @@ describe('OSS Readiness: Reversible Style Lifecycle & Mermaid Viewport Ergonomic
         dom.headTags.filter((t) => t.dataset.plugin === 'dsh-genui-a2ui').length,
       ).toBeGreaterThanOrEqual(2)
 
-      // 2. Disable plugin in DSH Plugin Manager -> all plugin & structural styles removed
       while (cleanups.length > 0) cleanups.pop()!()
       expect(isPluginStylesMounted('dsh-genui-a2ui')).toBe(false)
       expect(dom.headTags.some((t) => t.id === 'a2ui-structural-styles')).toBe(false)
       expect(dom.headTags.filter((t) => t.dataset.plugin === 'dsh-genui-a2ui')).toHaveLength(0)
 
-      // 3. Re-enable plugin without reloading window -> both CSS Module sheets and #a2ui-structural-styles restored!
       applyClient(makeCtx() as never)
       await loadRuntimeChunk()
       expect(isPluginStylesMounted('dsh-genui-a2ui')).toBe(true)
@@ -203,8 +198,6 @@ describe('OSS Readiness: Reversible Style Lifecycle & Mermaid Viewport Ergonomic
   })
 
   it('keeps Mermaid wire schema unchanged while clamping local zoom bounds and SSR-rendering cleanly', () => {
-    // A2UI principle check: Mermaid schema only exposes semantic props (code, title, caption, weight),
-    // never leaking ephemeral viewport zoom/fullscreen props into LLM prompt tokens.
     const schemaKeys = Object.keys(MermaidApi.schema.shape).sort()
     expect(schemaKeys).toEqual(['caption', 'code', 'title', 'weight'])
 
@@ -215,7 +208,6 @@ describe('OSS Readiness: Reversible Style Lifecycle & Mermaid Viewport Ergonomic
     expect(clampMermaidZoom(125)).toBe(125)
     expect(clampMermaidZoom(9999)).toBe(2000)
 
-    // Multiplicative zoom steps smoothly from 10% -> 2000% and snaps cleanly onto 100%
     expect(stepMermaidZoom(85, 1)).toBe(100)
     expect(stepMermaidZoom(120, -1)).toBe(100)
     expect(stepMermaidZoom(100, 1)).toBe(125)
@@ -227,12 +219,10 @@ describe('OSS Readiness: Reversible Style Lifecycle & Mermaid Viewport Ergonomic
     }
     expect(cur).toBe(MERMAID_ZOOM_MAX)
 
-    // Smooth exponential wheel / pinch zoom
     expect(scaleMermaidZoomByWheel(100, -100)).toBeGreaterThan(120)
     expect(scaleMermaidZoomByWheel(100, 100)).toBeLessThan(85)
     expect(scaleMermaidZoomByWheel(1800, -500)).toBe(2000)
 
-    // Intrinsic SVG vector normalization strips Mermaid's inline max-width lock
     const prepared = prepareMermaidSvg(
       '<svg id="m1" width="100%" style="max-width: 3240.5px; background: transparent;" viewBox="-8 -8 3240.5 820.25"><g/></svg>',
     )
@@ -269,7 +259,6 @@ describe('OSS Readiness: Reversible Style Lifecycle & Mermaid Viewport Ergonomic
     try {
       setUiLocaleOverride('en')
 
-      // 1. English widget chrome
       const enHtml = renderToStaticMarkup(
         createElement(DshMermaidView, {
           props: {
@@ -282,7 +271,6 @@ describe('OSS Readiness: Reversible Style Lifecycle & Mermaid Viewport Ergonomic
       expect(enHtml).toContain('Copy')
       expect(enHtml).toContain('Rendering diagram…')
 
-      // 2. Outbound English [a2ui-action] formatting + inbound parser compatibility across both locales
       const enFormatted = formatActionMessage(
         {
           name: 'drill_down',
@@ -308,7 +296,6 @@ describe('OSS Readiness: Reversible Style Lifecycle & Mermaid Viewport Ergonomic
       expect(parsedEn?.data.paramsText).toContain('"APAC"')
       expect(parsedEn?.data.dataModelText).toContain('"Q4"')
 
-      // 3. Host /a2ui command responds in English when locale is 'en' and client sync parses both zh & en
       const registeredCommands = new Map<
         string,
         (inv: { rawInput: string }) => { kind: string; text?: string }
@@ -415,19 +402,16 @@ describe('OSS Readiness: Reversible Style Lifecycle & Mermaid Viewport Ergonomic
       }
     }
 
-    // 1. Homogeneous 4-Stat row (unweighted or weight=1) -> activates data-kpi-grid="true"
     const homoCtx = compileSurfaceRowCtx(
       'surface("s")\nroot = Card(Row([Stat("月供", "9,050"), Stat("剩余利息", "58.9", weight=1), Stat("缩短年限", "26.65"), Stat("减少月供", "13.09")]))',
     )
     expect(isHomogeneousStatRow(homoCtx)).toBe(true)
 
-    // 2. Proportional unequal weights (weight=2 vs weight=1) -> stays standard flex (false)
     const unequalCtx = compileSurfaceRowCtx(
       'surface("s")\nroot = Card(Row([Stat("主指标", "26.65", weight=2), Stat("次指标", "13.09", weight=1)]))',
     )
     expect(isHomogeneousStatRow(unequalCtx)).toBe(false)
 
-    // 3. Mixed non-Stat row -> stays standard flex (false)
     const mixedCtx = compileSurfaceRowCtx(
       'surface("s")\nroot = Card(Row([Stat("主指标", "26.65"), Badge("正常", tone="success")]))',
     )
@@ -445,7 +429,6 @@ describe('OSS Readiness: Reversible Style Lifecycle & Mermaid Viewport Ergonomic
       }),
     )
 
-    // Row defaults to official A2UI 1.0 align="stretch" and emits kpi-grid + child-count metadata
     expect(rowHtml).toContain('data-a2ui-row=""')
     expect(rowHtml).toContain('data-align="stretch"')
     expect(rowHtml).toContain('data-child-count="4"')
@@ -454,7 +437,6 @@ describe('OSS Readiness: Reversible Style Lifecycle & Mermaid Viewport Ergonomic
     expect(rowHtml).toContain('data-a2ui-stat=""')
     expect(rowHtml).not.toContain('min-width:130px')
 
-    // Explicit align="start" is preserved faithfully
     const startRowHtml = renderToStaticMarkup(
       createElement(DshRowView, {
         props: { children: ['s1'], align: 'start' },
@@ -469,11 +451,9 @@ describe('OSS Readiness: Reversible Style Lifecycle & Mermaid Viewport Ergonomic
     expect(startRowHtml).toContain('align-items:flex-start')
     expect(startRowHtml).not.toContain('data-kpi-grid')
 
-    // Prompt & schema guidance recommend standard A2UI weight=1 on equal-width peer items inside Row
     expect(A2UI_SYSTEM_GUIDANCE).toContain('Row([Stat(..., weight=1), ...])')
     expect(StatApi.schema.description).toContain('weight=1')
 
-    // Built runtime chunk preserves @container, data-kpi-grid, [data-child-count] narrow specificity, and >*>.statCard piercing <a2ui-react-stat>
     const runtimeBundle = readFileSync(
       resolve(import.meta.dirname, '../lib/client.runtime.js'),
       'utf8',
@@ -484,7 +464,6 @@ describe('OSS Readiness: Reversible Style Lifecycle & Mermaid Viewport Ergonomic
     expect(runtimeBundle).toMatch(/data-kpi-grid=['"]?true['"]?\]\[data-child-count\]/)
     expect(runtimeBundle).toMatch(/data-kpi-grid=['"]?true['"]?\]>\*>\.a2ui_/)
 
-    // Compact pie charts (< 400px or > 5 slices) suppress outer spider label lines and use center hover emphasis
     const compactPie = buildChartOption(
       {
         kind: 'pie',
@@ -503,7 +482,6 @@ describe('OSS Readiness: Reversible Style Lifecycle & Mermaid Viewport Ergonomic
     expect(compactPie.series[0]?.label.position).toBe('center')
     expect(compactPie.series[0]?.labelLine.show).toBe(false)
 
-    // Locale-aware formatCurrency formats CNY natively as ¥ in zh and CN¥ in en
     try {
       setUiLocaleOverride('zh')
       const zhCny = String(
@@ -526,7 +504,6 @@ describe('OSS Readiness: Reversible Style Lifecycle & Mermaid Viewport Ergonomic
       setUiLocaleOverride(null)
     }
 
-    // Table keeps short CJK category columns single-line (tdNowrap) while allowing long prose columns to wrap horizontally (tdProse)
     const tableHtml = renderToStaticMarkup(
       createElement(TableWidget, {
         rows: [

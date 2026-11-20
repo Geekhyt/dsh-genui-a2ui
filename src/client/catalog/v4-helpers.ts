@@ -1,11 +1,3 @@
-/**
- * Pure, zero-DOM normalizers, cURL builders, schedule range calculators,
- * conditional-formatting matrix helpers, and ProTable CSV/Markdown exporters
- * for Phase v4 Enterprise & Vercel/Tremor A2UI 1.0 components.
- */
-
-/* ─────────────────────────── 1. Tracker ─────────────────────────── */
-
 export type TrackerSliceStatus = 'ok' | 'warning' | 'error' | 'unknown'
 export type TrackerSegmentTone = 'brand' | 'success' | 'warning' | 'danger' | 'neutral'
 
@@ -108,8 +100,6 @@ export function normalizeCategorySegments(raw: unknown): readonly NormalizedCate
   }))
 }
 
-/* ─────────────────────────── 2. Terminal ─────────────────────────── */
-
 export interface NormalizedTerminalStep {
   readonly id: string
   readonly cmd: string
@@ -182,8 +172,6 @@ export function normalizeTerminalCommands(raw: unknown): readonly NormalizedTerm
   })
   return out
 }
-
-/* ─────────────────────────── 3. ApiEndpoint ─────────────────────────── */
 
 export interface RouteToken {
   readonly text: string
@@ -295,8 +283,6 @@ export function buildEndpointCurl(params: {
   }
   return parts.join(' \\\n  ')
 }
-
-/* ─────────────────────────── 4. Schedule ─────────────────────────── */
 
 export type ScheduleBarStatus = 'done' | 'active' | 'warning' | 'pending' | 'danger'
 
@@ -485,8 +471,6 @@ export function normalizeScheduleItems(
   return { tracks, axisTicks, nowPct, nowLabel }
 }
 
-/* ─────────────────────────── 5. Matrix ─────────────────────────── */
-
 export interface NormalizedMatrixCell {
   readonly kind: 'number' | 'ok' | 'warn' | 'no' | 'empty' | 'text'
   readonly display: string
@@ -604,8 +588,6 @@ export function normalizeMatrixData(params: {
   }
 }
 
-/* ─────────────────────────── 6. ProTable Helpers ─────────────────────────── */
-
 export interface ProTableColumnDescriptor {
   readonly key: string
   readonly label: string
@@ -622,7 +604,6 @@ function escapeCsvCell(raw: unknown): string {
   return s
 }
 
-/** Generate RFC-4180 CSV prefixed with UTF-8 BOM (`\uFEFF`) so Excel renders CJK cleanly. */
 export function formatTableToCsv(
   columns: readonly ProTableColumnDescriptor[],
   rows: readonly Record<string, unknown>[],
@@ -632,7 +613,6 @@ export function formatTableToCsv(
   return `\uFEFF${[header, ...body].join('\r\n')}`
 }
 
-/** Generate GitHub-Flavored Markdown table from visible columns and rows. */
 export function formatTableToMarkdown(
   columns: readonly ProTableColumnDescriptor[],
   rows: readonly Record<string, unknown>[],
@@ -724,9 +704,6 @@ export function computeTableNumericSummary(
   return summary
 }
 
-/* ─────────────────────────── 7. P2 Cross-Filter & Chart Export ─────────────────────────── */
-
-/** Toggle cross-filter selection: clicking the already-active label clears it back to `""`. */
 export function computeNextCrossFilterSelection(
   currentSelected: string | undefined,
   clickedLabel: string | undefined,
@@ -737,14 +714,6 @@ export function computeNextCrossFilterSelection(
   return cur !== '' && cur.toLowerCase() === next.toLowerCase() ? '' : next
 }
 
-/**
- * Filter ProTable rows locally at 0ms by a cross-filter `filterValue` (typically bound
- * to the same `$/path` as `Chart(..., selected=$/region)`).
- *
- * Uses exact case-insensitive match first so `"US"` doesn't collide with `"US-West"`;
- * falls back to normalized substring match only when zero exact matches exist (e.g.
- * Sankey node labels carrying numeric suffixes like `"华东 9,860"`).
- */
 export function filterTableRowsByField(
   rows: readonly Record<string, unknown>[],
   filterField: string | undefined,
@@ -778,10 +747,6 @@ export function filterTableRowsByField(
   })
 }
 
-/**
- * Serialize any ECharts dataset (tabular row array or `{ nodes, links }` graph/sankey object)
- * to UTF-8 BOM CSV for 1-click clipboard copy / export.
- */
 export function formatChartDataToCsv(data: unknown): string | null {
   let rows: Record<string, unknown>[] = []
   if (Array.isArray(data)) {

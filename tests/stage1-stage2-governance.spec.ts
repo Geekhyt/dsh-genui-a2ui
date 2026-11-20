@@ -104,22 +104,18 @@ describe('Stage 1 Governance: surface message pruning, memo stability, & switch 
     const snap1: ChatTargetSnapshot = { nodes: { values: () => nodes } }
     const t2First = resolveTurnTailBatch(snap1, 2)
     expect(t2First).not.toBeNull()
-    // Turn 2 ONLY receives `compare` messages — zero `weather` messages leaked!
     expect(t2First!.messages).toHaveLength(1)
     expect(JSON.stringify(t2First!.messages)).toContain('compare')
     expect(JSON.stringify(t2First!.messages)).not.toContain('weather')
 
-    // Turn 3 receives `weather`'s full cross-turn chain (Turn 1 create + Turn 3 update), zero `compare` or `dock_bar`!
     const t3 = resolveTurnTailBatch(snap1, 3)
     expect(t3!.messages).toHaveLength(2)
     expect(JSON.stringify(t3!.messages)).not.toContain('compare')
 
-    // Dock ONLY receives `dock_bar` messages!
     const dock = resolveDockBatch(snap1)
     expect(dock!.messages).toHaveLength(1)
     expect(JSON.stringify(dock!.messages)).toContain('dock_bar')
 
-    // New snapshot during Turn 4 text streaming keeps exact === reference for Turn 2 & Dock!
     const snap2: ChatTargetSnapshot = {
       nodes: {
         values: () => [
@@ -166,13 +162,11 @@ describe('Stage 1 Governance: surface message pruning, memo stability, & switch 
       expect(cmdHandler!({ agent, rawInput: 'status' }).text).toContain('已开启')
       expect(cmdHandler!({ agent, rawInput: 'off' }).text).toContain('已关闭')
 
-      // Simulate cold Host restart reading from the same `stateFile`
       apply(makeCtx() as never, { stateFile })
       expect(
         cmdHandler!({ agent: { session: { id: 's-new' } }, rawInput: 'status' }).text,
       ).toContain('已关闭')
 
-      // Client chat command detector picks up the latest `/a2ui` command outcome
       const chatSnap: ChatTargetSnapshot = {
         nodes: {
           values: () => [
@@ -217,7 +211,6 @@ describe('Stage 1 Governance: surface message pruning, memo stability, & switch 
     )
     expect(compiled.length).toBeGreaterThan(0)
 
-    // Client streaming parser seeds unknown `update=true` surfaces on the fly
     const stream = new StreamingExpressSession()
     const snap = stream.advance('surface("cold_card", update=true)\n$/temp = 11\n', true)
     expect(snap.error).toBeNull()
@@ -228,7 +221,6 @@ describe('Stage 1 Governance: surface message pruning, memo stability, & switch 
 
 describe('Stage 2 Evolution: slimmed calc() formula gateway, static validation & Click-to-Drill', () => {
   it('keeps Catalog function surface orthogonal (only 9 DSH semantic functions) and evaluates calc & comparators', () => {
-    // 14 Basic functions + 9 orthogonal DSH functions = 23 total (no redundant add/mul/pow bloat)
     expect(DSH_FUNCTION_APIS).toHaveLength(25)
     const fnNames = DSH_FUNCTION_APIS.map((f) => f.name)
     expect(fnNames).toContain('calc')
@@ -236,7 +228,6 @@ describe('Stage 2 Evolution: slimmed calc() formula gateway, static validation &
     expect(fnNames).not.toContain('mul')
     expect(fnNames).not.toContain('pow')
 
-    // ChoicePicker single-select array unwrapping + minimal UI comparators
     expect(computeEq(['benxi'], 'benxi')).toBe(true)
     expect(computeEq('100', 100)).toBe(true)
     expect(computeGt(5000, 4688.08)).toBe(true)
@@ -246,7 +237,6 @@ describe('Stage 2 Evolution: slimmed calc() formula gateway, static validation &
     expect(computeCond(true, '预算内', '超预算')).toBe('预算内')
     expect(computeCond(false, '预算内', '超预算')).toBe('超预算')
 
-    // Algebraic `calc(expr, vars, decimals)` engine (infix ^, unary -exp, ternaries, functions, safety)
     expect(computeCalc('0.1 + 0.2')).toBe(0.3)
     expect(computeCalc('2 ^ 10')).toBe(1024)
     expect(computeCalc('round(exp(1), 4)')).toBe(2.7183)
@@ -288,7 +278,6 @@ describe('Stage 2 Evolution: slimmed calc() formula gateway, static validation &
       .map(([, c]) => c)
     const chart = [...surface.componentsModel.entries].find(([, c]) => c.type === 'Chart')![1]
 
-    // Default: 100万, 30年, 3.85%, 等额本息 -> exact monthly = 4,688.08, total interest = 68.77万, total = 168.77万
     expect(ctx.resolveDynamicValue(stats[0]!.properties.label as never)).toBe('每月月供')
     expect(String(ctx.resolveDynamicValue(stats[0]!.properties.value as never))).toContain(
       '4,688.08',
@@ -300,7 +289,6 @@ describe('Stage 2 Evolution: slimmed calc() formula gateway, static validation &
       { item: '累计利息', wan: 68.77 },
     ])
 
-    // Switch ChoicePicker mode to 等额本金 (`$/mode = ["benjin"]`) -> exact first-month = 5,986.11, interest = 57.91万
     surface.dataModel.set('/mode', ['benjin'])
     expect(ctx.resolveDynamicValue(stats[0]!.properties.label as never)).toBe('首月月供')
     expect(String(ctx.resolveDynamicValue(stats[0]!.properties.value as never))).toContain(
@@ -312,7 +300,6 @@ describe('Stage 2 Evolution: slimmed calc() formula gateway, static validation &
       { item: '累计利息', wan: 57.91 },
     ])
 
-    // Drag Years slider to 20 years (`$/years = 20`) back on 等额本息 -> live recomputation
     surface.dataModel.set('/mode', ['benxi'])
     surface.dataModel.set('/years', 20)
     expect(String(ctx.resolveDynamicValue(stats[0]!.properties.value as never))).toContain(
@@ -323,7 +310,6 @@ describe('Stage 2 Evolution: slimmed calc() formula gateway, static validation &
   it('statically validates calc() syntax, unknown functions, unbound vars, pruned math, and $/path traps on Host', () => {
     const sessions = new SurfaceSessions(createGenerator())
 
-    // 1. $/path storing a reactive expression
     expect(() =>
       sessions.compile(
         'sess-bad-path',
@@ -331,7 +317,6 @@ describe('Stage 2 Evolution: slimmed calc() formula gateway, static validation &
       ),
     ).toThrow(/WITHOUT `\$\/`/)
 
-    // 2. Unclosed parenthesis inside calc() expr caught at Host compile time!
     expect(() =>
       sessions.compile(
         'sess-bad-syntax',
@@ -339,7 +324,6 @@ describe('Stage 2 Evolution: slimmed calc() formula gateway, static validation &
       ),
     ).toThrow(/Invalid calc\(\) formula.*Unclosed "\("/)
 
-    // 3. Unknown function inside calc() expr caught at Host compile time!
     expect(() =>
       sessions.compile(
         'sess-bad-fn',
@@ -347,7 +331,6 @@ describe('Stage 2 Evolution: slimmed calc() formula gateway, static validation &
       ),
     ).toThrow(/Unknown math function "unknownFn\(\.\.\.\)"/)
 
-    // 4. Forgotten variable in `vars` map caught at Host compile time!
     expect(() =>
       sessions.compile(
         'sess-unbound-var',
@@ -355,7 +338,6 @@ describe('Stage 2 Evolution: slimmed calc() formula gateway, static validation &
       ),
     ).toThrow(/Unbound variable "r"/)
 
-    // 5. Calling pruned binary math (`mul`) emits actionable `calc(...)` self-repair tip
     expect(() =>
       sessions.compile(
         'sess-pruned-mul',

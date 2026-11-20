@@ -10,7 +10,6 @@ import {
 
 describe('ToolChannelPromptGenerator', () => {
   it('replaces the SDK <a2ui> sentinel paragraph with the a2ui_render tool contract', () => {
-    // Guard against upstream SDK wording changes silently skipping our replacement.
     const upstream = new ExpressPromptGenerator([basicCatalog]).generateBaseRules()
     expect(SENTINEL_PARAGRAPH.test(upstream)).toBe(true)
 

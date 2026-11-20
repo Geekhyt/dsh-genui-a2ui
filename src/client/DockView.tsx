@@ -1,12 +1,3 @@
-/**
- * Persistent cross-turn workspace dock mounted in `conversation.input.dock`.
- *
- * Surfaces rendered with `a2ui_render({ placement: "dock", ... })` stay pinned
- * right above the chat composer across turns and update live in place whenever
- * a later turn calls `surface("id", update=true)`. Users can collapse or dismiss
- * the dock; if dismissed, a newer docked update (`latestSeq > dismissedSeq`)
- * automatically surfaces the updated panel again.
- */
 import { memo, useCallback, useMemo, useSyncExternalStore } from 'react'
 import css from './DockView.module.css'
 import type { WorkspaceFileOpener } from './file-opener.tsx'

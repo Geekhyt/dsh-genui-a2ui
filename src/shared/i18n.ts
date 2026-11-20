@@ -1,16 +1,3 @@
-/**
- * Zero-dependency bilingual (`zh` / `en`) UI chrome dictionary & locale resolver.
- *
- * Design notes:
- * - Split into `HOST_MESSAGES`, `SHELL_MESSAGES`, and `RUNTIME_MESSAGES` so tsdown / Rollup
- *   tree-shakes unused dictionaries out of `lib/client.js` (keeping cold-boot `< 50 kB`).
- * - In DeepSeek Harness, `LocaleRuntime` syncs the active UI language directly onto
- *   `document.documentElement.lang` (`"zh-CN"` vs `"en"`), which `src/client/i18n.ts`
- *   observes reactively via `MutationObserver`.
- * - In headless Vitest runs without an explicit override or `<html lang="...">`, defaults
- *   deterministically to `'zh'` across macOS, Linux, and Windows CI runners.
- */
-
 export type UiLocale = 'zh' | 'en'
 
 let localeOverride: UiLocale | null = null
@@ -53,7 +40,6 @@ function isVitestEnv(): boolean {
   )
 }
 
-/** Resolve active UI language in browser / client renderers. */
 export function resolveClientLocale(): UiLocale {
   if (localeOverride !== null) return localeOverride
 
@@ -84,7 +70,6 @@ export function resolveClientLocale(): UiLocale {
   return 'zh'
 }
 
-/** Resolve active UI language on the Node host (`/a2ui` & `/a2ui-answer` slash commands). */
 export function resolveHostLocale(): UiLocale {
   if (localeOverride !== null) return localeOverride
   if (typeof process !== 'undefined' && process.env) {
@@ -96,8 +81,6 @@ export function resolveHostLocale(): UiLocale {
   }
   return 'zh'
 }
-
-/* ─────────────────────────── 1. Host Messages ─────────────────────────── */
 
 export interface HostUiMessages {
   readonly tierCommandDesc: string
@@ -137,8 +120,6 @@ export const HOST_MESSAGES: Record<UiLocale, HostUiMessages> = {
     askDefaultTitle: 'A2UI interactive prompt',
   },
 }
-
-/* ─────────────────────────── 2. Client Shell Messages ─────────────────────────── */
 
 export interface ShellUiMessages {
   readonly toggleOnTooltip: string
@@ -328,8 +309,6 @@ export const SHELL_MESSAGES: Record<UiLocale, ShellUiMessages> = {
     footnotes: 'Footnotes',
   },
 }
-
-/* ─────────────────────────── 3. Runtime & Catalog Messages ─────────────────────────── */
 
 export interface RuntimeUiMessages {
   readonly generating: string

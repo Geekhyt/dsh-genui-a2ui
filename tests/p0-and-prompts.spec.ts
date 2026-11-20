@@ -158,22 +158,18 @@ describe('Prompt optimizations & cross-restart update=true hydration', () => {
     expect(renderWhen?.({ agent: mainAgent })).toBe(true)
     expect(registeredSection!.text({ scope: mainAgent })).toBe(A2UI_SYSTEM_GUIDANCE)
 
-    // Subagent receives 0 system-prompt tokens and 0 tool schemas
     const subAgent = { isSubagent: true, session: { id: 'sess-sub' } }
     expect(renderWhen?.({ agent: subAgent })).toBe(false)
     expect(registeredSection!.text({ scope: subAgent })).toBe('')
 
-    // Toolset restriction suppresses system-prompt guidance
     toolAdmitted = false
     expect(registeredSection!.text({ scope: mainAgent })).toBe('')
     toolAdmitted = true
 
-    // Turning A2UI switch OFF suppresses both tools and system-prompt guidance (0 tokens)
     toggleCmd!({ agent: mainAgent, rawInput: 'off' })
     expect(renderWhen?.({ agent: mainAgent })).toBe(false)
     expect(registeredSection!.text({ scope: mainAgent })).toBe('')
 
-    // Turning A2UI switch back ON restores both
     toggleCmd!({ agent: mainAgent, rawInput: 'on' })
     expect(renderWhen?.({ agent: mainAgent })).toBe(true)
     expect(registeredSection!.text({ scope: mainAgent })).toBe(A2UI_SYSTEM_GUIDANCE)

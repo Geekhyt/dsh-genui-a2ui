@@ -43,7 +43,6 @@ describe('Tier-1 ECharts Expansion (14 -> 19 Kinds + y2Field + referenceLine)', 
   })
 
   it('builds and SSR-renders valid ECharts 6 SVG options for all 5 new chart kinds and referenceLine', () => {
-    // 1. Waterfall + referenceLine + zh/en locale labels
     const wfOpt = buildChartOption(
       {
         kind: 'waterfall',
@@ -85,7 +84,6 @@ describe('Tier-1 ECharts Expansion (14 -> 19 Kinds + y2Field + referenceLine)', 
       setUiLocaleOverride(null)
     }
 
-    // 2. Combo dual-axis (explicit y2Field + auto fallback + SLO referenceLine)
     const comboOpt = buildChartOption(
       {
         kind: 'combo',
@@ -115,7 +113,6 @@ describe('Tier-1 ECharts Expansion (14 -> 19 Kinds + y2Field + referenceLine)', 
     const comboSvg = renderOptionToSvg(comboOpt)
     expect(comboSvg).toContain('SLO 200ms')
 
-    // 3. Sunburst (nested tree + flat parent group + compact mode)
     const sunburstOpt = buildChartOption(
       {
         kind: 'sunburst',
@@ -140,7 +137,6 @@ describe('Tier-1 ECharts Expansion (14 -> 19 Kinds + y2Field + referenceLine)', 
       ),
     ).toContain('<svg')
 
-    // 4. Parallel coordinates (<=10 named legend series & >10 bulk sweep mode)
     const parallelOpt = buildChartOption(
       {
         kind: 'parallel',
@@ -158,7 +154,6 @@ describe('Tier-1 ECharts Expansion (14 -> 19 Kinds + y2Field + referenceLine)', 
     expect(parallelOpt.series.map((s) => s.name)).toEqual(['DeepSeek-R1', 'DeepSeek-V3'])
     expect(renderOptionToSvg(parallelOpt)).toContain('<svg')
 
-    // 5. Calendar heatmap (chronological range auto-inference + empty fallback)
     const calOpt = buildChartOption(
       {
         kind: 'calendar',
@@ -179,7 +174,6 @@ describe('Tier-1 ECharts Expansion (14 -> 19 Kinds + y2Field + referenceLine)', 
       '<svg',
     )
 
-    // 6. Cross-cutting referenceLine on standard Cartesian line/bar
     const lineRef = buildChartOption(
       {
         kind: 'line',
@@ -236,7 +230,6 @@ describe('Tier-1 ECharts Expansion (14 -> 19 Kinds + y2Field + referenceLine)', 
   })
 
   it('prevents text collisions and clipping in narrow multi-component compositions', () => {
-    // 1. Waterfall per-bar label avoidance against referenceLine pill & dashed line at 276px width
     const wfNarrow = buildChartOption(
       {
         kind: 'waterfall',
@@ -263,18 +256,15 @@ describe('Tier-1 ECharts Expansion (14 -> 19 Kinds + y2Field + referenceLine)', 
       }>
     }
     expect(wfNarrow.series[1]?.markLine?.label?.position).toBe('insideStartTop')
-    // Bar 2 (+165) moves inside its green bar instead of colliding with 目标 ¥680w pill
     expect(wfNarrow.series[2]?.data[1]).toMatchObject({
       value: 165,
       label: { position: 'inside' },
     })
-    // Bar 6 (-38) flips to 'top' so the dashed 680 referenceLine never slices across it
     expect(wfNarrow.series[3]?.data[5]).toMatchObject({
       value: 38,
       label: { position: 'top' },
     })
 
-    // 2. Combo picks insideStartTop when right edge crosses referenceLine and tightens compact grid
     const comboNarrow = buildChartOption(
       {
         kind: 'combo',
@@ -301,7 +291,6 @@ describe('Tier-1 ECharts Expansion (14 -> 19 Kinds + y2Field + referenceLine)', 
     expect(comboNarrow.grid.left).toBeLessThanOrEqual(8)
     expect(comboNarrow.grid.right).toBeLessThanOrEqual(10)
 
-    // 3. Calendar 12-month narrow (271px) drops to compact numeric month labels & sparse GitHub-style weekday ticks with zero overlap
     const cal12Narrow = buildChartOption(
       {
         kind: 'calendar',
@@ -340,7 +329,6 @@ describe('Tier-1 ECharts Expansion (14 -> 19 Kinds + y2Field + referenceLine)', 
     expect(cal12Narrow.calendar.dayLabel.nameMap).toEqual(['日', '一', '', '三', '', '五', ''])
     expect(cal12Narrow.calendar.top).toBeGreaterThan(50)
 
-    // 4. Parallel staggers axis headers and sets explicit nameTruncate.maxWidth at 320px
     const parallelNarrow = buildChartOption(
       {
         kind: 'parallel',
@@ -360,7 +348,6 @@ describe('Tier-1 ECharts Expansion (14 -> 19 Kinds + y2Field + referenceLine)', 
     expect(parallelNarrow.parallelAxis[1]?.nameGap).toBe(23)
     expect(parallelNarrow.parallelAxis[0]?.nameTruncate.maxWidth).toBeGreaterThanOrEqual(76)
 
-    // 5. Radar ultra-narrow (<300px) wraps long CJK+ASCII labels onto two lines
     const radarUltraNarrow = buildChartOption(
       {
         kind: 'radar',
@@ -373,7 +360,6 @@ describe('Tier-1 ECharts Expansion (14 -> 19 Kinds + y2Field + referenceLine)', 
     ) as { radar: { axisName: { formatter: (s: string) => string } } }
     expect(radarUltraNarrow.radar.axisName.formatter('结构化JSON稳定度')).toContain('\n')
 
-    // 6. Narrow funnel/scatter/boxplot/treemap/graph/candlestick hardening at 276px width
     const funnelNarrow = buildChartOption(
       {
         kind: 'funnel',

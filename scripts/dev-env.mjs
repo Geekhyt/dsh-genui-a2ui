@@ -1,11 +1,4 @@
 #!/usr/bin/env node
-/**
- * Isolated DSH development harness (`DSH_HOME=.dsh-dev`).
- *
- * Commands:
- *   node scripts/dev-env.mjs setup   — initialize `.dsh-dev` and install `dsh-genui-a2ui` into its `web` profile
- *   node scripts/dev-env.mjs serve   — start mock LLM + `dsh web` on 127.0.0.1:18992
- */
 import { spawn, spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync } from 'node:fs'
 import { homedir } from 'node:os'

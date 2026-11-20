@@ -1,23 +1,7 @@
-/**
- * Quote-safe, deterministic A2UI Express DSL pre-processing passes.
- *
- * Eliminates the two highest-frequency LLM codegen failure modes at compile time
- * while keeping 100% wire compliance with A2UI 1.0 (`MAX_FUNC_CALL_DEPTH = 5`):
- *
- * 1. `desugarExpressConcat`: rewrites natural string concatenation (`formatNumber(x) + " GB"`)
- *    into valid `concat([formatNumber(x), " GB"])` calls without touching string literals or bare math.
- * 2. `foldNestedCondToLookup`: collapses 2+ level `cond(eq(K, "a"), lit1, cond(eq(K, "b"), lit2, fallback))`
- *    chains into a single depth-1 `lookup(K, { "a": lit1, "b": lit2 }, fallback)` call.
- * 3. `flattenChainedCalc`: algebraically inlines chained local `calc()` variables
- *    (`a = calc(...)`, `b = calc("a * 12", { a: a })`) into a single flat `calc()` call,
- *    preventing `Recursion limit exceeded: functionCall depth > 5` on multi-step calculators.
- */
-
 import { ALLOWED_CALC_FUNCTIONS } from './calc-engine.ts'
 
 const CALC_BUILTINS = ALLOWED_CALC_FUNCTIONS
 
-/** Splits `src` on a single-character separator ONLY at bracket depth 0 and outside quotes. */
 function splitTopLevel(src: string, sep: string): string[] {
   const parts: string[] = []
   let depthParen = 0
@@ -114,10 +98,6 @@ function findMatchingClose(src: string, openIdx: number, open: string, close: st
   return -1
 }
 
-// ---------------------------------------------------------------------------
-// Pass 1: Quote-safe string `+` concatenation -> `concat([...])`
-// ---------------------------------------------------------------------------
-
 function isStringLikeConcatTerm(term: string): boolean {
   const t = term.trim()
   return (
@@ -207,16 +187,11 @@ export function desugarExpressConcat(ui: string): string {
     .join('\n')
 }
 
-// ---------------------------------------------------------------------------
-// Pass 2: Nested `cond(eq(K, "a"), lit, cond(eq(K, "b"), lit, def))` -> `lookup(...)`
-// ---------------------------------------------------------------------------
-
 function isStaticScalarLiteral(expr: string): boolean {
   const t = expr.trim()
   if (/^-?\d+(?:\.\d+)?$/.test(t)) return true
   if (t === 'true' || t === 'false') return true
   if ((t.startsWith('"') && t.endsWith('"')) || (t.startsWith("'") && t.endsWith("'"))) {
-    // Ensure single string literal with no outer operators
     const q = t[0]!
     let i = 1
     while (i < t.length - 1) {
@@ -266,7 +241,6 @@ function tryFoldCondChain(condCall: string): string | null {
     if (!eqInfo || !isStaticScalarLiteral(truthy)) break
     if (sharedKey !== null && sharedKey !== eqInfo.keyExpr) break
     sharedKey = eqInfo.keyExpr
-    // Preserve short-circuit `cond` semantics: later branches with the same key are unreachable.
     if (!seenKeys.has(eqInfo.matchKey)) {
       seenKeys.add(eqInfo.matchKey)
       entries.push([eqInfo.matchKey, truthy])
@@ -274,7 +248,6 @@ function tryFoldCondChain(condCall: string): string | null {
     cur = falsy
   }
 
-  // Only fold chains of >= 2 levels whose final fallback is also a static scalar literal
   if (sharedKey === null || entries.length < 2 || !isStaticScalarLiteral(cur)) {
     return null
   }
@@ -323,10 +296,6 @@ export function foldNestedCondToLookup(ui: string): string {
   }
   return out
 }
-
-// ---------------------------------------------------------------------------
-// Pass 3: Chained local `calc()` inlining (`a = calc(...)`, `b = calc("a*12", { a })`)
-// ---------------------------------------------------------------------------
 
 interface CalcDef {
   readonly expr: string
@@ -404,7 +373,6 @@ function countFormulaIdentOccurrences(formula: string, name: string): number {
 function replaceFormulaIdent(formula: string, oldName: string, replacement: string): string {
   const re = new RegExp(`\\b${oldName}\\b`, 'g')
   return formula.replace(re, (match, offset: number, full: string) => {
-    // Never replace function call names (followed by `(`)
     const after = full.slice(offset + match.length).trimStart()
     if (after.startsWith('(') && CALC_BUILTINS.has(oldName)) return match
     return replacement
@@ -431,7 +399,6 @@ function inlineSingleCalcCall(
       continue
     }
 
-    // Guard against runaway expression growth by accounting for every occurrence of `k`
     const occurrences = countFormulaIdentOccurrences(mergedExpr, k)
     const projectedLen =
       mergedExpr.length + occurrences * Math.max(0, refCalc.expr.length + 2 - k.length)
@@ -539,7 +506,6 @@ export function flattenChainedCalc(ui: string): string {
     const varName = assignMatch[1]!
     const rhs = assignMatch[2]!.trim()
 
-    // Track local var maps like `v = { w: $/wan, y: $/years, r: $/rate }`
     const objMap = parseSimpleObjectLiteral(rhs)
     if (objMap !== null) {
       localMaps.set(varName, objMap)
@@ -561,7 +527,6 @@ export function flattenChainedCalc(ui: string): string {
   return outStmts.join('\n')
 }
 
-/** Runs all deterministic quote-safe Express pre-processing passes in optimal order. */
 export function preprocessExpressProgram(ui: string): string {
   const step1 = desugarExpressConcat(ui)
   const step2 = foldNestedCondToLookup(step1)

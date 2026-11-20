@@ -1,7 +1,3 @@
-/**
- * Crisp 24x24 stroke/fill SVG icons for all standard A2UI v1.0 `Icon` names
- * plus custom `{ svgPath }` artwork.
- */
 import css from './Catalog.module.css'
 
 const ICON_PATHS: Record<string, string> = {

@@ -1,13 +1,3 @@
-/**
- * TanStack Table v9-backed Enterprise `ProTable` component for `dsh-genui-a2ui`.
- *
- * Supports instant deferred search, sorting, pagination, tabular right-aligned
- * numeric columns (including currency & percentage strings), 1-click CSV (UTF-8 BOM)
- * & Markdown export (`exportable`), multi-row checkboxes & batch action (`selectable`),
- * expandable inline row-detail drawer (`expandKey`), compact/standard density toggle,
- * and numeric summary footers (`showSummary`).
- */
-
 import type { ActionDispatchOptions } from '@a2ui/web_core/v1_0'
 import {
   columnFilteringFeature,

@@ -1,20 +1,3 @@
-/**
- * dsh-genui-a2ui browser half.
- *
- * Zero DOM hacks, zero assistant-step shadowing — 100% official DSH seams:
- * 1. `ctx.uiConversation.events.register` projects settled `a2ui_render` results
- *    into turn-indexed chat metadata (replay-safe, fork-safe, & `update=true` aware);
- * 2. `ctx.uiConversation.userText.register` + `conversation.user.text.node`
- *    beautifies `[a2ui-action]` protocol user messages into expandable receipt chips;
- * 3. `tool.call.toolview` (`a2ui_render` & `a2ui_ask`) renders live 60fps progressive
- *    streaming surfaces and blocking in-turn interactive forms;
- * 4. `conversation.chat.turnTail` renders settled `placement="answer"` cards below
- *    the assistant's reply, turning superseded historical turns into read-only snapshots;
- * 5. `conversation.input.dock` pins `placement="dock"` workspace panels above the composer;
- * 6. `conversation.input.left` mounts the 1-click A2UI on/off toggle pill.
- *
- * @module dsh-genui-a2ui/client
- */
 import type { Context } from '@deepseek-ai/cordis'
 import { ANSWER_COMMAND, ASK_TOOL, RENDER_TOOL, TIER_COMMAND } from '../shared/constants.ts'
 import type { AskAnswerInput } from '../shared/wire-types.ts'

@@ -1,9 +1,3 @@
-/**
- * Pure protocol serializer & `userText` matcher for `[a2ui-action]` user messages.
- *
- * Kept free of React and host UI primitives so both browser components and Node
- * unit tests can import it directly.
- */
 import type { ActionPayload } from '@a2ui/web_core/v1_0'
 import { resolveClientLocale, SHELL_MESSAGES } from '../shared/i18n.ts'
 import { sanitizeDataModel } from './persistence.ts'
@@ -77,7 +71,6 @@ function formatSelectionLabel(selection: Record<string, unknown>): string | unde
   return undefined
 }
 
-/** Enrich an `ActionPayload` with any attached click-to-drill `dshSelection` metadata. */
 export function enrichActionWithSelection(action: ActionPayload): ActionPayload {
   const selection = extractClickSelection(action)
   const cleanContext = sanitizeDataModel(action.context ?? {})
@@ -96,7 +89,6 @@ export function enrichActionWithSelection(action: ActionPayload): ActionPayload 
   }
 }
 
-/** Format an outbound A2UI action + optional surface data model as a user turn message. */
 export function formatActionMessage(
   rawAction: ActionPayload,
   dataModels: Record<string, unknown> | undefined,
@@ -124,7 +116,6 @@ export function formatActionMessage(
 const HEADER_RE =
   /\[a2ui-action\]\s+surface="([^"]*)"\s+action="([^"]*)"(?:\s+component="([^"]*)")?/g
 
-/** Match the next `[a2ui-action]` block in `text` starting at `from`. */
 export function matchA2uiActionUserText(
   text: string,
   from: number,
@@ -198,7 +189,6 @@ export function matchA2uiActionUserText(
   }
 }
 
-/** Rule registered on `ctx.uiConversation.userText.register(...)`. */
 export const a2uiActionUserTextRule = {
   id: A2UI_ACTION_NODE_ID,
   order: 10,

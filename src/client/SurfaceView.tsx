@@ -1,11 +1,3 @@
-/**
- * Renders one or more A2UI v1.0 surfaces from a stream of `AgentToRendererMessage`s
- * inside a DSH-themed container, delegating Markdown to DSH's `MarkdownText`,
- * persisting local form drafts in LRU-200 `localStorage` (with obscured/secret
- * fields stripped), supporting read-only historical snapshots, and forwarding
- * component actions back to the conversation session or `a2ui_ask` handler.
- */
-
 import type { AgentToRendererMessage } from '@a2ui/agent'
 import {
   A2uiSurface,
@@ -62,12 +54,10 @@ const SKELETON_KPI_ROW = (
 )
 const SKELETON_CHART = <div className={css.skeletonChart} />
 
-/** Shared Markdown renderer supplied to every `<A2uiSurface>` on the page. */
 const HostMarkdown = memo(function HostMarkdown({ markdown }: MarkdownComponentProps) {
   return <DshMarkdown text={markdown} variant="compact" />
 })
 
-/** Extract JSON Pointer paths bound to `TextField(..., variant="obscured")` on a surface. */
 function collectObscuredPointers(surface: SurfaceModel<ReactCatalogComponent>): Set<string> {
   const pointers = new Set<string>()
   try {
@@ -85,13 +75,10 @@ function collectObscuredPointers(surface: SurfaceModel<ReactCatalogComponent>): 
         }
       }
     }
-  } catch {
-    // Ignore
-  }
+  } catch {}
   return pointers
 }
 
-/** Read sanitized data models across visible (or all) surfaces in a `MessageProcessor`. */
 export function readSanitizedDataModels(
   processor: MessageProcessor<ReactCatalogComponent>,
   visibleSurfaceIds?: ReadonlySet<string>,
@@ -117,36 +104,19 @@ export type SurfaceActionCallback = (
 ) => void
 
 export interface SurfaceGroupViewProps {
-  /** Ordered A2UI wire messages to apply (may grow incrementally during streaming). */
   readonly messages: readonly AgentToRendererMessage[]
-  /** Optional filter: when provided, only render surfaces whose IDs are in this set. */
   readonly visibleSurfaceIds?: ReadonlySet<string> | undefined
-  /** Optional card header title. */
   readonly title?: string | null | undefined
-  /** Whether the surface is still actively streaming. */
   readonly streaming?: boolean | undefined
-  /** Owning session ID (enables LRU-200 local draft persistence when settled & editable). */
   readonly sessionId?: string | undefined
-  /** When true, disables controls & outbound actions (e.g. superseded historical card). */
   readonly readOnly?: boolean | undefined
-  /** Optional custom badge label when `readOnly` is true. */
   readonly readOnlyLabel?: string | undefined
-  /** Optional extra controls/badges rendered on the right side of the header. */
   readonly headerRight?: ReactNode | undefined
-  /** Container framing: `'card'` (default) or `'bare'` (inside Dock / DisclosureRow). */
   readonly variant?: 'card' | 'bare' | undefined
-  /** Callback to send an A2UI action back into the DSH conversation or `a2ui_ask` RPC. */
   readonly onAction?: SurfaceActionCallback | undefined
-  /** Optional workspace file opener supplied by DSH right-sidebar / toolview slot. */
   readonly openWorkspaceFile?: WorkspaceFileOpener | undefined
 }
 
-/**
- * Instance-scoped external store wrapping `MessageProcessor` so `SurfaceGroupView`
- * compiles surfaces & restores drafts synchronously on Frame 1 (including SSR and
- * StrictMode double-render idempotence) and subscribes declaratively via `useSyncExternalStore`
- * with zero `useEffect`s (`vercel-react-best-practices`).
- */
 export class SurfaceSessionStore {
   readonly processor: MessageProcessor<ReactCatalogComponent>
   private onAction: SurfaceActionCallback | undefined = undefined
@@ -201,8 +171,6 @@ export class SurfaceSessionStore {
   }
 
   readonly getServerSurfaces = (): readonly SurfaceModel<ReactCatalogComponent>[] => {
-    // Upstream `@a2ui/react`'s `<A2uiSurface>` omits `getServerSnapshot` in its internal
-    // `useSyncExternalStore` call, so SSR renders the container shell cleanly and hydrates on client Frame 1.
     return EMPTY_SURFACES
   }
 
@@ -307,7 +275,6 @@ export class SurfaceSessionStore {
       this.syncDraftSubscriptions()
     }
 
-    // Restore saved local drafts idempotently on Frame 1 once settled & editable.
     if (!options.streaming && !options.readOnly && options.sessionId && options.fingerprint) {
       this.mutatingModel = true
       try {
@@ -332,7 +299,6 @@ export class SurfaceSessionStore {
           }
         }
       } catch {
-        // Ignore malformed draft restoration
       } finally {
         this.mutatingModel = false
       }

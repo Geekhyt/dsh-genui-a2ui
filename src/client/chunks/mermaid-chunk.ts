@@ -1,12 +1,3 @@
-/**
- * Self-contained Mermaid lazy chunk (`lib/client.mermaid.js`).
- *
- * Loaded on demand via `require.async("./client.mermaid.js")` only when a
- * surface mounts `<Mermaid>`. Enforces `securityLevel: 'strict'`, strips
- * untrusted `%%{init}%%` directives, syncs DSH `--dsw-*` tokens into sRGB
- * `themeVariables`, measures labels in an off-screen container, and verifies
- * the output SVG via `assertSafeSvg`.
- */
 import DOMPurify from 'dompurify'
 import mermaid from 'mermaid'
 import {
@@ -20,7 +11,6 @@ import {
 let renderSeq = 0
 let renderChain: Promise<unknown> = Promise.resolve()
 
-/** Resolve DSH `--dsw-*` CSS custom properties (including `oklch()` / `color-mix()`) to sRGB for Mermaid. */
 function readMermaidThemeColor(
   name: string,
   fallback: string,
@@ -159,10 +149,6 @@ async function renderIntoOffscreen(id: string, source: string): Promise<string> 
   }
 }
 
-/**
- * Serialize Mermaid renders through a single async queue so concurrent `<Mermaid>`
- * cards never race on `mermaid.initialize(...)` global state.
- */
 export function renderMermaidDiagram(
   rawCode: string,
   dark: boolean,

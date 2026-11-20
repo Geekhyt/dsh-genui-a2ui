@@ -1,11 +1,3 @@
-/**
- * Client-side DSH React Catalogs registered on `MessageProcessor`.
- *
- * Registers both `DSH_CATALOG_ID` and `BASIC_CATALOG_ID` with our light-DOM
- * React component implementations and hardened local functions so both DSH-compiled
- * surfaces and standard A2UI v1.0 basic surfaces render identically with `--dsw-*`
- * tokens (and zero Lit WebComponent classes are retained in the client bundle).
- */
 import type { ReactCatalogComponent } from '@a2ui/react'
 import { Catalog, WeightSchema } from '@a2ui/web_core/v1_0'
 import { BASIC_CATALOG_ID, DSH_CATALOG_ID } from '../../shared/catalog-schema.ts'

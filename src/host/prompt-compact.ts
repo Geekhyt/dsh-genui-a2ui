@@ -1,15 +1,3 @@
-/**
- * P0 Prompt Compaction & Domain-Scoped Skill Partitioning for A2UI 1.0.
- *
- * Reduces the monolithic `skill("a2ui")` footprint (~73.5k chars / ~19.3k tokens)
- * without changing any component API, positional signature, enum, or runtime behavior:
- * 1. Deduplicates universal boilerplate (e.g. 57× repeated `weight` prose -> 1 header note).
- * 2. Strips redundant/self-evident prop filler while preserving 100% of positional signatures,
- *    enum lists, nested object key lists, and non-trivial behavioral constraints.
- * 3. Partitions all 57 registered components cleanly into 4 non-overlapping domain scopes
- *    (`core`, `analytics`, `devops`, `forms`) so the LLM loads only the domain it needs.
- */
-
 export type SkillDomain = 'core' | 'analytics' | 'devops' | 'forms'
 
 export const SKILL_DOMAINS: Readonly<Record<SkillDomain, readonly string[]>> = {
@@ -138,7 +126,6 @@ const COMPACT_FUNCTIONS_SECTION = [
 ].join('\n')
 
 function compactFunctionsSection(rawFnSec: string): string {
-  // Only replace when the upstream section contains the expected functions; preserves forward safety.
   if (rawFnSec.includes('• calc(') && rawFnSec.includes('• pluralize(')) {
     return COMPACT_FUNCTIONS_SECTION
   }
@@ -158,7 +145,6 @@ const REPEATED_WEIGHT_LINE = /^ {2}- weight: The relative weight of this compone
 const WEIGHT_HEADER_NOTE =
   'Note: Any component with `weight?` accepts a positive number (`flex-grow`) ONLY when it is a direct child of `Row` or `Column`.'
 
-/** Trivial self-evident single-line descriptions safe to omit because the positional param name already says it all. */
 const TRIVIAL_PROP_PATTERNS: readonly RegExp[] = [
   /^ {2}- title: Optional [^.\n]{0,42}title\.?\n/gm,
   /^ {2}- subtitle: Optional [^.\n]{0,48}\.?\n/gm,
@@ -196,7 +182,6 @@ function compactComponentBlock(block: string): string {
   for (const re of TRIVIAL_PROP_PATTERNS) {
     out = out.replace(re, '')
   }
-  // Remove redundant CSS/SSR marketing filler phrases that waste tokens without aiding codegen
   out = out
     .replace(/\s*\(~0 kB bundle cost, instant SSR\/first-frame render\)/g, '')
     .replace(
@@ -280,10 +265,6 @@ function parsePromptSections(raw: string): ParsedPromptSections {
   }
 }
 
-/**
- * Compacts the full 57-component prompt snippet losslessly (preserving 100% of positional
- * component signatures, enums, function signatures, and grammar rules).
- */
 export function compactPromptSnippet(raw: string): string {
   const parsed = parsePromptSections(raw)
   if (parsed.components.size === 0) {
@@ -308,11 +289,6 @@ export function compactPromptSnippet(raw: string): string {
   ].join('\n')
 }
 
-/**
- * Produces a domain-scoped prompt snippet from the full raw SDK snippet:
- * - `'core'`: full grammar + 24 foundational components + 25 functions + domain sub-skill index
- * - `'analytics' | 'devops' | 'forms'`: laser-focused component signatures for that domain only
- */
 export function slicePromptSnippetByDomain(raw: string, domain: SkillDomain): string {
   const parsed = parsePromptSections(raw)
   const allowList = SKILL_DOMAINS[domain]
@@ -379,7 +355,6 @@ export interface SkillTelemetry {
   >
 }
 
-/** Computes exact before/after char and token telemetry for tests and QA reports. */
 export function measureSkillTelemetry(raw: string, corePreambleChars = 0): SkillTelemetry {
   const compactFull = compactPromptSnippet(raw)
   const rawTotal = raw.length + corePreambleChars

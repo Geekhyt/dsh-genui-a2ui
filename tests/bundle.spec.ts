@@ -32,7 +32,6 @@ describe('Spike 1 & Dynamic Chunk Architecture: DSH bundle purity & <500 kB gate
     const clientCode = readFileSync(clientPath, 'utf8')
     const clientBytes = statSync(clientPath).size
 
-    // Hard target < 500 kB; cold-boot entry is ~46 kB!
     expect(clientBytes).toBeLessThan(100 * 1024)
     expect(clientCode.startsWith('window.__ModuleLoader__.load({')).toBe(true)
     expect(
@@ -48,13 +47,11 @@ describe('Spike 1 & Dynamic Chunk Architecture: DSH bundle purity & <500 kB gate
     }
     expect(syncRequires).not.toContain('zod')
 
-    // Cordis strict service guard + official right-sidebar file jump injection
     expect(clientCode).toMatch(/["'`]slots["'`]/)
     expect(clientCode).toMatch(/["'`]sessions["'`]/)
     expect(clientCode).toMatch(/["'`]uiConversation["'`]/)
     expect(clientCode).toMatch(/["'`]sidebarRight["'`]/)
 
-    // Heavy engines and Node globals must NEVER appear in main lib/client.js
     expect(clientCode).not.toContain('Buffer.byteLength')
     expect(clientCode).not.toContain('CandlestickChart')
     expect(clientCode).not.toContain('sequenceDiagram')
@@ -89,8 +86,6 @@ describe('Spike 1 & Dynamic Chunk Architecture: DSH bundle purity & <500 kB gate
 
       const syncRequires = extractSyncRequires(code)
       for (const req of syncRequires) {
-        // Every synchronous require() inside a chunk MUST hit the shell's frozen PLATFORM_MODULES table;
-        // never a relative `./client.*.js` edge or Node built-in (`crypto`, `fs`, `path`).
         expect(req.startsWith('.')).toBe(false)
         expect(PLATFORM_MODULES).toContain(req)
       }

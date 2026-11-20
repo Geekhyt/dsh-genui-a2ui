@@ -1,11 +1,3 @@
-/**
- * Defensive adapter over `@deepseek-ai/dsh-client-ui-primitives`.
- *
- * All host primitives enter `dsh-genui-a2ui` through this module. Because DSH is in `0.x`,
- * if a future DSH release renames or drops an individual primitive export, the fallback
- * implementation keeps every A2UI surface rendering cleanly with `--dsw-*` tokens.
- */
-
 import type {
   ButtonVariant,
   JsonTreeLabels,

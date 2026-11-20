@@ -1,19 +1,3 @@
-/**
- * `a2ui_ask` client views:
- *
- * 1. `A2uiAskDockView` (`conversation.input.dock`, `order: 5`):
- *    Automatically pops open above the chat composer whenever an `a2ui_ask` call
- *    is streaming (`preparing`) or suspended awaiting user input (`start`) —
- *    mirroring DSH's own native `ask_user_question` UX so the user sees and
- *    interacts with the form immediately even when `stepGrouping: "collapsed"`
- *    folds the turn's process group.
- *
- * 2. `A2uiAskToolView` (`tool.call.toolview`, `key: 'a2ui_ask'`):
- *    Shows a compact status row inside the process group while active, and settles
- *    to `"已提交 · <action>"` / `"已跳过"` / `"等待超时"` (expandable to inspect the
- *    read-only snapshot and submitted JSON payload) once `phase === 'result'`.
- */
-
 import type { ActionPayload } from '@a2ui/web_core/v1_0'
 import { memo, useCallback, useMemo, useState, useSyncExternalStore } from 'react'
 import type { AskAnswerInput } from '../shared/wire-types.ts'
@@ -47,7 +31,6 @@ export interface A2uiAskToolViewProps extends ToolViewOwnerProps {
 const NOOP_SUBSCRIBE = () => () => {}
 const APPS_ICON_14 = <DshAppsIcon size={14} />
 
-/** Active interactive `a2ui_ask` card pinned right above the composer while awaiting input. */
 export const A2uiAskDockView = memo(function A2uiAskDockView({
   sessionId,
   chatStore,
@@ -213,7 +196,6 @@ export const A2uiAskDockView = memo(function A2uiAskDockView({
   )
 })
 
-/** Transcript row inside `tool.call.toolview` (`key: 'a2ui_ask'`). */
 export const A2uiAskToolView = memo(function A2uiAskToolView({
   phase,
   block,
@@ -237,7 +219,6 @@ export const A2uiAskToolView = memo(function A2uiAskToolView({
 
   const title = settledMeta?.title ?? argTitle ?? msg.askDefaultTitle
 
-  // 1. Error / interrupted state
   if (phase === 'result' && block.isError) {
     const stopped = block.error?.code === 'interrupted'
     const reason = (block.content ?? [])
@@ -273,7 +254,6 @@ export const A2uiAskToolView = memo(function A2uiAskToolView({
     )
   }
 
-  // 2. Active (`preparing` / `start`) — interactive surface is pinned above composer in `A2uiAskDockView`
   if (phase !== 'result') {
     const waiting = phase === 'start'
     return (
@@ -296,7 +276,6 @@ export const A2uiAskToolView = memo(function A2uiAskToolView({
     )
   }
 
-  // 3. Settled (`phase === 'result'`): compact summary row, expandable to inspect read-only snapshot
   const statusLabel =
     settledMeta?.status === 'skipped'
       ? msg.askSkipped

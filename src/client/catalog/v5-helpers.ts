@@ -1,11 +1,4 @@
-/**
- * Pure, zero-DOM normalizers and precision math/tree helpers for Phase v5
- * Ant Design / Pro / X parity components (`NumberInput`, `MultiSelect`,
- * `DateRange`, `TreeSelect`, `CheckCard`, `Tree`, `Grid`).
- */
 import { type NormalizedSelectOption, normalizeSelectOptions } from './v3-helpers.ts'
-
-/* ─────────────────────────── 1. NumberInput ─────────────────────────── */
 
 export function decimalPlacesOf(step: number): number {
   const s = String(step)
@@ -41,8 +34,6 @@ export function clampAndStepNumber(params: {
   return next
 }
 
-/* ─────────────────────────── 2. MultiSelect ─────────────────────────── */
-
 export function normalizeMultiSelectMergedOptions(
   rawOptions: unknown,
   selectedValues: readonly string[],
@@ -57,8 +48,6 @@ export function normalizeMultiSelectMergedOptions(
   }
   return base
 }
-
-/* ─────────────────────────── 3. DateRange ─────────────────────────── */
 
 export function computeDateRangeSpanDays(startStr: string, endStr: string): number | null {
   if (!startStr || !endStr) return null
@@ -116,8 +105,6 @@ export function buildDatePresetRange(
   }
   return { start: fmt(startObj), end: fmt(endObj) }
 }
-
-/* ─────────────────────────── 4. Tree & TreeSelect ─────────────────────────── */
 
 export type HierarchyNodeStatus = 'healthy' | 'warning' | 'error' | 'neutral'
 
@@ -248,8 +235,6 @@ export function collectAllBranchIds(nodes: readonly NormalizedHierarchyNode[]): 
   walk(nodes)
   return ids
 }
-
-/* ─────────────────────────── 5. CheckCard ─────────────────────────── */
 
 export interface NormalizedCheckCardOption {
   readonly value: string
