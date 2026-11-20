@@ -66,8 +66,14 @@ export function readPersistedEnabled(stateFile: string | null): boolean | undefi
   }
 }
 
-export function writePersistedEnabled(stateFile: string | null, enabled: boolean): void {
-  if (!stateFile) return
+const warnedStateFiles = new Set<string>()
+
+export function writePersistedEnabled(
+  stateFile: string | null,
+  enabled: boolean,
+  onWarn?: (message: string, err: unknown) => void,
+): boolean {
+  if (!stateFile) return false
   try {
     mkdirSync(dirname(stateFile), { recursive: true })
     writeFileSync(
@@ -75,7 +81,20 @@ export function writePersistedEnabled(stateFile: string | null, enabled: boolean
       JSON.stringify({ defaultEnabled: enabled, updatedAt: new Date().toISOString() }, null, 2),
       'utf8',
     )
-  } catch {}
+    return true
+  } catch (err) {
+    const code = (err as { code?: unknown } | null)?.code
+    if (code !== 'ENOENT' && !warnedStateFiles.has(stateFile)) {
+      warnedStateFiles.add(stateFile)
+      const message = `[dsh-genui-a2ui] Failed to persist A2UI switch state to "${stateFile}"`
+      if (onWarn) {
+        onWarn(message, err)
+      } else {
+        console.warn(message, err)
+      }
+    }
+    return false
+  }
 }
 
 interface ToolsService {
@@ -510,7 +529,15 @@ export function apply(ctx: Context, config: Config = {}): void {
             sessions.setEnabled(sid, next)
             sessions.setDefaultEnabled(next)
             syncSkillCatalog()
-            writePersistedEnabled(stateFile, next)
+            const logger = (ctx as unknown as { logger?: { warn?: (...a: unknown[]) => void } })
+              .logger
+            writePersistedEnabled(
+              stateFile,
+              next,
+              typeof logger?.warn === 'function'
+                ? (message, err) => logger.warn!(message, err)
+                : undefined,
+            )
             return {
               kind: 'success',
               text: next ? msg.enabledStatus : msg.disabledStatus,

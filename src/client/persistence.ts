@@ -33,27 +33,83 @@ interface EnabledStoreShape {
 }
 
 const memoryFallback = new Map<string, string>()
+const warnedStorageKeys = new Set<string>()
+
+function getBrowserStorage(): Storage | null {
+  if (typeof window === 'undefined') return null
+  try {
+    return window.localStorage ?? null
+  } catch {
+    return null
+  }
+}
+
+function warnOnceForKey(warnKey: string, message: string, err?: unknown): void {
+  if (warnedStorageKeys.has(warnKey)) return
+  warnedStorageKeys.add(warnKey)
+  if (err !== undefined) {
+    console.warn(`[dsh-genui-a2ui] ${message}`, err)
+  } else {
+    console.warn(`[dsh-genui-a2ui] ${message}`)
+  }
+}
 
 function readStorage(storageKey: string): string | null {
-  try {
-    if (typeof window !== 'undefined' && window.localStorage) {
-      return window.localStorage.getItem(storageKey)
+  const storage = getBrowserStorage()
+  if (storage !== null) {
+    try {
+      return storage.getItem(storageKey)
+    } catch (err) {
+      warnOnceForKey(`read:${storageKey}`, `localStorage read failed for "${storageKey}":`, err)
     }
-  } catch {}
+  }
   return memoryFallback.get(storageKey) ?? null
 }
 
 function writeStorage(storageKey: string, value: string): void {
   memoryFallback.set(storageKey, value)
-  try {
-    if (typeof window !== 'undefined' && window.localStorage) {
-      window.localStorage.setItem(storageKey, value)
+  const storage = getBrowserStorage()
+  if (storage !== null) {
+    try {
+      storage.setItem(storageKey, value)
+    } catch (err) {
+      warnOnceForKey(`write:${storageKey}`, `localStorage write failed for "${storageKey}":`, err)
     }
-  } catch {}
+  }
+}
+
+function removeStorage(storageKey: string): void {
+  memoryFallback.delete(storageKey)
+  const storage = getBrowserStorage()
+  if (storage !== null) {
+    try {
+      storage.removeItem(storageKey)
+    } catch (err) {
+      warnOnceForKey(`remove:${storageKey}`, `localStorage remove failed for "${storageKey}":`, err)
+    }
+  }
+}
+
+function parseStoredJson(
+  storageKey: string,
+  raw: string,
+): { ok: true; value: unknown } | { ok: false } {
+  try {
+    return { ok: true, value: JSON.parse(raw) as unknown }
+  } catch (err) {
+    warnOnceForKey(
+      `corrupt:${storageKey}`,
+      `Evicting corrupt JSON stored under "${storageKey}":`,
+      err,
+    )
+    removeStorage(storageKey)
+    return { ok: false }
+  }
 }
 
 export function resetPersistenceForTests(): void {
   memoryFallback.clear()
+  warnedStorageKeys.clear()
   fallbackDefaultEnabled = true
   cachedDockRaw = undefined
   cachedDockMap = {}
@@ -65,13 +121,9 @@ export function resetPersistenceForTests(): void {
   }
   commandNoticeTimersBySession.clear()
   commandNoticesBySession.clear()
-  try {
-    if (typeof window !== 'undefined' && window.localStorage) {
-      window.localStorage.removeItem(DRAFTS_STORAGE_KEY)
-      window.localStorage.removeItem(DOCK_STORAGE_KEY)
-      window.localStorage.removeItem(ENABLED_STORAGE_KEY)
-    }
-  } catch {}
+  removeStorage(DRAFTS_STORAGE_KEY)
+  removeStorage(DOCK_STORAGE_KEY)
+  removeStorage(ENABLED_STORAGE_KEY)
   notifyListeners(dockListeners)
   notifyListeners(enabledListeners)
   notifyListeners(commandNoticeListeners)
@@ -145,19 +197,38 @@ function draftKeyOf(sessionId: string, surfaceId: string, fingerprint: string): 
 function readDraftList(): DraftEntry[] {
   const raw = readStorage(DRAFTS_STORAGE_KEY)
   if (!raw) return []
-  try {
-    const parsed = JSON.parse(raw) as unknown
-    if (!Array.isArray(parsed)) return []
-    return parsed.filter(
-      (item): item is DraftEntry =>
-        typeof item === 'object' &&
-        item !== null &&
-        typeof (item as DraftEntry).key === 'string' &&
-        typeof (item as DraftEntry).data === 'object' &&
-        (item as DraftEntry).data !== null,
+  const parsed = parseStoredJson(DRAFTS_STORAGE_KEY, raw)
+  if (!parsed.ok) return []
+  if (!Array.isArray(parsed.value)) {
+    warnOnceForKey(
+      `shape:${DRAFTS_STORAGE_KEY}`,
+      `Evicting non-array draft payload stored under "${DRAFTS_STORAGE_KEY}".`,
     )
-  } catch {
+    removeStorage(DRAFTS_STORAGE_KEY)
     return []
+  }
+  return parsed.value.filter(
+    (item): item is DraftEntry =>
+      typeof item === 'object' &&
+      item !== null &&
+      typeof (item as DraftEntry).key === 'string' &&
+      typeof (item as DraftEntry).data === 'object' &&
+      (item as DraftEntry).data !== null &&
+      !Array.isArray((item as DraftEntry).data),
+  )
+}
+
+export function removeSurfaceDraft(
+  sessionId: string,
+  surfaceId: string,
+  fingerprint: string,
+): void {
+  if (!sessionId || !surfaceId) return
+  const targetKey = draftKeyOf(sessionId, surfaceId, fingerprint)
+  const prev = readDraftList()
+  const next = prev.filter((e) => e.key !== targetKey)
+  if (next.length !== prev.length) {
+    writeDraftList(next)
   }
 }
 
@@ -228,7 +299,9 @@ function notifyListeners(listeners: ReadonlySet<() => void>): void {
   for (const fn of listeners) {
     try {
       fn()
-    } catch {}
+    } catch (err) {
+      console.error('[dsh-genui-a2ui] Persistence subscriber error:', err)
+    }
   }
 }
 
@@ -240,13 +313,19 @@ function readDockMap(): Record<string, DockUiEntry> {
     cachedDockMap = {}
     return cachedDockMap
   }
-  try {
-    const parsed = JSON.parse(raw) as unknown
-    if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
-      cachedDockMap = parsed as Record<string, DockUiEntry>
+  const parsed = parseStoredJson(DOCK_STORAGE_KEY, raw)
+  if (parsed.ok) {
+    if (typeof parsed.value === 'object' && parsed.value !== null && !Array.isArray(parsed.value)) {
+      cachedDockMap = parsed.value as Record<string, DockUiEntry>
       return cachedDockMap
     }
-  } catch {}
+    warnOnceForKey(
+      `shape:${DOCK_STORAGE_KEY}`,
+      `Evicting invalid dock state stored under "${DOCK_STORAGE_KEY}".`,
+    )
+    removeStorage(DOCK_STORAGE_KEY)
+  }
+  cachedDockRaw = null
   cachedDockMap = {}
   return cachedDockMap
 }
@@ -321,8 +400,14 @@ function readEnabledStore(): EnabledStoreShape {
     cachedEnabledStore = { defaultEnabled: fallbackDefaultEnabled, bySession: {} }
     return cachedEnabledStore
   }
-  try {
-    const parsed = JSON.parse(raw) as Record<string, unknown>
+  const parsedResult = parseStoredJson(ENABLED_STORAGE_KEY, raw)
+  if (
+    parsedResult.ok &&
+    typeof parsedResult.value === 'object' &&
+    parsedResult.value !== null &&
+    !Array.isArray(parsedResult.value)
+  ) {
+    const parsed = parsedResult.value as Record<string, unknown>
     const defaultCandidate = parsePersistedEnabled(parsed.defaultEnabled ?? parsed.defaultTier)
     const defaultEnabled = defaultCandidate ?? fallbackDefaultEnabled
     const bySession: Record<string, boolean> = {}
@@ -334,10 +419,17 @@ function readEnabledStore(): EnabledStoreShape {
     }
     cachedEnabledStore = { defaultEnabled, bySession }
     return cachedEnabledStore
-  } catch {
-    cachedEnabledStore = { defaultEnabled: fallbackDefaultEnabled, bySession: {} }
-    return cachedEnabledStore
   }
+  if (parsedResult.ok) {
+    warnOnceForKey(
+      `shape:${ENABLED_STORAGE_KEY}`,
+      `Evicting invalid enabled store under "${ENABLED_STORAGE_KEY}".`,
+    )
+    removeStorage(ENABLED_STORAGE_KEY)
+  }
+  cachedEnabledRaw = null
+  cachedEnabledStore = { defaultEnabled: fallbackDefaultEnabled, bySession: {} }
+  return cachedEnabledStore
 }
 
 export function subscribeA2uiEnabled(listener: () => void): () => void {

@@ -1,4 +1,5 @@
 import { A2uiError, type AgentToRendererMessage } from '@a2ui/agent'
+import { z } from 'zod'
 import { A2UI_LIMITS, normalizePlacement, type SurfacePlacement } from '../shared/catalog-schema.ts'
 import type { RenderMeta } from '../shared/wire-types.ts'
 import { RENDER_TOOL, type SurfaceSessions } from './generator.ts'
@@ -51,38 +52,70 @@ const PARAMETERS = {
   additionalProperties: false,
 } as const
 
+const RenderArgsSchema = z
+  .object({
+    ui: z.string(),
+    title: z.string().optional(),
+    placement: z.unknown().optional(),
+  })
+  .passthrough()
+
+let warnedLegacyBridgeArgs = false
+
+function warnLegacyBridgeEncoding(reason: string): void {
+  if (warnedLegacyBridgeArgs) return
+  warnedLegacyBridgeArgs = true
+  console.warn(
+    `[dsh-genui-a2ui] Unwrapped non-standard a2ui_render arguments (${reason}); upstream tool bridge should pass a JSON object.`,
+  )
+}
+
+export function resetRenderArgsWarningForTests(): void {
+  warnedLegacyBridgeArgs = false
+}
+
 export function readArgs(args: unknown): {
   ui: string | undefined
   title: string | undefined
   placement: SurfacePlacement
 } {
-  let value: unknown = args
-  for (let i = 0; i < 3; i++) {
-    if (typeof value === 'string') {
-      try {
-        value = JSON.parse(value)
-      } catch {
-        return { ui: value as string, title: undefined, placement: 'answer' }
-      }
-      continue
-    }
-    if (typeof value === 'object' && value !== null && 'arguments' in value && !('ui' in value)) {
-      value = (value as { arguments: unknown }).arguments
-      continue
-    }
-    break
+  let candidate: unknown = args
+  if (
+    typeof candidate === 'object' &&
+    candidate !== null &&
+    'arguments' in candidate &&
+    !('ui' in candidate)
+  ) {
+    warnLegacyBridgeEncoding('wrapped in { arguments }')
+    candidate = (candidate as { arguments: unknown }).arguments
   }
-  if (typeof value !== 'object' || value === null) {
+  if (typeof candidate === 'string') {
+    const rawStr = candidate
+    const trimmed = rawStr.trim()
+    if (trimmed.startsWith('{')) {
+      try {
+        const parsed = JSON.parse(trimmed) as unknown
+        warnLegacyBridgeEncoding('string-encoded JSON object')
+        candidate = parsed
+      } catch {
+        return { ui: rawStr, title: undefined, placement: 'answer' }
+      }
+    } else {
+      return { ui: rawStr, title: undefined, placement: 'answer' }
+    }
+  }
+  const parsed = RenderArgsSchema.safeParse(candidate)
+  if (!parsed.success) {
     return { ui: undefined, title: undefined, placement: 'answer' }
   }
-  const record = value as Record<string, unknown>
+  const cleanTitle =
+    typeof parsed.data.title === 'string' && parsed.data.title.trim() !== ''
+      ? parsed.data.title.trim()
+      : undefined
   return {
-    ui: typeof record.ui === 'string' ? record.ui : undefined,
-    title:
-      typeof record.title === 'string' && record.title.trim() !== ''
-        ? record.title.trim()
-        : undefined,
-    placement: normalizePlacement(record.placement),
+    ui: parsed.data.ui,
+    title: cleanTitle,
+    placement: normalizePlacement(parsed.data.placement),
   }
 }
 

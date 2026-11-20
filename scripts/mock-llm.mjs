@@ -1229,7 +1229,33 @@ export function startMockLlmServer(port = PORT) {
     if (req.method === 'POST' && url.pathname.endsWith('/chat/completions')) {
       let body = ''
       for await (const chunk of req) body += chunk
-      const payload = JSON.parse(body || '{}')
+      let payload
+      try {
+        payload = JSON.parse(body || '{}')
+      } catch (err) {
+        res.writeHead(400, { 'content-type': 'application/json' })
+        res.end(
+          JSON.stringify({
+            error: {
+              message: `Invalid JSON request body: ${err instanceof Error ? err.message : String(err)}`,
+              type: 'invalid_request_error',
+            },
+          }),
+        )
+        return
+      }
+      if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) {
+        res.writeHead(400, { 'content-type': 'application/json' })
+        res.end(
+          JSON.stringify({
+            error: {
+              message: 'Request body must be a JSON object',
+              type: 'invalid_request_error',
+            },
+          }),
+        )
+        return
+      }
       const model = payload.model ?? 'mock-a2ui-1'
       const messages = Array.isArray(payload.messages) ? payload.messages : []
       const tools = Array.isArray(payload.tools) ? payload.tools : []
@@ -1612,9 +1638,14 @@ export function startMockLlmServer(port = PORT) {
         return
       }
 
-      if (isAsk) {
+      if (isAsk && lastToolText.trim().startsWith('{')) {
+        let askRes = null
         try {
-          const askRes = JSON.parse(lastToolText)
+          askRes = JSON.parse(lastToolText)
+        } catch (err) {
+          console.warn('[mock-llm] Ignoring malformed a2ui_ask tool result JSON:', err)
+        }
+        if (askRes && typeof askRes === 'object') {
           if (askRes.status === 'skipped') {
             await streamTextReply(res, model, '您已跳过本次交互确认，未执行任何发布变更。')
             return
@@ -1631,7 +1662,7 @@ export function startMockLlmServer(port = PORT) {
             )
             return
           }
-        } catch {}
+        }
       }
 
       const reply = isShowcase1

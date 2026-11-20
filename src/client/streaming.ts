@@ -13,6 +13,7 @@ export interface StreamingCompileSnapshot {
   readonly messages: readonly AgentToRendererMessage[]
   readonly surfaceIds: readonly string[]
   readonly error: string | null
+  readonly seedWarnings?: readonly string[]
 }
 
 function collectSurfaceIds(messages: readonly AgentToRendererMessage[], target: Set<string>): void {
@@ -43,17 +44,31 @@ export class StreamingExpressSession {
   private messages: AgentToRendererMessage[] = []
   private readonly surfaceIdSet = new Set<string>()
   private readonly seededUpdateIds = new Set<string>()
+  private seedWarnings: string[] = []
   private lastError: string | null = null
 
   private closed = false
 
+  getSeedWarnings(): readonly string[] {
+    return this.seedWarnings
+  }
+
   reset(preserveSeeds = false): void {
     this.stream = this.parser.openStream({ wrapped: false })
+    this.seedWarnings = []
     if (preserveSeeds && this.seededUpdateIds.size > 0) {
       for (const id of this.seededUpdateIds) {
+        if (typeof id !== 'string' || id.trim() === '') {
+          this.seedWarnings.push(`Skipped invalid surface seed id: ${JSON.stringify(id)}`)
+          continue
+        }
         try {
           this.stream.feed(`surface(${JSON.stringify(id)})\nroot = Text("")\n`)
-        } catch {}
+        } catch (err) {
+          const reason = err instanceof Error ? err.message : String(err)
+          this.seedWarnings.push(`Failed to seed surface "${id}": ${reason}`)
+          console.warn(`[dsh-genui-a2ui] Streaming seed failed for surface "${id}":`, err)
+        }
       }
     } else if (!preserveSeeds) {
       this.seededUpdateIds.clear()
@@ -137,6 +152,7 @@ export class StreamingExpressSession {
       messages: this.messages,
       surfaceIds: [...this.surfaceIdSet],
       error: this.lastError,
+      ...(this.seedWarnings.length > 0 ? { seedWarnings: [...this.seedWarnings] } : {}),
     }
   }
 }

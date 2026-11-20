@@ -19,7 +19,9 @@ function notifySet(listeners: ReadonlySet<() => void>): void {
   for (const fn of listeners) {
     try {
       fn()
-    } catch {}
+    } catch (err) {
+      console.error('[dsh-genui-a2ui] Chunk store subscriber error:', err)
+    }
   }
 }
 

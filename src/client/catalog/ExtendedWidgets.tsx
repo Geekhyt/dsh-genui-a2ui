@@ -174,6 +174,23 @@ export const DshAccordionImpl = defineComponent<{
   )
 })
 
+export function safeStringifyJson(value: unknown, space = 2): string {
+  const seen = new WeakSet<object>()
+  const serialized = JSON.stringify(
+    value,
+    (_key, current: unknown) => {
+      if (typeof current === 'bigint') return current.toString()
+      if (typeof current === 'object' && current !== null) {
+        if (seen.has(current)) return '[Circular]'
+        seen.add(current)
+      }
+      return current
+    },
+    space,
+  )
+  return serialized ?? 'null'
+}
+
 export const DshJsonTreeImpl = defineComponent<{
   data?: unknown
   title?: unknown
@@ -191,11 +208,9 @@ export const DshJsonTreeImpl = defineComponent<{
   const [copiedAll, setCopiedAll] = useState(false)
 
   const handleCopyAll = () => {
-    try {
-      copyToClipboardSafe(JSON.stringify(props.data ?? null, null, 2))
-      setCopiedAll(true)
-      setTimeout(() => setCopiedAll(false), 1300)
-    } catch {}
+    copyToClipboardSafe(safeStringifyJson(props.data ?? null, 2))
+    setCopiedAll(true)
+    setTimeout(() => setCopiedAll(false), 1300)
   }
 
   return (

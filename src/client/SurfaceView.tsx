@@ -35,6 +35,7 @@ import { useRuntimeMessages } from './i18n.ts'
 import {
   computeMessagesFingerprint,
   loadSurfaceDraft,
+  removeSurfaceDraft,
   sanitizeDataModel,
   saveSurfaceDraft,
 } from './persistence.ts'
@@ -58,10 +59,23 @@ const HostMarkdown = memo(function HostMarkdown({ markdown }: MarkdownComponentP
   return <DshMarkdown text={markdown} variant="compact" />
 })
 
-function collectObscuredPointers(surface: SurfaceModel<ReactCatalogComponent>): Set<string> {
+export function collectObscuredPointers(
+  surface: SurfaceModel<ReactCatalogComponent>,
+): Set<string> | null {
   const pointers = new Set<string>()
   try {
-    for (const [, comp] of surface.componentsModel.entries) {
+    const entries = surface?.componentsModel?.entries
+    if (
+      entries === undefined ||
+      entries === null ||
+      typeof entries[Symbol.iterator] !== 'function'
+    ) {
+      console.error(
+        '[dsh-genui-a2ui] Failed to inspect obscured fields: surface.componentsModel.entries is unavailable',
+      )
+      return null
+    }
+    for (const [, comp] of entries) {
       if (comp.type !== 'TextField') continue
       const props = comp.properties
       if (props?.variant !== 'obscured') continue
@@ -75,7 +89,10 @@ function collectObscuredPointers(surface: SurfaceModel<ReactCatalogComponent>): 
         }
       }
     }
-  } catch {}
+  } catch (err) {
+    console.error('[dsh-genui-a2ui] Failed to inspect obscured fields:', err)
+    return null
+  }
   return pointers
 }
 
@@ -86,8 +103,10 @@ export function readSanitizedDataModels(
   const result: Record<string, unknown> = {}
   for (const surface of processor.getSurfaces().values()) {
     if (visibleSurfaceIds !== undefined && !visibleSurfaceIds.has(surface.id)) continue
+    const obscured = collectObscuredPointers(surface)
+    if (obscured === null) continue
     const raw = surface.dataModel.get('/')
-    const cleaned = sanitizeDataModel(raw, collectObscuredPointers(surface))
+    const cleaned = sanitizeDataModel(raw, obscured)
     if (Object.keys(cleaned).length > 0) {
       result[surface.id] = cleaned
     }
@@ -202,13 +221,9 @@ export class SurfaceSessionStore {
         const sid = this.sessionId
         const fp = this.fingerprint
         if (!sid || !fp || typeof rootVal !== 'object' || rootVal === null) return
-        saveSurfaceDraft(
-          sid,
-          surface.id,
-          fp,
-          rootVal as Record<string, unknown>,
-          collectObscuredPointers(surface),
-        )
+        const obscured = collectObscuredPointers(surface)
+        if (obscured === null) return
+        saveSurfaceDraft(sid, surface.id, fp, rootVal as Record<string, unknown>, obscured)
       })
       this.draftSubs.set(surface, sub)
     }
@@ -289,16 +304,20 @@ export class SurfaceSessionStore {
           if (this.restoredDraftKeys.has(draftKey)) continue
           this.restoredDraftKeys.add(draftKey)
           const draft = loadSurfaceDraft(options.sessionId, surface.id, options.fingerprint)
-          if (draft !== null && typeof draft === 'object') {
-            const current = surface.dataModel.get('/')
-            const merged =
-              typeof current === 'object' && current !== null && !Array.isArray(current)
-                ? { ...(current as Record<string, unknown>), ...draft }
-                : { ...draft }
-            surface.dataModel.set('/', merged)
+          if (draft !== null && typeof draft === 'object' && !Array.isArray(draft)) {
+            try {
+              const current = surface.dataModel.get('/')
+              const merged =
+                typeof current === 'object' && current !== null && !Array.isArray(current)
+                  ? { ...(current as Record<string, unknown>), ...draft }
+                  : { ...draft }
+              surface.dataModel.set('/', merged)
+            } catch (err) {
+              console.warn('[dsh-genui-a2ui] Discarding malformed draft restoration:', err)
+              removeSurfaceDraft(options.sessionId, surface.id, options.fingerprint)
+            }
           }
         }
-      } catch {
       } finally {
         this.mutatingModel = false
       }
