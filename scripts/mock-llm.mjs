@@ -609,6 +609,480 @@ export const SHOWCASE_ACCORDION_MODAL_UI = [
   ']))',
 ].join('\n')
 
+export const SHOWCASE_FINOPS_WATERFALL_SUNBURST_UI = [
+  'surface("finops_waterfall_sunburst")',
+  '$/arrBridge = [',
+  '  { step: "Q2 基线", delta: 480, total: true },',
+  '  { step: "新客签约", delta: 165 },',
+  '  { step: "老客增购", delta: 110 },',
+  '  { step: "缓存降本", delta: 65 },',
+  '  { step: "席位缩减", delta: -52 },',
+  '  { step: "客户流失", delta: -38 },',
+  '  { step: "Q3 实绩", delta: 730, total: true }',
+  ']',
+  '$/costTree = [',
+  '  { name: "AI 对话业务", children: [',
+  '    { name: "R1 推理池", children: [{ name: "深度研究 36w", value: 36 }, { name: "代码审阅 18w", value: 18 }] },',
+  '    { name: "V3 快回池", children: [{ name: "A2UI 渲染 16w", value: 16 }] }',
+  '  ] },',
+  '  { name: "混合检索", children: [{ name: "向量引擎", children: [{ name: "Milvus 集群 18w", value: 18 }] }] },',
+  '  { name: "评测沙箱", children: [{ name: "基准回归", children: [{ name: "自动化压测 12w", value: 12 }] }] }',
+  ']',
+  '$/ledger = [',
+  '  { domain: "AI 对话业务", cluster: "cn-hz-r1-pool", q2Spend: 46.0, q3Spend: 54.0, cacheSaved: "¥ 14.2w" },',
+  '  { domain: "AI 对话业务", cluster: "cn-sh-v3-fast", q2Spend: 19.5, q3Spend: 16.0, cacheSaved: "¥ 6.8w" },',
+  '  { domain: "混合检索", cluster: "cn-hz-milvus", q2Spend: 15.0, q3Spend: 18.0, cacheSaved: "¥ 2.1w" },',
+  '  { domain: "评测沙箱", cluster: "cn-bj-eval", q2Spend: 11.0, q3Spend: 12.0, cacheSaved: "¥ 1.4w" }',
+  ']',
+  'root = Card(Column([',
+  '  EntityHeader("2026 Q3 营收增减归因与算力多层成本分摊台", subtitle="财务归因 · 多级云账单钻取（示例数据）", avatarText="FO", status="healthy", statusLabel="预算受控", badge="FinOps Q3", tags=["A2UI 1.0", "Waterfall + Sunburst"], metrics=[{ label: "Q3 实绩 ARR", value: "¥ 730w" }, { label: "月均算力总支出", value: "¥ 100w" }]),',
+  '  Row([',
+  '    Stat("季度净增 ARR", "+¥ 250 万", delta="+52.1%", trend="up", spark=[480, 520, 595, 645, 702, 730], caption="超目标 ¥50w", weight=1),',
+  '    Stat("Prompt 缓存净省", "¥ 24.5 万", delta="+31.0%", trend="up", spark=[11, 14, 16, 19, 22, 24.5], caption="命中率 76%", weight=1),',
+  '    Stat("净收入留存 NRR", "121.5%", delta="+4.2%", trend="up", caption="老客扩购强劲", weight=1),',
+  '    Stat("单会话推理成本", "¥ 0.14", delta="-28.0%", trend="up", caption="低于红线 ¥0.20", weight=1)',
+  '  ]),',
+  '  Row([',
+  '    Chart("waterfall", $/arrBridge, xField="step", yField="delta", referenceLine=680, referenceLabel="目标 ¥680w", title="Q2 → Q3 ARR 增减归因瀑布图（万元）", height=265, weight=1),',
+  '    Chart("sunburst", $/costTree, title="算力成本三级归因旭日图（点击扇区下钻）", height=265, weight=1)',
+  '  ]),',
+  '  Table($/ledger, title="各业务域算力账单与缓存节流明细", searchable=true, exportable=true, showSummary=true, columns=[{ key: "domain", label: "业务域" }, { key: "cluster", label: "物理集群" }, { key: "q2Spend", label: "Q2 支出(w)" }, { key: "q3Spend", label: "Q3 支出(w)" }, { key: "cacheSaved", label: "缓存净省" }])',
+  ']))',
+].join('\n')
+
+export const SHOWCASE_SRE_COMBO_CALENDAR_UI = [
+  'surface("sre_combo_calendar")',
+  '$/slo = 200',
+  '$/traffic = [',
+  '  { hour: "08:00", "在线调用(万)": 95, "离线批处理(万)": 25, "P99延迟(ms)": 88, "未命中率(%)": 12 },',
+  '  { hour: "10:00", "在线调用(万)": 220, "离线批处理(万)": 65, "P99延迟(ms)": 115, "未命中率(%)": 16 },',
+  '  { hour: "12:00", "在线调用(万)": 275, "离线批处理(万)": 65, "P99延迟(ms)": 142, "未命中率(%)": 19 },',
+  '  { hour: "14:00", "在线调用(万)": 330, "离线批处理(万)": 80, "P99延迟(ms)": 168, "未命中率(%)": 22 },',
+  '  { hour: "16:00", "在线调用(万)": 410, "离线批处理(万)": 85, "P99延迟(ms)": 224, "未命中率(%)": 31 },',
+  '  { hour: "18:00", "在线调用(万)": 385, "离线批处理(万)": 75, "P99延迟(ms)": 192, "未命中率(%)": 24 },',
+  '  { hour: "20:00", "在线调用(万)": 320, "离线批处理(万)": 70, "P99延迟(ms)": 148, "未命中率(%)": 18 },',
+  '  { hour: "22:00", "在线调用(万)": 165, "离线批处理(万)": 45, "P99延迟(ms)": 96, "未命中率(%)": 11 }',
+  ']',
+  '$/uptime = [',
+  '  { label: "11-07", status: "ok", note: "99.99%" }, { label: "11-08", status: "ok", note: "99.99%" },',
+  '  { label: "11-09", status: "ok", note: "99.98%" }, { label: "11-10", status: "warning", note: "99.82% 晚高峰抖动" },',
+  '  { label: "11-11", status: "ok", note: "99.99%" }, { label: "11-12", status: "ok", note: "100%" },',
+  '  { label: "11-13", status: "ok", note: "99.99%" }, { label: "11-14", status: "ok", note: "99.98%" },',
+  '  { label: "11-15", status: "ok", note: "100%" }, { label: "11-16", status: "warning", note: "99.75% 缓存预热" },',
+  '  { label: "11-17", status: "ok", note: "99.99%" }, { label: "11-18", status: "ok", note: "99.99%" },',
+  '  { label: "11-19", status: "ok", note: "100%" }, { label: "11-20", status: "ok", note: "99.99%" }',
+  ']',
+  '$/cal = [',
+  '  { date: "2026-07-03", count: 6 }, { date: "2026-07-14", count: 14 }, { date: "2026-07-22", count: 9 },',
+  '  { date: "2026-08-05", count: 18 }, { date: "2026-08-12", count: 11 }, { date: "2026-08-26", count: 21 },',
+  '  { date: "2026-09-02", count: 8 }, { date: "2026-09-16", count: 16 }, { date: "2026-09-28", count: 24 },',
+  '  { date: "2026-10-09", count: 19 }, { date: "2026-10-18", count: 12 }, { date: "2026-10-29", count: 26 },',
+  '  { date: "2026-11-04", count: 15 }, { date: "2026-11-12", count: 22 }, { date: "2026-11-19", count: 28 }, { date: "2026-11-20", count: 17 }',
+  ']',
+  'root = Card(Column([',
+  '  Row([',
+  '    MetricRing("今日可用性", 99.96, max=100, unit="%", sublabel="达标 >=99.9%", tone="success", weight=1),',
+  '    MetricRing("晚高峰 P99", 224, max=300, unit="ms", sublabel="16:00 触顶", tone="warning", weight=1),',
+  '    MetricRing("当前 SLO 红线", $/slo, max=300, unit="ms", sublabel="实时联动图表标线", tone="brand", weight=1)',
+  '  ]),',
+  '  Slider("拖动实时调节双轴图右轴 SLO 红线阈值 (ms)", 140, 260, $/slo, steps=24),',
+  '  Chart("combo", $/traffic, xField="hour", yField=["在线调用(万)", "离线批处理(万)"], y2Field=["P99延迟(ms)", "未命中率(%)"], referenceLine=$/slo, referenceLabel="SLO 红线", stacked=true, zoom=true, title="全天分时段吞吐量（左轴堆叠柱）vs P99 延迟与未命中率（右轴折线）", height=275),',
+  '  Tracker($/uptime, title="近 14 日核心网关 SLA 可用性分片", summary="14 日均值 99.96%"),',
+  '  Chart("calendar", $/cal, xField="date", yField="count", title="2026 下半年生产变更与自动化巡检热力日历", height=205)',
+  ']))',
+].join('\n')
+
+export const SHOWCASE_LLM_PARALLEL_BENCHMARK_UI = [
+  'surface("llm_parallel_benchmark")',
+  '$/models = [',
+  '  { model: "DeepSeek-R1-0528", "GPQA推理得分": 86.4, "首字响应延迟(ms)": 620, "每秒吞吐(tok/s)": 52, "百万Token成本($)": 0.14, "A2UI一次合格率(%)": 98.5 },',
+  '  { model: "DeepSeek-V3-0324", "GPQA推理得分": 76.2, "首字响应延迟(ms)": 220, "每秒吞吐(tok/s)": 118, "百万Token成本($)": 0.07, "A2UI一次合格率(%)": 96.8 },',
+  '  { model: "Qwen3-235B-A22B", "GPQA推理得分": 79.5, "首字响应延迟(ms)": 340, "每秒吞吐(tok/s)": 84, "百万Token成本($)": 0.28, "A2UI一次合格率(%)": 94.6 },',
+  '  { model: "Claude-4-Sonnet", "GPQA推理得分": 83.8, "首字响应延迟(ms)": 480, "每秒吞吐(tok/s)": 68, "百万Token成本($)": 3.00, "A2UI一次合格率(%)": 97.9 },',
+  '  { model: "Llama-4-Maverick", "GPQA推理得分": 71.4, "首字响应延迟(ms)": 260, "每秒吞吐(tok/s)": 105, "百万Token成本($)": 0.19, "A2UI一次合格率(%)": 90.2 }',
+  ']',
+  '$/radarDims = [',
+  '  { dim: "复杂推理深度", "DeepSeek-R1": 96, "DeepSeek-V3": 84 },',
+  '  { dim: "首字响应速度", "DeepSeek-R1": 72, "DeepSeek-V3": 97 },',
+  '  { dim: "高并发吞吐", "DeepSeek-R1": 76, "DeepSeek-V3": 95 },',
+  '  { dim: "缓存成本优势", "DeepSeek-R1": 92, "DeepSeek-V3": 99 },',
+  '  { dim: "结构化JSON稳定度", "DeepSeek-R1": 99, "DeepSeek-V3": 97 }',
+  ']',
+  '$/options = [',
+  '  { key: "v3", name: "DeepSeek-V3 主力路由", badge: "高吞吐首选", recommended: true, score: "96 / 100" },',
+  '  { key: "r1", name: "DeepSeek-R1 深度推演", badge: "复杂架构首选", score: "95 / 100" },',
+  '  { key: "hybrid", name: "V3+R1 分级混部网关", badge: "均衡方案", score: "98 / 100" }',
+  ']',
+  '$/matrixRows = [',
+  '  { dimension: "常规看板首屏延迟", values: { v3: "ok:220ms 极速上屏", r1: "warn:620ms 含思维链", hybrid: "ok:235ms 智能分流" } },',
+  '  { dimension: "57组件复杂组合合格率", values: { v3: "ok:96.8% 一次通过", r1: "ok:98.5% 零自愈通过", hybrid: "ok:98.4% 双重保障" } },',
+  '  { dimension: "百万调用算力月成本", values: { v3: "ok:$70 / 百万Token", r1: "ok:$140 / 百万Token", hybrid: "ok:$92 / 百万Token" } }',
+  ']',
+  'root = Card(Column([',
+  '  Row([',
+  '    Chart("parallel", $/models, xField="model", yField=["GPQA推理得分", "首字响应延迟(ms)", "每秒吞吐(tok/s)", "百万Token成本($)", "A2UI一次合格率(%)"], title="五大模型跨量纲真实物理刻度平行坐标（支持轴上拖拽框选）", height=275, weight=13),',
+  '    Chart("radar", $/radarDims, xField="dim", yField=["DeepSeek-R1", "DeepSeek-V3"], title="主力双模五维能力对比", height=275, weight=9)',
+  '  ]),',
+  '  Comparison($/options, $/matrixRows, title="生产网关主力生成式 UI 路由策略权衡")',
+  ']))',
+].join('\n')
+
+export const SHOWCASE_COMPOSITION_STRESS_UI = [
+  'surface("composition_stress_qa")',
+  '$/slo = 200',
+  '$/traffic = [',
+  '  { hour: "08:00", "在线调用(万)": 95, "离线批处理(万)": 25, "P99延迟(ms)": 88, "未命中率(%)": 12 },',
+  '  { hour: "10:00", "在线调用(万)": 220, "离线批处理(万)": 65, "P99延迟(ms)": 115, "未命中率(%)": 16 },',
+  '  { hour: "12:00", "在线调用(万)": 275, "离线批处理(万)": 65, "P99延迟(ms)": 142, "未命中率(%)": 19 },',
+  '  { hour: "14:00", "在线调用(万)": 330, "离线批处理(万)": 80, "P99延迟(ms)": 168, "未命中率(%)": 22 },',
+  '  { hour: "16:00", "在线调用(万)": 410, "离线批处理(万)": 85, "P99延迟(ms)": 224, "未命中率(%)": 31 },',
+  '  { hour: "18:00", "在线调用(万)": 385, "离线批处理(万)": 75, "P99延迟(ms)": 192, "未命中率(%)": 24 },',
+  '  { hour: "20:00", "在线调用(万)": 320, "离线批处理(万)": 70, "P99延迟(ms)": 148, "未命中率(%)": 18 },',
+  '  { hour: "22:00", "在线调用(万)": 165, "离线批处理(万)": 45, "P99延迟(ms)": 215, "未命中率(%)": 26 }',
+  ']',
+  '$/yearCal = [',
+  '  { date: "2026-01-12", count: 8 }, { date: "2026-02-19", count: 14 }, { date: "2026-03-08", count: 11 },',
+  '  { date: "2026-04-21", count: 19 }, { date: "2026-05-15", count: 16 }, { date: "2026-06-27", count: 22 },',
+  '  { date: "2026-07-14", count: 12 }, { date: "2026-08-26", count: 24 }, { date: "2026-09-18", count: 17 },',
+  '  { date: "2026-10-29", count: 28 }, { date: "2026-11-19", count: 25 }, { date: "2026-12-10", count: 20 }',
+  ']',
+  '$/arrBridge = [',
+  '  { step: "Q2 基线", delta: 480, total: true },',
+  '  { step: "新客签约", delta: 165 },',
+  '  { step: "老客增购", delta: 110 },',
+  '  { step: "缓存降本", delta: 65 },',
+  '  { step: "席位缩减", delta: -52 },',
+  '  { step: "客户流失", delta: -38 },',
+  '  { step: "Q3 实绩", delta: 730, total: true }',
+  ']',
+  '$/costTree = [',
+  '  { name: "AI 对话业务", children: [{ name: "R1 推理池", children: [{ name: "深度研究 36w", value: 36 }, { name: "代码审阅 18w", value: 18 }] }, { name: "V3 快回池", children: [{ name: "A2UI 渲染 16w", value: 16 }] }] },',
+  '  { name: "混合检索", children: [{ name: "向量引擎", children: [{ name: "Milvus 18w", value: 18 }] }] },',
+  '  { name: "评测沙箱", children: [{ name: "基准回归", children: [{ name: "自动化压测 12w", value: 12 }] }] }',
+  ']',
+  '$/models = [',
+  '  { model: "DeepSeek-R1", "GPQA推理": 86.4, "首字延迟(ms)": 620, "吞吐(tok/s)": 52, "成本($)": 0.14, "合格率(%)": 98.5 },',
+  '  { model: "DeepSeek-V3", "GPQA推理": 76.2, "首字延迟(ms)": 220, "吞吐(tok/s)": 118, "成本($)": 0.07, "合格率(%)": 96.8 },',
+  '  { model: "Qwen3-235B", "GPQA推理": 79.5, "首字延迟(ms)": 340, "吞吐(tok/s)": 84, "成本($)": 0.28, "合格率(%)": 94.6 }',
+  ']',
+  '$/radarDims = [',
+  '  { dim: "复杂推理深度", "DeepSeek-R1": 96, "DeepSeek-V3": 84 },',
+  '  { dim: "首字响应速度", "DeepSeek-R1": 72, "DeepSeek-V3": 97 },',
+  '  { dim: "高并发吞吐", "DeepSeek-R1": 76, "DeepSeek-V3": 95 },',
+  '  { dim: "缓存成本优势", "DeepSeek-R1": 92, "DeepSeek-V3": 99 },',
+  '  { dim: "结构化JSON稳定度", "DeepSeek-R1": 99, "DeepSeek-V3": 97 }',
+  ']',
+  'root = Card(Column([',
+  '  Row([',
+  '    Chart("combo", $/traffic, xField="hour", yField=["在线调用(万)", "离线批处理(万)"], y2Field=["P99延迟(ms)", "未命中率(%)"], referenceLine=$/slo, referenceLabel="SLO 200", stacked=true, zoom=true, title="并排双轴图（含缩放条+尾峰避让）", height=255, weight=1),',
+  '    Chart("calendar", $/yearCal, xField="date", yField="count", title="并排全年 12 个月活跃热力日历", height=255, weight=1)',
+  '  ]),',
+  '  Tabs([',
+  '    { title: "Grid 双列（瀑布 + 旭日）", child: Grid([Chart("waterfall", $/arrBridge, xField="step", yField="delta", referenceLine=680, referenceLabel="目标 ¥680w", title="Grid 内瀑布图", height=245), Chart("sunburst", $/costTree, title="Grid 内旭日图", height=245)], columns=2, gap="md") },',
+  '    { title: "Tab 切换（平行坐标）", child: Chart("parallel", $/models, xField="model", yField=["GPQA推理", "首字延迟(ms)", "吞吐(tok/s)", "成本($)", "合格率(%)"], title="Tab 切换后动态挂载平行坐标", height=245) },',
+  '    { title: "Tab 切换（全年日历）", child: Chart("calendar", $/yearCal, xField="date", yField="count", title="Tab 切换后全宽 12 个月日历", height=200) }',
+  '  ]),',
+  '  Accordion([',
+  '    { title: "折叠面板内嵌双图（点击展开验证 ResizeObserver）", child: Row([Chart("sunburst", $/costTree, title="折叠展开旭日图", height=235, weight=1), Chart("radar", $/radarDims, xField="dim", yField=["DeepSeek-R1", "DeepSeek-V3"], title="折叠展开五维雷达", height=235, weight=1)]) }',
+  '  ]),',
+  '  Modal(trigger=Button(Text("在 Modal 弹窗中查看瀑布图详情"), variant="primary", action=Event("open_chart_modal")), content=Column([Text("### 弹窗内嵌图表示例"), Chart("waterfall", $/arrBridge, xField="step", yField="delta", referenceLine=680, referenceLabel="目标 ¥680w", title="Modal 内瀑布图", height=260)]))',
+  ']))',
+].join('\n')
+
+export const SHOWCASE_ALL_FORMS_MEDIA_UI = [
+  'surface("all_forms_media_qa")',
+  '$/serviceName = "a2ui-gateway-prod"',
+  '$/ownerNotes = "支持多地域灰度、自动回滚与实时延迟监控"',
+  '$/cluster = "prod-hz"',
+  '$/deployAt = "2026-11-20T22:30"',
+  '$/enableHpa = true',
+  '$/enableCanary = false',
+  '$/imgPreview = "data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 480 240%27%3E%3Cdefs%3E%3ClinearGradient id=%27g%27 x1=%270%27 y1=%270%27 x2=%271%27 y2=%271%27%3E%3Cstop offset=%270%25%27 stop-color=%27%231d4ed8%27/%3E%3Cstop offset=%27100%25%27 stop-color=%27%230f766e%27/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width=%27480%27 height=%27240%27 fill=%27url(%23g)%27/%3E%3Ctext x=%27240%27 y=%27112%27 text-anchor=%27middle%27 fill=%27%23fff%27 font-size=%2724%27 font-family=%27sans-serif%27 font-weight=%27700%27%3ECluster Topology Snapshot%3C/text%3E%3Ctext x=%27240%27 y=%27146%27 text-anchor=%27middle%27 fill=%27%23cbd5e1%27 font-size=%2714%27 font-family=%27sans-serif%27%3ECN-Hangzhou · 3 AZ Active-Active%3C/text%3E%3C/svg%3E"',
+  'root = Card(Column([',
+  '  Row([',
+  '    Icon("settings"),',
+  '    Text("全量表单与多媒体混排压测台（补齐 57/57 组件）", variant="h3", weight=1),',
+  '    Badge("57/57 全覆盖", tone="success"),',
+  '    Divider(axis="vertical"),',
+  '    Button(Text("提交校验"), variant="primary", action=Event("submit_forms"))',
+  '  ], align="center"),',
+  '  Divider(),',
+  '  Row([',
+  '    TextField("服务标识（单行输入）", value=$/serviceName, weight=1),',
+  '    Select("目标生产集群（可搜索下拉）", [{ value: "prod-hz", label: "华东1 · 杭州主集群", description: "3 AZ 多活" }, { value: "prod-sh", label: "华东2 · 上海容灾集群", description: "热备" }, { value: "stg-bj", label: "华北2 · 北京预发集群" }], $/cluster, searchable=true, weight=1),',
+  '    DateTimeInput($/deployAt, label="计划发布时间窗口", enableDate=true, enableTime=true, weight=1)',
+  '  ]),',
+  '  Grid([',
+  '    TextField("变更说明与回滚备注（多行文本域）", value=$/ownerNotes, variant="longText"),',
+  '    Column([',
+  '      Switch("启用弹性扩缩容 (HPA)", $/enableHpa, description="CPU > 75% 自动扩容至 12 Pods"),',
+  '      Switch("开启 5% 金丝雀影子流量", $/enableCanary, description="同步对比新旧网关 P99 响应差异")',
+  '    ])',
+  '  ], columns=2, gap="md"),',
+  '  Divider(),',
+  '  List([Badge("Tag: Edge-Gateway", tone="info"), Badge("Zone: cn-hz-a", tone="neutral"), Badge("SLA: 99.99%", tone="success"), Badge("A2UI v1.0", tone="warning")], direction="horizontal"),',
+  '  Row([',
+  '    Image($/imgPreview, description="集群拓扑预览图（点击放大）", variant="mediumFeature", fit="cover", weight=1),',
+  '    Column([',
+  '      Video("http://127.0.0.1:18991/demo.mp4"),',
+  '      AudioPlayer("http://127.0.0.1:18991/alert.mp3", description="告警播报语音回放样本（AudioPlayer）")',
+  '    ], weight=1)',
+  '  ])',
+  ']))',
+].join('\n')
+
+export const SHOWCASE_NARROW_WIDGET_TORTURE_UI = [
+  'surface("narrow_widget_torture_qa")',
+  '$/tier = "h20"',
+  '$/seg = "hybrid"',
+  '$/regions = ["cn-hz", "cn-sh", "cn-bj", "cn-sz"]',
+  '$/specOpts = [',
+  '  { value: "l20", title: "L20 · TP2", description: "48GB 轻量推理", extra: "¥18/h" },',
+  '  { value: "h20", title: "H20 · TP4", description: "384GB 高并发", extra: "¥46/h", badge: "推荐" },',
+  '  { value: "h800", title: "H800 · TP8", description: "640GB 满血MoE", extra: "¥118/h" }',
+  ']',
+  '$/kvItems = [',
+  '  { label: "工单编号", value: "CHG-2026-1120-008", copyable: true, mono: true },',
+  '  { label: "合规等级", value: "SOC2 Type II · VPC 隔离", tone: "success", copyable: true },',
+  '  { label: "回滚策略", value: "蓝绿切流自动回退 (<30s)", copyable: true },',
+  '  { label: "值班审批人", value: "SRE-林珊 / DBA-陈明" }',
+  ']',
+  '$/schedItems = [',
+  '  { id: "s1", title: "1. 快照校验", start: "00:00", end: "01:20", status: "done", progress: 100 },',
+  '  { id: "s2", title: "2. 冷分区归档", owner: "@DBA", start: "01:20", end: "03:10", status: "active", progress: 60 },',
+  '  { id: "s3", title: "3. 业务回归巡检", owner: "@SRE", start: "03:20", end: "05:00", status: "pending" }',
+  ']',
+  '$/logs = [',
+  '  { timestamp: "22:14:08", level: "error", service: "fraud-scorer", message: "TiKV region #19 read_index timeout (126.8ms > 80ms SLA)" },',
+  '  { timestamp: "22:14:09", level: "warn", service: "checkout-api", message: "Fallback local risk cache engaged for 18% of requests" }',
+  ']',
+  '$/cmds = [',
+  '  { command: "kubectl -n prod-gateway rollout status deployment/a2ui-edge-router --timeout=120s", comment: "检查边缘网关灰度滚动状态", exitCode: 0, output: "deployment a2ui-edge-router successfully rolled out" }',
+  ']',
+  '$/spans = [',
+  '  { key: "root", label: "POST /v1/checkout/confirm", meta: "api-gateway", badge: "HTTP 200", durationMs: 184, sharePct: 100, status: "warning", children: [',
+  '    { key: "s1", label: "RiskEngine.EvaluateOrderGraph", meta: "fraud-scorer", badge: "慢调用瓶颈", durationMs: 141.6, sharePct: 77, status: "error" },',
+  '    { key: "s2", label: "FeatureStore.BatchFetch90d", meta: "tikv-prod", badge: "热点分片 #19", durationMs: 126.8, sharePct: 69, status: "error" }',
+  '  ] }',
+  ']',
+  '$/resp = { policyId: "rl_90412", status: "active", updatedPods: 18 }',
+  'root = Card(Column([',
+  '  Row([',
+  '    CheckCard("半宽 3 列 CheckCard 挤压测试", $/specOpts, value=$/tier, columns=3, weight=1),',
+  '    KeyValue($/kvItems, title="半宽 2 列 Bordered KeyValue", columns=2, bordered=true, weight=1)',
+  '  ]),',
+  '  Row([',
+  '    Schedule($/schedItems, title="半宽甘特图挤压测试", range=["00:00", "05:00"], now="02:30", weight=1),',
+  '    ApiEndpoint("POST", "/v1/gateways/{gatewayId}/rate-limits/bulk-sync", summary="半宽接口契约挤压测试", status=200, latency="19 ms", responseBody=$/resp, weight=1)',
+  '  ]),',
+  '  Row([',
+  '    LogViewer($/logs, title="半宽日志查看器", searchable=true, weight=1),',
+  '    Terminal($/cmds, title="半宽命令行手册", cwd="~/prod-ops", shell="zsh", weight=1)',
+  '  ]),',
+  '  Row([',
+  '    Tree($/spans, title="半宽 Trace 瀑布树", summary="总耗时 184ms", weight=1),',
+  '    Column([',
+  '      Segmented("半宽 4 项长标题分段器", [{ value: "v3", label: "DeepSeek-V3 主力" }, { value: "r1", label: "DeepSeek-R1 深度" }, { value: "hybrid", label: "混合智能路由" }, { value: "fallback", label: "降级容灾模式" }], $/seg),',
+  '      MultiSelect("半宽 4 标签多选器", [{ value: "cn-hz", label: "华东1（杭州主集群）" }, { value: "cn-sh", label: "华东2（上海双活）" }, { value: "cn-bj", label: "华北2（北京预发）" }, { value: "cn-sz", label: "华南1（深圳边缘）" }], $/regions, allowCreate=true),',
+  '      EntityHeader("NovaAI · 核心生产集群极长标题防挤压测试", subtitle="集群 ID: cls_hz_90812 · SRE: 林珊", avatarText="NV", status="healthy", statusLabel="SLA 达标", badge="Dedicated", tags=["VPC 专线", "ISO-27001", "多活容灾"], metrics=[{ label: "月预算", value: "¥200k" }, { label: "并发", value: "420/500" }, { label: "可用性", value: "99.96%" }])',
+  '    ], weight=1)',
+  '  ])',
+  ']))',
+].join('\n')
+
+export const SHOWCASE_ECHARTS_REMAINING8_TORTURE_UI = [
+  'surface("echarts_remaining8_torture_qa")',
+  '$/pieData = [',
+  '  { name: "R1 深度推理集群", value: 38 }, { name: "V3 高并发对话", value: 27 },',
+  '  { name: "向量混合检索", value: 14 }, { name: "代码审阅流水线", value: 11 },',
+  '  { name: "多模态视觉解析", value: 6 }, { name: "基准压测沙箱", value: 4 }',
+  ']',
+  '$/funnelData = [',
+  '  { stage: "自然流量触达", value: 100 }, { stage: "插件市场安装", value: 62 },',
+  '  { stage: "首日成功渲染", value: 41 }, { stage: "团队协作留存", value: 23 }, { stage: "企业版年框签约", value: 9 }',
+  ']',
+  '$/bubbleData = [',
+  '  { name: "DeepSeek-V3", latency: 220, score: 78, qps: 118 },',
+  '  { name: "DeepSeek-R1", latency: 620, score: 88, qps: 52 },',
+  '  { name: "Qwen3-235B", latency: 340, score: 81, qps: 84 },',
+  '  { name: "Claude-4", latency: 480, score: 85, qps: 68 },',
+  '  { name: "Llama-4", latency: 260, score: 73, qps: 105 }',
+  ']',
+  '$/boxData = [',
+  '  { sector: "AI 算力芯片", min: -1.2, q1: 1.4, median: 3.2, q3: 5.6, max: 8.4 },',
+  '  { sector: "云原生软件", min: -2.0, q1: 0.5, median: 1.9, q3: 3.8, max: 6.1 },',
+  '  { sector: "智能终端硬件", min: -1.8, q1: -0.2, median: 1.1, q3: 2.7, max: 4.5 },',
+  '  { sector: "企业级数据库", min: -0.8, q1: 1.0, median: 2.4, q3: 4.2, max: 6.8 }',
+  ']',
+  '$/ohlcData = [',
+  '  { date: "11-11", open: 3420, close: 3468, low: 3405, high: 3482 },',
+  '  { date: "11-12", open: 3468, close: 3442, low: 3430, high: 3479 },',
+  '  { date: "11-13", open: 3442, close: 3510, low: 3438, high: 3526 },',
+  '  { date: "11-14", open: 3510, close: 3548, low: 3496, high: 3560 },',
+  '  { date: "11-17", open: 3548, close: 3522, low: 3508, high: 3558 },',
+  '  { date: "11-18", open: 3522, close: 3586, low: 3518, high: 3598 }',
+  ']',
+  '$/treeMapData = [',
+  '  { name: "R1 深度推理 36w", value: 36, parent: "AI 对话" },',
+  '  { name: "代码审阅 18w", value: 18, parent: "AI 对话" },',
+  '  { name: "Milvus 向量 18w", value: 18, parent: "混合检索" },',
+  '  { name: "A2UI 渲染 16w", value: 16, parent: "AI 对话" },',
+  '  { name: "压测沙箱 12w", value: 12, parent: "质量保障" }',
+  ']',
+  '$/graphData = {',
+  '  nodes: [',
+  '    { id: "gw", name: "Edge Gateway", size: 34, group: "入口" },',
+  '    { id: "auth", name: "Auth Service", size: 28, group: "核心" },',
+  '    { id: "llm", name: "LLM Router", size: 36, group: "核心" },',
+  '    { id: "tikv", name: "TiKV Cluster", size: 30, group: "存储" },',
+  '    { id: "redis", name: "Prompt Cache", size: 28, group: "存储" }',
+  '  ],',
+  '  links: [',
+  '    { source: "gw", target: "auth", label: "2ms" },',
+  '    { source: "gw", target: "llm", label: "48ms" },',
+  '    { source: "llm", target: "redis", label: "hit 76%" },',
+  '    { source: "llm", target: "tikv", label: "18ms" }',
+  '  ]',
+  '}',
+  'root = Card(Column([',
+  '  Row([',
+  '    Chart("pie", $/pieData, xField="name", yField="value", title="276px 窄饼图（6 项长图例挤压）", height=245, weight=1),',
+  '    Chart("funnel", $/funnelData, xField="stage", yField="value", title="276px 窄漏斗图（底部细窄层）", height=245, weight=1)',
+  '  ]),',
+  '  Row([',
+  '    Chart("scatter", $/bubbleData, xField="latency", yField="score", sizeField="qps", referenceLine=85, referenceLabel="S 级基线 85", zoom=true, title="276px 窄气泡图 + 标线 + 缩放", height=255, weight=1),',
+  '    Chart("boxplot", $/boxData, xField="sector", referenceLine=6.0, referenceLabel="高波动线 6%", zoom=true, title="276px 窄箱线图 + 标线 + 缩放", height=255, weight=1)',
+  '  ]),',
+  '  Row([',
+  '    Chart("gauge", [{ name: "核心集群健康水位", value: 78.5 }], title="276px 窄仪表盘", height=225, weight=1),',
+  '    Chart("candlestick", $/ohlcData, xField="date", referenceLine=3550, referenceLabel="压力位 3550", zoom=true, title="276px 窄 K 线 + 压力位 + 缩放", height=225, weight=1)',
+  '  ]),',
+  '  Row([',
+  '    Chart("treemap", $/treeMapData, xField="name", yField="value", seriesField="parent", title="276px 窄矩形树图", height=240, weight=1),',
+  '    Chart("graph", $/graphData, title="276px 窄力导向拓扑图", height=240, weight=1)',
+  '  ])',
+  ']))',
+].join('\n')
+
+export const SHOWCASE_EXTREME_EDGE_TORTURE_A_UI = [
+  'surface("extreme_edge_torture_a")',
+  '$/selCluster = "prod-cn-hangzhou-inference-gateway-canary-v2"',
+  '$/treeTarget = "svc-r1"',
+  '$/refs = [',
+  '  { title: "DeepSeek-R1-0528-Multi-Region-Zero-Downtime-Inference-Architecture-Whitepaper.pdf", url: "https://docs.internal.example.com/architecture/deepseek-r1-multi-region-inference-routing-2026", domain: "docs.internal.example.com", score: 0.97, snippet: "Detailed benchmark for prod-cn-hangzhou-inference-gateway-canary-v2-deployment-7f8d9c8b4a with strict SLA guarantees." },',
+  '  { title: "A2UI v1.0 Generative Surface Security & CSP Governance Specification", url: "https://spec.a2ui.dev/v1/security/content-security-policy-and-expression-ast", domain: "spec.a2ui.dev", score: 0.92, snippet: "Zero arbitrary eval, strict Zod catalog schemas, and container-query responsive hardening." }',
+  ']',
+  '$/cmpOpts = [',
+  '  { key: "pg", name: "PostgreSQL+pgvector", badge: "Recommended", recommended: true },',
+  '  { key: "milvus", name: "Milvus-Distributed", badge: "High-Scale" },',
+  '  { key: "es", name: "Elasticsearch-8.x", badge: "Full-Text" }',
+  ']',
+  '$/cmpRows = [',
+  '  { dimension: "P99 Query Latency", values: { pg: "ok:14ms HNSW", milvus: "ok:9ms GPU", es: "warn:28ms JVM" } },',
+  '  { dimension: "ACID Transactions", values: { pg: "ok:Native MVCC", milvus: "no:Eventual", es: "warn:Near-RT" } }',
+  ']',
+  '$/tblRows = [',
+  '  { instance: "gpu-cn-hangzhou-a100-node-019", az: "cn-hz-az2", util: "3.2%", save: "¥12,400", detail: "Idle > 14 days on cluster prod-cn-hangzhou-inference-gateway-canary-v2" },',
+  '  { instance: "gpu-cn-beijing-l20-node-088", az: "cn-bj-az1", util: "0.4%", save: "¥16,400", detail: "Zero traffic since 2026-11-02; safe to scale down to 0 replicas" }',
+  ']',
+  '$/diffA = "export const MAX_COLD_BOOT_BUNDLE_BUDGET_KB = 500;\\nexport async function loadEChartsChunk() { return require(\\"./client.echarts.js\\"); }"',
+  '$/diffB = "export const MAX_COLD_BOOT_BUNDLE_BUDGET_KB = 100;\\nexport async function loadEChartsChunk() { return require.async(\\"./client.echarts.js\\"); }"',
+  '$/lanes = [',
+  '  { id: "todo", title: "Backlog", tone: "warning", items: [{ id: "t1", title: "INFRA-20261120-CANARY-ROLLBACK-VERIFY", tag: "P0-Urgent", assignee: "@oncall-sre" }] },',
+  '  { id: "doing", title: "In Progress", tone: "info", items: [{ id: "t2", title: "Optimize container-query breakpoints for 306px split cards", tag: "Frontend", assignee: "@ui-team" }] },',
+  '  { id: "done", title: "Verified", tone: "success", items: [{ id: "t3", title: "Audit 57/57 A2UI components", tag: "QA-Pass", assignee: "@qa-bot" }] }',
+  ']',
+  '$/treeOpts = [',
+  '  { value: "hz", label: "prod-cn-hangzhou-primary-cluster", children: [{ value: "svc-r1", label: "deepseek-r1-0528-inference-gateway-canary-v2" }, { value: "svc-v3", label: "deepseek-v3-0324-fast-router" }] }',
+  ']',
+  'root = Card(Column([',
+  '  Row([',
+  '    ApprovalCard("Execute Zero-Downtime Partition Archival on billing_orders_2024_q1_q2", summary="Cluster: prod-cn-hangzhou-inference-gateway-canary-v2-deployment-7f8d9c", severity="high", scope="DDL-20261120-PROD-009", impacts=["Affects 14,200,000 settled rows in billing_orders_2024_q1_q2", "Dual-replica SHA-256 snapshot verified"], confirmLabel="Confirmed snapshot integrity and rollback procedure", approveAction=Event("approve_a"), rejectAction=Event("reject_a"), weight=1),',
+  '    Result("success", "Multi-Region Failover & Zero-Packet-Loss Verification Completed", subtitle="Verified prod-cn-hangzhou-inference-gateway-canary-v2 RTO=4.1s (SLO < 15s)", meta=[{ label: "Run ID", value: "DR-20261120-CN-HZ-SH-0042" }, { label: "Services", value: "28 / 28 Healthy" }], weight=1)',
+  '  ]),',
+  '  Row([',
+  '    SourceList($/refs, title="Half-Width SourceList (Long EN URLs)", weight=1),',
+  '    Comparison($/cmpOpts, $/cmpRows, title="Half-Width Comparison Matrix (3 EN Options)", action=Event("pick_cmp"), weight=1)',
+  '  ]),',
+  '  Row([',
+  '    Table($/tblRows, title="Half-Width ProTable (Expand + Search + Export)", searchable=true, exportable=true, expandKey="detail", columns=[{ key: "instance", label: "Instance" }, { key: "az", label: "AZ" }, { key: "util", label: "Util" }, { key: "save", label: "Savings" }], weight=1),',
+  '    DiffView($/diffA, $/diffB, title="src/client/chunk-loader-budget-guard.ts", language="typescript", mode="split", weight=1)',
+  '  ]),',
+  '  Row([',
+  '    Kanban($/lanes, title="Half-Width 3-Lane Kanban", weight=1),',
+  '    Column([',
+  '      Select("Right-Edge Searchable Select (Click to Test Popover Clamp)", [{ value: "prod-cn-hangzhou-inference-gateway-canary-v2", label: "prod-cn-hangzhou-inference-gateway-canary-v2", description: "3-AZ Active-Active · Primary Inference Router" }, { value: "prod-cn-shanghai-disaster-recovery-standby", label: "prod-cn-shanghai-disaster-recovery-standby", description: "Warm Standby · Auto-Failover < 5s" }, { value: "staging-cn-beijing-regression-sandbox", label: "staging-cn-beijing-regression-sandbox", description: "Automated A2UI Visual QA Environment" }], $/selCluster, searchable=true),',
+  '      TreeSelect("Right-Edge TreeSelect (Click to Test Popover)", $/treeOpts, $/treeTarget, searchable=true),',
+  '      Callout("Long Unbroken URL Overflow Guard", "Alert webhook target: https://monitoring.internal.example.com/grafana/d/a2ui-p99-latency?orgId=1&var-cluster=prod-cn-hangzhou-inference-gateway-canary-v2", tone="warning")',
+  '    ], weight=1)',
+  '  ])',
+  ']))',
+].join('\n')
+
+export const SHOWCASE_EXTREME_EDGE_TORTURE_B_UI = [
+  'surface("extreme_edge_torture_b")',
+  '$/hbarData = [',
+  '  { name: "DeepSeek-R1-0528 深度推理集群", score: 94 },',
+  '  { name: "PostgreSQL + pgvector 混合检索", score: 88 },',
+  '  { name: "A2UI 1.0 零延迟本地公式引擎", score: 82 },',
+  '  { name: "Milvus 分布式向量索引服务", score: 74 },',
+  '  { name: "自动化视觉回归压测沙箱集群", score: 61 }',
+  ']',
+  '$/negBarData = [',
+  '  { month: "2026-Jan", "Revenue": 42, "Refund": -12 },',
+  '  { month: "2026-Feb", "Revenue": 56, "Refund": -18 },',
+  '  { month: "2026-Mar", "Revenue": 48, "Refund": -9 },',
+  '  { month: "2026-Apr", "Revenue": 65, "Refund": -21 },',
+  '  { month: "2026-May", "Revenue": 72, "Refund": -14 },',
+  '  { month: "2026-Jun", "Revenue": 81, "Refund": -16 }',
+  ']',
+  '$/lineData = [',
+  '  { t: "00:00", "Gateway-P99": 82, "Router-P99": 64, "Cache-P99": 18, "Storage-P99": 44 },',
+  '  { t: "03:00", "Gateway-P99": 76, "Router-P99": 58, "Cache-P99": 16, "Storage-P99": 39 },',
+  '  { t: "06:00", "Gateway-P99": 94, "Router-P99": 71, "Cache-P99": 21, "Storage-P99": 52 },',
+  '  { t: "09:00", "Gateway-P99": 148, "Router-P99": 112, "Cache-P99": 28, "Storage-P99": 79 },',
+  '  { t: "12:00", "Gateway-P99": 186, "Router-P99": 134, "Cache-P99": 34, "Storage-P99": 95 },',
+  '  { t: "15:00", "Gateway-P99": 214, "Router-P99": 158, "Cache-P99": 41, "Storage-P99": 118 },',
+  '  { t: "18:00", "Gateway-P99": 192, "Router-P99": 142, "Cache-P99": 36, "Storage-P99": 102 },',
+  '  { t: "21:00", "Gateway-P99": 135, "Router-P99": 98, "Cache-P99": 24, "Storage-P99": 68 }',
+  ']',
+  '$/denseTracker = [',
+  '  { label: "D01", status: "ok" }, { label: "D02", status: "ok" }, { label: "D03", status: "ok" }, { label: "D04", status: "ok" }, { label: "D05", status: "warning" },',
+  '  { label: "D06", status: "ok" }, { label: "D07", status: "ok" }, { label: "D08", status: "ok" }, { label: "D09", status: "ok" }, { label: "D10", status: "ok" },',
+  '  { label: "D11", status: "ok" }, { label: "D12", status: "error" }, { label: "D13", status: "ok" }, { label: "D14", status: "ok" }, { label: "D15", status: "ok" },',
+  '  { label: "D16", status: "ok" }, { label: "D17", status: "ok" }, { label: "D18", status: "ok" }, { label: "D19", status: "warning" }, { label: "D20", status: "ok" },',
+  '  { label: "D21", status: "ok" }, { label: "D22", status: "ok" }, { label: "D23", status: "ok" }, { label: "D24", status: "ok" }, { label: "D25", status: "ok" },',
+  '  { label: "D26", status: "ok" }, { label: "D27", status: "ok" }, { label: "D28", status: "ok" }, { label: "D29", status: "ok" }, { label: "D30", status: "ok" },',
+  '  { label: "D31", status: "ok" }, { label: "D32", status: "ok" }, { label: "D33", status: "ok" }, { label: "D34", status: "warning" }, { label: "D35", status: "ok" },',
+  '  { label: "D36", status: "ok" }, { label: "D37", status: "ok" }, { label: "D38", status: "ok" }, { label: "D39", status: "ok" }, { label: "D40", status: "ok" },',
+  '  { label: "D41", status: "ok" }, { label: "D42", status: "ok" }, { label: "D43", status: "ok" }, { label: "D44", status: "ok" }, { label: "D45", status: "ok" },',
+  '  { label: "D46", status: "ok" }, { label: "D47", status: "ok" }, { label: "D48", status: "ok" }, { label: "D49", status: "ok" }, { label: "D50", status: "ok" },',
+  '  { label: "D51", status: "ok" }, { label: "D52", status: "ok" }, { label: "D53", status: "ok" }, { label: "D54", status: "ok" }, { label: "D55", status: "ok" },',
+  '  { label: "D56", status: "ok" }, { label: "D57", status: "ok" }, { label: "D58", status: "ok" }, { label: "D59", status: "ok" }, { label: "D60", status: "ok" }',
+  ']',
+  '$/miniFlow = "flowchart LR\\n  A[Client] --> B[A2UI Compiler]\\n  B --> C[Zod Guard]\\n  C --> D[DSH React UI]"',
+  'root = Card(Column([',
+  '  Row([',
+  '    Chart("bar", $/hbarData, xField="name", yField="score", horizontal=true, referenceLine=80, referenceLabel="Target 80%", zoom=true, title="276px 水平条形图（极长 Y 轴标签 + 竖标线 + 缩放）", height=250, weight=1),',
+  '    Chart("bar", $/negBarData, xField="month", yField=["Revenue", "Refund"], stacked=true, referenceLine=0, referenceLabel="Zero Baseline", title="276px 正负堆叠柱状图 + 零线", height=250, weight=1)',
+  '  ]),',
+  '  Row([',
+  '    Mermaid($/miniFlow, title="半宽 306px Mermaid 工具栏挤压测试", weight=1),',
+  '    Column([',
+  '      Tracker($/denseTracker, title="半宽 60 天高密度 SLA Tracker", summary="98.3% · 60d"),',
+  '      Grid([',
+  '        MetricRing("峰值并发吞吐", 12480, max=20000, unit="req/s", size=68, tone="brand", sublabel="5位数字+长单位"),',
+  '        MetricRing("核心链路 SLA", 99.995, max=100, unit="%", size=68, tone="success", sublabel="高精度小数")',
+  '      ], columns=2, gap="sm")',
+  '    ], weight=1)',
+  '  ]),',
+  '  Row([',
+  '    Chart("line", $/lineData, xField="t", yField=["Gateway-P99", "Router-P99", "Cache-P99", "Storage-P99"], referenceLine=200, referenceLabel="SLO 200ms", zoom=true, title="276px 4 系列折线 + 标线 + 缩放", height=245, weight=1),',
+  '    Chart("area", $/lineData, xField="t", yField=["Gateway-P99", "Router-P99", "Cache-P99"], referenceLine=180, referenceLabel="Warn 180ms", title="276px 3 系列面积图 + 标线", height=245, weight=1)',
+  '  ])',
+  ']))',
+].join('\n')
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 function extractText(content) {
@@ -822,33 +1296,45 @@ export function startMockLlmServer(port = PORT) {
       const turnTailMsgs = lastAnyUserIdx >= 0 ? messages.slice(lastAnyUserIdx + 1) : []
       const toolResults = turnTailMsgs.filter((m) => m?.role === 'tool')
 
-      const isShowcase1 = /showcase-1|全链路转化诊断|conversion diagnostic dashboard/i.test(
+      const isShowcase1 = /\bshowcase-1(?!\d)|全链路转化诊断|conversion diagnostic dashboard/i.test(
         userText,
       )
-      const isShowcase2 = /showcase-2|核心模块分层|Mermaid 架构图|layered Mermaid diagram/i.test(
+      const isShowcase2 =
+        /\bshowcase-2(?!\d)|核心模块分层|Mermaid 架构图|layered Mermaid diagram/i.test(userText)
+      const isShowcase3 = /\bshowcase-3(?!\d)|缓存成本实时测算|prompt-cache cost calculator/i.test(
         userText,
       )
-      const isShowcase3 = /showcase-3|缓存成本实时测算|prompt-cache cost calculator/i.test(userText)
-      const isShowcase4 = /showcase-4|双栏配置差异|split config diff/i.test(userText)
-      const isShowcase5 = /showcase-5|发布流水线进度条|release verification tracker/i.test(userText)
-      const isShowcase6 = /showcase-6|连锁咖啡|coffee store operations/i.test(userText)
-      const isShowcase7 = /showcase-7|瀑布树|健康拓扑|latency spike/i.test(userText)
-      const isShowcase8 = /showcase-8|专属推理集群|季度巡检与治理|SLA uptime/i.test(userText)
-      const isShowcase9 = /showcase-9|容量与规格选型|GPU tier|步进数字框/i.test(userText)
-      const isShowcase10 = /showcase-10|冷分区|审批门禁|approval gate/i.test(userText)
-      const isShowcase11 = /showcase-11|混合检索方案|权衡矩阵|trade-off comparison|pgvector/i.test(
+      const isShowcase4 = /\bshowcase-4(?!\d)|双栏配置差异|split config diff/i.test(userText)
+      const isShowcase5 = /\bshowcase-5(?!\d)|发布流水线进度条|release verification tracker/i.test(
         userText,
       )
-      const isShowcase12 = /showcase-12|接口契约调试|圆环水位|HTTP endpoint card|rate-limit/i.test(
+      const isShowcase6 = /\bshowcase-6(?!\d)|连锁咖啡|coffee store operations/i.test(userText)
+      const isShowcase7 = /\bshowcase-7(?!\d)|瀑布树|健康拓扑|latency spike/i.test(userText)
+      const isShowcase8 = /\bshowcase-8(?!\d)|专属推理集群|季度巡检与治理|SLA uptime/i.test(
         userText,
       )
-      const isShowcase13 = /showcase-13|容灾演练复盘|三泳道|failover drill|Kanban board/i.test(
+      const isShowcase9 = /\bshowcase-9(?!\d)|容量与规格选型|GPU tier|步进数字框/i.test(userText)
+      const isShowcase10 = /\bshowcase-10\b|冷分区|审批门禁|approval gate/i.test(userText)
+      const isShowcase11 =
+        /\bshowcase-11\b|混合检索方案|权衡矩阵|trade-off comparison|pgvector/i.test(userText)
+      const isShowcase12 =
+        /\bshowcase-12\b|接口契约调试|圆环水位|HTTP endpoint card|rate-limit/i.test(userText)
+      const isShowcase13 = /\bshowcase-13\b|容灾演练复盘|三泳道|failover drill|Kanban board/i.test(
         userText,
       )
-      const isShowcase14 = /showcase-14|量化复盘|日 K 线|candlestick chart/i.test(userText)
-      const isShowcase15 = /showcase-15|折叠手风琴|慢查询详情|collapsible accordions/i.test(
+      const isShowcase14 = /\bshowcase-14\b|量化复盘|日 K 线|candlestick chart/i.test(userText)
+      const isShowcase15 = /\bshowcase-15\b|折叠手风琴|慢查询详情|collapsible accordions/i.test(
         userText,
       )
+      const isShowcase16 = /\bshowcase-16\b|增减归因瀑布|waterfall.*sunburst/i.test(userText)
+      const isShowcase17 = /\bshowcase-17\b|双轴混合与日历|combo.*calendar/i.test(userText)
+      const isShowcase18 = /\bshowcase-18\b|平行坐标|parallel/i.test(userText)
+      const isShowcase19 = /\bshowcase-19\b|组合压测|composition stress/i.test(userText)
+      const isShowcase20 = /\bshowcase-20\b|全量表单|forms.*media/i.test(userText)
+      const isShowcase21 = /\bshowcase-21\b|窄容器组件压测|narrow.*torture/i.test(userText)
+      const isShowcase22 = /\bshowcase-22\b|剩余8类图表压测|remaining8/i.test(userText)
+      const isShowcase23 = /\bshowcase-23\b|长词与浮层压测|extreme.*a/i.test(userText)
+      const isShowcase24 = /\bshowcase-24\b|水平条与高密度压测|extreme.*b/i.test(userText)
       const isDashboard = /dashboard|看板/i.test(userText)
       const isAsk = /ask|向导|部署/i.test(userText)
       const isDock = /dock|工作台|监控/i.test(userText)
@@ -958,6 +1444,69 @@ export function startMockLlmServer(port = PORT) {
           await streamToolCall(res, model, 'a2ui_render', {
             title: '线上网关延迟突增分级排查手风琴与慢查询弹窗',
             ui: SHOWCASE_ACCORDION_MODAL_UI,
+          })
+          return
+        }
+        if (isShowcase16) {
+          await streamToolCall(res, model, 'a2ui_render', {
+            title: '2026 Q3 营收增减归因与算力成本多层分摊台',
+            ui: SHOWCASE_FINOPS_WATERFALL_SUNBURST_UI,
+          })
+          return
+        }
+        if (isShowcase17) {
+          await streamToolCall(res, model, 'a2ui_render', {
+            title: '全天吞吐与延迟双轴监控及下半年发版热力日历',
+            ui: SHOWCASE_SRE_COMBO_CALENDAR_UI,
+          })
+          return
+        }
+        if (isShowcase18) {
+          await streamToolCall(res, model, 'a2ui_render', {
+            title: '五大模型跨量纲平行坐标评测与路由权衡台',
+            ui: SHOWCASE_LLM_PARALLEL_BENCHMARK_UI,
+          })
+          return
+        }
+        if (isShowcase19) {
+          await streamToolCall(res, model, 'a2ui_render', {
+            title: '极限组件组合样式压测台（并排双轴+全年日历+Tabs+Grid+Accordion+Modal）',
+            ui: SHOWCASE_COMPOSITION_STRESS_UI,
+          })
+          return
+        }
+        if (isShowcase20) {
+          await streamToolCall(res, model, 'a2ui_render', {
+            title: '全量表单与多媒体混排压测台（57/57 补全）',
+            ui: SHOWCASE_ALL_FORMS_MEDIA_UI,
+          })
+          return
+        }
+        if (isShowcase21) {
+          await streamToolCall(res, model, 'a2ui_render', {
+            title: '深挖压测 A：半宽 306px 非图表复杂组件极限挤压台',
+            ui: SHOWCASE_NARROW_WIDGET_TORTURE_UI,
+          })
+          return
+        }
+        if (isShowcase22) {
+          await streamToolCall(res, model, 'a2ui_render', {
+            title: '深挖压测 B：剩余 8 类 ECharts 图表 276px 极限挤压台',
+            ui: SHOWCASE_ECHARTS_REMAINING8_TORTURE_UI,
+          })
+          return
+        }
+        if (isShowcase23) {
+          await streamToolCall(res, model, 'a2ui_render', {
+            title: '深挖压测 C：半宽长英文/URL/浮层与剩余重组件极限压测台',
+            ui: SHOWCASE_EXTREME_EDGE_TORTURE_A_UI,
+          })
+          return
+        }
+        if (isShowcase24) {
+          await streamToolCall(res, model, 'a2ui_render', {
+            title: '深挖压测 D：水平条形图/正负柱/60天Tracker/半宽Mermaid/大数圆环压测台',
+            ui: SHOWCASE_EXTREME_EDGE_TORTURE_B_UI,
           })
           return
         }
@@ -1083,16 +1632,71 @@ export function startMockLlmServer(port = PORT) {
                         ? '已就绪私有化推理集群容量选型工作台，切换 GPU 档位或点击步进器即可在本地 0ms 重算吞吐与包月预算。'
                         : isShowcase10
                           ? '已生成核心账单表冷分区归档风控审批卡、前置快照校验手册与凌晨维护窗口甘特排期。'
-                          : userText.includes('[a2ui-action]')
-                            ? '已根据您的操作实时增量刷新界面数据模型。'
-                            : isDock
-                              ? '已将 CI/CD 发布流水线监控面板固定在输入框上方的常驻工作台（Dock），后续轮次将继续实时原地刷新。'
-                              : isInline
-                                ? '已在工具步骤流内嵌渲染诊断摘要。'
-                                : isDashboard
-                                  ? '已为您生成 2026 区域经营交互看板（示例数据），可切换图表、搜索排序明细表或一键调整预测情景。'
-                                  : '已为您准备好餐厅预订交互卡片，您可直接在下方调整人数、口味或包间选项后点击确认。'
+                          : isShowcase11
+                            ? '已生成千万级混合检索引擎多维权衡对比矩阵与权威基准溯源列表。'
+                            : isShowcase12
+                              ? '已就绪核心网关限流接口契约调试面板、圆环水位指示与日期区间选择器。'
+                              : isShowcase13
+                                ? '已汇总跨可用区容灾演练三泳道看板、关键动作时间轴、延迟热力矩阵与演练达标回执。'
+                                : isShowcase14
+                                  ? '已绘制市场情绪仪表盘、科技指数 10 日 K 线走势与细分板块涨跌幅分布箱线图。'
+                                  : isShowcase15
+                                    ? '已整理线上延迟突增分级排查手风琴与完整慢 SQL 执行计划弹窗。'
+                                    : isShowcase16
+                                      ? '已生成 Q3 营收增减归因瀑布图与三级算力成本可下钻旭日图，点击任意业务域扇区即可下钻查看细分集群账单。'
+                                      : isShowcase17
+                                        ? '已就绪全天吞吐与 P99 延迟双轴监控及下半年发版日历，拖动上方滑块可 0ms 实时移动双轴图上的 SLO 红线阈值。'
+                                        : isShowcase18
+                                          ? '已生成五大模型跨量纲平行坐标与五维雷达同屏对比，可在平行坐标任意纵轴上按住拖拽框选满足延迟与成本约束的模型。'
+                                          : isShowcase19
+                                            ? '已渲染极限多组件组合压测台：包含并排双轴图、全年 12 个月热力日历、Tabs/Grid 切换、Accordion 折叠展开与 Modal 弹窗内嵌图表。'
+                                            : isShowcase20
+                                              ? '已渲染全量表单与多媒体混排压测台，补齐 Icon / Image / Video / AudioPlayer / List / Divider / TextField / DateTimeInput / Select / Switch 等全部 57 组件。'
+                                              : isShowcase21
+                                                ? '已渲染半宽 306px 非图表复杂组件极限挤压台（CheckCard / Bordered KeyValue / Schedule / ApiEndpoint / LogViewer / Terminal / Tree / Segmented / MultiSelect / EntityHeader）。'
+                                                : isShowcase22
+                                                  ? '已渲染剩余 8 类 ECharts 图表 276px 极限挤压台（Pie / Funnel / Scatter / Boxplot / Gauge / Candlestick / Treemap / Graph）。'
+                                                  : isShowcase23
+                                                    ? '已渲染半宽长英文/URL/浮层与剩余重组件压测台（ApprovalCard / Result / SourceList / Comparison / ProTable / Split DiffView / Kanban / Right-Edge Popovers / Callout）。'
+                                                    : isShowcase24
+                                                      ? '已渲染水平条形图、正负堆叠柱、半宽 Mermaid 工具栏、60 天高密度 Tracker 与 5 位数 MetricRing 压测台。'
+                                                      : userText.includes('[a2ui-action]')
+                                                        ? '已根据您的操作实时增量刷新界面数据模型。'
+                                                        : isDock
+                                                          ? '已将 CI/CD 发布流水线监控面板固定在输入框上方的常驻工作台（Dock），后续轮次将继续实时原地刷新。'
+                                                          : isInline
+                                                            ? '已在工具步骤流内嵌渲染诊断摘要。'
+                                                            : isDashboard
+                                                              ? '已为您生成 2026 区域经营交互看板（示例数据），可切换图表、搜索排序明细表或一键调整预测情景。'
+                                                              : '已为您准备好餐厅预订交互卡片，您可直接在下方调整人数、口味或包间选项后点击确认。'
       await streamTextReply(res, model, reply)
+      return
+    }
+
+    if (req.method === 'GET' && (req.url === '/alert.mp3' || req.url === '/demo.mp4')) {
+      // Minimal valid 0.1s silent RIFF/WAVE sample with permissive CORS headers for local media QA
+      const wavBytes = Buffer.alloc(44 + 800)
+      wavBytes.write('RIFF', 0)
+      wavBytes.writeUInt32LE(36 + 800, 4)
+      wavBytes.write('WAVE', 8)
+      wavBytes.write('fmt ', 12)
+      wavBytes.writeUInt32LE(16, 16)
+      wavBytes.writeUInt16LE(1, 20)
+      wavBytes.writeUInt16LE(1, 22)
+      wavBytes.writeUInt32LE(8000, 24)
+      wavBytes.writeUInt32LE(8000, 28)
+      wavBytes.writeUInt16LE(1, 32)
+      wavBytes.writeUInt16LE(8, 34)
+      wavBytes.write('data', 36)
+      wavBytes.writeUInt32LE(800, 40)
+      wavBytes.fill(128, 44)
+      res.writeHead(200, {
+        'content-type': req.url === '/alert.mp3' ? 'audio/wav' : 'video/mp4',
+        'content-length': String(wavBytes.length),
+        'access-control-allow-origin': '*',
+        'cross-origin-resource-policy': 'cross-origin',
+      })
+      res.end(wavBytes)
       return
     }
 

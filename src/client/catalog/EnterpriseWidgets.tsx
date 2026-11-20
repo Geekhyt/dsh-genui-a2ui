@@ -710,7 +710,7 @@ export const DshScheduleImpl = defineComponent<{
             for (const ch of barLabel) {
               estLabelPx += (ch.codePointAt(0) ?? 0) > 0xff ? 11.2 : 6.4
             }
-            const minPctForInside = Math.min(48, Math.ceil(estLabelPx / 2.8))
+            const minPctForInside = Math.min(48, Math.ceil(estLabelPx / 3.4))
             const placeOutside = tr.widthPct < minPctForInside
             const spaceRightPct = 100 - (tr.leftPct + tr.widthPct)
             const placeOutsideRight = spaceRightPct >= tr.leftPct

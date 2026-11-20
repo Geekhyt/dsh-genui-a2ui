@@ -32,6 +32,7 @@ import {
 } from '@a2ui/web_core/v1_0'
 import { SegmentedApi, SelectApi, SwitchApi } from '../../shared/catalog-schema.ts'
 import { useRuntimeMessages } from '../i18n.ts'
+import { useDarkTheme } from '../theme.ts'
 import {
   DshButton,
   DshCheckIcon,
@@ -461,6 +462,7 @@ export const DshDateTimeInputImpl = defineComponent<{
   weight?: number
 }>(DateTimeInputApi, function DshDateTimeInput({ props }) {
   const inputId = useId()
+  const dark = useDarkTheme()
   const readOnly = useContext(SurfaceReadOnlyContext)
   const { submitAttempted } = useContext(SurfaceValidationContext)
   const [touched, setTouched] = useState(false)
@@ -497,6 +499,7 @@ export const DshDateTimeInputImpl = defineComponent<{
           id={inputId}
           type={type}
           className={css.dateInput}
+          style={{ colorScheme: dark ? 'dark' : 'light' }}
           value={normalizedVal}
           disabled={readOnly}
           aria-invalid={showError || undefined}
@@ -789,7 +792,7 @@ export function DshSegmentedView({
       }
       total += w
     }
-    return Math.max(160, Math.min(440, Math.ceil(total)))
+    return Math.max(160, Math.min(260, Math.ceil(total)))
   }, [segOptions])
 
   return (

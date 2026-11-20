@@ -36,6 +36,11 @@ export const CHART_KINDS = [
   'boxplot',
   'graph',
   'candlestick',
+  'waterfall',
+  'combo',
+  'sunburst',
+  'parallel',
+  'calendar',
 ] as const
 
 export type ChartKind = (typeof CHART_KINDS)[number]

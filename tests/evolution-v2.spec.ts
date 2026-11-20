@@ -67,7 +67,7 @@ describe('Evolution v2–v5: 57-Component Catalog Parity & Scope Governance', ()
   it('registers exact 57 components across Host schema catalog and Client React catalog with zero banned features', () => {
     expect(DSH_COMPONENT_APIS).toHaveLength(57)
     expect(DSH_REACT_COMPONENTS).toHaveLength(57)
-    expect(CHART_KINDS).toHaveLength(14)
+    expect(CHART_KINDS).toHaveLength(19)
 
     const schemaJson = dshSchemaCatalog.toJson()
     const schemaNames = Object.keys(schemaJson.components as Record<string, unknown>).sort()

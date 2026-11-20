@@ -444,6 +444,7 @@ export interface MetricRingGeometry {
   readonly resolvedTone: MetricRingTone
   readonly numberFontSize: number
   readonly unitFontSize: number
+  readonly stackUnit: boolean
 }
 
 export function computeMetricRingGeometry(params: {
@@ -471,23 +472,40 @@ export function computeMetricRingGeometry(params: {
 
   const displayNumber = Number.isInteger(safeVal)
     ? String(safeVal)
-    : Number(safeVal.toFixed(2)).toString()
+    : safeVal > 99.9 && safeVal < 100
+      ? Number(safeVal.toFixed(3)).toString()
+      : Number(safeVal.toFixed(2)).toString()
 
   const resolvedUnit = params.unit !== undefined ? params.unit : max === 100 ? '%' : ''
   const innerClearDiameter = Math.max(28, radius * 2 - strokeWidth - 8)
-  let charEmUnits = 0
+  let numEmUnits = 0
   for (const ch of displayNumber) {
-    charEmUnits += (ch.codePointAt(0) ?? 0) > 0xff ? 1.05 : 0.62
+    numEmUnits += (ch.codePointAt(0) ?? 0) > 0xff ? 1.05 : 0.62
   }
-  if (resolvedUnit) {
-    charEmUnits += 0.1
-    for (const ch of resolvedUnit) {
-      charEmUnits += (ch.codePointAt(0) ?? 0) > 0xff ? 0.78 : 0.48
-    }
+  let unitEmUnits = 0
+  for (const ch of resolvedUnit) {
+    unitEmUnits += (ch.codePointAt(0) ?? 0) > 0xff ? 0.78 : 0.48
   }
-  const maxFitFont = innerClearDiameter / Math.max(1.6, charEmUnits)
-  const numberFontSize = Number(Math.max(10, Math.min(size * 0.2, maxFitFont)).toFixed(1))
-  const unitFontSize = Number(Math.max(8.5, numberFontSize * 0.66).toFixed(1))
+  const inlineEmUnits = numEmUnits + (resolvedUnit ? 0.1 + unitEmUnits : 0)
+  const stackUnit =
+    resolvedUnit.length >= 2 &&
+    (displayNumber.length + resolvedUnit.length >= 7 || inlineEmUnits * 10 > innerClearDiameter)
+
+  const maxFitFont = stackUnit
+    ? innerClearDiameter / Math.max(1.6, numEmUnits)
+    : innerClearDiameter / Math.max(1.6, inlineEmUnits)
+  const numberFontSize = Number(
+    Math.max(stackUnit ? 9 : 10, Math.min(size * 0.2, maxFitFont)).toFixed(1),
+  )
+  const maxUnitFit = resolvedUnit
+    ? (innerClearDiameter * 0.88) / Math.max(1, unitEmUnits)
+    : numberFontSize * 0.66
+  const unitFontSize = Number(
+    Math.max(
+      7.5,
+      Math.min(numberFontSize * 0.68, stackUnit ? maxUnitFit : numberFontSize * 0.66),
+    ).toFixed(1),
+  )
 
   let resolvedTone: MetricRingTone
   if (!params.tone || params.tone === 'brand') {
@@ -509,6 +527,7 @@ export function computeMetricRingGeometry(params: {
     resolvedTone,
     numberFontSize,
     unitFontSize,
+    stackUnit,
   }
 }
 
@@ -781,16 +800,16 @@ export function buildServiceGraphLayout(
   }
 
   const estimateNodeIdealW = (n: (typeof parsedNodes)[number]): number => {
-    const topW = 35 + estimateInlineTextPx(n.label, 6.85, 12.5)
+    const topW = 26 + estimateInlineTextPx(n.label, 6.2, 11.4)
     const bottomW =
-      20 +
-      estimateInlineTextPx(n.sublabel, 5.8, 10.8) +
-      (n.sublabel && n.metric ? 8 : 0) +
-      estimateInlineTextPx(n.metric, 6.3, 10.8)
-    return Math.max(148, Math.min(194, Math.max(topW, bottomW)))
+      16 +
+      estimateInlineTextPx(n.sublabel, 5.4, 10.2) +
+      (n.sublabel && n.metric ? 6 : 0) +
+      estimateInlineTextPx(n.metric, 5.8, 10.2)
+    return Math.max(114, Math.min(156, Math.max(topW, bottomW)))
   }
 
-  let maxIdealNodeW = 148
+  let maxIdealNodeW = 114
   for (const n of parsedNodes) {
     maxIdealNodeW = Math.max(maxIdealNodeW, estimateNodeIdealW(n))
   }
@@ -798,13 +817,13 @@ export function buildServiceGraphLayout(
   const lrRankWidths: number[] = []
   for (let r = 0; r <= maxRank; r++) {
     const bucket = layers.get(r) ?? []
-    let rw = 148
+    let rw = 114
     for (const n of bucket) rw = Math.max(rw, estimateNodeIdealW(n))
     lrRankWidths.push(rw)
   }
 
   const NODE_H = 58
-  const PAD_X = 14
+  const PAD_X = 12
   const PAD_Y = 16
   const hasTbForwardLabel =
     direction === 'TB' &&
@@ -814,7 +833,7 @@ export function buildServiceGraphLayout(
 
   // Compute adaptive horizontal rank gaps in LR mode so long ASCII/CJK edge labels
   // never collide with or get occluded by adjacent node boxes.
-  const lrRankGaps = new Array<number>(Math.max(0, maxRank)).fill(64)
+  const lrRankGaps = new Array<number>(Math.max(0, maxRank)).fill(52)
   if (direction === 'LR' && maxRank > 0) {
     for (const e of parsedEdges) {
       if (!e.label || backEdgeKeys.has(`${e.from}->${e.to}`)) continue
@@ -824,7 +843,7 @@ export function buildServiceGraphLayout(
       const span = rTo - rFrom
       const neededTotal = estimateEdgeLabelWidth(e.label) + 24
       if (span === 1) {
-        lrRankGaps[rFrom] = Math.max(lrRankGaps[rFrom] ?? 64, neededTotal)
+        lrRankGaps[rFrom] = Math.max(lrRankGaps[rFrom] ?? 52, neededTotal)
       } else {
         const intermediateNodesW = lrRankWidths.slice(rFrom + 1, rTo).reduce((sum, w) => sum + w, 0)
         const currentSpanWidth =
@@ -832,7 +851,7 @@ export function buildServiceGraphLayout(
         if (currentSpanWidth < neededTotal) {
           const extraEach = Math.ceil((neededTotal - currentSpanWidth) / span)
           for (let r = rFrom; r < rTo; r++) {
-            lrRankGaps[r] = (lrRankGaps[r] ?? 64) + extraEach
+            lrRankGaps[r] = (lrRankGaps[r] ?? 52) + extraEach
           }
         }
       }

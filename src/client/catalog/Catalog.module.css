@@ -525,6 +525,7 @@
   background: var(--dsw-alias-bg-layer-1, transparent);
   overflow: hidden;
   min-width: 0;
+  container-type: inline-size;
 }
 
 .tableToolbar {
@@ -610,6 +611,17 @@
   font-variant-numeric: tabular-nums;
 }
 
+@container (max-width: 420px) {
+  .table {
+    font-size: 11.5px;
+  }
+
+  .th,
+  .td {
+    padding: 6px 7px;
+  }
+}
+
 .emptyCell {
   padding: 18px 12px;
   text-align: center;
@@ -666,6 +678,7 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
+  container-type: inline-size;
 }
 
 .diffToolbar {
@@ -721,11 +734,13 @@
 .diffActions {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .diffModeSwitch {
   display: inline-flex;
+  flex-shrink: 0;
   border: 1px solid var(--dsw-alias-border-l1, rgba(128, 128, 128, 0.2));
   border-radius: 6px;
   overflow: hidden;
@@ -737,6 +752,8 @@
   color: var(--dsw-alias-label-secondary, inherit);
   font-size: 11.5px;
   padding: 2px 8px;
+  white-space: nowrap;
+  flex-shrink: 0;
   cursor: pointer;
 }
 
@@ -753,6 +770,8 @@
   color: var(--dsw-alias-label-secondary, inherit);
   font-size: 11.5px;
   padding: 2px 8px;
+  white-space: nowrap;
+  flex-shrink: 0;
   cursor: pointer;
 }
 
@@ -835,6 +854,31 @@
   border-right: 1px solid var(--dsw-alias-border-l1, rgba(128, 128, 128, 0.12));
 }
 
+@container (max-width: 440px) {
+  .diffGutter {
+    width: 24px;
+    min-width: 24px;
+    padding: 1px 4px;
+    font-size: 10.5px;
+  }
+
+  .diffSplitCell {
+    padding: 2px 6px;
+    font-size: 11px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+  }
+
+  .diffCode {
+    padding: 2px 6px;
+    font-size: 11px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+  }
+}
+
 /* ─────────────────────────── P0: Steps ─────────────────────────── */
 
 .stepsWrap {
@@ -874,7 +918,7 @@
 }
 
 .stepsHorizontal .stepItem {
-  flex: 1 1 140px;
+  flex: 1 1 112px;
   align-items: flex-start;
 }
 
@@ -1087,6 +1131,7 @@
   flex-direction: column;
   gap: 8px;
   min-width: 0;
+  container-type: inline-size;
 }
 
 .kvTitle {
@@ -1425,6 +1470,7 @@
   background: var(--dsw-alias-bg-layer-1, transparent);
   overflow: hidden;
   min-width: 0;
+  container-type: inline-size;
 }
 
 .fileTreeHeader {
@@ -1524,6 +1570,12 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 46%;
+}
+
+@container (max-width: 340px) {
+  .fileTreeSummary {
+    display: none;
+  }
 }
 
 .fileTreeCount {
@@ -1639,6 +1691,8 @@
   font-size: 11.5px;
   line-height: 1.4;
   padding: 2px 7px;
+  white-space: nowrap;
+  flex-shrink: 0;
   cursor: pointer;
   font-variant-numeric: tabular-nums;
 }
@@ -1861,11 +1915,21 @@
   max-width: 100%;
   min-width: 0;
   overflow-x: auto;
-  scrollbar-width: none;
+  scrollbar-width: thin;
 }
 
-.segmentedHostWrap::-webkit-scrollbar {
-  display: none;
+.segmentedHostWrap > [role="tablist"],
+.segmentedHostWrap > [role="radiogroup"] {
+  display: flex;
+  flex-wrap: wrap;
+  height: auto;
+  max-width: 100%;
+}
+
+.segmentedHostWrap > [role="tablist"] > button,
+.segmentedHostWrap > [role="radiogroup"] > button {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .switchCard {
@@ -1921,6 +1985,7 @@
   background: var(--dsw-alias-bg-layer-1, transparent);
   overflow: hidden;
   min-width: 0;
+  container-type: inline-size;
 }
 
 .comparisonHeader {
@@ -2057,6 +2122,26 @@
   border-left: 1px solid var(--dsw-alias-border-l1, rgba(128, 128, 128, 0.12));
 }
 
+@container (max-width: 420px) {
+  .comparisonTable {
+    font-size: 11px;
+  }
+
+  .comparisonCornerTh {
+    min-width: 64px;
+    padding: 6px 6px;
+    font-size: 10.5px;
+  }
+
+  .comparisonOptionTh,
+  .comparisonDimTd,
+  .comparisonValTd {
+    padding: 6px 6px;
+    font-size: 11px;
+    min-width: 78px;
+  }
+}
+
 /* ─────────────────────────── LogViewer ─────────────────────────── */
 
 .logCard {
@@ -2067,6 +2152,7 @@
   background: var(--dsw-alias-bg-layer-1, transparent);
   overflow: hidden;
   min-width: 0;
+  container-type: inline-size;
 }
 
 .logHeader {
@@ -2163,6 +2249,18 @@
   align-items: baseline;
   gap: 8px;
   padding: 6px 12px;
+}
+
+@container (max-width: 390px) {
+  .logRowMain {
+    flex-wrap: wrap;
+    row-gap: 4px;
+    padding: 7px 10px;
+  }
+
+  .logRowMain > :last-child {
+    flex: 1 0 100%;
+  }
 }
 
 .logRowMain:hover {
@@ -2858,7 +2956,7 @@
 .serviceGraphViewport {
   overflow-x: auto;
   overflow-y: hidden;
-  padding: 6px 8px;
+  padding: 6px 2px;
 }
 
 .serviceGraphCanvas {
@@ -3282,6 +3380,7 @@
   background: var(--dsw-alias-bg-layer-1, transparent);
   overflow: hidden;
   min-width: 0;
+  container-type: inline-size;
 }
 
 .terminalHeader {
@@ -3356,7 +3455,23 @@
 .terminalCmdLine {
   min-width: 0;
   flex: 1;
-  word-break: break-all;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+@container (max-width: 390px) {
+  .terminalCmdRow {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+
+  .terminalCmdLine {
+    flex: 1 0 100%;
+  }
+
+  .terminalCmdActions {
+    margin-left: auto;
+  }
 }
 
 .terminalDollar {
@@ -3661,6 +3776,7 @@
   background: var(--dsw-alias-bg-layer-1, transparent);
   overflow: hidden;
   min-width: 0;
+  container-type: inline-size;
 }
 
 .scheduleHeader {
@@ -3699,6 +3815,26 @@
   .scheduleRow {
     grid-template-columns: minmax(96px, 132px) minmax(0, 1fr);
     gap: 8px;
+  }
+}
+
+@container (max-width: 440px) {
+  .scheduleAxisRow {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+
+  .scheduleAxisRow .scheduleLabelCol {
+    display: none;
+  }
+
+  .scheduleRow {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+
+  .scheduleAxisTicks {
+    font-size: 10px;
   }
 }
 
@@ -4051,6 +4187,7 @@
   background: var(--dsw-alias-bg-layer-1, transparent);
   overflow: hidden;
   min-width: 0;
+  container-type: inline-size;
 }
 
 .matrixTable {
@@ -4123,6 +4260,21 @@
   background: var(--dsw-alias-bg-layer-2, rgba(128, 128, 128, 0.05));
 }
 
+@container (max-width: 390px) {
+  .matrixTable {
+    font-size: 10.5px;
+  }
+
+  .matrixCornerTh,
+  .matrixColTh,
+  .matrixRowTd,
+  .matrixValTd,
+  .matrixTotalTd {
+    padding: 6px 4px;
+    font-size: 10.5px;
+  }
+}
+
 /* ─────────────────────────── Phase v5: AntD / AntD Pro / AntD X Parity ─────────────────────────── */
 
 /* 1. KeyValue Bordered Mode (AntD <Descriptions bordered>) */
@@ -4154,14 +4306,14 @@
 .kvCellBordered {
   grid-column: span var(--kv-span, 1);
   display: grid;
-  grid-template-columns: minmax(96px, 136px) minmax(0, 1fr);
+  grid-template-columns: minmax(80px, 114px) minmax(0, 1fr);
   align-items: stretch;
   background: var(--dsw-alias-bg-layer-1, var(--dsw-alias-bg-base, #ffffff));
   min-width: 0;
 }
 
 .kvLabelBordered {
-  padding: 8px 12px;
+  padding: 8px 10px;
   min-width: 0;
   overflow-wrap: break-word;
   font-size: 12px;
@@ -4171,6 +4323,16 @@
   border-right: 1px solid var(--dsw-alias-border-l1, rgba(128, 128, 128, 0.16));
   display: flex;
   align-items: center;
+}
+
+@container (max-width: 480px) {
+  .kvGridBordered {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .kvCellBordered {
+    grid-column: span 1;
+  }
 }
 
 @media (max-width: 640px) {
@@ -4185,16 +4347,24 @@
 
 .kvValueBordered {
   margin: 0;
-  padding: 8px 12px;
+  padding: 8px 10px;
   font-size: 12.5px;
   font-weight: 500;
   color: var(--dsw-alias-label-primary, inherit);
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 6px;
   overflow-wrap: anywhere;
   min-width: 0;
+}
+
+.kvValueBordered > span {
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 /* 2. ProTable Expandable Row Drawer (AntD Table expandable) */
@@ -4259,6 +4429,21 @@
   align-items: stretch;
   min-width: 0;
   width: 100%;
+}
+
+@container (max-width: 560px) {
+  .responsiveGrid[data-columns="3"],
+  .responsiveGrid[data-columns="4"],
+  .responsiveGrid[data-columns="5"],
+  .responsiveGrid[data-columns="6"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container (max-width: 440px) {
+  .responsiveGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 @media (max-width: 640px) {
@@ -4594,10 +4779,26 @@
 }
 
 /* 8. CheckCard (AntD Pro CheckCard.Group & AntD X Prompts) */
+.checkCardField {
+  container-type: inline-size;
+}
+
 .checkCardGrid {
   display: grid;
   grid-template-columns: repeat(var(--a2ui-grid-cols, 3), minmax(0, 1fr));
   gap: 10px;
+}
+
+@container (max-width: 480px) {
+  .checkCardGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container (max-width: 340px) {
+  .checkCardGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 @media (max-width: 640px) {
@@ -4823,4 +5024,27 @@
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   color: var(--dsw-alias-label-secondary, inherit);
+}
+
+@container (max-width: 390px) {
+  .generalTreeRow {
+    flex-wrap: wrap;
+    row-gap: 4px;
+    padding: 6px 10px;
+  }
+
+  .generalTreeMainBtn {
+    flex: 1 1 180px;
+  }
+
+  .generalTreeSub {
+    display: none;
+  }
+
+  .generalTreeRight {
+    width: 100%;
+    padding-left: 20px;
+    justify-content: flex-end;
+    box-sizing: border-box;
+  }
 }

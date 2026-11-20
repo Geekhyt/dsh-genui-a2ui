@@ -891,7 +891,12 @@ export const DshMetricRingImpl = defineComponent<{
           />
         </svg>
         <div className={css.metricRingCenterText}>
-          <span className={css.metricRingValueGroup}>
+          <span
+            className={css.metricRingValueGroup}
+            style={
+              geom.stackUnit ? { flexDirection: 'column', alignItems: 'center', gap: 1 } : undefined
+            }
+          >
             <span className={css.metricRingNumber} style={{ fontSize: geom.numberFontSize }}>
               {geom.displayNumber}
             </span>

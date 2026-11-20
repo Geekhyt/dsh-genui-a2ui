@@ -28,6 +28,7 @@ import {
   TreeSelectApi,
 } from '../../shared/catalog-schema.ts'
 import { useRuntimeMessages } from '../i18n.ts'
+import { useDarkTheme } from '../theme.ts'
 import {
   DshCheckIcon,
   DshChevronDownIcon,
@@ -446,6 +447,7 @@ export const DshDateRangeImpl = defineComponent<{
   weight?: number
 }>(DateRangeApi, function DshDateRange({ props }) {
   const msg = useRuntimeMessages()
+  const dark = useDarkTheme()
   const readOnly = useContext(SurfaceReadOnlyContext)
   const enableTime = Boolean(props.enableTime)
   const showPresets = props.presets !== false
@@ -500,6 +502,7 @@ export const DshDateRangeImpl = defineComponent<{
         <input
           type={inputType}
           className={css.dateRangeInput}
+          style={{ colorScheme: dark ? 'dark' : 'light' }}
           value={normStart}
           disabled={readOnly}
           aria-label="Start date"
@@ -518,6 +521,7 @@ export const DshDateRangeImpl = defineComponent<{
         <input
           type={inputType}
           className={css.dateRangeInput}
+          style={{ colorScheme: dark ? 'dark' : 'light' }}
           value={normEnd}
           disabled={readOnly}
           aria-label="End date"
@@ -827,7 +831,11 @@ export const DshCheckCardImpl = defineComponent<{
   }
 
   return (
-    <div className={css.field} style={weightStyle(props.weight, 220)} data-a2ui-checkcard="">
+    <div
+      className={`${css.field} ${css.checkCardField}`}
+      style={weightStyle(props.weight, 220)}
+      data-a2ui-checkcard=""
+    >
       {label || err ? (
         <div className={css.fieldHeader}>
           {label ? <span className={css.label}>{label}</span> : <span />}

@@ -82,8 +82,8 @@ export const DshImageImpl = defineComponent<{
       <div
         className={css.imageWrap}
         style={{
-          ...weightStyle(props.weight),
-          width: isAvatar ? height : '100%',
+          ...weightStyle(props.weight, isAvatar ? height : 140),
+          width: isAvatar ? height : props.weight !== undefined ? undefined : '100%',
           height,
           borderRadius: props.variant === 'avatar' ? '999px' : undefined,
           cursor: canZoom ? 'zoom-in' : undefined,
@@ -322,8 +322,11 @@ export const DshChartImpl = defineComponent<{
   title?: unknown
   xField?: string
   yField?: string | string[]
+  y2Field?: string | string[]
   seriesField?: string
   sizeField?: string
+  referenceLine?: unknown
+  referenceLabel?: unknown
   stacked?: boolean
   horizontal?: boolean
   zoom?: boolean
@@ -332,6 +335,14 @@ export const DshChartImpl = defineComponent<{
   weight?: number
 }>(ChartApi, function DshChart({ props }) {
   const readOnly = useContext(SurfaceReadOnlyContext)
+  const parsedRefLine =
+    typeof props.referenceLine === 'number' && Number.isFinite(props.referenceLine)
+      ? props.referenceLine
+      : typeof props.referenceLine === 'string' &&
+          props.referenceLine.trim() !== '' &&
+          Number.isFinite(Number(props.referenceLine))
+        ? Number(props.referenceLine)
+        : undefined
   return (
     <EChartsWidget
       kind={props.kind}
@@ -339,8 +350,15 @@ export const DshChartImpl = defineComponent<{
       title={props.title ? String(props.title) : undefined}
       xField={props.xField}
       yField={props.yField}
+      y2Field={props.y2Field}
       seriesField={props.seriesField}
       sizeField={props.sizeField}
+      referenceLine={parsedRefLine}
+      referenceLabel={
+        props.referenceLabel !== undefined && props.referenceLabel !== null
+          ? String(props.referenceLabel)
+          : undefined
+      }
       stacked={props.stacked}
       horizontal={props.horizontal}
       zoom={props.zoom}

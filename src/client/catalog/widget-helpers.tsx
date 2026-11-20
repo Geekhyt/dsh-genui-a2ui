@@ -130,7 +130,7 @@ export function isSafeMediaUrl(raw: unknown): raw is string {
   if (typeof raw !== 'string') return false
   const trimmed = raw.trim()
   if (trimmed === '') return false
-  if (/^data:image\/(?:png|jpeg|jpg|gif|webp|svg\+xml);/i.test(trimmed)) return true
+  if (/^data:image\/(?:png|jpeg|jpg|gif|webp|svg\+xml)[;,]/i.test(trimmed)) return true
   try {
     const parsed = new URL(trimmed)
     if (parsed.protocol === 'https:') return true

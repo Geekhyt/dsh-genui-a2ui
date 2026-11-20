@@ -28,8 +28,11 @@ export interface ChartWidgetProps {
   readonly title?: string | undefined
   readonly xField?: string | undefined
   readonly yField?: string | string[] | undefined
+  readonly y2Field?: string | string[] | undefined
   readonly seriesField?: string | undefined
   readonly sizeField?: string | undefined
+  readonly referenceLine?: number | undefined
+  readonly referenceLabel?: string | undefined
   readonly stacked?: boolean | undefined
   readonly horizontal?: boolean | undefined
   readonly zoom?: boolean | undefined
@@ -50,8 +53,11 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
     title,
     xField,
     yField,
+    y2Field,
     seriesField,
     sizeField,
+    referenceLine,
+    referenceLabel,
     stacked,
     horizontal,
     zoom,
@@ -95,8 +101,11 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
         title,
         xField,
         yField,
+        y2Field,
         seriesField,
         sizeField,
+        referenceLine,
+        referenceLabel,
         stacked,
         horizontal,
         zoom,
@@ -112,8 +121,11 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
     title,
     xField,
     yField,
+    y2Field,
     seriesField,
     sizeField,
+    referenceLine,
+    referenceLabel,
     stacked,
     horizontal,
     zoom,
@@ -127,8 +139,9 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
   const handleContainerWidth = useCallback((nextW: number) => {
     setContainerWidth((prev) => {
       if (prev === undefined) return nextW
-      const crossedCompact = prev < 400 !== nextW < 400
-      if (crossedCompact || Math.abs(nextW - prev) >= 16) return nextW
+      const crossedBreakpoint =
+        prev < 300 !== nextW < 300 || prev < 400 !== nextW < 400 || prev < 460 !== nextW < 460
+      if (crossedBreakpoint || Math.abs(nextW - prev) >= 16) return nextW
       return prev
     })
   }, [])

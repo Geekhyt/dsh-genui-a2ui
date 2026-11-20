@@ -96,19 +96,25 @@ export const ChartApi = {
         xField: z
           .string()
           .describe(
-            'Property name for the category / X axis (or item label in pie/funnel/gauge/treemap/boxplot, source in sankey/graph, or date in candlestick).',
+            'Property name for the category / X axis (or item label in pie/funnel/gauge/treemap/sunburst/boxplot/waterfall/parallel, source in sankey/graph, or date in candlestick/calendar).',
           )
           .optional(),
         yField: z
           .union([z.string(), z.array(z.string()).min(1)])
           .describe(
-            'Property name(s) for numeric series values (or Y category in heatmap); pass an array of field names for multi-series charts.',
+            'Property name(s) for numeric series values (or Y category in heatmap, delta in waterfall, left-axis bar values in combo, parallel axis dimensions in parallel, or daily count in calendar); pass an array of field names for multi-series or parallel charts.',
+          )
+          .optional(),
+        y2Field: z
+          .union([z.string(), z.array(z.string()).min(1)])
+          .describe(
+            'Optional property name(s) plotted as line series on a right-hand secondary Y axis (ideal for `combo` dual-axis charts pairing left-axis volume bars with right-axis rate/latency lines).',
           )
           .optional(),
         seriesField: z
           .string()
           .describe(
-            'Optional property name used to group rows into separate series (or target node in sankey/graph, parent group in treemap).',
+            'Optional property name used to group rows into separate series (or target node in sankey/graph, parent group in treemap/sunburst).',
           )
           .optional(),
         sizeField: z
@@ -117,10 +123,16 @@ export const ChartApi = {
             'Optional numeric property name mapped to bubble radius on scatter charts or cell intensity on heatmap charts.',
           )
           .optional(),
+        referenceLine: DynamicNumberSchema.describe(
+          'REF:#/$defs/DynamicNumber|Optional horizontal (or vertical when `horizontal=true`) dashed threshold/target reference line value (e.g. SLO latency limit or budget target).',
+        ).optional(),
+        referenceLabel: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional label displayed along `referenceLine` (e.g. `"SLO 200ms"` or `"目标 ¥680w"`).',
+        ).optional(),
         stacked: z
           .boolean()
           .default(false)
-          .describe('Whether to stack series in bar, line, or area charts.')
+          .describe('Whether to stack series in bar, line, area, or combo charts.')
           .optional(),
         horizontal: z
           .boolean()
@@ -145,7 +157,7 @@ export const ChartApi = {
         weight: WeightSchema.optional(),
       })
       .describe(
-        'Interactive lazy-loaded ECharts visualization bound to structured data rows. Supports 14 chart kinds: bar, line, area, pie, scatter, radar, funnel, gauge, heatmap, treemap, sankey, boxplot, graph, and candlestick.',
+        'Interactive lazy-loaded ECharts visualization bound to structured data rows. Supports 19 chart kinds: bar, line, area, pie, scatter, radar, funnel, gauge, heatmap, treemap, sankey, boxplot, graph, candlestick, waterfall, combo, sunburst, parallel, and calendar.',
       )
       .strict(),
     { mixins: [], required: ['kind', 'data'] },
@@ -1796,7 +1808,7 @@ export const DSH_CATALOG_INSTRUCTIONS = [
   'Prefer storing mutable form values, step lists, table rows, and chart datasets under $/paths in the surface data model so follow-up turns can update them incrementally with `surface("id", update=true)`.',
   'For multi-row equal-width KPI or card grids, prefer `Grid(children, columns?=3, gap?="md")`; for single-row KPI strips, place `Stat(..., spark?=$/trend, weight=1)` or `MetricRing(..., weight=1)` inside `Row([...])`; for structured metadata/descriptions, prefer `KeyValue($/meta, columns=2, bordered?=true)` or `JsonTree($/payload, title=...)`.',
   'For form & calculator controls bound to $/paths, prefer `NumberInput(label, $/num, min?=..., max?=..., step?=..., unit?=...)`, `MultiSelect(label, options, $/tags, allowCreate?=false)`, `DateRange(label, $/start, $/end, presets?=true)`, `TreeSelect(label, nodes, $/choice)`, `CheckCard(label, options, $/choice)`, `Segmented(label, options, $/mode)`, `Select(label, options, $/choice)`, and `Switch(label, $/enabled)`.',
-  'For quantitative visualizations, prefer `Chart(kind, $/data, xField=..., yField=..., title=...)` across its 14 kinds (`bar`, `line`, `area`, `pie`, `scatter`, `radar`, `funnel`, `gauge`, `heatmap`, `treemap`, `sankey`, `boxplot`, `graph`, `candlestick`); for architecture/flow/sequence/state/ER/Gantt diagrams, prefer `Mermaid(code, title=...)`; for live health-colored service/module dependency DAGs, prefer `ServiceGraph($/nodes, $/edges, title=...)`.',
+  'For quantitative visualizations, prefer `Chart(kind, $/data, xField=..., yField=..., y2Field?=..., referenceLine?=..., title=...)` across its 19 kinds (`bar`, `line`, `area`, `pie`, `scatter`, `radar`, `funnel`, `gauge`, `heatmap`, `treemap`, `sankey`, `boxplot`, `graph`, `candlestick`, `waterfall`, `combo`, `sunburst`, `parallel`, `calendar`); for architecture/flow/sequence/state/ER/Gantt diagrams, prefer `Mermaid(code, title=...)`; for live health-colored service/module dependency DAGs, prefer `ServiceGraph($/nodes, $/edges, title=...)`.',
   'For multi-option trade-off matrices, prefer `Comparison($/options, $/rows, title=...)`; for >= 4 tabular rows, prefer `Table($/rows, searchable=true, expandKey?=...)`; for hierarchical org/OKR/APM trace trees, prefer `Tree($/nodes, title=...)`; for sprint/remediation lanes, prefer `Kanban($/columns, title=...)`; for research citations or workspace code evidence, prefer `SourceList($/sources, title=...)`.',
   'For workspace file trees or change summaries, prefer `FileTree($/files, title=...)`; for config/code review, prefer `DiffView($/before, $/after, title=..., filePath?=...)` or `Code(code, language=..., filePath?=...)`; for diagnostic logs & stack traces, prefer `LogViewer($/entries, title=...)`; for chronological incident/release streams, prefer `Timeline(items=[...], title=...)`; for progressive disclosure, prefer `Accordion(items=[...])`; for multi-stage plans, prefer `Steps($/stages, current=...)`; for risk warnings, prefer `Callout(title, message, tone=...)`; for clickable follow-up suggestion cards, prefer `CheckCard(label, options, action=action("follow_up"))`.',
   'Never fabricate real external state: if using illustrative numbers, mark them clearly in titles or captions; never claim an action has executed before receiving `[a2ui-action]`.',
@@ -1811,7 +1823,7 @@ export const dshSchemaCatalog: CatalogApi = new Catalog(
   {
     title: 'DeepSeek Harness A2UI 1.0 Catalog',
     description:
-      'A2UI 1.0 basic components plus 39 DSH-native extensions (57 total): Grid, NumberInput, MultiSelect, DateRange, TreeSelect, CheckCard, Tree, Chart (14 ECharts kinds), Table (ProTable), Stat, MetricRing, Tracker, Progress, Badge, Code, Terminal, DiffView, Steps, Timeline, Schedule, Callout, ApprovalCard, Result, EntityHeader, KeyValue (Descriptions), Accordion, JsonTree, ApiEndpoint, FileTree, Mermaid, ServiceGraph, Select, Segmented, Switch, Comparison, Matrix, LogViewer, Kanban, and SourceList.',
+      'A2UI 1.0 basic components plus 39 DSH-native extensions (57 total): Grid, NumberInput, MultiSelect, DateRange, TreeSelect, CheckCard, Tree, Chart (19 ECharts kinds), Table (ProTable), Stat, MetricRing, Tracker, Progress, Badge, Code, Terminal, DiffView, Steps, Timeline, Schedule, Callout, ApprovalCard, Result, EntityHeader, KeyValue (Descriptions), Accordion, JsonTree, ApiEndpoint, FileTree, Mermaid, ServiceGraph, Select, Segmented, Switch, Comparison, Matrix, LogViewer, Kanban, and SourceList.',
     instructions: DSH_CATALOG_INSTRUCTIONS,
     defModels: [WeightSchema],
   },
