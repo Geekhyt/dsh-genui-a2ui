@@ -62,7 +62,7 @@ flowchart TB
 `dsh-genui-a2ui` adheres strictly to the **A2UI (Agent-to-User Interface) 1.0** specification without private protocol forks:
 
 1. **Data, Not Code (Security by Design)** — Agents never emit executable HTML, JavaScript, or `iframe` documents. Only pure declarative JSON messages cross the Host-Client boundary, eliminating XSS and arbitrary script execution by construction.
-2. **Trusted Client Catalog** — Only the **57 components** and **23 functions** registered in `dshSchemaCatalog` can be instantiated. Unknown components or malformed arguments are rejected at compile time and render time.
+2. **Trusted Client Catalog** — Only the **57 components** and **25 functions** registered in `dshSchemaCatalog` can be instantiated. Unknown components or malformed arguments are rejected at compile time and render time.
 3. **LLM-Friendly Flat Streaming Graph** — Container composition uses flat component maps with `ChildSchema` ID references rather than deeply nested JSX trees, enabling 60fps token-by-token streaming and surgical in-place updates via `surface("id", update=true)`.
 4. **Structure · State · Render Separation** — UI topology (`components`), JSON Pointer reactive state (`$/paths`), and host React widgets are decoupled.
 5. **Thin UI, Thick Agent** — Deterministic scalar math (`calc`), conditional formatting (`cond`), and input checks (`?checks`) execute locally in `0ms`; open-ended reasoning, multi-row schedule generation, live queries, and external side effects round-trip to the Agent via `[a2ui-action]` or `a2ui_ask`.
@@ -76,7 +76,7 @@ flowchart TB
 
 | Layer | Official DSH Extension Seam | Usage in `dsh-genui-a2ui` |
 | :--- | :--- | :--- |
-| **Host Services** | Cordis `tools`, `skills`, `commands`, `systemPrompt` | Registers `a2ui_render`, `a2ui_ask`, `skill("a2ui")`, `/a2ui`, `/a2ui-answer`, and `tool:a2ui` prompt guidance. |
+| **Host Services** | Cordis `tools`, `skills`, `commands`, `systemPrompt` | Registers `a2ui_render`, `a2ui_ask`, 4 on-demand domain skills (`a2ui`, `a2ui-analytics`, `a2ui-devops`, `a2ui-forms`), `/a2ui`, `/a2ui-answer`, and `tool:a2ui` prompt guidance. |
 | **Client UI Slots** | `tool.call.toolview`, `conversation.chat.turnTail`, `conversation.input.dock`, `conversation.input.left`, `conversation.user.text.node` | Renders inline streaming cards, turn-tail spotlight deliverables, persistent docks, blocking approval wizards, the composer toggle pill, and `[a2ui-action]` receipt chips. |
 | **Conversation Projections** | `uiConversation.events.register`, `uiConversation.userText.register` | Projects settled `a2ui_render` surfaces into replay-safe, fork-safe turn metadata and formats `[a2ui-action]` user messages. |
 | **Shared UI Primitives** | `@deepseek-ai/dsh-client-ui-primitives` | Reuses 27 native host exports (`Switch`, `SegmentedControl`, `HoverCard`, `StateDot`, `ImageLightbox`, `FileTypeIcon`, `PathLabel`, `LinkIconRegular`, `JsonTree`, etc.) and `--dsw-*` semantic design tokens. |
@@ -87,11 +87,11 @@ flowchart TB
 
 | Bundle Target | Raw Size | Gzip Size | Role & Load Trigger |
 | :--- | :--- | :--- | :--- |
-| `lib/client.js` | **`58.3 kB`** | **`16.5 kB`** | Cold-boot shell: registers UI Slots, bilingual chrome, empty-session toast feedback, and composer pill (enforced by `< 100 kB` build & test gate). |
-| `lib/client.runtime.js` | `1.30 MB` | ~`348 kB` | Loaded on first A2UI surface mount (`@a2ui/react`, 57-component catalog, TanStack Table, React Aria). |
-| `lib/client.echarts.js` | `871.8 kB` | ~`288 kB` | Loaded only when a surface renders `Chart` (ECharts 6 modular registration for 19 chart kinds, threshold markLines & 276px compact adaptation). |
+| `lib/client.js` | **`59.3 kB`** | **`16.7 kB`** | Cold-boot shell: registers UI Slots, bilingual chrome, empty-session toast feedback, and composer pill (enforced by `< 100 kB` build & test gate). |
+| `lib/client.runtime.js` | `1.31 MB` | ~`352 kB` | Loaded on first A2UI surface mount (`@a2ui/react`, 57-component catalog, TanStack Table, 0ms cross-filtering & anti-jank streaming). |
+| `lib/client.echarts.js` | `874.3 kB` | ~`289 kB` | Loaded only when a surface renders `Chart` (ECharts 6 modular registration for 19 chart kinds, threshold markLines, cross-filter highlight, 2× PNG export & 276px compact adaptation). |
 | `lib/client.mermaid.js` | `3.51 MB` | ~`943 kB` | Loaded only when a surface renders `Mermaid` (Mermaid 11 under `securityLevel: "strict"` + SVG sanitizer + LRU-64 cache). |
-| `lib/index.js` | `727.8 kB` | `198.6 kB` | Self-contained Host ESM bundle (`@a2ui/agent` + Zod catalog) — ships with zero runtime `dependencies`. |
+| `lib/index.js` | `745.6 kB` | `204.6 kB` | Self-contained Host ESM bundle (`@a2ui/agent`, domain skill compactor, Express lowering passes & Zod catalog) — ships with zero runtime `dependencies`. |
 
 ---
 
@@ -209,15 +209,16 @@ Every surface begins with `surface("snake_id")` (or `surface("snake_id", update=
 
 ---
 
-## 6. Client-Side Functions Reference (23 Functions)
+## 6. Client-Side Functions Reference (25 Functions)
 
-- **Algebraic & Aggregate Math (4)**:
-  - `calc(expr, vars, decimals?)`: Safe recursive-descent formula evaluator supporting `+ - * / ^ % ( ) ? : == != < <= > >= && ||` and `pow, sqrt, exp, log, ln, log10, abs, min, max, clamp, round, floor, ceil, pmt(ratePerPeriod, nper, pv)`. Validated statically at compile time (max AST depth `36`, max AST nodes `128`).
+- **Algebraic, Lookup & Aggregate Math (5)**:
+  - `calc(expr, vars, decimals?)`: Safe recursive-descent formula evaluator supporting `+ - * / ^ % ( ) ? : == != < <= > >= && ||` and `pow, sqrt, exp, log, ln, log10, abs, min, max, clamp, round, floor, ceil, pmt(ratePerPeriod, nper, pv)`. Validated statically at compile time (max true nesting depth `36`, max AST nodes `128`).
+  - `lookup(key, table, fallback?)`: Depth-1 map lookup (auto-unwraps single-select `ChoicePicker` arrays) replacing deeply nested `cond(eq(...))` chains.
   - `cond(condition, truthy, falsy)`, `sum(items, field?)`, `avg(items, field?)`
 - **Comparators & Boolean Logic (7)**:
   - `eq(a, b)` (auto-unwraps single-element `ChoicePicker` arrays), `gt(a, b)`, `lt(a, b)`, `includes(items, value)`, `and([...])`, `or([...])`, `not(x)`
-- **Formatting (5)**:
-  - `formatNumber(value, decimals?, grouping?)`, `formatCurrency(value, currency, decimals?, grouping?)`, `formatDate(value, format)`, `formatString(template)`, `pluralize(...)`
+- **Formatting & Concatenation (6)**:
+  - `formatNumber(value, decimals?, grouping?)`, `formatCurrency(value, currency, decimals?, grouping?)`, `formatDate(value, format)`, `formatString(template)`, `concat(items)`, `pluralize(...)`
 - **Validation (`?checks`) & Local Actions (7)**:
   - `required(value)`, `regex(value, pattern)`, `length(value, min?, max?)`, `numeric(value, min?, max?)`, `email(value)`, `copyText(text)`, `openUrl(url)`
 
@@ -232,11 +233,14 @@ npm ci
 # TypeScript strict check
 npm run typecheck
 
-# Build Host ESM + 4 Client CJS chunks (enforces cold-boot size gate)
+# Build Host ESM + 4 Client CJS chunks (enforces < 100 kB cold-boot size gate)
 npm run build
 
-# Run all 19 Vitest suites / 81 unit, React best-practice, contract, and bundle tests
+# Run all 22 Vitest suites / 94 unit, React best-practice, contract, and bundle tests
 npm test
+
+# Run 28-case LLM generation & self-repair eval benchmark (--mode=mock or --mode=live --model=deepseek-chat)
+npm run eval:llm -- --mode=mock --strategy=both
 
 # Verify compatibility against 27 installed DeepSeek Harness.app platform exports & slots
 npm run check:host-api
@@ -251,13 +255,13 @@ node scripts/dev-env.mjs serve
 
 ### Key Repository Layout
 
-- `src/index.ts` — Host Cordis plugin entry (`tools`, `skills`, `commands`, `systemPrompt`)
-- `src/host/` — `a2ui_render`, `a2ui_ask`, `SurfaceSessions` compiler & self-repair engine
-- `src/shared/` — Isomorphic `dshSchemaCatalog` (57 components), Host/Client `wire-types.ts`, `calc` parser/evaluator, and bilingual i18n
-- `src/client/index.ts` — `58.3 kB` cold-boot UI slot shell & composer toggle pill
-- `src/client/dom-hooks.ts` — Sole low-level DOM / external engine lifecycle boundary (`0` `useEffect` in `.tsx` files)
+- `src/index.ts` — Host Cordis plugin entry (`tools`, 4-domain `skills`, `commands`, `systemPrompt`)
+- `src/host/` — `a2ui_render`, `a2ui_ask`, `SurfaceSessions` compiler, domain skill compactor (`prompt-compact.ts`), Express lowering passes (`express-preprocess.ts`), and 28-case eval suite (`eval-suite.ts`)
+- `src/shared/` — Isomorphic `dshSchemaCatalog` (57 components / 25 functions), Host/Client `wire-types.ts`, `calc` parser/evaluator, and bilingual i18n
+- `src/client/index.ts` — `59.3 kB` cold-boot UI slot shell & composer toggle pill
+- `src/client/dom-hooks.ts` — Sole low-level DOM / ECharts PNG export / streaming height stabilizer / Mermaid lifecycle boundary (`0` `useEffect` in `.tsx` files)
 - `src/client/chunks/` — On-demand entrypoints (`runtime-chunk.ts`, `echarts-chunk.ts`, `mermaid-chunk.ts`)
-- `src/client/catalog/` — Light-DOM React implementations of all 57 components & 23 functions
+- `src/client/catalog/` — Light-DOM React implementations of all 57 components & 25 functions
 - `build/` — `tsdown` 5-target build preset & DSH web platform externalizer
-- `scripts/` — Host API contract verifier (`check-host-api.mjs`) and isolated mock dev server (`dev-env.mjs`, `mock-llm.mjs`)
+- `scripts/` — Host API contract verifier (`check-host-api.mjs`), LLM benchmark runner (`eval-llm.mjs`), and isolated mock dev server (`dev-env.mjs`, `mock-llm.mjs`)
 - `AGENTS.md` — `306px`-first `@container` layout rules, ECharts `276px` compact anti-collision contract, and pre-ship visual QA checklist

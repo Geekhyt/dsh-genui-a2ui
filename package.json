@@ -1,6 +1,6 @@
 {
   "name": "dsh-genui-a2ui",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Google A2UI 1.0 Generative UI plugin for DeepSeek Harness — stream 57 native interactive components, 19 chart types, Mermaid diagrams, 0ms simulators, and approval gates inline in chat.",
   "license": "MIT",
   "author": "Geekhyt",
@@ -75,6 +75,7 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "check:host-api": "node scripts/check-host-api.mjs",
+    "eval:llm": "node --no-warnings --use-env-proxy --experimental-transform-types scripts/eval-llm.mjs",
     "dev:env": "node scripts/dev-env.mjs",
     "dev:mock": "node scripts/mock-llm.mjs"
   },

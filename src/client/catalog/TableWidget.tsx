@@ -30,8 +30,10 @@ import { useRuntimeMessages } from '../i18n.ts'
 import { DshButton, DshInput, DshSearchIcon, DshTag } from '../ui/primitives.tsx'
 import css from './Catalog.module.css'
 import {
+  computeNextCrossFilterSelection,
   computeTableNumericSummary,
   detectNumericColumnKeys,
+  filterTableRowsByField,
   formatTableToCsv,
   formatTableToMarkdown,
 } from './v4-helpers.ts'
@@ -76,6 +78,9 @@ export interface TableWidgetProps {
   readonly batchLabel?: string | undefined
   readonly showSummary?: boolean | undefined
   readonly expandKey?: string | undefined
+  readonly filterField?: string | undefined
+  readonly filterValue?: string | undefined
+  readonly onFilterValueChange?: ((next: string) => void) | undefined
   readonly action?: ((options?: ActionDispatchOptions) => Promise<void>) | undefined
   readonly weight?: number | undefined
 }
@@ -155,18 +160,38 @@ export const TableWidget = memo(function TableWidget({
   batchLabel,
   showSummary = false,
   expandKey,
+  filterField,
+  filterValue,
+  onFilterValueChange,
   action,
   weight,
 }: TableWidgetProps) {
   const msg = useRuntimeMessages()
-  const data = useMemo(() => normalizeRows(rawRows), [rawRows])
+  const normalizedData = useMemo(() => normalizeRows(rawRows), [rawRows])
+  const activeCrossFilter = (filterValue ?? '').trim()
+  const data = useMemo(
+    () => filterTableRowsByField(normalizedData, filterField, activeCrossFilter) as RowRecord[],
+    [normalizedData, filterField, activeCrossFilter],
+  )
   const [sorting, setSorting] = useState<SortingState>([])
   const [searchInput, setSearchInput] = useState('')
   const globalFilter = useDeferredValue(searchInput)
+  const clampedPageSize = Math.max(3, Math.min(100, pageSize))
+  const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: clampedPageSize })
   const [selectedIndices, setSelectedIndices] = useState<ReadonlySet<number>>(() => new Set())
   const [expandedIndices, setExpandedIndices] = useState<ReadonlySet<number>>(() => new Set())
   const [compact, setCompact] = useState(false)
   const [copiedMd, setCopiedMd] = useState(false)
+  const [prevCrossFilter, setPrevCrossFilter] = useState(activeCrossFilter)
+
+  if (prevCrossFilter !== activeCrossFilter) {
+    setPrevCrossFilter(activeCrossFilter)
+    if (pagination.pageIndex !== 0) {
+      setPagination((prev) => ({ ...prev, pageIndex: 0 }))
+    }
+    if (selectedIndices.size > 0) setSelectedIndices(new Set())
+    if (expandedIndices.size > 0) setExpandedIndices(new Set())
+  }
 
   const inferredCols = useMemo<readonly TableColumnInput[]>(() => {
     if (explicitCols && explicitCols.length > 0) return explicitCols
@@ -233,9 +258,10 @@ export const TableWidget = memo(function TableWidget({
     features: TABLE_FEATURES,
     data,
     columns,
-    state: { sorting, globalFilter },
+    state: { sorting, globalFilter, pagination },
     onSortingChange: setSorting,
     onGlobalFilterChange: setSearchInput,
+    onPaginationChange: setPagination,
     globalFilterFn: (row, _columnId, filterValue) => {
       const q = String(filterValue ?? '')
         .trim()
@@ -244,9 +270,6 @@ export const TableWidget = memo(function TableWidget({
       return Object.values(row.original).some((val) =>
         formatCellValue(val, msg).toLowerCase().includes(q),
       )
-    },
-    initialState: {
-      pagination: { pageIndex: 0, pageSize: Math.max(3, Math.min(100, pageSize)) },
     },
   })
 
@@ -342,7 +365,7 @@ export const TableWidget = memo(function TableWidget({
   }
 
   const showProControls = exportable || selectable
-  const showToolbar = Boolean(title || searchable || showProControls)
+  const showToolbar = Boolean(title || searchable || showProControls || activeCrossFilter)
   const colSpanTotal = Math.max(
     1,
     columns.length + (selectable ? 1 : 0) + (hasExpandColumn ? 1 : 0),
@@ -358,12 +381,28 @@ export const TableWidget = memo(function TableWidget({
       className={css.tableCard}
       style={weightStyle}
       data-a2ui-table=""
+      data-a2ui-table-filter={activeCrossFilter || undefined}
       data-density={compact ? 'compact' : 'standard'}
     >
       {showToolbar ? (
         <div className={css.tableToolbar}>
           <div className={css.proTableLeftGroup}>
             {title ? <span className={css.tableTitle}>{title}</span> : null}
+            {activeCrossFilter ? (
+              <span className={css.crossFilterChip} data-a2ui-table-filter-chip="">
+                <span>{msg.tableFilterActive(activeCrossFilter)}</span>
+                {onFilterValueChange ? (
+                  <button
+                    type="button"
+                    className={css.crossFilterClear}
+                    aria-label={msg.tableClearFilter}
+                    onClick={() => onFilterValueChange('')}
+                  >
+                    ×
+                  </button>
+                ) : null}
+              </span>
+            ) : null}
             {selectable && selectedRowsList.length > 0 ? (
               <DshTag tone="info">{msg.tableSelectedCount(selectedRowsList.length)}</DshTag>
             ) : null}
@@ -461,12 +500,24 @@ export const TableWidget = memo(function TableWidget({
               </tr>
             ) : (
               pageRows.map((row) => {
-                const clickable = typeof action === 'function' && !selectable
+                const canCrossFilterRow = Boolean(
+                  filterField && onFilterValueChange && !action && !selectable,
+                )
+                const clickable = (typeof action === 'function' && !selectable) || canCrossFilterRow
                 const rowChecked = selectable && selectedIndices.has(row.index)
                 const detailText =
                   hasExpandColumn && expandKey ? formatExpandDetail(row.original[expandKey]) : ''
                 const isExpanded = detailText !== '' && expandedIndices.has(row.index)
                 const triggerRow = () => {
+                  if (canCrossFilterRow && filterField && onFilterValueChange) {
+                    const cellVal = formatCellValue(row.original[filterField], msg)
+                    if (cellVal && cellVal !== '—') {
+                      onFilterValueChange(
+                        computeNextCrossFilterSelection(activeCrossFilter, cellVal),
+                      )
+                    }
+                    return
+                  }
                   if (!action) return
                   const firstKey = inferredCols[0]?.key
                   const label =

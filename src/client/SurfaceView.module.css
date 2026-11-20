@@ -116,15 +116,12 @@
   padding: 6px 0;
 }
 
-@keyframes a2uiShimmer {
+@keyframes a2uiShimmerSweep {
   0% {
-    opacity: 0.45;
-  }
-  50% {
-    opacity: 0.85;
+    background-position: 200% 0;
   }
   100% {
-    opacity: 0.45;
+    background-position: -200% 0;
   }
 }
 
@@ -144,15 +141,61 @@
 .skeletonBlock {
   height: 52px;
   border-radius: var(--dsw-radius-md, 8px);
-  background: var(--dsw-alias-interactive-bg-hover, rgba(128, 128, 128, 0.1));
-  animation: a2uiShimmer 1.4s ease-in-out infinite;
+  background: linear-gradient(
+    90deg,
+    var(--dsw-alias-interactive-bg-hover, rgba(128, 128, 128, 0.08)) 25%,
+    color-mix(
+        in srgb,
+        var(--dsw-alias-brand-primary, #4d6bfe) 10%,
+        var(--dsw-alias-interactive-bg-hover, rgba(128, 128, 128, 0.14))
+      )
+      50%,
+    var(--dsw-alias-interactive-bg-hover, rgba(128, 128, 128, 0.08)) 75%
+  );
+  background-size: 200% 100%;
+  animation: a2uiShimmerSweep 1.6s ease-in-out infinite;
 }
 
 .skeletonChart {
-  height: 112px;
+  height: 120px;
   border-radius: var(--dsw-radius-md, 8px);
-  background: var(--dsw-alias-interactive-bg-hover, rgba(128, 128, 128, 0.08));
-  animation: a2uiShimmer 1.4s ease-in-out 0.18s infinite;
+  background: linear-gradient(
+    90deg,
+    var(--dsw-alias-interactive-bg-hover, rgba(128, 128, 128, 0.06)) 25%,
+    color-mix(
+        in srgb,
+        var(--dsw-alias-brand-primary, #4d6bfe) 9%,
+        var(--dsw-alias-interactive-bg-hover, rgba(128, 128, 128, 0.12))
+      )
+      50%,
+    var(--dsw-alias-interactive-bg-hover, rgba(128, 128, 128, 0.06)) 75%
+  );
+  background-size: 200% 100%;
+  animation: a2uiShimmerSweep 1.6s ease-in-out 0.18s infinite;
+}
+
+.streamingFoot {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--dsw-alias-label-tertiary, #8f959e);
+  padding-top: 2px;
+}
+
+.streamingDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--dsw-alias-brand-primary, #4d6bfe);
+  opacity: 0.78;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeletonBlock,
+  .skeletonChart {
+    animation: none;
+  }
 }
 
 .skeletonHint {

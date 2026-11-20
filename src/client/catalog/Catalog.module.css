@@ -655,12 +655,114 @@
   border-radius: var(--dsw-radius-md, 10px);
   background: var(--dsw-alias-bg-layer-1, rgba(128, 128, 128, 0.02));
   min-width: 0;
+  container-type: inline-size;
+}
+
+.chartHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 8px;
+  min-width: 0;
+}
+
+.chartTitleGroup {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1 1 140px;
 }
 
 .chartTitle {
   font-size: 13px;
   font-weight: 600;
   color: var(--dsw-alias-label-primary, inherit);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.chartActions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.chartActionBtn {
+  appearance: none;
+  border: 1px solid var(--dsw-alias-border-l1, rgba(128, 128, 128, 0.24));
+  background: var(--dsw-alias-bg-base, transparent);
+  color: var(--dsw-alias-label-secondary, inherit);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.25;
+  padding: 2px 7px;
+  border-radius: var(--dsw-radius-sm, 5px);
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease;
+}
+
+.chartActionBtn:hover {
+  background: var(--dsw-alias-interactive-bg-hover, rgba(128, 128, 128, 0.1));
+  color: var(--dsw-alias-label-primary, inherit);
+  border-color: var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.36));
+}
+
+.crossFilterChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.3;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--dsw-alias-brand-primary, #4d6bfe) 14%, transparent);
+  color: var(--dsw-alias-brand-primary, #4d6bfe);
+  border: 1px solid color-mix(in srgb, var(--dsw-alias-brand-primary, #4d6bfe) 32%, transparent);
+  white-space: nowrap;
+  flex-shrink: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.crossFilterClear {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: 13px;
+  line-height: 1;
+  padding: 0 2px;
+  cursor: pointer;
+  opacity: 0.78;
+  flex-shrink: 0;
+}
+
+.crossFilterClear:hover {
+  opacity: 1;
+}
+
+@container (max-width: 340px) {
+  .chartCard {
+    padding: 10px 10px;
+  }
+
+  .chartActionBtn {
+    padding: 2px 6px;
+    font-size: 10.5px;
+  }
 }
 
 .chartCanvas {
@@ -2120,6 +2222,12 @@
 
 .comparisonFooterTd {
   border-left: 1px solid var(--dsw-alias-border-l1, rgba(128, 128, 128, 0.12));
+  white-space: nowrap;
+}
+
+.comparisonFooterTd button {
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 @container (max-width: 420px) {
@@ -2135,7 +2243,9 @@
 
   .comparisonOptionTh,
   .comparisonDimTd,
-  .comparisonValTd {
+  .comparisonValTd,
+  .comparisonFooterDimTd,
+  .comparisonFooterTd {
     padding: 6px 6px;
     font-size: 11px;
     min-width: 78px;

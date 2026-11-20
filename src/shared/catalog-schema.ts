@@ -153,6 +153,16 @@ export const ChartApi = {
           .default(260)
           .describe('Canvas height in pixels.')
           .optional(),
+        selected: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional two-way bound $/path storing the clicked category/item for 0ms local cross-filtering with Table or KPIs (clicking the active item clears it).',
+        ).optional(),
+        exportable: z
+          .boolean()
+          .default(true)
+          .describe(
+            'When true (default), displays compact 1-click PNG download and CSV copy actions in the chart header.',
+          )
+          .optional(),
         action: ActionSchema.describe('REF:#/$defs/Action').optional(),
         weight: WeightSchema.optional(),
       })
@@ -235,6 +245,15 @@ export const TableApi = {
             'Optional property key on row objects whose text/JSON content can be expanded inline beneath each row (`▸` / `▾`).',
           )
           .optional(),
+        filterField: z
+          .string()
+          .describe(
+            'Optional row property key matched against `filterValue` for 0ms local cross-filtering (matches any column when omitted).',
+          )
+          .optional(),
+        filterValue: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Optional two-way bound $/path filter value (e.g. paired with `Chart(..., selected=$/region)`) that filters rows locally at 0ms.',
+        ).optional(),
         action: ActionSchema.describe(
           'REF:#/$defs/Action|Optional row drill-down or batch selection action triggered when clicking a row or batch action button.',
         ).optional(),
@@ -499,9 +518,9 @@ export const KeyValueApi = {
           .number()
           .int()
           .min(1)
-          .max(3)
+          .max(4)
           .default(2)
-          .describe('Number of grid columns (1 to 3, default 2).')
+          .describe('Number of grid columns (1 to 4, default 2).')
           .optional(),
         bordered: z
           .boolean()
@@ -1791,6 +1810,40 @@ export const CondApi = {
   ),
 } satisfies FunctionApi
 
+/** Reactive string concatenation (`concat([formatNumber(v), " GB"])`). */
+export const ConcatApi = {
+  name: 'concat' as const,
+  returnType: 'string' as const,
+  description:
+    'Joins an array of strings, numbers, or formatted expressions into a single string (e.g. `concat([formatNumber(v), " GB"])`).',
+  schema: spec(
+    z.object({
+      items: DynamicValueSchema.describe(
+        'Array of string/number values or reactive expressions to join.',
+      ),
+    }),
+    { closure: 'unevaluatedProperties' },
+  ),
+} satisfies FunctionApi
+
+/** Reactive map lookup (`lookup($/tier, { "l40s": 1, "a800": 2 }, 4)`). */
+export const LookupApi = {
+  name: 'lookup' as const,
+  returnType: 'any' as const,
+  description:
+    'Looks up `key` (auto-unwrapping single-select ChoicePicker `["x"]`) in `table`, returning `fallback` when absent.',
+  schema: spec(
+    z.object({
+      key: DynamicValueSchema.describe('Scalar key or single-select ChoicePicker $/path.'),
+      table: DynamicValueSchema.describe('Static key -> value map object (e.g. `{ "a800": 80 }`).'),
+      fallback: DynamicValueSchema.describe(
+        'Default value when `key` is not in `table`.',
+      ).optional(),
+    }),
+    { closure: 'unevaluatedProperties' },
+  ),
+} satisfies FunctionApi
+
 export const DSH_FUNCTION_APIS: readonly FunctionApi[] = [
   ...BASIC_FUNCTION_APIS,
   CopyTextApi,
@@ -1802,6 +1855,8 @@ export const DSH_FUNCTION_APIS: readonly FunctionApi[] = [
   LtApi,
   IncludesApi,
   CondApi,
+  ConcatApi,
+  LookupApi,
 ]
 
 export const DSH_CATALOG_INSTRUCTIONS = [

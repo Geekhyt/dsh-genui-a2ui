@@ -21,10 +21,29 @@ import {
 } from '@a2ui/agent'
 
 type SchemaCatalogInput = ConstructorParameters<typeof CatalogConfig>[0]
-import { A2UI_LIMITS, ASK_TOOL, dshSchemaCatalog, RENDER_TOOL } from '../shared/catalog-schema.ts'
 import { validateCalcExpression } from '../shared/calc-engine.ts'
+import { A2UI_LIMITS, ASK_TOOL, dshSchemaCatalog, RENDER_TOOL } from '../shared/catalog-schema.ts'
+import {
+  desugarExpressConcat,
+  flattenChainedCalc,
+  foldNestedCondToLookup,
+  preprocessExpressProgram,
+} from './express-preprocess.ts'
+import {
+  compactPromptSnippet,
+  type SkillDomain,
+  slicePromptSnippetByDomain,
+} from './prompt-compact.ts'
 
-export { ASK_TOOL, RENDER_TOOL }
+export {
+  ASK_TOOL,
+  desugarExpressConcat,
+  flattenChainedCalc,
+  foldNestedCondToLookup,
+  preprocessExpressProgram,
+  RENDER_TOOL,
+}
+export type { SkillDomain }
 
 /**
  * The SDK's Express output contract tells the model to wrap blocks in
@@ -63,14 +82,6 @@ class ToolChannelFormatFactory implements InferenceFormatFactory {
     return { promptGenerator, createParser: () => format.createParser() }
   }
 }
-
-const PLURALIZE_VERBOSE_BLOCK = /• pluralize\([^\n]*\n(?: {2}- [^\n]*\n)+/
-
-const COMPACT_PLURALIZE = [
-  '• pluralize(value, other, one?, zero?)',
-  '  - Description: Selects a string based on the count (`value`), falling back to `other`.',
-  '',
-].join('\n')
 
 function extractUpdateSurfaceIds(cleanedUi: string): string[] {
   const ids: string[] = []
@@ -164,13 +175,50 @@ function enrichCompilerError(err: unknown): never {
   if (err instanceof Error) {
     if (/functionCall depth >/i.test(err.message)) {
       throw new A2uiError(
-        `${err.message}. Tip: A2UI limits nested function call depth to 5; collapse math into a single \`calc("p * r * (1 + r)^n / ((1 + r)^n - 1)", { p: $/p, r: $/r, n: $/n }, decimals=2)\` call.`,
+        `${err.message}. Tip: A2UI caps nested function call depth at 5. NEVER nest 3+ \`cond(...)\` inside \`calc(...)\` + \`formatNumber(...)\` and NEVER chain \`calc()\` variables — collapse math into one flat \`calc()\` reading \`$/paths\` directly (e.g. \`calc("p * r * (1 + r)^n / ((1 + r)^n - 1)", { p: $/p, r: $/r, n: $/n }, decimals=2)\`), and bind derived results to plain local variables (never \`$/paths\`).`,
         'VALIDATION_ERROR',
       )
     }
     if (PRUNED_MATH_FN_RE.test(err.message)) {
       throw new A2uiError(
         `${err.message} Tip: Arithmetic & rounding are unified in \`calc(expr, vars?, decimals?)\`, e.g. \`calc("a * b", { a: $/a, b: $/b }, decimals=2)\`; for comparisons use \`eq\`, \`gt\`, \`lt\`, or \`not(...)\`.`,
+        'VALIDATION_ERROR',
+      )
+    }
+    if (/token recognition error at:\s*'[\s]*[+*/]/i.test(err.message)) {
+      throw new A2uiError(
+        `${err.message} Tip: A2UI Express DSL has NO \`+\`, \`*\`, or \`/\` operators outside \`calc()\`. NEVER concatenate strings with \`+\` (put units in \`label\`/\`caption\`) and NEVER write math inside \`formatNumber(a * 100)\` or \`{ q: $/a / $/b }\` — put ALL arithmetic inside the \`calc("a / b * 100", { a: $/a, b: $/b }, decimals=1)\` formula string.`,
+        'VALIDATION_ERROR',
+      )
+    }
+    if (
+      /token recognition error at:\s*'\.[a-zA-Z_]/i.test(err.message) ||
+      /mismatched input '\[' expecting \{',', '\)'\}/i.test(err.message)
+    ) {
+      throw new A2uiError(
+        `${err.message} Tip: A2UI Express DSL has NO JavaScript dot-access (\`obj.prop\`) or bracket indexing (\`arr[0]\`) on variables. Use JSON Pointer paths (\`$/obj/prop\`) for data model fields, or flat scalar local variables (\`gpuName = cond(eq($/gpu, "a800"), "A800", "H800")\`).`,
+        'VALIDATION_ERROR',
+      )
+    }
+    if (/token recognition error at:\s*'`/i.test(err.message)) {
+      throw new A2uiError(
+        `${err.message} Tip: A2UI Express DSL does NOT support JS backtick template literals (\`...\`). Use standard double-quoted strings with \`\\n\` for newlines.`,
+        'VALIDATION_ERROR',
+      )
+    }
+    if (/extraneous input ':' expecting \{',', '\)'\}/i.test(err.message)) {
+      throw new A2uiError(
+        `${err.message} Tip: Named component arguments MUST use \`=\` (e.g. \`EntityHeader("...", avatarText="HR", status="healthy")\`), NOT \`:\`. Use \`:\` ONLY inside \`{ key: value }\` object literals.`,
+        'VALIDATION_ERROR',
+      )
+    }
+    if (
+      /(?:approveAction|rejectAction|action):.*Expected object, received string|(?:approveAction|rejectAction|action)\.event: Expected object/i.test(
+        err.message,
+      )
+    ) {
+      throw new A2uiError(
+        `${err.message} Tip: Action props MUST use \`Event("action_name", { key: $/val })\` (e.g. \`approveAction=Event("approve")\`, \`rejectAction=Event("reject")\`), never a plain string or \`{ action: ... }\`.`,
         'VALIDATION_ERROR',
       )
     }
@@ -275,10 +323,21 @@ export class SurfaceSessions {
     this.defaultEnabled = enabled
   }
 
-  /** The Express prompt snippet for the DSH catalog (with verbose CLDR prose compacted). */
-  promptSnippet(): string {
-    const raw = this.generator.createProcessor(CAPABILITIES).promptSnippet
-    return raw.replace(PLURALIZE_VERBOSE_BLOCK, COMPACT_PLURALIZE)
+  /** Raw SDK prompt snippet before P0 compaction (useful for telemetry & regression tests). */
+  rawPromptSnippet(): string {
+    return this.generator.createProcessor(CAPABILITIES).promptSnippet
+  }
+
+  /**
+   * Compacted Express prompt snippet for the DSH catalog.
+   * - Omit `domain` for the full compacted 57-component catalog (legacy fallback & verification).
+   * - Pass `'core' | 'analytics' | 'devops' | 'forms'` for lightweight domain-scoped skills.
+   */
+  promptSnippet(domain?: SkillDomain): string {
+    const raw = this.rawPromptSnippet()
+    return domain === undefined
+      ? compactPromptSnippet(raw)
+      : slicePromptSnippetByDomain(raw, domain)
   }
 
   processor(sessionId: string): A2uiRequestProcessor {
@@ -319,7 +378,7 @@ export class SurfaceSessions {
       }
     }
 
-    const cleaned = stripWrapping(ui)
+    const cleaned = preprocessExpressProgram(stripWrapping(ui))
     let parts: ReturnType<A2uiRequestProcessor['parseResponse']>
     try {
       parts = this.processor(sessionId).parseResponse(cleaned, { wrapped: false })

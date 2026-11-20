@@ -87,6 +87,7 @@ export interface ChartOptionInput {
   readonly horizontal?: boolean | undefined
   readonly zoom?: boolean | undefined
   readonly height?: number | undefined
+  readonly selected?: string | undefined
 }
 
 export function initChartInstance(el: HTMLElement): EChartsInstance {
@@ -445,7 +446,153 @@ function normalizeIsoDate(raw: unknown): string | null {
   return parsed.toISOString().slice(0, 10)
 }
 
+function extractCategoryAxisLabels(option: Record<string, unknown>): readonly string[] | null {
+  for (const axisKey of ['xAxis', 'yAxis'] as const) {
+    const raw = option[axisKey]
+    const axis = Array.isArray(raw) ? raw[0] : raw
+    if (
+      typeof axis === 'object' &&
+      axis !== null &&
+      (axis as Record<string, unknown>).type === 'category' &&
+      Array.isArray((axis as Record<string, unknown>).data)
+    ) {
+      return ((axis as Record<string, unknown>).data as unknown[]).map((v) =>
+        sanitizeChartLabel(v).trim().toLowerCase(),
+      )
+    }
+  }
+  return null
+}
+
+/**
+ * Post-processes any built ECharts option when `selected` is non-empty, dimming
+ * non-selected bars/slices/nodes (`opacity: 0.30`) and accenting the active item
+ * so Chart ↔ Table cross-filtering has immediate in-canvas visual feedback.
+ */
+function applyCrossFilterSelection(
+  option: echarts.EChartsCoreOption,
+  rawSelected: string | undefined,
+  dark: boolean,
+): echarts.EChartsCoreOption {
+  const q = (rawSelected ?? '').trim().toLowerCase()
+  if (q === '' || typeof option !== 'object' || option === null) return option
+
+  const opt = option as Record<string, unknown>
+  if (!Array.isArray(opt.series)) return option
+
+  const categories = extractCategoryAxisLabels(opt)
+  const highlightBorder = dark ? 'rgba(248, 250, 252, 0.92)' : 'rgba(15, 23, 42, 0.82)'
+
+  const nextSeries = (opt.series as Record<string, unknown>[]).map((s) => {
+    if (typeof s !== 'object' || s === null) return s
+    const type = String(s.type ?? '')
+    const seriesNameNorm = sanitizeChartLabel(s.name).trim().toLowerCase()
+    const seriesMatched = seriesNameNorm !== '' && seriesNameNorm === q
+
+    if (
+      (type === 'pie' || type === 'funnel' || type === 'treemap' || type === 'sunburst') &&
+      Array.isArray(s.data)
+    ) {
+      const nextData = (s.data as unknown[]).map((item) => {
+        if (typeof item !== 'object' || item === null) return item
+        const rec = item as Record<string, unknown>
+        const nameNorm = sanitizeChartLabel(rec.name).trim().toLowerCase()
+        const isMatch = nameNorm === q || (nameNorm !== '' && nameNorm.includes(q))
+        const prevStyle =
+          typeof rec.itemStyle === 'object' && rec.itemStyle !== null
+            ? (rec.itemStyle as Record<string, unknown>)
+            : {}
+        return {
+          ...rec,
+          itemStyle: {
+            ...prevStyle,
+            opacity: isMatch ? 1 : 0.3,
+            ...(isMatch ? { borderColor: highlightBorder, borderWidth: 1.5 } : {}),
+          },
+        }
+      })
+      return { ...s, data: nextData }
+    }
+
+    if ((type === 'bar' || type === 'line') && Array.isArray(s.data) && categories) {
+      // Skip waterfall transparent helper series
+      if (
+        typeof s.itemStyle === 'object' &&
+        s.itemStyle !== null &&
+        (s.itemStyle as Record<string, unknown>).color === 'transparent'
+      ) {
+        return s
+      }
+      const nextData = (s.data as unknown[]).map((pt, idx) => {
+        const cat = categories[idx] ?? ''
+        const isMatch = seriesMatched || cat === q || (cat !== '' && cat.includes(q))
+        if (typeof pt === 'object' && pt !== null && !Array.isArray(pt)) {
+          const rec = pt as Record<string, unknown>
+          const prevStyle =
+            typeof rec.itemStyle === 'object' && rec.itemStyle !== null
+              ? (rec.itemStyle as Record<string, unknown>)
+              : {}
+          return {
+            ...rec,
+            itemStyle: {
+              ...prevStyle,
+              opacity: isMatch ? 1 : 0.28,
+              ...(isMatch && type === 'bar'
+                ? { borderColor: highlightBorder, borderWidth: 1.2 }
+                : {}),
+            },
+          }
+        }
+        return {
+          value: pt,
+          itemStyle: {
+            opacity: isMatch ? 1 : 0.28,
+            ...(isMatch && type === 'bar'
+              ? { borderColor: highlightBorder, borderWidth: 1.2 }
+              : {}),
+          },
+        }
+      })
+      return { ...s, data: nextData }
+    }
+
+    if ((type === 'sankey' || type === 'graph') && Array.isArray(s.data)) {
+      const nextNodes = (s.data as unknown[]).map((node) => {
+        if (typeof node !== 'object' || node === null) return node
+        const rec = node as Record<string, unknown>
+        const nameNorm = sanitizeChartLabel(rec.name).trim().toLowerCase()
+        const isMatch = nameNorm === q || (nameNorm !== '' && nameNorm.includes(q))
+        const prevStyle =
+          typeof rec.itemStyle === 'object' && rec.itemStyle !== null
+            ? (rec.itemStyle as Record<string, unknown>)
+            : {}
+        return {
+          ...rec,
+          itemStyle: {
+            ...prevStyle,
+            opacity: isMatch ? 1 : 0.3,
+          },
+        }
+      })
+      return { ...s, data: nextNodes }
+    }
+
+    return s
+  })
+
+  return { ...opt, series: nextSeries }
+}
+
 export function buildChartOption(
+  props: ChartOptionInput,
+  dark: boolean,
+  containerWidth?: number,
+): echarts.EChartsCoreOption {
+  const raw = buildChartOptionInternal(props, dark, containerWidth)
+  return applyCrossFilterSelection(raw, props.selected, dark)
+}
+
+function buildChartOptionInternal(
   props: ChartOptionInput,
   dark: boolean,
   containerWidth?: number,
@@ -897,8 +1044,17 @@ export function buildChartOption(
     const srcField = props.xField ?? 'source'
     const tgtField = props.seriesField ?? 'target'
     const valField = (typeof props.yField === 'string' ? props.yField : undefined) ?? 'value'
+    const sankeySourceRows =
+      rows.length > 0
+        ? rows
+        : typeof props.data === 'object' &&
+            props.data !== null &&
+            !Array.isArray(props.data) &&
+            Array.isArray((props.data as Record<string, unknown>).links)
+          ? normalizeChartRows((props.data as Record<string, unknown>).links)
+          : rows
 
-    const rawLinks = rows.map((r) => ({
+    const rawLinks = sankeySourceRows.map((r) => ({
       source: sanitizeChartLabel(r[srcField] ?? r.source ?? r.from),
       target: sanitizeChartLabel(r[tgtField] ?? r.target ?? r.to),
       value: Math.max(0, toNumber(r[valField] ?? r.value ?? r[primaryY])),

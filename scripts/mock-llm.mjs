@@ -1083,6 +1083,41 @@ export const SHOWCASE_EXTREME_EDGE_TORTURE_B_UI = [
   ']))',
 ].join('\n')
 
+export const SHOWCASE_P2_CROSSFILTER_UI = [
+  'surface("p2_crossfilter")',
+  '$/activeRegion = ""',
+  '$/regions = [',
+  '  { region: "华东", gmv: 9860, orders: 420 },',
+  '  { region: "华南", gmv: 7420, orders: 315 },',
+  '  { region: "华北", gmv: 6180, orders: 268 }',
+  ']',
+  '$/orders = [',
+  '  { id: "ORD-101", region: "华东", customer: "星海智算", amount: 5200, status: "🟢 已回款" },',
+  '  { id: "ORD-102", region: "华东", customer: "云帆数据", amount: 4660, status: "🟢 已回款" },',
+  '  { id: "ORD-103", region: "华南", customer: "岭南数科", amount: 4120, status: "🟢 已回款" },',
+  '  { id: "ORD-104", region: "华南", customer: "深湾云网", amount: 3300, status: "🟡 审批中" },',
+  '  { id: "ORD-105", region: "华北", customer: "燕京实验室", amount: 3480, status: "🟢 已回款" },',
+  '  { id: "ORD-106", region: "华北", customer: "星河引擎", amount: 2700, status: "🟡 审批中" }',
+  ']',
+  'activeLabel = cond(eq($/activeRegion, ""), "全部区域", $/activeRegion)',
+  'activeGmv = lookup($/activeRegion, { "华东": "¥9,860 万", "华南": "¥7,420 万", "华北": "¥6,180 万" }, "¥23,460 万")',
+  'root = Card(Column([',
+  '  Row([',
+  '    Text("### P2 交叉筛选 + 一键导出验证台（示例数据）"),',
+  '    Badge(activeLabel, tone="info")',
+  '  ], justify="spaceBetween"),',
+  '  Row([',
+  '    Stat("当前视图区域", activeLabel, caption="点击下方图表柱/扇区 0ms 联动", weight=1),',
+  '    Stat("视图 GMV 汇总", activeGmv, delta="0ms 本地重算", trend="up", caption="无需往返 LLM", weight=1)',
+  '  ]),',
+  '  Row([',
+  '    Chart("bar", $/regions, title="区域 GMV 柱状图（点击联动）", xField="region", yField="gmv", selected=$/activeRegion, height=230, weight=1),',
+  '    Chart("pie", $/regions, title="区域营收占比（双向高亮）", xField="region", yField="gmv", selected=$/activeRegion, height=230, weight=1)',
+  '  ], align="stretch"),',
+  '  Table($/orders, title="订单明细 ProTable（0ms 交叉筛选）", filterField="region", filterValue=$/activeRegion, searchable=true, exportable=true, showSummary=true, columns=[{ key: "id", label: "订单号", sortable: true }, { key: "region", label: "区域", sortable: true }, { key: "customer", label: "客户" }, { key: "amount", label: "金额（万）", align: "right", sortable: true }, { key: "status", label: "状态" }])',
+  ']))',
+].join('\n')
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 function extractText(content) {
@@ -1335,6 +1370,7 @@ export function startMockLlmServer(port = PORT) {
       const isShowcase22 = /\bshowcase-22\b|剩余8类图表压测|remaining8/i.test(userText)
       const isShowcase23 = /\bshowcase-23\b|长词与浮层压测|extreme.*a/i.test(userText)
       const isShowcase24 = /\bshowcase-24\b|水平条与高密度压测|extreme.*b/i.test(userText)
+      const isShowcase25 = /\bshowcase-25\b|交叉筛选|crossfilter/i.test(userText)
       const isDashboard = /dashboard|看板/i.test(userText)
       const isAsk = /ask|向导|部署/i.test(userText)
       const isDock = /dock|工作台|监控/i.test(userText)
@@ -1510,6 +1546,13 @@ export function startMockLlmServer(port = PORT) {
           })
           return
         }
+        if (isShowcase25) {
+          await streamToolCall(res, model, 'a2ui_render', {
+            title: 'P2 实测：Chart ↔ ProTable 0ms 交叉筛选 + 一键 PNG/CSV 导出',
+            ui: SHOWCASE_P2_CROSSFILTER_UI,
+          })
+          return
+        }
         if (userText.includes('[a2ui-action]')) {
           if (userText.includes('surface="analytics"') || userText.includes('action="boost_q2"')) {
             await streamToolCall(res, model, 'a2ui_render', {
@@ -1660,15 +1703,17 @@ export function startMockLlmServer(port = PORT) {
                                                     ? '已渲染半宽长英文/URL/浮层与剩余重组件压测台（ApprovalCard / Result / SourceList / Comparison / ProTable / Split DiffView / Kanban / Right-Edge Popovers / Callout）。'
                                                     : isShowcase24
                                                       ? '已渲染水平条形图、正负堆叠柱、半宽 Mermaid 工具栏、60 天高密度 Tracker 与 5 位数 MetricRing 压测台。'
-                                                      : userText.includes('[a2ui-action]')
-                                                        ? '已根据您的操作实时增量刷新界面数据模型。'
-                                                        : isDock
-                                                          ? '已将 CI/CD 发布流水线监控面板固定在输入框上方的常驻工作台（Dock），后续轮次将继续实时原地刷新。'
-                                                          : isInline
-                                                            ? '已在工具步骤流内嵌渲染诊断摘要。'
-                                                            : isDashboard
-                                                              ? '已为您生成 2026 区域经营交互看板（示例数据），可切换图表、搜索排序明细表或一键调整预测情景。'
-                                                              : '已为您准备好餐厅预订交互卡片，您可直接在下方调整人数、口味或包间选项后点击确认。'
+                                                      : isShowcase25
+                                                        ? '已渲染 P2 交叉筛选与一键导出验证台：点击任意柱状图/饼图扇区或表格行即可 0ms 本地双向联动筛选，并支持一键下载 PNG 与复制 CSV。'
+                                                        : userText.includes('[a2ui-action]')
+                                                          ? '已根据您的操作实时增量刷新界面数据模型。'
+                                                          : isDock
+                                                            ? '已将 CI/CD 发布流水线监控面板固定在输入框上方的常驻工作台（Dock），后续轮次将继续实时原地刷新。'
+                                                            : isInline
+                                                              ? '已在工具步骤流内嵌渲染诊断摘要。'
+                                                              : isDashboard
+                                                                ? '已为您生成 2026 区域经营交互看板（示例数据），可切换图表、搜索排序明细表或一键调整预测情景。'
+                                                                : '已为您准备好餐厅预订交互卡片，您可直接在下方调整人数、口味或包间选项后点击确认。'
       await streamTextReply(res, model, reply)
       return
     }

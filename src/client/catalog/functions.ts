@@ -27,11 +27,13 @@ import { resolveClientLocale } from '../../shared/i18n.ts'
 import {
   AvgApi,
   CalcApi,
+  ConcatApi,
   CondApi,
   CopyTextApi,
   EqApi,
   GtApi,
   IncludesApi,
+  LookupApi,
   LtApi,
   SumApi,
 } from '../../shared/catalog-schema.ts'
@@ -210,6 +212,37 @@ export const IncludesImplementation = createFunctionImplementation(IncludesApi, 
   computeIncludes(args.items, args.value),
 )
 
+export function computeConcat(items: unknown): string {
+  if (!Array.isArray(items)) return items == null ? '' : String(items)
+  return items.map((part) => (part == null ? '' : String(part))).join('')
+}
+
+export function computeLookup(key: unknown, table: unknown, fallback?: unknown): unknown {
+  const unwrapped = Array.isArray(key) && key.length === 1 ? key[0] : key
+  if (
+    typeof table === 'object' &&
+    table !== null &&
+    !Array.isArray(table) &&
+    unwrapped !== undefined &&
+    unwrapped !== null
+  ) {
+    const rec = table as Record<string, unknown>
+    const strKey = String(unwrapped)
+    if (Object.hasOwn(rec, strKey)) {
+      return rec[strKey]
+    }
+  }
+  return fallback
+}
+
+export const LookupImplementation = createFunctionImplementation(LookupApi, (args) =>
+  computeLookup(args.key, args.table, args.fallback),
+)
+
+export const ConcatImplementation = createFunctionImplementation(ConcatApi, (args) =>
+  computeConcat(args.items),
+)
+
 export const CondImplementation = createFunctionImplementation(CondApi, (args) =>
   computeCond(args.condition, args.truthy, args.falsy),
 )
@@ -274,4 +307,6 @@ export const DSH_FUNCTIONS: FunctionImplList = [
   LtImplementation,
   IncludesImplementation,
   CondImplementation,
+  ConcatImplementation,
+  LookupImplementation,
 ]

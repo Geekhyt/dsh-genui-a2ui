@@ -331,6 +331,9 @@ export const DshChartImpl = defineComponent<{
   horizontal?: boolean
   zoom?: boolean
   height?: number
+  selected?: unknown
+  setSelected?: (next: string) => void
+  exportable?: boolean
   action?: ((options?: ActionDispatchOptions) => Promise<void>) | undefined
   weight?: number
 }>(ChartApi, function DshChart({ props }) {
@@ -363,6 +366,11 @@ export const DshChartImpl = defineComponent<{
       horizontal={props.horizontal}
       zoom={props.zoom}
       height={props.height}
+      selected={
+        props.selected !== undefined && props.selected !== null ? String(props.selected) : undefined
+      }
+      onSelectChange={readOnly ? undefined : props.setSelected}
+      exportable={props.exportable}
       action={readOnly ? undefined : props.action}
       weight={props.weight}
     />
@@ -380,6 +388,9 @@ export const DshTableImpl = defineComponent<{
   batchLabel?: unknown
   showSummary?: boolean
   expandKey?: string
+  filterField?: string
+  filterValue?: unknown
+  setFilterValue?: (next: string) => void
   action?: ((options?: ActionDispatchOptions) => Promise<void>) | undefined
   weight?: number
 }>(TableApi, function DshTable({ props }) {
@@ -396,6 +407,13 @@ export const DshTableImpl = defineComponent<{
       batchLabel={props.batchLabel ? String(props.batchLabel) : undefined}
       showSummary={props.showSummary}
       expandKey={props.expandKey}
+      filterField={props.filterField}
+      filterValue={
+        props.filterValue !== undefined && props.filterValue !== null
+          ? String(props.filterValue)
+          : undefined
+      }
+      onFilterValueChange={readOnly ? undefined : props.setFilterValue}
       action={readOnly ? undefined : props.action}
       weight={props.weight}
     />

@@ -62,7 +62,7 @@ flowchart TB
 `dsh-genui-a2ui` 严格遵循 **A2UI（Agent-to-User Interface）1.0** 官方设计原则，不做任何破坏确定性的私有协议魔改：
 
 1. **Data, Not Code（声明式数据而非可执行代码，安全内生）** —— 模型绝不发送 HTML、JavaScript 脚本或 `iframe`，前后端边界只传递纯 JSON 声明消息，从协议层彻底杜绝代码注入与 XSS。
-2. **Trusted Client Catalog（客户端受控组件白名单）** —— 模型只能调用 `dshSchemaCatalog` 注册并通过 Zod 严格校验的 **57 个组件**与 **23 个函数**，未知标签在编译期与渲染期双重拦截。
+2. **Trusted Client Catalog（客户端受控组件白名单）** —— 模型只能调用 `dshSchemaCatalog` 注册并通过 Zod 严格校验的 **57 个组件**与 **25 个函数**，未知标签在编译期与渲染期双重拦截。
 3. **LLM-Friendly Flat Streaming Graph（面向流式生成的扁平 ID 拓扑）** —— 容器采用扁平组件表 + `ChildSchema` ID 引用替代深层嵌套树，天然支持流式逐行上屏与按 Surface ID 原地增量更新（`surface("id", update=true)`）。
 4. **Structure · State · Render 三层解耦** —— 组件结构（`components`）、JSON Pointer 响应式状态（`$/paths`）与 React 视图渲染完全分离。
 5. **Thin UI, Thick Agent（薄视图、厚智能体职责边界）** —— 闭式标量公式（`calc`）、条件映射（`cond`）与表单即时校验（`?checks`）在本地 `0ms` 执行；开放式多步推理、外部数据查询与真实副作用通过 `[a2ui-action]` 或 `a2ui_ask` 交回 Agent。
@@ -76,7 +76,7 @@ flowchart TB
 
 | 架构分层 | 使用的 DSH 官方公开扩展接口 | 在 `dsh-genui-a2ui` 中的职责 |
 | :--- | :--- | :--- |
-| **Host 服务层** | Cordis `tools`、`skills`、`commands`、`systemPrompt` | 注册 `a2ui_render`、`a2ui_ask`、`skill("a2ui")`、`/a2ui`、`/a2ui-answer` 与系统提示词引导。 |
+| **Host 服务层** | Cordis `tools`、`skills`、`commands`、`systemPrompt` | 注册 `a2ui_render`、`a2ui_ask`、4 个按域按需加载 Skill（`a2ui` / `a2ui-analytics` / `a2ui-devops` / `a2ui-forms`）、`/a2ui`、`/a2ui-answer` 与系统提示词引导。 |
 | **Client 槽位层** | `tool.call.toolview`、`conversation.chat.turnTail`、`conversation.input.dock`、`conversation.input.left`、`conversation.user.text.node` | 挂载步骤内流式卡片、回合尾部主视图、常驻底部工作台、回合内阻塞确认台、输入框左侧胶囊开关及动作回执芯片。 |
 | **会话投影服务** | `uiConversation.events.register`、`uiConversation.userText.register` | 将已完成的 `a2ui_render` 投影为支持历史回放与会话分叉的回合索引状态，并美化 `[a2ui-action]` 用户消息。 |
 | **共享 UI 原语** | `@deepseek-ai/dsh-client-ui-primitives` | 直接复用宿主原生 `27` 项导出（`Switch`、`SegmentedControl`、`HoverCard`、`StateDot`、`ImageLightbox`、`FileTypeIcon`、`PathLabel`、`LinkIconRegular`、`JsonTree` 等）与 `--dsw-*` 语义变量。 |
@@ -87,11 +87,11 @@ flowchart TB
 
 | 构建产物 | 原始体积 | Gzip 体积 | 职责与加载触发时机 |
 | :--- | :--- | :--- | :--- |
-| `lib/client.js` | **`58.3 kB`** | **`16.5 kB`** | 首屏冷启动轻量壳：注册 UI Slots、双语自适应、空会话原生轻提示与胶囊开关（构建与单测双重强制 `< 100 kB` 门禁）。 |
-| `lib/client.runtime.js` | `1.30 MB` | ~`348 kB` | 仅当对话中真正挂载 A2UI 卡片时才加载（含 `@a2ui/react`、57 组件目录、TanStack Table）。 |
-| `lib/client.echarts.js` | `871.8 kB` | ~`288 kB` | 仅当卡片使用 `Chart` 组件时按需加载 ECharts 6（按需注册 19 类图表、标线模块与 276px 紧凑自适应）。 |
+| `lib/client.js` | **`59.3 kB`** | **`16.7 kB`** | 首屏冷启动轻量壳：注册 UI Slots、双语自适应、空会话原生轻提示与胶囊开关（构建与单测双重强制 `< 100 kB` 门禁）。 |
+| `lib/client.runtime.js` | `1.31 MB` | ~`352 kB` | 仅当对话中真正挂载 A2UI 卡片时才加载（含 `@a2ui/react`、57 组件目录、TanStack Table、0ms 交叉筛选与流式防抖）。 |
+| `lib/client.echarts.js` | `874.3 kB` | ~`289 kB` | 仅当卡片使用 `Chart` 组件时按需加载 ECharts 6（按需注册 19 类图表、标线模块、交叉筛选高亮、2× PNG 导出与 276px 紧凑自适应）。 |
 | `lib/client.mermaid.js` | `3.51 MB` | ~`943 kB` | 仅当卡片使用 `Mermaid` 组件时按需加载 Mermaid 11（强制 `securityLevel: "strict"` + SVG 净化 + LRU-64 缓存）。 |
-| `lib/index.js` | `727.8 kB` | `198.6 kB` | 自包含 Host ESM 产物（打包 `@a2ui/agent` 与同构 Zod 契约），用户安装时零运行时 npm 依赖。 |
+| `lib/index.js` | `745.6 kB` | `204.6 kB` | 自包含 Host ESM 产物（打包 `@a2ui/agent`、分域 Skill 压缩器、Express 编译降维预处理与同构 Zod 契约），用户安装时零运行时 npm 依赖。 |
 
 ---
 
@@ -209,15 +209,16 @@ flowchart TB
 
 ---
 
-## 6. 23 个客户端响应式与校验函数参考
+## 6. 25 个客户端响应式与校验函数参考
 
-- **`0ms` 安全代数公式与聚合（4）**：
-  - `calc(expr, vars, decimals?)`：递归下降安全公式求值器，支持 `+ - * / ^ % ( ) ? : == != < <= > >= && ||` 与 `pow, sqrt, exp, log, ln, log10, abs, min, max, clamp, round, floor, ceil, pmt(ratePerPeriod, nper, pv)`；编译期静态校验 AST 深度（`<= 36`）与节点数（`<= 128`）。
+- **`0ms` 安全代数公式、查表与聚合（5）**：
+  - `calc(expr, vars, decimals?)`：递归下降安全公式求值器，支持 `+ - * / ^ % ( ) ? : == != < <= > >= && ||` 与 `pow, sqrt, exp, log, ln, log10, abs, min, max, clamp, round, floor, ceil, pmt(ratePerPeriod, nper, pv)`；编译期静态校验真实嵌套深度（`<= 36`）与节点数（`<= 128`）。
+  - `lookup(key, table, fallback?)`：深度 1 映射查表（自动解包单选 `ChoicePicker` 单元素数组），替代多层嵌套 `cond(eq(...))`。
   - `cond(condition, truthy, falsy)`、`sum(items, field?)`、`avg(items, field?)`
 - **比较与布尔逻辑（7）**：
   - `eq(a, b)`（自动解包单选 `ChoicePicker` 单元素数组）、`gt(a, b)`、`lt(a, b)`、`includes(items, value)`、`and([...])`、`or([...])`、`not(x)`
-- **格式化（5）**：
-  - `formatNumber(value, decimals?, grouping?)`、`formatCurrency(value, currency, decimals?, grouping?)`、`formatDate(value, format)`、`formatString(template)`、`pluralize(...)`
+- **格式化与拼接（6）**：
+  - `formatNumber(value, decimals?, grouping?)`、`formatCurrency(value, currency, decimals?, grouping?)`、`formatDate(value, format)`、`formatString(template)`、`concat(items)`、`pluralize(...)`
 - **表单校验（`?checks`）与本地动作（7）**：
   - `required(value)`、`regex(value, pattern)`、`length(value, min?, max?)`、`numeric(value, min?, max?)`、`email(value)`、`copyText(text)`、`openUrl(url)`
 
@@ -232,11 +233,14 @@ npm ci
 # TypeScript 类型检查
 npm run typecheck
 
-# 构建 Host ESM + 4 个 Client 分包（自动校验首屏 < 500 kB 门禁）
+# 构建 Host ESM + 4 个 Client 分包（自动校验首屏 < 100 kB 门禁）
 npm run build
 
-# 运行全部 19 个测试套件 / 81 项单元、React 架构最佳实践、契约与分包门禁测试
+# 运行全部 22 个测试套件 / 94 项单元、React 架构最佳实践、契约与分包门禁测试
 npm test
+
+# 运行 28 用例 LLM 生成与自修复基准测试（支持 --mode=mock 或 --mode=live --model=deepseek-chat）
+npm run eval:llm -- --mode=mock --strategy=both
 
 # 核验与本机 DeepSeek Harness.app 内部 27 项模块导出及 Slots 的契约兼容性
 npm run check:host-api
@@ -251,13 +255,13 @@ node scripts/dev-env.mjs serve
 
 ### 核心源码目录说明
 
-- `src/index.ts` —— Host 端 Cordis 插件入口（注册工具、Skill、命令与系统提示词切片）
-- `src/host/` —— `a2ui_render`、`a2ui_ask`、`SurfaceSessions` 编译器与自愈诊断逻辑
-- `src/shared/` —— 前后端同构 `dshSchemaCatalog`（57 组件）、跨端协议类型 `wire-types.ts`、`calc` 公式解析器与双语词条
-- `src/client/index.ts` —— `58.3 kB` 首屏冷启动轻量壳与输入框胶囊开关
-- `src/client/dom-hooks.ts` —— 全仓唯一底层 DOM / 外部库生命周期隔离层（业务 `.tsx` 强制 `0` `useEffect`）
+- `src/index.ts` —— Host 端 Cordis 插件入口（注册工具、4 域分域 Skill、命令与系统提示词切片）
+- `src/host/` —— `a2ui_render`、`a2ui_ask`、`SurfaceSessions` 编译器、分域 Skill 压缩器（`prompt-compact.ts`）、Express 编译期降维预处理（`express-preprocess.ts`）与 28 用例评测套件（`eval-suite.ts`）
+- `src/shared/` —— 前后端同构 `dshSchemaCatalog`（57 组件 / 25 函数）、跨端协议类型 `wire-types.ts`、`calc` 公式解析器与双语词条
+- `src/client/index.ts` —— `59.3 kB` 首屏冷启动轻量壳与输入框胶囊开关
+- `src/client/dom-hooks.ts` —— 全仓唯一底层 DOM / ECharts PNG 导出 / 流式高度稳定器 / Mermaid 生命周期隔离层（业务 `.tsx` 强制 `0` `useEffect`）
 - `src/client/chunks/` —— 按需加载分包入口（`runtime-chunk.ts`、`echarts-chunk.ts`、`mermaid-chunk.ts`）
-- `src/client/catalog/` —— 57 个 Light-DOM 原生组件与 23 个客户端函数的具体实现
+- `src/client/catalog/` —— 57 个 Light-DOM 原生组件与 25 个客户端函数的具体实现
 - `build/` —— `tsdown` 五目标构建预设与 DSH 宿主模块外部化配置
-- `scripts/` —— Host API 契约核验脚本（`check-host-api.mjs`）与隔离演示环境（`dev-env.mjs`、`mock-llm.mjs`）
+- `scripts/` —— Host API 契约核验脚本（`check-host-api.mjs`）、真模型评测脚本（`eval-llm.mjs`）与隔离演示环境（`dev-env.mjs`、`mock-llm.mjs`）
 - `AGENTS.md` —— `306px` 半宽优先 `@container` 排版、ECharts `276px` 防碰撞契约与发版前视觉回归工程规范

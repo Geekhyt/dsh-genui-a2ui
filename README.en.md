@@ -25,26 +25,27 @@ To install from a local clone instead, run `npm ci && npm run build` and then `d
 Once enabled, ask questions as usual. Click **A2UI** below the input box or type `/a2ui off` anytime to switch back to plain text.
 
 <details>
-<summary><strong>Click to expand 18 ready-to-run example prompts</strong></summary>
+<summary><strong>Click to expand 19 ready-to-run example prompts</strong></summary>
 
 1. **Executive conversion and health dashboard**: `Build a quarterly growth and conversion diagnostic dashboard with four KPI cards with sparklines on top, a four-stage Sankey flow paired with a five-axis health radar chart side by side, plus tabs for regional growth bars and a searchable channel ROI table.`
-2. **FinOps ARR variance waterfall & drill-down cost sunburst**: `Build a quarterly ARR variance bridge and compute cost attribution dashboard with an entity header and four sparkline KPI cards on top, a waterfall bridge with a ¥680w target reference line paired side by side with a 3-level drill-down sunburst chart, and a searchable billing summary table below.`
-3. **Dual-axis combo chart, live SLO slider & change calendar heatmap**: `Build a core gateway throughput and SLO diagnostic dashboard with three radial gauges and a live slider controlling the right-axis SLO threshold line, a zoomable dual-axis combo chart (stacked traffic bars + P99 latency & miss-rate lines), a 14-day SLA tracker strip, and a production change calendar heatmap.`
-4. **Multi-model 5-axis parallel coordinates benchmark**: `Compare DeepSeek-R1, DeepSeek-V3, Qwen3, Claude-4, and Llama-4 across reasoning score, TTFT latency, throughput, token cost, and pass rate using a 5-axis parallel coordinates chart paired with a radar comparison and recommended stack trade-off matrix.`
-5. **Live multi-store operations dashboard**: `Create a live chain coffee store operations dashboard showing daily revenue, total orders, peak fulfillment rate, and stock alerts, paired with hourly channel area curves, a store-by-hour order heatmap, and a searchable inventory warning table.`
-6. **Zero-latency LLM inference and cache simulator**: `Build a zero-latency LLM inference and prompt-cache cost calculator where I can switch models (DeepSeek-V3 vs DeepSeek-R1), drag sliders for daily call volume, prompt cache hit rate, and average output tokens, and see monthly spend, net cache savings, budget utilization, and a cost breakdown bar chart update live.`
-7. **GPU tier check-cards, precision steppers & follow-up prompts**: `Build a private LLM cluster capacity and GPU tier planner using visual check-cards to switch GPU instance tiers, precision number steppers for replica count and per-pod concurrency, multi-select tags for failover zones, a hierarchical tree-select for the target service, and clickable next-step prompt cards at the bottom.`
-8. **Dedicated cluster SLA strip, bordered descriptions & expandable ProTable**: `Generate a quarterly dedicated inference cluster governance workbench with a cluster health header and 20-day SLA uptime strip on top, bordered specification descriptions in the middle, and an expandable, CSV/Markdown-exportable ProTable of idle GPU optimization targets with summary totals at the bottom.`
-9. **Service health topology, APM trace waterfall & log triage**: `Diagnose a checkout API P99 latency spike by combining a live health-colored service dependency DAG (including fallback bypass and retry arcs), a distributed trace waterfall tree with latency share bars, and an error stack-trace log viewer linked to workspace source files.`
-10. **High-risk DDL approval gate, runbook terminal & maintenance schedule**: `Prepare an online cold-partition archival workflow for our core billing table with a switch-gated high-risk approval card, pre-flight backup verification terminal runbook, and a maintenance window Gantt schedule bar.`
-11. **Architecture trade-off comparison matrix & source citations**: `Compare PostgreSQL pgvector, Milvus, and Elasticsearch for production hybrid search with a workload tier segmented switcher on top, a multi-criteria trade-off matrix highlighting the recommended stack, and clickable benchmark citations at the bottom.`
-12. **HTTP API contract workbench, preset date range & radial SLO gauges**: `Build an API rate-limit and health inspection panel combining three radial SLO gauges and a preset date-range picker on top with an interactive HTTP endpoint card supporting request/response JSON trees and shell-safe cURL copy.`
-13. **Incident response Kanban, cross-zone heat matrix & execution receipt**: `Summarize a multi-AZ failover drill on one screen with a three-lane action Kanban board, an incident timeline, a quarterly cross-zone P99 latency heat matrix, and a structured drill verification receipt.`
-14. **Code diff approval gate**: `Suppose you are updating our production gateway canary weight from 5% to 20% and adding a circuit-breaker timeout. Pause with a review card showing the split config diff, target cluster selector, and auto-rollback switch for my confirmation before proceeding.`
-15. **Workspace architecture diagram and source explorer**: `Analyze the architecture of this workspace, render a layered Mermaid diagram alongside a clickable file tree and config JSON inspector so I can open any file directly in the right sidebar.`
-16. **Persistent bottom task tracker**: `Pin a five-stage release verification tracker above the chat input showing step status and overall completion percentage across typecheck, bundle build, host API check, test suite, and tarball audit.`
-17. **Market candlestick and volatility distribution**: `Create a 10-day market review dashboard combining a sentiment gauge with a daily OHLC candlestick chart and a sector return boxplot side by side.`
-18. **Incident triage accordion and detail modal**: `Generate a layered API latency incident report using collapsible accordions for root-cause summary, key-value metrics, and mitigation steps, plus a modal button to inspect full slow-query details.`
+2. **0ms Chart ↔ ProTable bidirectional cross-filtering & 1-click export**: `Build a regional operations cross-filter workbench with reactive KPI cards on top, side-by-side regional GMV bar and revenue share donut charts (supporting 0ms local cross-filter highlighting on click plus 1-click PNG download & CSV copy), and a linked orders ProTable below that filters instantly on chart or row click.`
+3. **FinOps ARR variance waterfall & drill-down cost sunburst**: `Build a quarterly ARR variance bridge and compute cost attribution dashboard with an entity header and four sparkline KPI cards on top, a waterfall bridge with a ¥680w target reference line paired side by side with a 3-level drill-down sunburst chart, and a searchable billing summary table below.`
+4. **Dual-axis combo chart, live SLO slider & change calendar heatmap**: `Build a core gateway throughput and SLO diagnostic dashboard with three radial gauges and a live slider controlling the right-axis SLO threshold line, a zoomable dual-axis combo chart (stacked traffic bars + P99 latency & miss-rate lines), a 14-day SLA tracker strip, and a production change calendar heatmap.`
+5. **Multi-model 5-axis parallel coordinates benchmark**: `Compare DeepSeek-R1, DeepSeek-V3, Qwen3, Claude-4, and Llama-4 across reasoning score, TTFT latency, throughput, token cost, and pass rate using a 5-axis parallel coordinates chart paired with a radar comparison and recommended stack trade-off matrix.`
+6. **Live multi-store operations dashboard**: `Create a live chain coffee store operations dashboard showing daily revenue, total orders, peak fulfillment rate, and stock alerts, paired with hourly channel area curves, a store-by-hour order heatmap, and a searchable inventory warning table.`
+7. **Zero-latency LLM inference and cache simulator**: `Build a zero-latency LLM inference and prompt-cache cost calculator where I can switch models (DeepSeek-V3 vs DeepSeek-R1), drag sliders for daily call volume, prompt cache hit rate, and average output tokens, and see monthly spend, net cache savings, budget utilization, and a cost breakdown bar chart update live.`
+8. **GPU tier check-cards, precision steppers & follow-up prompts**: `Build a private LLM cluster capacity and GPU tier planner using visual check-cards to switch GPU instance tiers, precision number steppers for replica count and per-pod concurrency, multi-select tags for failover zones, a hierarchical tree-select for the target service, and clickable next-step prompt cards at the bottom.`
+9. **Dedicated cluster SLA strip, bordered descriptions & expandable ProTable**: `Generate a quarterly dedicated inference cluster governance workbench with a cluster health header and 20-day SLA uptime strip on top, bordered specification descriptions in the middle, and an expandable, CSV/Markdown-exportable ProTable of idle GPU optimization targets with summary totals at the bottom.`
+10. **Service health topology, APM trace waterfall & log triage**: `Diagnose a checkout API P99 latency spike by combining a live health-colored service dependency DAG (including fallback bypass and retry arcs), a distributed trace waterfall tree with latency share bars, and an error stack-trace log viewer linked to workspace source files.`
+11. **High-risk DDL approval gate, runbook terminal & maintenance schedule**: `Prepare an online cold-partition archival workflow for our core billing table with a switch-gated high-risk approval card, pre-flight backup verification terminal runbook, and a maintenance window Gantt schedule bar.`
+12. **Architecture trade-off comparison matrix & source citations**: `Compare PostgreSQL pgvector, Milvus, and Elasticsearch for production hybrid search with a workload tier segmented switcher on top, a multi-criteria trade-off matrix highlighting the recommended stack, and clickable benchmark citations at the bottom.`
+13. **HTTP API contract workbench, preset date range & radial SLO gauges**: `Build an API rate-limit and health inspection panel combining three radial SLO gauges and a preset date-range picker on top with an interactive HTTP endpoint card supporting request/response JSON trees and shell-safe cURL copy.`
+14. **Incident response Kanban, cross-zone heat matrix & execution receipt**: `Summarize a multi-AZ failover drill on one screen with a three-lane action Kanban board, an incident timeline, a quarterly cross-zone P99 latency heat matrix, and a structured drill verification receipt.`
+15. **Code diff approval gate**: `Suppose you are updating our production gateway canary weight from 5% to 20% and adding a circuit-breaker timeout. Pause with a review card showing the split config diff, target cluster selector, and auto-rollback switch for my confirmation before proceeding.`
+16. **Workspace architecture diagram and source explorer**: `Analyze the architecture of this workspace, render a layered Mermaid diagram alongside a clickable file tree and config JSON inspector so I can open any file directly in the right sidebar.`
+17. **Persistent bottom task tracker**: `Pin a five-stage release verification tracker above the chat input showing step status and overall completion percentage across typecheck, bundle build, host API check, test suite, and tarball audit.`
+18. **Market candlestick and volatility distribution**: `Create a 10-day market review dashboard combining a sentiment gauge with a daily OHLC candlestick chart and a sector return boxplot side by side.`
+19. **Incident triage accordion and detail modal**: `Generate a layered API latency incident report using collapsible accordions for root-cause summary, key-value metrics, and mitigation steps, plus a modal button to inspect full slow-query details.`
 
 </details>
 
@@ -59,6 +60,14 @@ Equal-height KPI cards with sparklines pair with a four-stage Sankey flow and a 
 | Dark mode | Light mode |
 | :---: | :---: |
 | ![Full-funnel conversion flow and radar diagnostic dashboard (Dark)](assets/screenshots/hero-executive-dashboard.png) | ![Full-funnel conversion flow and radar diagnostic dashboard (Light)](assets/screenshots/hero-executive-dashboard-light.png) |
+
+### Cross-filter charts and ProTables locally in 0 ms with one-click export
+
+Click any bar, donut slice, or `ProTable` row to highlight linked charts, filter table rows, and recalculate KPI totals locally in 0 ms with zero extra LLM turns. Dismiss the filter chip (`×`) to reset, or export any chart as a 2× PNG or UTF-8 CSV directly from its header.
+
+| Dark mode | Light mode |
+| :---: | :---: |
+| ![0ms Chart and ProTable cross-filtering and 1-click export (Dark)](assets/screenshots/chart-table-crossfilter.png) | ![0ms Chart and ProTable cross-filtering and 1-click export (Light)](assets/screenshots/chart-table-crossfilter-light.png) |
 
 ### Attribute revenue bridges and drill into multi-level compute spend
 
@@ -142,9 +151,10 @@ Keep multi-stage pipelines anchored at the bottom of the window. Stages and comp
 
 ## Why A2UI
 
-- **Safe by design**: Built on Google's A2UI 1.0 specification, models output declarative JSON only and never execute untrusted HTML or scripts.
+- **Safe by design**: Built on Google's A2UI 1.0 specification, models output declarative JSON only and never execute untrusted HTML or scripts, with anti-jank streaming skeletons.
+- **Scoped domain skills, fewer tokens, higher accuracy**: Partitions all 57 components across 4 lightweight on-demand skills (`a2ui`, `a2ui-analytics`, `a2ui-devops`, `a2ui-forms`) with compile-time depth lowering — cutting prompt tokens by **-44.2%** and achieving **100%** compile pass across 28 live `deepseek-chat` benchmark cases.
 - **Native look and feel**: Every surface renders with DeepSeek Harness UI primitives, adapting automatically to light mode, dark mode, and community themes.
-- **Zero host patches, fast startup**: Built on official plugin APIs with a 16.5 KB gzipped core; chart and diagram engines load only on demand.
+- **Zero host patches, fast startup**: Built on official plugin APIs with a 16.7 KB gzipped core; chart and diagram engines load only on demand.
 
 ## Component catalog
 
@@ -160,7 +170,7 @@ Includes 57 native UI components, 19 interactive chart types, and full Mermaid d
 | **Typography and alerts** | `Text`, `Callout`, `Badge`, `Icon` | Rich text, color-coded callouts, status badges, and semantic icons |
 | **Media** | `Image` (native lightbox), `AudioPlayer`, `Video` | Click-to-zoom lightbox image previews, audio players, and video playback |
 
-- **19 interactive charts (`Chart`)**: Vertical and horizontal ranking bars (`bar`), `line`, `area`, dual-axis bar + line (`combo`), variance bridge (`waterfall`), donut and pie (`pie`), bubble and `scatter`, `radar`, multi-axis `parallel`, `funnel`, `gauge`, `heatmap`, daily `calendar` heatmap, `treemap`, drill-down `sunburst`, `sankey`, `boxplot`, network (`graph`), and `candlestick`, plus `referenceLine` threshold markers.
+- **19 interactive charts (`Chart`)**: Vertical and horizontal ranking bars (`bar`), `line`, `area`, dual-axis bar + line (`combo`), variance bridge (`waterfall`), donut and pie (`pie`), bubble and `scatter`, `radar`, multi-axis `parallel`, `funnel`, `gauge`, `heatmap`, daily `calendar` heatmap, `treemap`, drill-down `sunburst`, `sankey`, `boxplot`, network (`graph`), and `candlestick`, plus `referenceLine` threshold markers, `selected` ↔ `Table` 0 ms bidirectional cross-filtering, and 1-click 2× PNG download & CSV copy.
 - **Architecture and flow diagrams (`Mermaid`)**: Flowcharts, sequence diagrams, state machines, class diagrams, ER diagrams, Gantt charts, Git graphs, and mindmaps with `10%–2000%` lossless vector zoom, pointer-anchored wheel zoom, drag-to-pan, fit-to-viewport, fullscreen view, and source toggle.
 
 ## Documentation and license

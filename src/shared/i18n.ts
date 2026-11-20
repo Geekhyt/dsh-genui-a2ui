@@ -341,6 +341,13 @@ export interface RuntimeUiMessages {
   readonly openInSidebar: (label: string) => string
   readonly chartLoadFailed: string
   readonly chartLoading: string
+  readonly chartExportPng: string
+  readonly chartCopyCsv: string
+  readonly chartFilterActive: (val: string) => string
+  readonly chartClearFilter: string
+  readonly tableFilterActive: (val: string) => string
+  readonly tableClearFilter: string
+  readonly streamingSyncing: string
   readonly chartOtherGroup: string
   readonly chartBoxplotDefault: string
   readonly chartCandlestickDefault: string
@@ -522,6 +529,13 @@ export const RUNTIME_MESSAGES: Record<UiLocale, RuntimeUiMessages> = {
     openInSidebar: (label) => `在右侧栏打开 ${label}`,
     chartLoadFailed: '图表引擎加载失败',
     chartLoading: '正在加载图表引擎…',
+    chartExportPng: 'PNG',
+    chartCopyCsv: 'CSV',
+    chartFilterActive: (val) => `筛选: ${val}`,
+    chartClearFilter: '清除联动筛选',
+    tableFilterActive: (val) => `联动筛选: ${val}`,
+    tableClearFilter: '清除筛选',
+    streamingSyncing: '正在增量同步组件…',
     chartOtherGroup: '其他',
     chartBoxplotDefault: '分布',
     chartCandlestickDefault: '行情',
@@ -701,6 +715,13 @@ export const RUNTIME_MESSAGES: Record<UiLocale, RuntimeUiMessages> = {
     openInSidebar: (label) => `Open ${label} in right sidebar`,
     chartLoadFailed: 'Failed to load chart runtime',
     chartLoading: 'Loading chart runtime…',
+    chartExportPng: 'PNG',
+    chartCopyCsv: 'CSV',
+    chartFilterActive: (val) => `Filter: ${val}`,
+    chartClearFilter: 'Clear cross-filter',
+    tableFilterActive: (val) => `Filtered: ${val}`,
+    tableClearFilter: 'Clear filter',
+    streamingSyncing: 'Syncing live updates…',
     chartOtherGroup: 'Other',
     chartBoxplotDefault: 'Distribution',
     chartCandlestickDefault: 'OHLC',

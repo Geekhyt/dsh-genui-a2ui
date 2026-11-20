@@ -14,7 +14,7 @@
  *    `ResizeObserver`, non-passive `{ passive: false }` wheel listener, `Escape` keydown,
  *    and unmount window drag cleanup.
  */
-import { useEffect, useLayoutEffect, useRef, type RefObject } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, type RefObject } from 'react'
 import type { EchartsChunkModule } from './chunk-loader.ts'
 
 const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect
@@ -45,8 +45,14 @@ export interface EChartsClickParams {
   readonly dataIndex?: unknown
 }
 
+export interface EChartsMountHandle {
+  /** Export the live ECharts canvas as a high-DPI 2x PNG download. Returns false if unavailable. */
+  readonly exportPng: (filename: string, backgroundColor: string) => boolean
+}
+
 /**
- * Imperative ECharts `<canvas>` lifecycle, `ResizeObserver`, and option synchronization.
+ * Imperative ECharts `<canvas>` lifecycle, `ResizeObserver`, option synchronization,
+ * and 1-click high-DPI PNG export handle.
  */
 export function useEChartsMount(params: {
   readonly hostRef: RefObject<HTMLDivElement | null>
@@ -54,7 +60,7 @@ export function useEChartsMount(params: {
   readonly option: Record<string, unknown> | null
   readonly onPointClick: (event: EChartsClickParams) => void
   readonly onContainerWidth: (width: number) => void
-}): void {
+}): EChartsMountHandle {
   const { hostRef, chunk, option, onPointClick, onContainerWidth } = params
   const chartRef = useRef<ReturnType<EchartsChunkModule['initChartInstance']> | null>(null)
   const onPointClickRef = useRef(onPointClick)
@@ -99,6 +105,35 @@ export function useEChartsMount(params: {
       chartRef.current.setOption(option, { notMerge: true })
     }
   }, [chunk, option])
+
+  const exportPng = useCallback((filename: string, backgroundColor: string): boolean => {
+    const inst = chartRef.current
+    if (!inst || typeof document === 'undefined') return false
+    try {
+      const dataUrl = inst.getDataURL({
+        type: 'png',
+        pixelRatio: 2,
+        backgroundColor,
+      })
+      if (!dataUrl?.startsWith('data:image/png')) return false
+      const slug = filename
+        .trim()
+        .replace(/[^\w\u4e00-\u9fa5-]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+      const a = document.createElement('a')
+      a.href = dataUrl
+      a.download = `${slug || 'a2ui-chart'}.png`
+      a.style.display = 'none'
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      return true
+    } catch {
+      return false
+    }
+  }, [])
+
+  return { exportPng }
 }
 
 export interface PendingMermaidZoomAnchor {
@@ -255,4 +290,58 @@ export function useMermaidViewportDom(params: {
       cleanDialog()
     }
   }, [activeFullscreen, canZoom, dialogViewportRef, inlineViewportRef])
+}
+
+/**
+ * High-water-mark height stabilizer for actively streaming A2UI surfaces.
+ *
+ * While `streaming === true`, locks `min-height` to the maximum observed height so
+ * incremental Express compilation frames never collapse/flicker or jump the chat
+ * scrollport backwards. Releases `min-height` immediately once streaming settles.
+ */
+export function useStreamingHeightStabilizer(
+  hostRef: RefObject<HTMLElement | null>,
+  streaming: boolean,
+): void {
+  const highWaterRef = useRef(0)
+
+  useEffect(() => {
+    const el = hostRef.current
+    if (!el) return
+    if (!streaming) {
+      highWaterRef.current = 0
+      el.style.minHeight = ''
+      return
+    }
+
+    let rafId: number | null = null
+    const applyHighWater = () => {
+      rafId = null
+      const h = Math.ceil(el.getBoundingClientRect().height)
+      if (h > highWaterRef.current) {
+        highWaterRef.current = h
+        el.style.minHeight = `${h}px`
+      }
+    }
+    const scheduleHighWater = () => {
+      if (rafId !== null) return
+      if (typeof requestAnimationFrame === 'function') {
+        rafId = requestAnimationFrame(applyHighWater)
+      } else {
+        applyHighWater()
+      }
+    }
+
+    scheduleHighWater()
+    const ro =
+      typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => scheduleHighWater()) : null
+    ro?.observe(el)
+
+    return () => {
+      ro?.disconnect()
+      if (rafId !== null && typeof cancelAnimationFrame === 'function') {
+        cancelAnimationFrame(rafId)
+      }
+    }
+  }, [hostRef, streaming])
 }

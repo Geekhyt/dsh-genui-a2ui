@@ -35,6 +35,7 @@ import {
   SurfaceValidationContext,
   type SurfaceValidationContextValue,
 } from './catalog/widget-helpers.tsx'
+import { useStreamingHeightStabilizer } from './dom-hooks.ts'
 import { ErrorBoundary } from './ErrorBoundary.tsx'
 import { FileOpenContext, type WorkspaceFileOpener } from './file-opener.tsx'
 import { useRuntimeMessages } from './i18n.ts'
@@ -412,8 +413,12 @@ export const SurfaceGroupView = memo(function SurfaceGroupView({
     return surfaces.filter((s) => visibleSurfaceIds.has(s.id))
   }, [surfaces, visibleSurfaceIds])
 
+  const stackRef = useRef<HTMLDivElement | null>(null)
+  useStreamingHeightStabilizer(stackRef, Boolean(streaming))
+
   const setStackInertRef = useCallback(
     (node: HTMLDivElement | null) => {
+      stackRef.current = node
       if (node !== null) {
         ;(node as HTMLDivElement & { inert?: boolean }).inert = Boolean(readOnly)
       }
@@ -488,6 +493,12 @@ export const SurfaceGroupView = memo(function SurfaceGroupView({
                     </ErrorBoundary>
                   ))
                 )}
+                {streaming && shown.length > 0 ? (
+                  <div className={css.streamingFoot} data-a2ui-streaming-foot="" aria-live="polite">
+                    <span className={css.streamingDot} aria-hidden="true" />
+                    <DshTextShimmer active={true}>{msg.streamingSyncing}</DshTextShimmer>
+                  </div>
+                ) : null}
               </div>
             </MarkdownComponentContext.Provider>
           </FileOpenContext.Provider>

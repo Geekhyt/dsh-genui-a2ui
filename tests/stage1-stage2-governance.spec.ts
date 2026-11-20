@@ -229,7 +229,7 @@ describe('Stage 1 Governance: surface message pruning, memo stability, & switch 
 describe('Stage 2 Evolution: slimmed calc() formula gateway, static validation & Click-to-Drill', () => {
   it('keeps Catalog function surface orthogonal (only 9 DSH semantic functions) and evaluates calc & comparators', () => {
     // 14 Basic functions + 9 orthogonal DSH functions = 23 total (no redundant add/mul/pow bloat)
-    expect(DSH_FUNCTION_APIS).toHaveLength(23)
+    expect(DSH_FUNCTION_APIS).toHaveLength(25)
     const fnNames = DSH_FUNCTION_APIS.map((f) => f.name)
     expect(fnNames).toContain('calc')
     expect(fnNames).not.toContain('add')

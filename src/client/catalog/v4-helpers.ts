@@ -715,3 +715,98 @@ export function computeTableNumericSummary(
   }
   return summary
 }
+
+/* ─────────────────────────── 7. P2 Cross-Filter & Chart Export ─────────────────────────── */
+
+/** Toggle cross-filter selection: clicking the already-active label clears it back to `""`. */
+export function computeNextCrossFilterSelection(
+  currentSelected: string | undefined,
+  clickedLabel: string | undefined,
+): string {
+  const next = (clickedLabel ?? '').trim()
+  if (next === '') return ''
+  const cur = (currentSelected ?? '').trim()
+  return cur !== '' && cur.toLowerCase() === next.toLowerCase() ? '' : next
+}
+
+/**
+ * Filter ProTable rows locally at 0ms by a cross-filter `filterValue` (typically bound
+ * to the same `$/path` as `Chart(..., selected=$/region)`).
+ *
+ * Uses exact case-insensitive match first so `"US"` doesn't collide with `"US-West"`;
+ * falls back to normalized substring match only when zero exact matches exist (e.g.
+ * Sankey node labels carrying numeric suffixes like `"华东 9,860"`).
+ */
+export function filterTableRowsByField(
+  rows: readonly Record<string, unknown>[],
+  filterField: string | undefined,
+  filterValue: string | undefined,
+): readonly Record<string, unknown>[] {
+  const q = (filterValue ?? '').trim().toLowerCase()
+  if (q === '') return rows
+  const field = filterField?.trim()
+
+  const cellText = (v: unknown): string => {
+    if (v === null || v === undefined) return ''
+    if (typeof v === 'object') return JSON.stringify(v).toLowerCase()
+    return String(v).trim().toLowerCase()
+  }
+
+  const exact = rows.filter((row) => {
+    if (field) return cellText(row[field]) === q
+    return Object.values(row).some((val) => cellText(val) === q)
+  })
+  if (exact.length > 0) return exact
+
+  return rows.filter((row) => {
+    if (field) {
+      const t = cellText(row[field])
+      return t !== '' && (t.includes(q) || q.includes(t))
+    }
+    return Object.values(row).some((val) => {
+      const t = cellText(val)
+      return t !== '' && (t.includes(q) || q.includes(t))
+    })
+  })
+}
+
+/**
+ * Serialize any ECharts dataset (tabular row array or `{ nodes, links }` graph/sankey object)
+ * to UTF-8 BOM CSV for 1-click clipboard copy / export.
+ */
+export function formatChartDataToCsv(data: unknown): string | null {
+  let rows: Record<string, unknown>[] = []
+  if (Array.isArray(data)) {
+    rows = data.filter(
+      (item): item is Record<string, unknown> =>
+        typeof item === 'object' && item !== null && !Array.isArray(item),
+    )
+  } else if (typeof data === 'object' && data !== null) {
+    const rec = data as Record<string, unknown>
+    const rawLinks = Array.isArray(rec.links) ? rec.links : null
+    const rawNodes = Array.isArray(rec.nodes) ? rec.nodes : null
+    const source = rawLinks && rawLinks.length > 0 ? rawLinks : rawNodes
+    if (source) {
+      rows = source.filter(
+        (item): item is Record<string, unknown> =>
+          typeof item === 'object' && item !== null && !Array.isArray(item),
+      )
+    }
+  }
+  if (rows.length === 0) return null
+
+  const keys: string[] = []
+  const seen = new Set<string>()
+  for (const row of rows.slice(0, 50)) {
+    for (const k of Object.keys(row)) {
+      if (!seen.has(k)) {
+        seen.add(k)
+        keys.push(k)
+      }
+    }
+  }
+  if (keys.length === 0) return null
+
+  const cols: ProTableColumnDescriptor[] = keys.map((k) => ({ key: k, label: k }))
+  return formatTableToCsv(cols, rows)
+}

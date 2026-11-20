@@ -215,7 +215,7 @@ function parseTokens(tokens: readonly Token[]): {
 
   const parseTernary = (depth: number): ExprNode | null => {
     if (depth > MAX_AST_DEPTH) return fail('Formula nesting depth exceeds maximum (36).')
-    const cond = parseOr(depth + 1)
+    const cond = parseOr(depth)
     if (!cond) return null
     if (peek().kind === 'question') {
       consume()
@@ -231,10 +231,10 @@ function parseTokens(tokens: readonly Token[]): {
   }
 
   const parseOr = (depth: number): ExprNode | null => {
-    let left = parseAnd(depth + 1)
+    let left = parseAnd(depth)
     if (!left) return null
     while (matchOp('||')) {
-      const right = parseAnd(depth + 1)
+      const right = parseAnd(depth)
       if (!right) return null
       left = { kind: 'binary', op: '||', left, right }
     }
@@ -242,10 +242,10 @@ function parseTokens(tokens: readonly Token[]): {
   }
 
   const parseAnd = (depth: number): ExprNode | null => {
-    let left = parseEquality(depth + 1)
+    let left = parseEquality(depth)
     if (!left) return null
     while (matchOp('&&')) {
-      const right = parseEquality(depth + 1)
+      const right = parseEquality(depth)
       if (!right) return null
       left = { kind: 'binary', op: '&&', left, right }
     }
@@ -253,11 +253,11 @@ function parseTokens(tokens: readonly Token[]): {
   }
 
   const parseEquality = (depth: number): ExprNode | null => {
-    let left = parseRelational(depth + 1)
+    let left = parseRelational(depth)
     if (!left) return null
     let op: string | null
     while ((op = matchOp('==', '!=')) !== null) {
-      const right = parseRelational(depth + 1)
+      const right = parseRelational(depth)
       if (!right) return null
       left = { kind: 'binary', op, left, right }
     }
@@ -265,11 +265,11 @@ function parseTokens(tokens: readonly Token[]): {
   }
 
   const parseRelational = (depth: number): ExprNode | null => {
-    let left = parseAdditive(depth + 1)
+    let left = parseAdditive(depth)
     if (!left) return null
     let op: string | null
     while ((op = matchOp('<', '<=', '>', '>=')) !== null) {
-      const right = parseAdditive(depth + 1)
+      const right = parseAdditive(depth)
       if (!right) return null
       left = { kind: 'binary', op, left, right }
     }
@@ -277,11 +277,11 @@ function parseTokens(tokens: readonly Token[]): {
   }
 
   const parseAdditive = (depth: number): ExprNode | null => {
-    let left = parseMultiplicative(depth + 1)
+    let left = parseMultiplicative(depth)
     if (!left) return null
     let op: string | null
     while ((op = matchOp('+', '-')) !== null) {
-      const right = parseMultiplicative(depth + 1)
+      const right = parseMultiplicative(depth)
       if (!right) return null
       left = { kind: 'binary', op, left, right }
     }
@@ -289,11 +289,11 @@ function parseTokens(tokens: readonly Token[]): {
   }
 
   const parseMultiplicative = (depth: number): ExprNode | null => {
-    let left = parseUnary(depth + 1)
+    let left = parseUnary(depth)
     if (!left) return null
     let op: string | null
     while ((op = matchOp('*', '/', '%')) !== null) {
-      const right = parseUnary(depth + 1)
+      const right = parseUnary(depth)
       if (!right) return null
       left = { kind: 'binary', op, left, right }
     }
@@ -308,12 +308,12 @@ function parseTokens(tokens: readonly Token[]): {
       if (!arg) return null
       return { kind: 'unary', op: op as '-' | '+' | '!', arg }
     }
-    return parsePower(depth + 1)
+    return parsePower(depth)
   }
 
   const parsePower = (depth: number): ExprNode | null => {
     if (depth > MAX_AST_DEPTH) return fail('Formula nesting depth exceeds maximum (36).')
-    const base = parsePrimary(depth + 1)
+    const base = parsePrimary(depth)
     if (!base) return null
     if (matchOp('^', '**') !== null) {
       const exp = parseUnary(depth + 1)

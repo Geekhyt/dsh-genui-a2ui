@@ -2,6 +2,28 @@
 
 All notable changes to `dsh-genui-a2ui` are documented in this file.
 
+## [0.4.0] - 2026-11-20
+
+### Added
+- **P0: Lossless Prompt Compaction & 4-Domain Scoped Skill Partitioning (`src/host/prompt-compact.ts`)**:
+  - Partitioned all 57 registered components cleanly with zero overlap into 4 on-demand skills (`a2ui` core 24, `a2ui-analytics` 11, `a2ui-devops` 13, `a2ui-forms` 9) via `skills.registerProvider`, cutting average prompt token consumption by **-44.2%** (`29,916 → 16,695` tokens in live 28-case `deepseek-chat` benchmarks) while preserving a full-catalog compacted fallback for legacy hosts.
+- **P1: Real LLM 28-Case Generation & Self-Repair Eval Suite + Deterministic Depth Lowering (`src/host/eval-suite.ts`, `scripts/eval-llm.mjs`, `src/host/express-preprocess.ts`)**:
+  - Added `npm run eval:llm` supporting `--mode=mock|live`, `--strategy=scoped|monolithic|both`, 8-bucket error taxonomy, and HTML report output across 23 positive UI tasks + 5 Markdown-only negative controls.
+  - Added 2 new A2UI 1.0 custom catalog functions (`23 → 25`): `concat(items)` and `lookup(key, table, fallback?)` (auto-unwrapping single-select `ChoicePicker` arrays).
+  - Added quote-safe compile-time Express lowering passes (`desugarExpressConcat`, `foldNestedCondToLookup`, `flattenChainedCalc` for both top-level and inline `calc()`) to stay 100% compliant with upstream `MAX_FUNC_CALL_DEPTH = 5` — lifting live `deepseek-chat` 28-case scores from `78.3%` final / `52.2%` 0-repair / `96.4%` routing to **100.0% final (23/23)**, **78.3% 0-repair**, **100.0% routing (0 FP)**, and **100.0% self-repair recovery**.
+- **P2: Chart ↔ ProTable 0ms Local Cross-Filtering, 1-Click Chart Export & Anti-Jank Streaming (`EChartsWidget.tsx`, `TableWidget.tsx`, `SurfaceView.tsx`, `dom-hooks.ts`)**:
+  - Added two-way `Chart(selected=$/path)` + `Table(filterField="...", filterValue=$/path)` bindings for instant 0ms bidirectional cross-filtering with in-canvas highlight/dimming (`bar`, `line`, `pie`, `funnel`, `treemap`, `sunburst`, `sankey`, `graph`), dismissible filter chips, and automatic pagination/selection reset on filter change.
+  - Added 1-click high-DPI 2× `PNG` download (theme-aware dark/light background) and UTF-8 BOM `CSV` copy actions in the `Chart` header (`exportable` defaults to `true`, 306px-safe compact layout).
+  - Added `requestAnimationFrame`-guarded high-water-mark height stabilization (`useStreamingHeightStabilizer`), gradient shimmer skeletons with `prefers-reduced-motion` support, and an inline syncing footer indicator during active streaming.
+
+### Fixed
+- **Algebraic Formula Depth Accounting (`src/shared/calc-engine.ts`)**: Fixed recursive-descent parser precedence fall-through incrementing `depth` by 10 per parenthesis group (which falsely rejected 4-level arithmetic formulas), while strictly keeping the 36-level anti-DoS recursion guard on real nesting.
+- **Sankey `{ nodes, links }` Compatibility (`src/client/chunks/echarts-chunk.ts`)**: Accepted ECharts-native `{ nodes, links }` datasets in `Chart("sankey", ...)` in addition to tabular edge arrays.
+- **Narrow-Column `Comparison` CTA Wrapping (`src/client/catalog/Catalog.module.css`)**: Added `white-space: nowrap; flex-shrink: 0` on `.comparisonFooterTd button` and compact `@container (max-width: 420px)` padding.
+
+### Changed
+- Added Dark & Light `chart-table-crossfilter` showcase screenshots, expanded copy-pasteable prompt examples (`18 → 19`), added `showcase-25` to `scripts/mock-llm.mjs`, and expanded Vitest coverage to **22 suites / 94 tests** (`lib/client.js = 59.3 kB / 16.7 kB gzip`).
+
 ## [0.3.0] - 2026-11-20
 
 ### Added

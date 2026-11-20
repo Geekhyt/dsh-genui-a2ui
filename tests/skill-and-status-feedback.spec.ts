@@ -50,6 +50,7 @@ import { isChatTimelineActive, type ChatTargetSnapshot } from '../src/client/tur
 import {
   A2UI_SYSTEM_GUIDANCE,
   apply as applyHost,
+  DOMAIN_SKILL_NAMES,
   SKILL_NAME,
   SYSTEM_PROMPT_SECTION_NAME,
   TIER_COMMAND,
@@ -155,9 +156,10 @@ describe('Issue 1 & Issue 2 regression suite: dynamic skill unregistration and b
     const agentC = { session: { id: 'sess-c' } }
     const subAgent = { session: { id: 'sess-sub', header: { parentSession: 'sess-a' } } }
 
-    // 1. Default ON: main agent gets candidate + full definition; subagent gets 0 candidates
+    // 1. Default ON: main agent gets all 4 domain-scoped candidates + definitions; subagent gets 0 candidates
     const initialList = await registeredProvider!.list({ cwd: '/repo', scope: agentA })
-    expect(initialList).toHaveLength(1)
+    expect(initialList).toHaveLength(DOMAIN_SKILL_NAMES.length)
+    expect(initialList.map((c) => c.name)).toEqual([...DOMAIN_SKILL_NAMES])
     expect(initialList[0]).toMatchObject({
       name: SKILL_NAME,
       source: 'bundled',
@@ -169,14 +171,25 @@ describe('Issue 1 & Issue 2 regression suite: dynamic skill unregistration and b
     expect(loaded?.name).toBe(SKILL_NAME)
     expect(loaded?.content).toContain('Availability guard (`/a2ui off`)')
 
+    const analyticsLoaded = await registeredProvider!.get(initialList[1]!, {
+      cwd: '/repo',
+      scope: agentA,
+    })
+    expect(analyticsLoaded?.name).toBe('a2ui-analytics')
+    expect(analyticsLoaded?.content).toContain('Chart(')
+    expect(analyticsLoaded?.content).toContain('Table(')
+
     expect(await registeredProvider!.list({ cwd: '/repo', scope: subAgent })).toEqual([])
     expect(
       await registeredProvider!.get(initialList[0]!, { cwd: '/repo', scope: subAgent }),
     ).toBeUndefined()
+    expect(
+      await registeredProvider!.get(initialList[1]!, { cwd: '/repo', scope: subAgent }),
+    ).toBeUndefined()
 
     // 2. Explicitly pin Session A ON, then run `/a2ui off` in Session B:
     //    - invalidates SkillRegistry cache synchronously
-    //    - removes `a2ui` from Session B, unscoped catalog, and new Session C
+    //    - removes all 4 domain skills from Session B, unscoped catalog, and new Session C
     //    - preserves explicit ON override for Session A until Session A is disposed or toggled
     const beforeInval = invalidateCount
     tierCommandDef!.handler({ agent: agentA, rawInput: 'on' })
@@ -194,17 +207,24 @@ describe('Issue 1 & Issue 2 regression suite: dynamic skill unregistration and b
     expect(
       await registeredProvider!.get(initialList[0]!, { cwd: '/repo', scope: agentB }),
     ).toBeUndefined()
+    expect(
+      await registeredProvider!.get(initialList[1]!, { cwd: '/repo', scope: agentB }),
+    ).toBeUndefined()
 
-    expect(await registeredProvider!.list({ cwd: '/repo', scope: agentA })).toHaveLength(1)
+    expect(await registeredProvider!.list({ cwd: '/repo', scope: agentA })).toHaveLength(
+      DOMAIN_SKILL_NAMES.length,
+    )
     for (const fn of disposedListeners) fn({ id: 'sess-a' })
     expect(await registeredProvider!.list({ cwd: '/repo', scope: agentA })).toEqual([])
 
-    // 3. Re-enabling via `/a2ui on` restores tool, system prompt, and skill catalog entry
+    // 3. Re-enabling via `/a2ui on` restores tool, system prompt, and all 4 scoped skill entries
     const onRes = tierCommandDef!.handler({ agent: agentB, rawInput: 'on' })
     expect(onRes).toEqual({ kind: 'success', text: 'A2UI 生成式界面已开启' })
     expect(renderWhen?.({ agent: agentB })).toBe(true)
     expect(promptSection!.text({ scope: agentB })).toBe(A2UI_SYSTEM_GUIDANCE)
-    expect(await registeredProvider!.list({ cwd: '/repo', scope: agentB })).toHaveLength(1)
+    expect(await registeredProvider!.list({ cwd: '/repo', scope: agentB })).toHaveLength(
+      DOMAIN_SKILL_NAMES.length,
+    )
 
     // 4. Cold start with `defaultEnabled: false` exposes 0 skills from boot
     let coldProvider: typeof registeredProvider
