@@ -24,7 +24,10 @@
    - 优先执行大小写无关的精确匹配（防止 `"US"` 误命中 `"US-West"`）；仅当精确匹配数为 0 时才回退到归一化子串匹配，以兼容携带数值后缀的 Sankey 节点标签（如 `"华东 9,860"`）。
 6. **兼容 Windows 盘符的工作区文件路径解析（`src/client/file-opener.tsx`）**：
    - 支持解析 `:line`、`:line:col`、`#Lline` 行号后缀的同时保留 `C:\...` Windows 盘符，并严格按照 `@deepseek-ai/dsh-util-workspace-path` 的 `dsh-resource://file/session/<sessionId>/<path>` 契约编码 URI。
+7. **306px `LogViewer` 容器查询层叠约束与 WCAG AAA 琥珀对比度（`src/client/catalog/Catalog.module.css`）**：
+   - `@container (max-width: 390px)` 中的 `.logMessage { flex: 1 0 100%; order: 10; }` 与 `.logDetailToggle { margin-left: auto; }` 必须声明在基础 `.logMessage` / `.logDetailToggle` 规则之后（容器查询不增加选择器权重），避免详情展开按钮被撑满整行或正文被挤压；
+   - 琥珀底 `#f59e0b` 的 `ApiEndpoint` `PUT`/`PATCH` 徽章、`Schedule` 告警进度条与 `Result` 告警徽标统一使用 `#18181b` 深色前景（`8.08:1` WCAG AAA）。
 
 ## 影响与约束
 
-- 所有新增图表类型与几何辅助函数都必须在 `tests/tier1-echarts.spec.ts`、`tests/v3-components.spec.ts` 或 `tests/audit-fixes-v041.spec.ts` 中补充 `containerWidth = 276` 窄宽回归断言。
+- 所有新增图表类型、窄容器样式与几何辅助函数都必须在 `tests/tier1-echarts.spec.ts`、`tests/v3-components.spec.ts`、`tests/audit-fixes-v041.spec.ts` 或 `tests/review-v042-fixes.spec.ts` 中补充 `containerWidth = 276` / `306px` 回归断言。

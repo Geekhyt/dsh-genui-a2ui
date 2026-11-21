@@ -114,6 +114,145 @@ export function readSanitizedDataModels(
   return result
 }
 
+function normalizePointer(raw: string): string {
+  const trimmed = raw.trim()
+  if (trimmed === '') return ''
+  const withSlash = trimmed.startsWith('/') ? trimmed : `/${trimmed}`
+  return withSlash.length > 1 ? withSlash.replace(/\/+$/, '') : withSlash
+}
+
+function isPointerObscuredOrParent(
+  pointer: string,
+  obscuredPointers: ReadonlySet<string>,
+): boolean {
+  const norm = normalizePointer(pointer)
+  if (norm === '') return false
+  for (const obs of obscuredPointers) {
+    if (norm === obs || obs.startsWith(`${norm}/`) || norm.startsWith(`${obs}/`)) {
+      return true
+    }
+  }
+  return false
+}
+
+function stripObscuredFromContext(
+  value: unknown,
+  rawBinding: unknown,
+  obscuredPointers: ReadonlySet<string>,
+  blockedValues: ReadonlySet<string>,
+  depth = 0,
+): unknown {
+  if (depth > 8) return undefined
+  if (typeof rawBinding === 'object' && rawBinding !== null && !Array.isArray(rawBinding)) {
+    const boundPath =
+      (rawBinding as { path?: unknown; '@path'?: unknown }).path ??
+      (rawBinding as { '@path'?: unknown })['@path']
+    if (typeof boundPath === 'string' && isPointerObscuredOrParent(boundPath, obscuredPointers)) {
+      return undefined
+    }
+  }
+  if (typeof value === 'string') {
+    return blockedValues.has(value) ? undefined : value
+  }
+  if (Array.isArray(value)) {
+    const rawArr = Array.isArray(rawBinding) ? rawBinding : undefined
+    return value
+      .map((item, idx) =>
+        stripObscuredFromContext(item, rawArr?.[idx], obscuredPointers, blockedValues, depth + 1),
+      )
+      .filter((item) => item !== undefined)
+  }
+  if (typeof value === 'object' && value !== null) {
+    const rawObj =
+      typeof rawBinding === 'object' && rawBinding !== null && !Array.isArray(rawBinding)
+        ? (rawBinding as Record<string, unknown>)
+        : undefined
+    const out: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      const cleaned = stripObscuredFromContext(
+        v,
+        rawObj !== undefined && Object.hasOwn(rawObj, k) ? rawObj[k] : undefined,
+        obscuredPointers,
+        blockedValues,
+        depth + 1,
+      )
+      if (cleaned !== undefined) out[k] = cleaned
+    }
+    return out
+  }
+  return value
+}
+
+export function sanitizeActionContextForSurface(
+  surface: SurfaceModel<ReactCatalogComponent> | undefined,
+  action: ActionPayload,
+): Record<string, unknown> {
+  const rawContext = action.context ?? {}
+  if (surface === undefined) return sanitizeDataModel(rawContext)
+  const obscuredPointers = new Set<string>()
+  let rawActionCtx: Record<string, unknown> | undefined
+  try {
+    const entries = surface?.componentsModel?.entries
+    if (
+      entries === undefined ||
+      entries === null ||
+      typeof entries[Symbol.iterator] !== 'function'
+    ) {
+      console.error(
+        '[dsh-genui-a2ui] Failed to inspect obscured fields: surface.componentsModel.entries is unavailable',
+      )
+      return {}
+    }
+    for (const [id, comp] of entries) {
+      if (comp.type === 'TextField' && comp.properties?.variant === 'obscured') {
+        const val = comp.properties?.value
+        if (typeof val === 'object' && val !== null) {
+          const rawPath =
+            (val as { path?: unknown; '@path'?: unknown }).path ??
+            (val as { '@path'?: unknown })['@path']
+          if (typeof rawPath === 'string') {
+            const norm = normalizePointer(rawPath)
+            if (norm !== '') obscuredPointers.add(norm)
+          }
+        }
+      }
+      if (id === action.sourceComponentId && action.sourceComponentId !== '') {
+        const actionProp = comp.properties?.action as
+          | { event?: { context?: Record<string, unknown> }; context?: Record<string, unknown> }
+          | undefined
+        const candidate = actionProp?.event?.context ?? actionProp?.context
+        if (candidate && typeof candidate === 'object' && !Array.isArray(candidate)) {
+          rawActionCtx = candidate
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[dsh-genui-a2ui] Failed to inspect obscured fields:', err)
+    return {}
+  }
+  if (obscuredPointers.size === 0) return sanitizeDataModel(rawContext)
+  const blockedValues = new Set<string>()
+  for (const pointer of obscuredPointers) {
+    try {
+      const secretVal = surface.dataModel.get(pointer)
+      if (typeof secretVal === 'string' && secretVal.length >= 4) {
+        blockedValues.add(secretVal)
+      }
+    } catch {
+      return {}
+    }
+  }
+  const stripped = stripObscuredFromContext(
+    rawContext,
+    rawActionCtx,
+    obscuredPointers,
+    blockedValues,
+  )
+  return sanitizeDataModel(
+    typeof stripped === 'object' && stripped !== null && !Array.isArray(stripped) ? stripped : {},
+  )
+}
+
 export { formatActionMessage }
 
 export type SurfaceActionCallback = (
@@ -170,7 +309,9 @@ export class SurfaceSessionStore {
         this.lastActionAt = now
 
         const dataModels = readSanitizedDataModels(this.processor, this.visibleSurfaceIds)
-        const cleanAction = enrichActionWithSelection(action)
+        const targetSurface = this.processor.getSurfaces().get(action.surfaceId)
+        const safeContext = sanitizeActionContextForSurface(targetSurface, action)
+        const cleanAction = enrichActionWithSelection({ ...action, context: safeContext })
         handler(formatActionMessage(cleanAction, dataModels), cleanAction, dataModels)
       },
       {
@@ -477,7 +618,11 @@ export const SurfaceGroupView = memo(function SurfaceGroupView({
                   )
                 ) : (
                   shown.map((surface) => (
-                    <ErrorBoundary key={surface.id} label={msg.surfaceRenderFailed(surface.id)}>
+                    <ErrorBoundary
+                      key={surface.id}
+                      resetKey={`${store.generation}:${streaming ? 1 : 0}:${messages.length}`}
+                      label={msg.surfaceRenderFailed(surface.id)}
+                    >
                       <A2uiSurface surface={surface} />
                     </ErrorBoundary>
                   ))

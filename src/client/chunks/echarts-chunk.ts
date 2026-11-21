@@ -342,6 +342,7 @@ function buildReferenceMarkLine(
   color: string,
   dark: boolean,
   position: 'insideStartTop' | 'insideEndTop' = 'insideEndTop',
+  compact = false,
 ): Record<string, unknown> | undefined {
   if (value === undefined || !Number.isFinite(value)) return undefined
   const text =
@@ -354,14 +355,14 @@ function buildReferenceMarkLine(
       formatter: text,
       position: horizontal ? 'start' : position,
       rotate: horizontal ? 0 : undefined,
-      distance: 4,
+      distance: compact && !horizontal ? 6 : 4,
       color,
       backgroundColor: dark ? 'rgba(20, 24, 36, 0.90)' : 'rgba(255, 255, 255, 0.92)',
       borderColor: color,
       borderWidth: 1,
       borderRadius: 4,
-      padding: [2, 5],
-      fontSize: 10,
+      padding: compact ? [1, 4] : [2, 5],
+      fontSize: compact ? 9.5 : 10,
       fontWeight: 600,
     },
     data: [horizontal ? { xAxis: value } : { yAxis: value }],
@@ -1013,8 +1014,9 @@ function buildChartOptionInternal(
           label: {
             show: true,
             ...innerSectorHalo,
-            fontSize: isCompact ? 10 : 11.5,
-            lineHeight: isCompact ? 13 : 15,
+            fontSize: isCompact ? 9.5 : 11.5,
+            lineHeight: isCompact ? 12 : 15,
+            padding: isCompact ? [2, 3] : undefined,
             fontWeight: 500,
             overflow: isCompact ? 'truncate' : 'break',
             ellipsis: '…',
@@ -1565,6 +1567,7 @@ function buildChartOptionInternal(
       theme.warn,
       dark,
       wfMarkPos,
+      isCompact,
     )
     const bounds = computeRefAxisBounds(peaks, props.referenceLine)
     const hasTotal = totalData.some((v) => v !== '-')

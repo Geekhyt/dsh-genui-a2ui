@@ -3,17 +3,29 @@ import { RUNTIME_MESSAGES, resolveClientLocale } from '../shared/i18n.ts'
 
 export interface ErrorBoundaryProps {
   readonly label?: string
+  readonly resetKey?: string | number | undefined
   readonly children: ReactNode
 }
 
 interface ErrorBoundaryState {
   readonly error: Error | null
+  readonly prevResetKey: string | number | undefined
 }
 
 export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  override state: ErrorBoundaryState = { error: null }
+  override state: ErrorBoundaryState = { error: null, prevResetKey: this.props.resetKey }
 
-  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+  static getDerivedStateFromProps(
+    props: ErrorBoundaryProps,
+    state: ErrorBoundaryState,
+  ): Partial<ErrorBoundaryState> | null {
+    if (props.resetKey !== state.prevResetKey) {
+      return { error: null, prevResetKey: props.resetKey }
+    }
+    return null
+  }
+
+  static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
     return { error }
   }
 

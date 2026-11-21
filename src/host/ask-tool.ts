@@ -156,11 +156,14 @@ export class PendingAskRegistry {
   }
 
   settle(sessionId: string, input: AskAnswerInput): boolean {
+    const callIdProvided =
+      input.callId !== undefined && input.callId !== null && input.callId !== ''
     let target: PendingEntry | undefined
-    if (input.callId !== undefined && input.callId !== '') {
-      target = this.entries.get(this.keyOf(sessionId, input.callId))
-    }
-    if (target === undefined) {
+    if (callIdProvided) {
+      if (typeof input.callId === 'string' && input.callId.trim() !== '') {
+        target = this.entries.get(this.keyOf(sessionId, input.callId))
+      }
+    } else {
       const candidates = [...this.entries.values()].filter((e) => e.sessionId === sessionId)
       if (candidates.length === 1) target = candidates[0]
     }

@@ -17,12 +17,13 @@
    - **零重依赖纯模块**：`mermaid-safe.ts` 不导入 `mermaid`（约 2 kB），使净化逻辑及裸边自动补全 `graph TD`、中文节点标签容错修复均可在 Node 端直接单测。
 2. **`openUrl` 强外链与用户手势校验**：
    - `src/client/catalog/functions.ts` 严格校验外链，禁止将相对路径解析到 DSH 宿主源，拒绝 `javascript:`、`file:`、`data:` 协议以及非用户手势触发的调用。
-3. **原型链污染防护与凭据字段脱敏**：
-   - `src/shared/constants.ts` 在清理不可信 JSON 时过滤 `__proto__`、`constructor`、`prototype` 键，并识别独立与复合命名凭据键（如 `userPassword`、`db_password`、`auth_token`、`clientSecret`、`bearerToken`、`apiKey`、`private_key`），同时避免误伤 `promptTokens` 等指标字段。
-   - `src/client/persistence.ts` 在写入 `localStorage` 草稿前，同时剥离凭据命名键与所有绑定了 `TextField(..., variant="obscured")` 的 JSON Pointer 路径。
+3. **原型链污染防护、HITL `callId` 严格绑定与凭据字段脱敏**：
+   - `src/shared/constants.ts` 在清理不可信 JSON 时过滤 `__proto__`、`constructor`、`prototype` 键，并识别独立与复合命名凭据键（如 `password`、`secret`、`token`、`pin`、`otp`、`passcode`、`cvv`、`passphrase`、`credential(s)`、`authorization`、`cookie`、`apiKey`、`privateKey`、`accessKey`、`sshKey`、`signingKey` 等），同时避免误伤 `tokens`/`promptTokens`/`totalTokens` 等指标字段。
+   - `src/client/persistence.ts` 与 `src/client/SurfaceView.tsx` 在写入 `localStorage` 草稿与派发 `action.context` 前，均单次 fail-closed 扫描所有 `TextField(..., variant="obscured")` 指针并递归剥离对应字段（含父路径绑定与 `>= 4` 字符值兜底）。
+   - `src/host/ask-tool.ts` 严格校验显式 `callId`，拒绝过期、空白或非法 `callId` 回退签批会话内其他活跃 `a2ui_ask`。
 4. **CSV 导出防公式注入与 Excel 中文兼容**：
-   - `src/client/catalog/v4-helpers.ts` 对以 `=`、`+`、`-`、`@`、`\t`、`\r` 开头的单元格做 DDE 防注入转义，并为 RFC-4180 CSV 添加 UTF-8 BOM（`\uFEFF`）头以确保 Excel 正确显示中文。
+   - `src/client/catalog/v4-helpers.ts` 仅豁免纯数字字面量（`/^[+-]?\d+(?:\.\d+)?$/`），对一切前导空白/换行或以 `=`、`+`、`-`、`@`、`\t`、`\r` 开头的公式/DDE 单元格前置单引号转义，并为 RFC-4180 CSV 添加 UTF-8 BOM（`\uFEFF`）头以确保 Excel 正确显示中文。
 
 ## 影响与约束
 
-- 任何涉及 Mermaid、`openUrl`、草稿脱敏或 CSV 导出的修改都必须保持 `tests/oss-readiness.spec.ts`、`tests/react-best-practices.spec.ts` 与 `tests/audit-fixes-v041.spec.ts` 中的安全回归测试全绿。
+- 任何涉及 Mermaid、`openUrl`、草稿/动作脱敏、`a2ui_ask` 签批或 CSV 导出的修改都必须保持 `tests/oss-readiness.spec.ts`、`tests/react-best-practices.spec.ts`、`tests/audit-fixes-v041.spec.ts` 与 `tests/review-v042-fixes.spec.ts` 中的安全回归测试全绿。

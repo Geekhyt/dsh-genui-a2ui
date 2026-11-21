@@ -60,19 +60,31 @@ export function isDangerousObjectKey(key: string): boolean {
   return DANGEROUS_OBJECT_KEYS.has(key)
 }
 
-const SECRET_SINGLE_WORDS = new Set(['password', 'passwd', 'pwd', 'secret'])
-const SECRET_TOKEN_PREFIXES = new Set([
-  'access',
-  'refresh',
-  'auth',
-  'bearer',
-  'id',
-  'session',
-  'api',
-  'oauth',
-  'csrf',
-  'jwt',
+const SECRET_SINGLE_WORDS = new Set([
+  'password',
+  'passwd',
+  'pwd',
   'secret',
+  'passphrase',
+  'passcode',
+  'credential',
+  'credentials',
+  'authorization',
+  'cookie',
+  'pin',
+  'otp',
+  'cvv',
+  'token',
+])
+const SECRET_KEY_PREFIXES = new Set([
+  'api',
+  'private',
+  'access',
+  'ssh',
+  'signing',
+  'encryption',
+  'master',
+  'client',
 ])
 
 export function isSecretKey(key: string): boolean {
@@ -85,9 +97,8 @@ export function isSecretKey(key: string): boolean {
     const w = words[i]
     if (!w) continue
     if (SECRET_SINGLE_WORDS.has(w)) return true
-    if (w === 'apikey' || w === 'privatekey') return true
-    if (w === 'key' && i > 0 && (words[i - 1] === 'api' || words[i - 1] === 'private')) return true
-    if (w === 'token' && i > 0 && SECRET_TOKEN_PREFIXES.has(words[i - 1] ?? '')) return true
+    if (w === 'apikey' || w === 'privatekey' || w === 'accesskey') return true
+    if (w === 'key' && i > 0 && SECRET_KEY_PREFIXES.has(words[i - 1] ?? '')) return true
   }
   return false
 }

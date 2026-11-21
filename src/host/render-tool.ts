@@ -55,7 +55,7 @@ const PARAMETERS = {
 const RenderArgsSchema = z
   .object({
     ui: z.string(),
-    title: z.string().optional(),
+    title: z.union([z.string(), z.null()]).optional(),
     placement: z.unknown().optional(),
   })
   .passthrough()
@@ -80,29 +80,33 @@ export function readArgs(args: unknown): {
   placement: SurfacePlacement
 } {
   let candidate: unknown = args
-  if (
-    typeof candidate === 'object' &&
-    candidate !== null &&
-    'arguments' in candidate &&
-    !('ui' in candidate)
-  ) {
-    warnLegacyBridgeEncoding('wrapped in { arguments }')
-    candidate = (candidate as { arguments: unknown }).arguments
-  }
-  if (typeof candidate === 'string') {
-    const rawStr = candidate
-    const trimmed = rawStr.trim()
-    if (trimmed.startsWith('{')) {
-      try {
-        const parsed = JSON.parse(trimmed) as unknown
-        warnLegacyBridgeEncoding('string-encoded JSON object')
-        candidate = parsed
-      } catch {
-        return { ui: rawStr, title: undefined, placement: 'answer' }
+  for (let step = 0; step < 3; step++) {
+    if (
+      typeof candidate === 'object' &&
+      candidate !== null &&
+      'arguments' in candidate &&
+      !('ui' in candidate)
+    ) {
+      warnLegacyBridgeEncoding('wrapped in { arguments }')
+      candidate = (candidate as { arguments: unknown }).arguments
+      continue
+    }
+    if (typeof candidate === 'string') {
+      const rawStr = candidate
+      const trimmed = rawStr.trim()
+      if (trimmed.startsWith('{')) {
+        try {
+          const parsed = JSON.parse(trimmed) as unknown
+          warnLegacyBridgeEncoding('string-encoded JSON object')
+          candidate = parsed
+          continue
+        } catch {
+          return { ui: rawStr, title: undefined, placement: 'answer' }
+        }
       }
-    } else {
       return { ui: rawStr, title: undefined, placement: 'answer' }
     }
+    break
   }
   const parsed = RenderArgsSchema.safeParse(candidate)
   if (!parsed.success) {

@@ -36,7 +36,7 @@ flowchart TB
   end
 
   subgraph S3["阶段 3 · Client 四分包懒加载与原生 Light-DOM 槽位"]
-    SHELL["冷启动轻量壳 lib/client.js (59.5 kB)"]
+    SHELL["冷启动轻量壳 lib/client.js (60.5 kB)"]
     RT["按需核心包 client.runtime.js (57 组件 + StreamingExpressSession)"]
     EC["按需图表包 client.echarts.js (19 类 ECharts 6)"]
     MM["按需架构图包 client.mermaid.js (Mermaid 11 严格沙箱)"]
@@ -87,11 +87,11 @@ flowchart TB
 
 | 构建产物 | 原始体积 | Gzip 体积 | 职责与加载触发时机 |
 | :--- | :--- | :--- | :--- |
-| `lib/client.js` | **`59.5 kB`** | **`16.7 kB`** | 首屏冷启动轻量壳：注册 UI Slots、双语自适应、空会话原生轻提示与胶囊开关（构建与单测双重强制 `< 100 kB` 门禁）。 |
+| `lib/client.js` | **`60.5 kB`** | **`17.1 kB`** | 首屏冷启动轻量壳：注册 UI Slots、双语自适应、空会话原生轻提示与胶囊开关（构建与单测双重强制 `< 100 kB` 门禁）。 |
 | `lib/client.runtime.js` | `1.32 MB` | ~`354 kB` | 仅当对话中真正挂载 A2UI 卡片时才加载（含 `@a2ui/react`、57 组件目录、TanStack Table、0ms 交叉筛选与流式防抖）。 |
 | `lib/client.echarts.js` | `875.3 kB` | ~`289 kB` | 仅当卡片使用 `Chart` 组件时按需加载 ECharts 6（按需注册 19 类图表、标线模块、交叉筛选高亮、2× PNG 导出与 276px 紧凑自适应）。 |
 | `lib/client.mermaid.js` | `3.51 MB` | ~`943 kB` | 仅当卡片使用 `Mermaid` 组件时按需加载 Mermaid 11（强制 `securityLevel: "strict"` + SVG 净化 + LRU-64 缓存）。 |
-| `lib/index.js` | `747.1 kB` | `205.2 kB` | 自包含 Host ESM 产物（打包 `@a2ui/agent`、分域 Skill 压缩器、Express 编译降维预处理与同构 Zod 契约），用户安装时零运行时 npm 依赖。 |
+| `lib/index.js` | `747.9 kB` | `205.6 kB` | 自包含 Host ESM 产物（打包 `@a2ui/agent`、分域 Skill 压缩器、Express 编译降维预处理与同构 Zod 契约），用户安装时零运行时 npm 依赖。 |
 
 ---
 
@@ -258,7 +258,7 @@ node scripts/dev-env.mjs serve
 - `src/index.ts` —— Host 端 Cordis 插件入口（注册工具、4 域分域 Skill、命令与系统提示词切片）
 - `src/host/` —— `a2ui_render`、`a2ui_ask`、`SurfaceSessions` 编译器（事务级状态回滚）、分域 Skill 压缩器（`prompt-compact.ts`）与 28 用例评测套件（`eval-suite.ts`）
 - `src/shared/` —— 前后端同构 `dshSchemaCatalog`（57 组件 / 25 函数）、Express 降维预处理（`express-preprocess.ts`）、跨端协议类型 `wire-types.ts`、`calc` 公式解析器、安全脱敏与双语词条
-- `src/client/index.ts` —— `59.5 kB` 首屏冷启动轻量壳与输入框胶囊开关
+- `src/client/index.ts` —— `60.5 kB` 首屏冷启动轻量壳与输入框胶囊开关
 - `src/client/dom-hooks.ts` —— 全仓唯一底层 DOM / ECharts PNG 导出 / 流式高度稳定器 / Mermaid 生命周期隔离层（业务 `.tsx` 强制 `0` `useEffect`）
 - `src/client/chunks/` —— 按需加载分包入口（`runtime-chunk.ts`、`echarts-chunk.ts`、`mermaid-chunk.ts`）
 - `src/client/catalog/` —— 57 个 Light-DOM 原生组件与 25 个客户端函数的具体实现

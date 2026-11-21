@@ -1018,10 +1018,10 @@ export const DshMatrixImpl = defineComponent<{
       ? String(props.cornerLabel)
       : msg.matrixDefaultCorner
   const scale = props.colorScale ?? 'brand'
-  const resolveCellColorVar = (intensityPct: number): string => {
+  const resolveCellColorVar = (ratio: number): string => {
     if (scale === 'auto') {
-      if (intensityPct >= 66) return 'var(--dsw-alias-state-error-primary, #ef4444)'
-      if (intensityPct >= 34) return 'var(--dsw-alias-state-warn-primary, #f59e0b)'
+      if (ratio >= 0.67) return 'var(--dsw-alias-state-error-primary, #ef4444)'
+      if (ratio >= 0.34) return 'var(--dsw-alias-state-warn-primary, #f59e0b)'
       return 'var(--dsw-alias-state-success-primary, #10b981)'
     }
     if (scale === 'success') return 'var(--dsw-alias-state-success-primary, #10b981)'
@@ -1064,7 +1064,7 @@ export const DshMatrixImpl = defineComponent<{
                     style={
                       cell.kind === 'number' && cell.intensityPct > 0
                         ? {
-                            background: `color-mix(in srgb, ${resolveCellColorVar(cell.intensityPct)} ${cell.intensityPct}%, transparent)`,
+                            background: `color-mix(in srgb, ${resolveCellColorVar(cell.ratio)} ${cell.intensityPct}%, transparent)`,
                           }
                         : undefined
                     }

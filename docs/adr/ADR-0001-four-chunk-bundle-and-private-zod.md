@@ -34,5 +34,5 @@ DeepSeek Harness（DSH）在宿主壳冷启动时会直接加载插件浏览器�
 
 ## 影响与约束
 
-- `lib/client.js` 稳定维持在 `~59.5 kB`（由 `tests/bundle.spec.ts` 自动化守卫）。
+- `lib/client.js` 稳定维持在 `~60.5 kB`（由 `tests/bundle.spec.ts` 自动化守卫 `< 100 kB`）。
 - 仓库禁注释 Lint（`scripts/check-no-comments.mjs`）必须始终将 `/* @__PURE__ */` 等打包器纯度指令列入白名单。

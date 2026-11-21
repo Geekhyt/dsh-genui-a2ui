@@ -253,6 +253,9 @@
 
 .dateInput {
   height: 34px;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   padding: 0 10px;
   border-radius: var(--dsw-radius-sm, 8px);
   border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.25));
@@ -261,6 +264,11 @@
   font-family: var(--dsw-font-family, inherit);
   font-size: 13px;
   outline: none;
+}
+
+.dateInput::-webkit-calendar-picker-indicator {
+  opacity: 0.9;
+  cursor: pointer;
 }
 
 .dateInput:focus {
@@ -2393,18 +2401,6 @@
   padding: 6px 12px;
 }
 
-@container (max-width: 390px) {
-  .logRowMain {
-    flex-wrap: wrap;
-    row-gap: 4px;
-    padding: 7px 10px;
-  }
-
-  .logRowMain > :last-child {
-    flex: 1 0 100%;
-  }
-}
-
 .logRowMain:hover {
   background: var(--dsw-alias-interactive-bg-hover, rgba(128, 128, 128, 0.06));
 }
@@ -2443,6 +2439,23 @@
   padding: 1px 4px;
   white-space: nowrap;
   flex-shrink: 0;
+}
+
+@container (max-width: 390px) {
+  .logRowMain {
+    flex-wrap: wrap;
+    row-gap: 4px;
+    padding: 7px 10px;
+  }
+
+  .logMessage {
+    flex: 1 0 100%;
+    order: 10;
+  }
+
+  .logDetailToggle {
+    margin-left: auto;
+  }
 }
 
 .logDetailDrawer {
@@ -3794,6 +3807,7 @@
 .apiMethodBadge[data-method="PUT"],
 .apiMethodBadge[data-method="PATCH"] {
   background: var(--dsw-alias-state-warn-primary, #f59e0b);
+  color: #18181b;
 }
 
 .apiPathCode {
@@ -4042,6 +4056,8 @@
 
 .scheduleBar[data-status="warning"] {
   background: var(--dsw-alias-state-warn-primary, #f59e0b);
+  color: #18181b;
+  font-weight: 600;
 }
 
 .scheduleBar[data-status="danger"] {
@@ -4125,6 +4141,7 @@
 
 .resultEmblem[data-status="warning"] {
   background: var(--dsw-alias-state-warn-primary, #f59e0b);
+  color: #18181b;
 }
 
 .resultEmblem[data-status="error"] {

@@ -1100,6 +1100,39 @@ export const SHOWCASE_P2_CROSSFILTER_UI = [
   ']))',
 ].join('\n')
 
+export const SHOWCASE_V042_QA_UI = [
+  'surface("v042_visual_qa")',
+  '$/v042Logs = [',
+  '  { timestamp: "14:02:11", level: "error", service: "fraud-scorer", message: "TiKV region #19 read_index timeout (126.8ms > 80ms SLA)", detail: "rpc error: code = DeadlineExceeded desc = tikv_client::read_index region=19 peer=402\\n  at RiskEngine.EvaluateOrderGraph (src/risk/scorer.ts:142)" },',
+  '  { timestamp: "14:02:12", level: "warn", service: "checkout-api", message: "Fallback local risk cache engaged for 18% of requests", detail: "cache_hit_ratio=0.82 degraded_routes=[/v1/checkout/confirm]" }',
+  ']',
+  '$/v042Sched = [',
+  '  { id: "s1", title: "1. 快照预检", owner: "@DBA", start: "00:00", end: "01:15", status: "done", progress: 100 },',
+  '  { id: "s2", title: "2. 灰度切流告警", owner: "@SRE", start: "01:15", end: "03:20", status: "warning", progress: 65 },',
+  '  { id: "s3", title: "3. 全量回归", owner: "@QA", start: "03:20", end: "05:00", status: "pending" }',
+  ']',
+  '$/v042Resp = { policyId: "rl_90412", mode: "degraded", updatedPods: 18 }',
+  '$/v042Dt = "2026-11-21T14:30"',
+  'root = Card(Column([',
+  '  Text("### v0.4.2 视觉与交互修复对照台（Matrix auto 红黄绿 · 306px LogViewer 详情按钮 · 琥珀对比度 · 暗色日期图标）"),',
+  '  Row([',
+  '    Matrix(["杭州主区", "上海双活", "北京灾备"], ["Q1", "Q2", "Q3", "Q4"], [[11.2, 14.5, 22.8, 36.0], [28.4, 48.2, 62.5, 74.0], [68.0, 82.4, 91.5, 98.2]], title="Matrix(colorScale=auto) 三档红黄绿热力验证", unit="ms", colorScale="auto", showTotals=true, weight=1),',
+  '    LogViewer($/v042Logs, title="306px LogViewer（含 detail 展开按钮防撑满）", searchable=true, weight=1)',
+  '  ]),',
+  '  Row([',
+  '    ApiEndpoint("PATCH", "/v1/gateways/{gatewayId}/rate-limits/canary-policy", summary="PATCH 琥珀徽章 WCAG 对比度验证", status=200, latency="19 ms", responseBody=$/v042Resp, weight=1),',
+  '    Schedule($/v042Sched, title="Schedule warning 琥珀进度条对比度验证", range=["00:00", "05:00"], now="02:30", weight=1)',
+  '  ]),',
+  '  Row([',
+  '    Result("warning", "灰度告警回执（Warning Emblem 对比度）", subtitle="检测到北京灾备区 P99 延迟突破阈值，已触发自动限流", meta=[{ label: "告警单号", value: "ALM-20261121" }], weight=1),',
+  '    Card(Column([',
+  '      DateTimeInput($/v042Dt, label="暗色模式原生日历图标清晰度验证", enableDate=true, enableTime=true),',
+  '      Text("验证 306px 容器内 datetime-local 不溢出且暗色图标清晰可见。", variant="caption")',
+  '    ]), weight=1)',
+  '  ])',
+  ']))',
+].join('\n')
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 function extractText(content) {
@@ -1378,6 +1411,7 @@ export function startMockLlmServer(port = PORT) {
       const isShowcase23 = /\bshowcase-23\b|长词与浮层压测|extreme.*a/i.test(userText)
       const isShowcase24 = /\bshowcase-24\b|水平条与高密度压测|extreme.*b/i.test(userText)
       const isShowcase25 = /\bshowcase-25\b|交叉筛选|crossfilter/i.test(userText)
+      const isShowcase26 = /\bshowcase-26\b|v042-qa/i.test(userText)
       const isDashboard = /dashboard|看板/i.test(userText)
       const isAsk = /ask|向导|部署/i.test(userText)
       const isDock = /dock|工作台|监控/i.test(userText)
@@ -1560,6 +1594,13 @@ export function startMockLlmServer(port = PORT) {
           })
           return
         }
+        if (isShowcase26) {
+          await streamToolCall(res, model, 'a2ui_render', {
+            title: 'v0.4.2 视觉与交互修复对照台',
+            ui: SHOWCASE_V042_QA_UI,
+          })
+          return
+        }
         if (userText.includes('[a2ui-action]')) {
           if (userText.includes('surface="analytics"') || userText.includes('action="boost_q2"')) {
             await streamToolCall(res, model, 'a2ui_render', {
@@ -1715,15 +1756,17 @@ export function startMockLlmServer(port = PORT) {
                                                       ? '已渲染水平条形图、正负堆叠柱、半宽 Mermaid 工具栏、60 天高密度 Tracker 与 5 位数 MetricRing 压测台。'
                                                       : isShowcase25
                                                         ? '已渲染 P2 交叉筛选与一键导出验证台：点击任意柱状图/饼图扇区或表格行即可 0ms 本地双向联动筛选，并支持一键下载 PNG 与复制 CSV。'
-                                                        : userText.includes('[a2ui-action]')
-                                                          ? '已根据您的操作实时增量刷新界面数据模型。'
-                                                          : isDock
-                                                            ? '已将 CI/CD 发布流水线监控面板固定在输入框上方的常驻工作台（Dock），后续轮次将继续实时原地刷新。'
-                                                            : isInline
-                                                              ? '已在工具步骤流内嵌渲染诊断摘要。'
-                                                              : isDashboard
-                                                                ? '已为您生成 2026 区域经营交互看板（示例数据），可切换图表、搜索排序明细表或一键调整预测情景。'
-                                                                : '已为您准备好餐厅预订交互卡片，您可直接在下方调整人数、口味或包间选项后点击确认。'
+                                                        : isShowcase26
+                                                          ? '已渲染 v0.4.2 视觉与交互修复对照台（Matrix colorScale="auto"、306px LogViewer 详情按钮、琥珀对比度与暗色日期选择器）。'
+                                                          : userText.includes('[a2ui-action]')
+                                                            ? '已根据您的操作实时增量刷新界面数据模型。'
+                                                            : isDock
+                                                              ? '已将 CI/CD 发布流水线监控面板固定在输入框上方的常驻工作台（Dock），后续轮次将继续实时原地刷新。'
+                                                              : isInline
+                                                                ? '已在工具步骤流内嵌渲染诊断摘要。'
+                                                                : isDashboard
+                                                                  ? '已为您生成 2026 区域经营交互看板（示例数据），可切换图表、搜索排序明细表或一键调整预测情景。'
+                                                                  : '已为您准备好餐厅预订交互卡片，您可直接在下方调整人数、口味或包间选项后点击确认。'
       await streamTextReply(res, model, reply)
       return
     }

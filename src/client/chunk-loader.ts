@@ -164,8 +164,21 @@ let mermaidModuleSync: MermaidChunkModule | null = null
 let mermaidPromise: Promise<MermaidChunkModule> | null = null
 const mermaidDiagramCache = /* @__PURE__ */ new Map<string, MermaidDiagramSnapshot>()
 const mermaidListenersByKey = /* @__PURE__ */ new Map<string, Set<() => void>>()
+const mermaidTargetsByKey = /* @__PURE__ */ new Map<string, Set<() => HTMLElement | null>>()
 const mermaidTimersByKey = /* @__PURE__ */ new Map<string, ReturnType<typeof setTimeout>>()
 const mermaidInflightKeys = /* @__PURE__ */ new Set<string>()
+
+function resolveLiveMermaidTarget(key: string): HTMLElement | null {
+  const targets = mermaidTargetsByKey.get(key)
+  if (!targets) return null
+  for (const getter of targets) {
+    try {
+      const el = getter()
+      if (el !== null) return el
+    } catch {}
+  }
+  return null
+}
 
 function mermaidCacheKey(code: string, dark: boolean): string {
   return `${dark ? '1' : '0'}::${code}`
@@ -232,43 +245,61 @@ export function subscribeMermaidDiagram(
   }
   set.add(listener)
 
+  let targets = mermaidTargetsByKey.get(key)
+  if (!targets) {
+    targets = new Set()
+    mermaidTargetsByKey.set(key, targets)
+  }
+  targets.add(getTarget)
+
   const existing = mermaidDiagramCache.get(key)
-  if (existing !== undefined) {
+  if (existing !== undefined && existing.error === null) {
     mermaidDiagramCache.delete(key)
     mermaidDiagramCache.set(key, existing)
-  } else if (!mermaidInflightKeys.has(key) && !mermaidTimersByKey.has(key)) {
-    const timer = setTimeout(() => {
-      mermaidTimersByKey.delete(key)
-      if ((mermaidListenersByKey.get(key)?.size ?? 0) === 0) return
-      mermaidInflightKeys.add(key)
-      loadMermaidChunk()
-        .then((mod) => mod.renderMermaidDiagram(code, dark, getTarget()))
-        .then(
-          (renderedSvg) => {
-            mermaidInflightKeys.delete(key)
-            storeMermaidSnapshot(key, {
-              svg: renderedSvg,
-              error: null,
-              rendering: false,
-            })
-          },
-          (err: unknown) => {
-            mermaidInflightKeys.delete(key)
-            const errMsg =
-              err instanceof Error && err.message ? err.message : MERMAID_RENDER_ERROR_SENTINEL
-            storeMermaidSnapshot(key, {
-              svg: null,
-              error: errMsg,
-              rendering: false,
-            })
-          },
-        )
-    }, MERMAID_DEBOUNCE_MS)
-    ;(timer as unknown as { unref?: () => void }).unref?.()
-    mermaidTimersByKey.set(key, timer)
+  } else {
+    if (existing !== undefined && existing.error !== null) {
+      mermaidDiagramCache.delete(key)
+    }
+    if (!mermaidInflightKeys.has(key) && !mermaidTimersByKey.has(key)) {
+      const timer = setTimeout(() => {
+        mermaidTimersByKey.delete(key)
+        if ((mermaidListenersByKey.get(key)?.size ?? 0) === 0) return
+        mermaidInflightKeys.add(key)
+        loadMermaidChunk()
+          .then((mod) => mod.renderMermaidDiagram(code, dark, resolveLiveMermaidTarget(key)))
+          .then(
+            (renderedSvg) => {
+              mermaidInflightKeys.delete(key)
+              storeMermaidSnapshot(key, {
+                svg: renderedSvg,
+                error: null,
+                rendering: false,
+              })
+            },
+            (err: unknown) => {
+              mermaidInflightKeys.delete(key)
+              if ((mermaidListenersByKey.get(key)?.size ?? 0) === 0) return
+              const errMsg =
+                err instanceof Error && err.message ? err.message : MERMAID_RENDER_ERROR_SENTINEL
+              storeMermaidSnapshot(key, {
+                svg: null,
+                error: errMsg,
+                rendering: false,
+              })
+            },
+          )
+      }, MERMAID_DEBOUNCE_MS)
+      ;(timer as unknown as { unref?: () => void }).unref?.()
+      mermaidTimersByKey.set(key, timer)
+    }
   }
 
   return () => {
+    const currentTargets = mermaidTargetsByKey.get(key)
+    if (currentTargets) {
+      currentTargets.delete(getTarget)
+      if (currentTargets.size === 0) mermaidTargetsByKey.delete(key)
+    }
     const currentSet = mermaidListenersByKey.get(key)
     if (!currentSet) return
     currentSet.delete(listener)
@@ -305,5 +336,7 @@ export function resetMermaidDiagramCacheForTests(): void {
   }
   mermaidTimersByKey.clear()
   mermaidInflightKeys.clear()
+  mermaidListenersByKey.clear()
+  mermaidTargetsByKey.clear()
   mermaidDiagramCache.clear()
 }

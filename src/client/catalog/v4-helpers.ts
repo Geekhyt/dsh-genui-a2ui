@@ -475,6 +475,7 @@ export interface NormalizedMatrixCell {
   readonly kind: 'number' | 'ok' | 'warn' | 'no' | 'empty' | 'text'
   readonly display: string
   readonly intensityPct: number
+  readonly ratio: number
 }
 
 export interface NormalizedMatrixModel {
@@ -522,7 +523,7 @@ export function normalizeMatrixData(params: {
     for (let c = 0; c < colLabels.length; c++) {
       const v = rowArr[c]
       if (v === undefined || v === null || v === '' || v === '—' || v === '-') {
-        rowOut.push({ kind: 'empty', display: '—', intensityPct: 0 })
+        rowOut.push({ kind: 'empty', display: '—', intensityPct: 0, ratio: 0 })
         continue
       }
       if (typeof v === 'number' && Number.isFinite(v)) {
@@ -534,6 +535,7 @@ export function normalizeMatrixData(params: {
           kind: 'number',
           display: `${formatted}${unit}`,
           intensityPct,
+          ratio,
         })
         continue
       }
@@ -542,6 +544,7 @@ export function normalizeMatrixData(params: {
           kind: v ? 'ok' : 'no',
           display: v ? '✓' : '—',
           intensityPct: 0,
+          ratio: 0,
         })
         continue
       }
@@ -551,21 +554,24 @@ export function normalizeMatrixData(params: {
           kind: 'ok',
           display: s.replace(/^(?:ok|yes|pass):\s*/i, '') || '✓',
           intensityPct: 0,
+          ratio: 0,
         })
       } else if (/^(?:warn|warning):/i.test(s)) {
         rowOut.push({
           kind: 'warn',
           display: s.replace(/^(?:warn|warning):\s*/i, ''),
           intensityPct: 0,
+          ratio: 0,
         })
       } else if (/^(?:no|err|fail):/i.test(s) || s === '✕' || s === '✗') {
         rowOut.push({
           kind: 'no',
           display: s.replace(/^(?:no|err|fail):\s*/i, '') || '✕',
           intensityPct: 0,
+          ratio: 0,
         })
       } else {
-        rowOut.push({ kind: 'text', display: s, intensityPct: 0 })
+        rowOut.push({ kind: 'text', display: s, intensityPct: 0, ratio: 0 })
       }
     }
     cells.push(rowOut)
@@ -593,11 +599,15 @@ export interface ProTableColumnDescriptor {
   readonly label: string
 }
 
-const CSV_FORMULA_PREFIX_RE = /^(?:[=@\t\r]|[+-](?!\d))/
+const PURE_SIGNED_NUMBER_RE = /^[+-]?\d+(?:\.\d+)?$/
+const CSV_FORMULA_PREFIX_RE = /^[\s\r\n]*[=+\-@\t\r]/
 
 function escapeCsvCell(raw: unknown): string {
   const rawStr = raw === undefined || raw === null ? '' : String(raw)
-  const s = CSV_FORMULA_PREFIX_RE.test(rawStr) ? `'${rawStr}` : rawStr
+  const s =
+    CSV_FORMULA_PREFIX_RE.test(rawStr) && !PURE_SIGNED_NUMBER_RE.test(rawStr)
+      ? `'${rawStr}`
+      : rawStr
   if (/[",\r\n]/.test(s)) {
     return `"${s.replace(/"/g, '""')}"`
   }

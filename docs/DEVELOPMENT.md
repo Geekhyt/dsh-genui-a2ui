@@ -36,7 +36,7 @@ flowchart TB
   end
 
   subgraph S3["Stage 3 · Client 4-Chunk Runtime & Native Light-DOM Slots"]
-    SHELL["Cold-Boot Shell lib/client.js (59.5 kB)"]
+    SHELL["Cold-Boot Shell lib/client.js (60.5 kB)"]
     RT["Lazy Runtime client.runtime.js (57 Components + StreamingExpressSession)"]
     EC["Lazy Chart Engine client.echarts.js (19 ECharts 6 Kinds)"]
     MM["Lazy Diagram Engine client.mermaid.js (Strict Sandbox Mermaid 11)"]
@@ -87,11 +87,11 @@ flowchart TB
 
 | Bundle Target | Raw Size | Gzip Size | Role & Load Trigger |
 | :--- | :--- | :--- | :--- |
-| `lib/client.js` | **`59.5 kB`** | **`16.7 kB`** | Cold-boot shell: registers UI Slots, bilingual chrome, empty-session toast feedback, and composer pill (enforced by `< 100 kB` build & test gate). |
+| `lib/client.js` | **`60.5 kB`** | **`17.1 kB`** | Cold-boot shell: registers UI Slots, bilingual chrome, empty-session toast feedback, and composer pill (enforced by `< 100 kB` build & test gate). |
 | `lib/client.runtime.js` | `1.32 MB` | ~`354 kB` | Loaded on first A2UI surface mount (`@a2ui/react`, 57-component catalog, TanStack Table, 0ms cross-filtering & anti-jank streaming). |
 | `lib/client.echarts.js` | `875.3 kB` | ~`289 kB` | Loaded only when a surface renders `Chart` (ECharts 6 modular registration for 19 chart kinds, threshold markLines, cross-filter highlight, 2× PNG export & 276px compact adaptation). |
 | `lib/client.mermaid.js` | `3.51 MB` | ~`943 kB` | Loaded only when a surface renders `Mermaid` (Mermaid 11 under `securityLevel: "strict"` + SVG sanitizer + LRU-64 cache). |
-| `lib/index.js` | `747.1 kB` | `205.2 kB` | Self-contained Host ESM bundle (`@a2ui/agent`, domain skill compactor, Express lowering passes & Zod catalog) — ships with zero runtime `dependencies`. |
+| `lib/index.js` | `747.9 kB` | `205.6 kB` | Self-contained Host ESM bundle (`@a2ui/agent`, domain skill compactor, Express lowering passes & Zod catalog) — ships with zero runtime `dependencies`. |
 
 ---
 
@@ -258,7 +258,7 @@ node scripts/dev-env.mjs serve
 - `src/index.ts` — Host Cordis plugin entry (`tools`, 4-domain `skills`, `commands`, `systemPrompt`)
 - `src/host/` — `a2ui_render`, `a2ui_ask`, `SurfaceSessions` compiler (with transactional rollback), domain skill compactor (`prompt-compact.ts`), and 28-case eval suite (`eval-suite.ts`)
 - `src/shared/` — Isomorphic `dshSchemaCatalog` (57 components / 25 functions), Express lowering passes (`express-preprocess.ts`), Host/Client `wire-types.ts`, `calc` parser/evaluator, secret/prototype sanitizers, and bilingual i18n
-- `src/client/index.ts` — `59.5 kB` cold-boot UI slot shell & composer toggle pill
+- `src/client/index.ts` — `60.5 kB` cold-boot UI slot shell & composer toggle pill
 - `src/client/dom-hooks.ts` — Sole low-level DOM / ECharts PNG export / streaming height stabilizer / Mermaid lifecycle boundary (`0` `useEffect` in `.tsx` files)
 - `src/client/chunks/` — On-demand entrypoints (`runtime-chunk.ts`, `echarts-chunk.ts`, `mermaid-chunk.ts`)
 - `src/client/catalog/` — Light-DOM React implementations of all 57 components & 25 functions

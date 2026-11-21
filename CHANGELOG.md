@@ -2,6 +2,27 @@
 
 All notable changes to `dsh-genui-a2ui` are documented in this file.
 
+## [0.4.2] - 2026-11-21
+
+### Fixed
+- **HITL Integrity, Tool Argument Parsing & Security Hardening**:
+  - **Strict `a2ui_ask` `callId` Matching (`src/host/ask-tool.ts`)**: `PendingAskRegistry.settle` now only falls back to the sole pending ask in a session when `callId` is omitted or empty; explicit mismatched, stale, whitespace-only, or non-string `callId` values are rejected (`false`) so stale callbacks cannot settle an unrelated active approval prompt.
+  - **`readArgs` `title: null` & Multi-Layer Unwrap Fix (`src/host/render-tool.ts`)**: Allowed `title: null` in `RenderArgsSchema` (matching LLM tool payloads that serialize omitted optional fields as `null`) and unified `{ arguments }` / stringified JSON unwrapping into a 3-pass loop aligned with `readAskArgs`.
+  - **Obscured Field Redaction in `action.context` & Expanded Secret Keys (`src/client/SurfaceView.tsx`, `src/shared/constants.ts`)**: Added `sanitizeActionContextForSurface` (single-pass fail-closed inspection of `componentsModel.entries`, normalized JSON pointer matching for exact/parent bindings regardless of value length, plus `>= 4`-char value matching fallback) so `TextField(..., variant="obscured")` values can no longer leak via `action.context` into `[a2ui-action]` or `/a2ui-answer`; expanded `isSecretKey` to cover `token`, `pin`, `otp`, `passcode`, `cvv`, `passphrase`, `credential(s)`, `authorization`, `cookie`, and `access`/`ssh`/`signing`/`encryption`/`master`/`client` key prefixes while preserving `tokens`/`promptTokens`/`totalTokens`.
+  - **CSV Formula Injection Hardening (`src/client/catalog/v4-helpers.ts`)**: Narrowed `escapeCsvCell` exemption strictly to pure signed numeric literals (`/^[+-]?\d+(?:\.\d+)?$/`) while neutralizing leading whitespace/newline and signed formula payloads (`+1+cmd|...`, `-2+3+HYPERLINK(...)`, `\n=1+1`).
+- **Runtime Recovery, Mermaid Cache & 306px/276px Visual QA Fixes (Verified Dark & Light)**:
+  - **`Matrix(colorScale="auto")` Three-Tier Red/Amber/Green Fix (`src/client/catalog/v4-helpers.ts`, `src/client/catalog/EnterpriseWidgets.tsx`)**: Added normalized `ratio` (`0..1`) on `NormalizedMatrixCell` (decoupled from CSS `color-mix` `intensityPct` `[8, 42]`) so `colorScale="auto"` properly triggers error red (`>= 0.67`), warning amber (`>= 0.34`), and success green (`< 0.34`) instead of leaving the red band unreachable.
+  - **`ErrorBoundary` Auto-Recovery via `resetKey` (`src/client/ErrorBoundary.tsx`, `src/client/SurfaceView.tsx`)**: Added `resetKey` (`generation:streaming:messages.length`) via `getDerivedStateFromProps` so transient streaming errors recover automatically once valid messages arrive.
+  - **Mermaid Cache Error-Poisoning & Stale Target Fix (`src/client/chunk-loader.ts`)**: Tracked live `getTarget` callbacks per diagram key, skipped caching rejected renders when zero subscribers remain mounted, and automatically evicted/retried stale error snapshots on remount.
+  - **306px `LogViewer` Layout & Accessibility (`src/client/catalog/Catalog.module.css`, `src/client/catalog/OpsAndInsightWidgets.tsx`)**: Replaced `.logRowMain > :last-child` with properly ordered `@container (max-width: 390px)` rules targeting `.logMessage { flex: 1 0 100%; order: 10; }` and `.logDetailToggle { margin-left: auto; }` (preventing the detail toggle button from stretching to 100% width) and added `aria-expanded`.
+  - **WCAG AAA Amber Contrast, `DateTimeInput` & Compact ECharts Polish (`src/client/catalog/Catalog.module.css`, `src/client/chunks/echarts-chunk.ts`)**: Switched foreground text on amber `#f59e0b` `ApiEndpoint` `PUT`/`PATCH` badges, `Schedule` warning bars, and `Result` warning emblems to `#18181b` (`2.15:1 → 8.08:1` AAA); added `max-width: 100%; min-width: 0; box-sizing: border-box` and picker-indicator visibility on `.dateInput`; refined compact `276px` `waterfall` markLine pill spacing (`distance: 6`, `fontSize: 9.5`) and `treemap` label sizing (`fontSize: 9.5`, `padding: [2, 3]`).
+- **Excuse-Comment Remediation & Zero-Comment Architecture (`docs/adr/`, `scripts/check-no-comments.mjs`, `tests/excuse-issues-fixes.spec.ts`)**:
+  - Eliminated all code comments across the repository, migrated architectural decisions to 7 ADRs (`docs/adr/ADR-0001`–`ADR-0007`), added the ratcheted `check:comments` lint gate, and remediated all 9 recorded workaround issues (fail-closed obscured inspection, corrupt `localStorage` eviction + `removeSurfaceDraft`, circular/BigInt-safe JSON stringify, subscriber error isolation, minimal DOM stub style guards, streaming `seedWarnings`, Zod-validated `readArgs`, state-file write error reporting, and HTTP 400 malformed-JSON handling in `mock-llm`).
+
+### Changed
+- Added `showcase-26` (`SHOWCASE_V042_QA_UI`) to `scripts/mock-llm.mjs` and added `tests/review-v042-fixes.spec.ts`, `tests/excuse-issues-fixes.spec.ts`, and `tests/no-comments-lint.spec.ts`, expanding Vitest coverage to **26 suites / 126 tests** (`lib/client.js = 60.49 kB / 17.08 kB gzip`, `0` Biome/Lint/Comments/TS diagnostics, Host API check passing).
+- Updated `SECURITY.md`, `THIRD_PARTY_NOTICES.md`, `docs/DEVELOPMENT*.md`, and `docs/adr/` to stay synchronized with 57 components, 19 chart kinds, 25 functions, and `v0.4.2` security & layout contracts.
+
 ## [0.4.1] - 2026-11-21
 
 ### Fixed

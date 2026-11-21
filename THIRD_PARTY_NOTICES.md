@@ -5,7 +5,7 @@
 | Package(s) | License | Role in `dsh-genui-a2ui` |
 | :--- | :--- | :--- |
 | `@a2ui/agent`, `@a2ui/react`, `@a2ui/web_core`, `@a2ui/markdown-it` | Apache-2.0 | Google A2UI 1.0 Express compiler, state processor, and React surface binding |
-| `echarts` | Apache-2.0 | Lazy-loaded (`lib/client.echarts.js`) 14-kind canvas/SVG chart engine |
+| `echarts` | Apache-2.0 | Lazy-loaded (`lib/client.echarts.js`) 19-kind canvas/SVG chart engine |
 | `zrender` | BSD-3-Clause | 2D vector and canvas rendering engine underlying ECharts |
 | `react-aria-components`, `react-aria`, `react-stately`, `@internationalized/*` | Apache-2.0 | Accessible headless UI primitives for interactive form controls |
 | `@tanstack/react-table`, `@tanstack/table-core` | MIT | Headless sorting, filtering, and pagination state for `Table` |

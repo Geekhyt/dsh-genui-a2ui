@@ -395,6 +395,7 @@ export const DshLogViewerImpl = defineComponent<{
                     <button
                       type="button"
                       className={css.logDetailToggle}
+                      aria-expanded={expanded}
                       onClick={(e) => {
                         e.stopPropagation()
                         toggleExpand(entry.id)
