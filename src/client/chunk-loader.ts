@@ -13,11 +13,23 @@ export type RuntimeChunkModule = typeof RuntimeChunk
 export type EchartsChunkModule = typeof EchartsChunk
 export type MermaidChunkModule = typeof MermaidChunk
 
+export const RUNTIME_LOAD_ERROR_SENTINEL = '__RUNTIME_LOAD_FAILED__'
 export const CHART_LOAD_ERROR_SENTINEL = '__CHART_LOAD_FAILED__'
 export const MERMAID_RENDER_ERROR_SENTINEL = '__MERMAID_RENDER_FAILED__'
 
+export interface RuntimeChunkSnapshot {
+  readonly chunk: RuntimeChunkModule | null
+  readonly error: string | null
+}
+
+const PENDING_RUNTIME_SNAPSHOT: RuntimeChunkSnapshot = /* @__PURE__ */ Object.freeze({
+  chunk: null,
+  error: null,
+})
+
 let runtimeModuleSync: RuntimeChunkModule | null = null
 let runtimePromise: Promise<RuntimeChunkModule> | null = null
+let runtimeSnapshot: RuntimeChunkSnapshot = PENDING_RUNTIME_SNAPSHOT
 const runtimeListeners = /* @__PURE__ */ new Set<() => void>()
 
 export function getLoadedRuntimeChunk(): RuntimeChunkModule | null {
@@ -28,12 +40,24 @@ export function getRuntimeChunkServerSnapshot(): RuntimeChunkModule | null {
   return runtimeModuleSync
 }
 
+export function getRuntimeChunkSnapshot(): RuntimeChunkSnapshot {
+  return runtimeSnapshot
+}
+
+export function getRuntimeChunkStateServerSnapshot(): RuntimeChunkSnapshot {
+  return runtimeModuleSync !== null ? runtimeSnapshot : PENDING_RUNTIME_SNAPSHOT
+}
+
 export function loadRuntimeChunk(): Promise<RuntimeChunkModule> {
   if (runtimeModuleSync !== null) {
     if (isPluginStylesMounted()) runtimeModuleSync.ensureA2uiRuntimeStyles()
     return Promise.resolve(runtimeModuleSync)
   }
   if (runtimePromise === null) {
+    if (runtimeSnapshot.error !== null) {
+      runtimeSnapshot = PENDING_RUNTIME_SNAPSHOT
+      notifySubscribers(runtimeListeners, 'Chunk store')
+    }
     const rawPromise =
       typeof __DSH_BUNDLED_CLIENT__ !== 'undefined' && __DSH_BUNDLED_CLIENT__
         ? (require.async('./client.runtime.js') as Promise<RuntimeChunkModule>)
@@ -41,12 +65,17 @@ export function loadRuntimeChunk(): Promise<RuntimeChunkModule> {
     runtimePromise = rawPromise.then(
       (mod) => {
         runtimeModuleSync = mod
+        runtimeSnapshot = Object.freeze({ chunk: mod, error: null })
         if (isPluginStylesMounted()) mod.ensureA2uiRuntimeStyles()
         notifySubscribers(runtimeListeners, 'Chunk store')
         return mod
       },
-      (err) => {
+      (err: unknown) => {
         runtimePromise = null
+        const errMsg =
+          err instanceof Error && err.message ? err.message : RUNTIME_LOAD_ERROR_SENTINEL
+        runtimeSnapshot = Object.freeze({ chunk: null, error: errMsg })
+        notifySubscribers(runtimeListeners, 'Chunk store')
         throw err
       },
     )
@@ -54,10 +83,17 @@ export function loadRuntimeChunk(): Promise<RuntimeChunkModule> {
   return runtimePromise
 }
 
+export function retryRuntimeChunk(): void {
+  if (runtimeModuleSync !== null || runtimePromise !== null) return
+  loadRuntimeChunk().catch((err: unknown) => {
+    console.warn('[dsh-genui-a2ui] failed to retry client.runtime.js:', err)
+  })
+}
+
 export function subscribeRuntimeChunk(enabled: boolean, listener: () => void): () => void {
   if (!enabled) return () => {}
   runtimeListeners.add(listener)
-  if (runtimeModuleSync === null) {
+  if (runtimeModuleSync === null && runtimePromise === null && runtimeSnapshot.error === null) {
     loadRuntimeChunk().catch((err: unknown) => {
       console.warn('[dsh-genui-a2ui] failed to load client.runtime.js:', err)
     })
@@ -97,6 +133,10 @@ export function getEchartsChunkServerSnapshot(): EchartsChunkSnapshot {
 export function loadEchartsChunk(): Promise<EchartsChunkModule> {
   if (echartsModuleSync !== null) return Promise.resolve(echartsModuleSync)
   if (echartsPromise === null) {
+    if (echartsSnapshot.error !== null) {
+      echartsSnapshot = PENDING_ECHARTS_SNAPSHOT
+      notifySubscribers(echartsListeners, 'Chunk store')
+    }
     const rawPromise =
       typeof __DSH_BUNDLED_CLIENT__ !== 'undefined' && __DSH_BUNDLED_CLIENT__
         ? (require.async('./client.echarts.js') as Promise<EchartsChunkModule>)
@@ -120,9 +160,14 @@ export function loadEchartsChunk(): Promise<EchartsChunkModule> {
   return echartsPromise
 }
 
+export function retryEchartsChunk(): void {
+  if (echartsModuleSync !== null || echartsPromise !== null) return
+  loadEchartsChunk().catch(() => {})
+}
+
 export function subscribeEchartsChunk(listener: () => void): () => void {
   echartsListeners.add(listener)
-  if (echartsModuleSync === null && echartsPromise === null) {
+  if (echartsModuleSync === null && echartsPromise === null && echartsSnapshot.error === null) {
     loadEchartsChunk().catch(() => {})
   }
   return () => {
@@ -179,12 +224,67 @@ function storeMermaidSnapshot(key: string, snapshot: MermaidDiagramSnapshot): vo
   mermaidDiagramCache.delete(key)
   mermaidDiagramCache.set(key, Object.freeze(snapshot))
   while (mermaidDiagramCache.size > MAX_MERMAID_CACHE_ENTRIES) {
-    const oldest = mermaidDiagramCache.keys().next()
-    if (oldest.done) break
-    mermaidDiagramCache.delete(oldest.value)
+    let victim: string | undefined
+    for (const candidate of mermaidDiagramCache.keys()) {
+      if (candidate === key) continue
+      if ((mermaidListenersByKey.get(candidate)?.size ?? 0) === 0) {
+        victim = candidate
+        break
+      }
+    }
+    if (victim === undefined) break
+    mermaidDiagramCache.delete(victim)
   }
   const listeners = mermaidListenersByKey.get(key)
   if (listeners) notifySubscribers(listeners, 'Chunk store')
+}
+
+function startMermaidRender(key: string, code: string, dark: boolean): void {
+  if ((mermaidListenersByKey.get(key)?.size ?? 0) === 0) return
+  if (mermaidInflightKeys.has(key)) return
+  mermaidInflightKeys.add(key)
+  loadMermaidChunk()
+    .then((mod) => {
+      if ((mermaidListenersByKey.get(key)?.size ?? 0) === 0) return null
+      return mod.renderMermaidDiagram(code, dark, resolveLiveMermaidTarget(key))
+    })
+    .then(
+      (renderedSvg) => {
+        mermaidInflightKeys.delete(key)
+        if (renderedSvg === null) return
+        storeMermaidSnapshot(key, {
+          svg: renderedSvg,
+          error: null,
+          rendering: false,
+        })
+      },
+      (err: unknown) => {
+        mermaidInflightKeys.delete(key)
+        if ((mermaidListenersByKey.get(key)?.size ?? 0) === 0) return
+        const errMsg =
+          err instanceof Error && err.message ? err.message : MERMAID_RENDER_ERROR_SENTINEL
+        storeMermaidSnapshot(key, {
+          svg: null,
+          error: errMsg,
+          rendering: false,
+        })
+      },
+    )
+}
+
+export function retryMermaidDiagram(code: string, dark: boolean): void {
+  if (code === '') return
+  const key = mermaidCacheKey(code, dark)
+  if (mermaidInflightKeys.has(key)) return
+  const pendingTimer = mermaidTimersByKey.get(key)
+  if (pendingTimer !== undefined) {
+    clearTimeout(pendingTimer)
+    mermaidTimersByKey.delete(key)
+  }
+  mermaidDiagramCache.delete(key)
+  const listeners = mermaidListenersByKey.get(key)
+  if (listeners) notifySubscribers(listeners, 'Chunk store')
+  startMermaidRender(key, code, dark)
 }
 
 export function loadMermaidChunk(): Promise<MermaidChunkModule> {
@@ -254,31 +354,7 @@ export function subscribeMermaidDiagram(
     if (!mermaidInflightKeys.has(key) && !mermaidTimersByKey.has(key)) {
       const timer = setTimeout(() => {
         mermaidTimersByKey.delete(key)
-        if ((mermaidListenersByKey.get(key)?.size ?? 0) === 0) return
-        mermaidInflightKeys.add(key)
-        loadMermaidChunk()
-          .then((mod) => mod.renderMermaidDiagram(code, dark, resolveLiveMermaidTarget(key)))
-          .then(
-            (renderedSvg) => {
-              mermaidInflightKeys.delete(key)
-              storeMermaidSnapshot(key, {
-                svg: renderedSvg,
-                error: null,
-                rendering: false,
-              })
-            },
-            (err: unknown) => {
-              mermaidInflightKeys.delete(key)
-              if ((mermaidListenersByKey.get(key)?.size ?? 0) === 0) return
-              const errMsg =
-                err instanceof Error && err.message ? err.message : MERMAID_RENDER_ERROR_SENTINEL
-              storeMermaidSnapshot(key, {
-                svg: null,
-                error: errMsg,
-                rendering: false,
-              })
-            },
-          )
+        startMermaidRender(key, code, dark)
       }, MERMAID_DEBOUNCE_MS)
       ;(timer as unknown as { unref?: () => void }).unref?.()
       mermaidTimersByKey.set(key, timer)

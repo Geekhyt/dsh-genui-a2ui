@@ -17,17 +17,99 @@ export type { AskAnswerInput, AskMeta }
 
 export const DEFAULT_ASK_TIMEOUT_SECONDS = 180
 const MAX_TIMEOUT_SECONDS = 2_147_483
+const MAX_ANSWER_STR_LEN = 32_000
+const MAX_ANSWER_ARRAY_LEN = 200
+const MAX_ANSWER_KEYS = 200
+let fallbackAskSeq = 0
 
-export function sanitizePayloadObject(value: unknown): Record<string, unknown> {
+function normalizeObsPointer(pointer: string): string {
+  const trimmed = pointer.trim()
+  if (trimmed === '' || trimmed === '/') return '/'
+  const withSlash = trimmed.startsWith('/') ? trimmed : `/${trimmed}`
+  return withSlash.length > 1 ? withSlash.replace(/\/+$/, '') : withSlash
+}
+
+function isPathObscured(path: string, obscured: ReadonlySet<string>): boolean {
+  if (obscured.size === 0) return false
+  const norm = normalizeObsPointer(path)
+  for (const raw of obscured) {
+    const trimmed = raw.trim()
+    if (trimmed === '') continue
+    const isRelative = !trimmed.startsWith('/')
+    const obs = normalizeObsPointer(trimmed)
+    if (obs === '/') return true
+    if (norm === obs || norm.startsWith(`${obs}/`)) return true
+    if (isRelative && (norm.endsWith(obs) || norm.includes(`${obs}/`))) return true
+  }
+  return false
+}
+
+export function collectObscuredPointersFromMessages(
+  messages: readonly AgentToRendererMessage[],
+): Set<string> {
+  const obscured = new Set<string>()
+  const inspectComponents = (list: unknown) => {
+    if (!Array.isArray(list)) return
+    for (const item of list) {
+      if (typeof item !== 'object' || item === null) continue
+      const rec = item as Record<string, unknown>
+      if (rec.component !== 'TextField' || rec.variant !== 'obscured') continue
+      const val = rec.value
+      if (typeof val === 'object' && val !== null) {
+        const rawPath =
+          (val as { path?: unknown; '@path'?: unknown }).path ??
+          (val as { '@path'?: unknown })['@path']
+        if (typeof rawPath === 'string' && rawPath.trim() !== '') {
+          obscured.add(rawPath.trim())
+        }
+      }
+    }
+  }
+  for (const msg of messages) {
+    const rec = msg as unknown as Record<string, unknown>
+    if (rec.createSurface && typeof rec.createSurface === 'object') {
+      inspectComponents((rec.createSurface as Record<string, unknown>).components)
+    }
+    if (rec.updateComponents && typeof rec.updateComponents === 'object') {
+      inspectComponents((rec.updateComponents as Record<string, unknown>).components)
+    }
+  }
+  return obscured
+}
+
+export function sanitizePayloadObject(
+  value: unknown,
+  obscuredPointers?: ReadonlySet<string>,
+  stripPerSurfaceRoot = false,
+): Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return {}
-  const clean = (node: unknown, depth: number): unknown => {
+  const blocked = obscuredPointers ?? new Set<string>()
+  const clean = (node: unknown, path: string, depth: number): unknown => {
     if (depth > 8) return undefined
-    if (Array.isArray(node)) return node.map((item) => clean(item, depth + 1))
+    if (blocked.size > 0 && path !== '' && isPathObscured(path, blocked)) return undefined
+    if (typeof node === 'string') {
+      return node.length > MAX_ANSWER_STR_LEN ? node.slice(0, MAX_ANSWER_STR_LEN) : node
+    }
+    if (Array.isArray(node)) {
+      const out: unknown[] = []
+      const limit = Math.min(node.length, MAX_ANSWER_ARRAY_LEN)
+      for (let i = 0; i < limit; i++) {
+        const childPath = path === '' ? `/${i}` : `${path}/${i}`
+        const next = clean(node[i], childPath, depth + 1)
+        if (next !== undefined) out.push(next)
+      }
+      return out
+    }
     if (typeof node === 'object' && node !== null) {
       const out: Record<string, unknown> = {}
+      let count = 0
       for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
+        if (count >= MAX_ANSWER_KEYS) break
         if (isDangerousObjectKey(k) || isSecretKey(k)) continue
-        const next = clean(v, depth + 1)
+        const childPath =
+          stripPerSurfaceRoot && depth === 0 ? '' : path === '' ? `/${k}` : `${path}/${k}`
+        if (blocked.size > 0 && childPath !== '' && isPathObscured(childPath, blocked)) continue
+        const next = clean(v, childPath, depth + 1)
         if (next !== undefined) {
           Object.defineProperty(out, k, {
             value: next,
@@ -35,13 +117,14 @@ export function sanitizePayloadObject(value: unknown): Record<string, unknown> {
             writable: true,
             configurable: true,
           })
+          count += 1
         }
       }
       return out
     }
     return node
   }
-  return (clean(value, 0) as Record<string, unknown>) ?? {}
+  return (clean(value, '', 0) as Record<string, unknown>) ?? {}
 }
 
 export type AskSettlement =
@@ -75,6 +158,7 @@ interface PendingEntry {
   readonly sessionId: string
   readonly callId: string
   readonly defaultSurfaceId: string
+  readonly obscuredPointers: ReadonlySet<string>
   resolve(settlement: AskSettlement): void
   reject(error: Error): void
   cleanup(): void
@@ -103,8 +187,10 @@ export class PendingAskRegistry {
     readonly defaultSurfaceId: string
     readonly timeoutSeconds: number
     readonly signal?: AbortSignal | undefined
+    readonly obscuredPointers?: ReadonlySet<string> | undefined
   }): Promise<AskSettlement> {
-    const { sessionId, callId, defaultSurfaceId, timeoutSeconds, signal } = options
+    const { sessionId, callId, defaultSurfaceId, timeoutSeconds, signal, obscuredPointers } =
+      options
     if (signal?.aborted) {
       const reason = signal.reason
       return Promise.reject(reason instanceof Error ? reason : new Error('a2ui_ask aborted'))
@@ -147,6 +233,7 @@ export class PendingAskRegistry {
         sessionId,
         callId,
         defaultSurfaceId,
+        obscuredPointers: obscuredPointers ?? new Set<string>(),
         resolve: (settlement) => {
           cleanup()
           this.entries.delete(mapKey)
@@ -168,7 +255,7 @@ export class PendingAskRegistry {
     let target: PendingEntry | undefined
     if (callIdProvided) {
       if (typeof input.callId === 'string' && input.callId.trim() !== '') {
-        target = this.entries.get(this.keyOf(sessionId, input.callId))
+        target = this.entries.get(this.keyOf(sessionId, input.callId.trim()))
       }
     } else {
       const candidates = [...this.entries.values()].filter((e) => e.sessionId === sessionId)
@@ -181,22 +268,18 @@ export class PendingAskRegistry {
       return true
     }
 
+    const trimCap = (val: unknown, max: number): string =>
+      typeof val === 'string' ? val.trim().slice(0, max) : ''
+    const userMessage = trimCap(input.userMessage, 4_000)
+
     target.resolve({
       status: 'answered',
-      action:
-        typeof input.action === 'string' && input.action.trim() !== ''
-          ? input.action.trim()
-          : 'submit',
-      surfaceId:
-        typeof input.surfaceId === 'string' && input.surfaceId.trim() !== ''
-          ? input.surfaceId.trim()
-          : target.defaultSurfaceId,
-      sourceComponentId: typeof input.sourceComponentId === 'string' ? input.sourceComponentId : '',
-      ...(typeof input.userMessage === 'string' && input.userMessage.trim() !== ''
-        ? { userMessage: input.userMessage.trim() }
-        : {}),
-      context: sanitizePayloadObject(input.context),
-      dataModels: sanitizePayloadObject(input.dataModels),
+      action: trimCap(input.action, 256) || 'submit',
+      surfaceId: trimCap(input.surfaceId, 256) || target.defaultSurfaceId,
+      sourceComponentId: trimCap(input.sourceComponentId, 256),
+      ...(userMessage !== '' ? { userMessage } : {}),
+      context: sanitizePayloadObject(input.context, target.obscuredPointers, false),
+      dataModels: sanitizePayloadObject(input.dataModels, target.obscuredPointers, true),
     })
     return true
   }
@@ -399,14 +482,18 @@ export function createAskTool(sessions: SurfaceSessions, asks: PendingAskRegistr
 
       sessions.clearCompileFailures(sid, 'ask')
       const surfaceIds = surfaceIdsOf(messages)
+      const obscuredPointers = collectObscuredPointersFromMessages(messages)
       const callId =
-        typeof exec?.callId === 'string' && exec.callId !== '' ? exec.callId : `ask_${Date.now()}`
+        typeof exec?.callId === 'string' && exec.callId.trim() !== ''
+          ? exec.callId.trim()
+          : `ask_${Date.now()}_${++fallbackAskSeq}`
       const settlement = await asks.wait({
         sessionId: sid,
         callId,
         defaultSurfaceId: surfaceIds[0] ?? 'default',
         timeoutSeconds: timeout,
         signal: exec?.signal,
+        obscuredPointers,
       })
 
       if (settlement.status !== 'answered') {

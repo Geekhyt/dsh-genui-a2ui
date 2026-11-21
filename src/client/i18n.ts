@@ -13,6 +13,7 @@ import { notifySubscribers } from './notify.ts'
 const localeListeners = new Set<() => void>()
 let sharedLocaleObserver: MutationObserver | null = null
 let sharedOverrideUnsub: (() => void) | null = null
+let sharedLanguageListenerAttached = false
 
 function notifyLocaleListeners(): void {
   notifySubscribers(localeListeners, 'Locale')
@@ -35,6 +36,14 @@ export function subscribeClientLocale(listener: () => void): () => void {
       attributeFilter: ['lang'],
     })
   }
+  if (
+    !sharedLanguageListenerAttached &&
+    typeof window !== 'undefined' &&
+    typeof window.addEventListener === 'function'
+  ) {
+    window.addEventListener('languagechange', notifyLocaleListeners)
+    sharedLanguageListenerAttached = true
+  }
   return () => {
     localeListeners.delete(listener)
     if (localeListeners.size === 0) {
@@ -42,6 +51,14 @@ export function subscribeClientLocale(listener: () => void): () => void {
       sharedLocaleObserver = null
       sharedOverrideUnsub?.()
       sharedOverrideUnsub = null
+      if (
+        sharedLanguageListenerAttached &&
+        typeof window !== 'undefined' &&
+        typeof window.removeEventListener === 'function'
+      ) {
+        window.removeEventListener('languagechange', notifyLocaleListeners)
+        sharedLanguageListenerAttached = false
+      }
     }
   }
 }

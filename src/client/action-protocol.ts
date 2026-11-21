@@ -89,6 +89,16 @@ export function enrichActionWithSelection(action: ActionPayload): ActionPayload 
   }
 }
 
+function sanitizeHeaderAttr(value: unknown): string {
+  return String(value ?? '')
+    .replace(/[\r\n"]+/g, ' ')
+    .trim()
+}
+
+function sanitizeSingleLineNote(value: string): string {
+  return value.replace(/[\r\n]+/g, ' ').trim()
+}
+
 export function formatActionMessage(
   rawAction: ActionPayload,
   dataModels: Record<string, unknown> | undefined,
@@ -96,10 +106,13 @@ export function formatActionMessage(
   const msg = SHELL_MESSAGES[resolveClientLocale()]
   const action = enrichActionWithSelection(rawAction)
   const parts: string[] = [
-    `[a2ui-action] surface="${action.surfaceId}" action="${action.name}" component="${action.sourceComponentId}"`,
+    `[a2ui-action] surface="${sanitizeHeaderAttr(action.surfaceId)}" action="${sanitizeHeaderAttr(action.name)}" component="${sanitizeHeaderAttr(action.sourceComponentId)}"`,
   ]
   if (action.userMessage !== undefined && action.userMessage.trim() !== '') {
-    parts.push(`${msg.actionUserNotePrefix}${action.userMessage.trim()}`)
+    const cleanNote = sanitizeSingleLineNote(action.userMessage)
+    if (cleanNote !== '') {
+      parts.push(`${msg.actionUserNotePrefix}${cleanNote}`)
+    }
   }
   const cleanContext = sanitizeDataModel(action.context ?? {})
   if (Object.keys(cleanContext).length > 0) {
@@ -114,7 +127,7 @@ export function formatActionMessage(
 }
 
 const HEADER_RE =
-  /\[a2ui-action\]\s+surface="([^"]*)"\s+action="([^"]*)"(?:\s+component="([^"]*)")?/g
+  /(?:^|\n)\[a2ui-action\]\s+surface="([^"\r\n]*)"\s+action="([^"\r\n]*)"(?:\s+component="([^"\r\n]*)")?(?=\r?\n|$)/g
 
 export function matchA2uiActionUserText(
   text: string,
@@ -127,66 +140,74 @@ export function matchA2uiActionUserText(
       readonly data: ParsedA2uiActionData
     }
   | undefined {
-  HEADER_RE.lastIndex = from
-  const headerMatch = HEADER_RE.exec(text)
-  if (headerMatch === null) return undefined
+  const searchFrom = from > 0 && text[from - 1] === '\n' ? from - 1 : from
+  HEADER_RE.lastIndex = searchFrom
+  let headerMatch: RegExpExecArray | null
+  while ((headerMatch = HEADER_RE.exec(text)) !== null) {
+    const leadingNewline = headerMatch[0].startsWith('\n') ? 1 : 0
+    const start = headerMatch.index + leadingNewline
+    if (start < from) continue
+    const surfaceId = headerMatch[1] ?? 'default'
+    const actionName = headerMatch[2] ?? 'action'
+    const componentId = headerMatch[3] ?? ''
 
-  const start = headerMatch.index
-  const surfaceId = headerMatch[1] ?? 'default'
-  const actionName = headerMatch[2] ?? 'action'
-  const componentId = headerMatch[3] ?? ''
+    let cursor = headerMatch.index + headerMatch[0].length
+    let userMessage: string | null = null
+    let paramsText: string | null = null
+    let dataModelText: string | null = null
+    let hasTrailingPrompt = false
 
-  let cursor = start + headerMatch[0].length
-  let userMessage: string | null = null
-  let paramsText: string | null = null
-  let dataModelText: string | null = null
+    while (cursor < text.length) {
+      if (text[cursor] !== '\n' && text[cursor] !== '\r') break
+      const lineStart = text[cursor] === '\r' && text[cursor + 1] === '\n' ? cursor + 2 : cursor + 1
+      const nextNewline = text.indexOf('\n', lineStart)
+      const lineEnd = nextNewline < 0 ? text.length : nextNewline
+      const rawLine = text.slice(lineStart, lineEnd).replace(/\r$/, '')
 
-  while (cursor < text.length) {
-    if (text[cursor] !== '\n' && text[cursor] !== '\r') break
-    const lineStart = text[cursor] === '\r' && text[cursor + 1] === '\n' ? cursor + 2 : cursor + 1
-    const nextNewline = text.indexOf('\n', lineStart)
-    const lineEnd = nextNewline < 0 ? text.length : nextNewline
-    const rawLine = text.slice(lineStart, lineEnd).replace(/\r$/, '')
-
-    const noteVal = stripMatchingPrefix(rawLine, USER_NOTE_PREFIXES)
-    if (noteVal !== null) {
-      userMessage = noteVal || null
-      cursor = lineEnd
-      continue
-    }
-    const paramsVal = stripMatchingPrefix(rawLine, PARAMS_PREFIXES)
-    if (paramsVal !== null) {
-      paramsText = paramsVal || null
-      cursor = lineEnd
-      continue
-    }
-    const modelVal = stripMatchingPrefix(rawLine, DATA_MODEL_PREFIXES)
-    if (modelVal !== null) {
-      dataModelText = modelVal || null
-      cursor = lineEnd
-      continue
-    }
-    if (TRAILING_PROMPT_PREFIXES.some((prefix) => rawLine.startsWith(prefix))) {
-      cursor = lineEnd
+      const noteVal = stripMatchingPrefix(rawLine, USER_NOTE_PREFIXES)
+      if (noteVal !== null) {
+        userMessage = noteVal || null
+        cursor = lineEnd
+        continue
+      }
+      const paramsVal = stripMatchingPrefix(rawLine, PARAMS_PREFIXES)
+      if (paramsVal !== null) {
+        paramsText = paramsVal || null
+        cursor = lineEnd
+        continue
+      }
+      const modelVal = stripMatchingPrefix(rawLine, DATA_MODEL_PREFIXES)
+      if (modelVal !== null) {
+        dataModelText = modelVal || null
+        cursor = lineEnd
+        continue
+      }
+      if (TRAILING_PROMPT_PREFIXES.some((prefix) => rawLine.startsWith(prefix))) {
+        hasTrailingPrompt = true
+        cursor = lineEnd
+        break
+      }
       break
     }
-    break
-  }
 
-  return {
-    id: A2UI_ACTION_NODE_ID,
-    start,
-    end: cursor,
-    data: {
-      surfaceId,
-      actionName,
-      componentId,
-      userMessage,
-      paramsText,
-      dataModelText,
-      summaryLabel: userMessage ?? actionName,
-    },
+    if (!hasTrailingPrompt) continue
+
+    return {
+      id: A2UI_ACTION_NODE_ID,
+      start,
+      end: cursor,
+      data: {
+        surfaceId,
+        actionName,
+        componentId,
+        userMessage,
+        paramsText,
+        dataModelText,
+        summaryLabel: userMessage ?? actionName,
+      },
+    }
   }
+  return undefined
 }
 
 export const a2uiActionUserTextRule = {

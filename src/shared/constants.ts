@@ -74,9 +74,14 @@ const SECRET_SINGLE_WORDS = new Set([
   'cookie',
   'pin',
   'otp',
+  'totp',
   'cvv',
+  'jwt',
+  'bearer',
+  'oauth',
   'token',
 ])
+
 const SECRET_KEY_PREFIXES = new Set([
   'api',
   'private',
@@ -86,9 +91,40 @@ const SECRET_KEY_PREFIXES = new Set([
   'encryption',
   'master',
   'client',
+  'auth',
+  'session',
+  'oauth',
+  'refresh',
+  'bearer',
+  'csrf',
+  'mfa',
 ])
 
-const BENIGN_METRIC_WORDS = new Set([
+const SECRET_FORCE_NEIGHBORS = new Set([
+  'auth',
+  'api',
+  'access',
+  'refresh',
+  'session',
+  'bearer',
+  'csrf',
+  'mfa',
+  'oauth',
+  'private',
+  'signing',
+  'encryption',
+  'master',
+  'client',
+  'ssh',
+  'credit',
+  'debit',
+  'bank',
+  'atm',
+  'card',
+  'account',
+])
+
+const TOKEN_BENIGN_WORDS = new Set([
   'budget',
   'price',
   'cost',
@@ -103,62 +139,123 @@ const BENIGN_METRIC_WORDS = new Set([
   'len',
   'size',
   'window',
+  'prompt',
+  'completion',
+  'input',
+  'output',
+  'total',
+  'cache',
+  'cached',
+])
+
+const PIN_BENIGN_WORDS = new Set([
   'dock',
   'sidebar',
   'panel',
   'tab',
-  'card',
   'top',
   'bottom',
+  'header',
+  'footer',
+  'column',
+  'row',
 ])
 
+const PLURAL_SECRET_MAP: Record<string, string> = {
+  passwords: 'password',
+  passwds: 'passwd',
+  secrets: 'secret',
+  passphrases: 'passphrase',
+  passcodes: 'passcode',
+  credentials: 'credential',
+  cookies: 'cookie',
+  pins: 'pin',
+  otps: 'otp',
+  totps: 'totp',
+  cvvs: 'cvv',
+  jwts: 'jwt',
+  keys: 'key',
+}
+
 const SECRET_COMPOUND_RE =
-  /(?:password|passwd|passphrase|passcode|secret|credential|authorization|cookie)s?$|(?:api|ssh|private|access|signing|master|client|encryption)key$|(?:access|refresh|auth|id|session|bearer|mfa|csrf|api)token$/
+  /(?:password|passwd|passphrase|passcode|secret|credential|authorization|cookie|totp|jwt)s?\d*$|(?:api|ssh|private|access|signing|master|client|encryption|auth|session|oauth)keys?\d*$|(?:access|refresh|auth|id|session|bearer|mfa|csrf|api|oauth)tokens?\d*$/
+
+function normalizeSecretWord(raw: string): string {
+  const noDigits = raw.replace(/\d+$/, '')
+  return Object.hasOwn(PLURAL_SECRET_MAP, noDigits) ? PLURAL_SECRET_MAP[noDigits]! : noDigits
+}
 
 export function isSecretKey(key: string): boolean {
-  const words = key
+  const rawWords = key
     .replace(/([A-Z]+)([A-Z][a-z])/g, '$1_$2')
     .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
     .toLowerCase()
     .split(/[^a-z0-9]+/)
     .filter(Boolean)
+  const words = rawWords.map(normalizeSecretWord)
   for (let i = 0; i < words.length; i++) {
+    const raw = rawWords[i] ?? ''
     const w = words[i]
     if (!w) continue
-    if (w === 'token' || w === 'pin') {
+    if (raw === 'tokens' || w === 'token') {
+      const hasForceNeighbor = words.some(
+        (other, idx) => idx !== i && SECRET_FORCE_NEIGHBORS.has(other),
+      )
+      if (hasForceNeighbor) return true
+      if (raw === 'tokens') continue
       const hasBenignNeighbor =
-        words.length > 1 && words.some((other, idx) => idx !== i && BENIGN_METRIC_WORDS.has(other))
+        words.length > 1 && words.some((other, idx) => idx !== i && TOKEN_BENIGN_WORDS.has(other))
+      if (!hasBenignNeighbor) return true
+      continue
+    }
+    if (w === 'pin') {
+      const hasForceNeighbor = words.some(
+        (other, idx) => idx !== i && SECRET_FORCE_NEIGHBORS.has(other),
+      )
+      if (hasForceNeighbor) return true
+      const hasBenignNeighbor =
+        words.length > 1 && words.some((other, idx) => idx !== i && PIN_BENIGN_WORDS.has(other))
       if (!hasBenignNeighbor) return true
       continue
     }
     if (SECRET_SINGLE_WORDS.has(w)) return true
-    if (SECRET_COMPOUND_RE.test(w)) return true
+    if (SECRET_COMPOUND_RE.test(raw)) return true
     if (w === 'key' && i > 0 && SECRET_KEY_PREFIXES.has(words[i - 1] ?? '')) return true
   }
   return false
 }
 
 export function safeStringifyJson(value: unknown, space = 2): string {
-  const seen = new WeakSet<object>()
-  const serialized = JSON.stringify(
-    value,
-    (_key, current: unknown) => {
-      if (typeof current === 'bigint') return current.toString()
-      if (typeof current === 'object' && current !== null) {
-        if (seen.has(current)) return '[Circular]'
-        seen.add(current)
-      }
-      return current
-    },
-    space,
-  )
-  return serialized ?? 'null'
+  const ancestors: object[] = []
+  try {
+    const serialized = JSON.stringify(
+      value,
+      function (this: unknown, _key: string, current: unknown) {
+        if (typeof current === 'bigint') return current.toString()
+        if (typeof current === 'object' && current !== null) {
+          while (ancestors.length > 0 && ancestors[ancestors.length - 1] !== this) {
+            ancestors.pop()
+          }
+          if (ancestors.includes(current)) return '[Circular]'
+          ancestors.push(current)
+        }
+        return current
+      },
+      space,
+    )
+    return serialized ?? 'null'
+  } catch {
+    return '"[Unserializable]"'
+  }
 }
 
 export function sanitizeInlineUrlText(input: unknown): string {
   if (input === null || input === undefined) return ''
   return String(input)
-    .replace(/(?:image|https?):\/\/\S+|(?:javascript|data):[^\s"'<>]+/gi, '')
+    .replace(
+      /(?:image|https?|file|blob):\/\/\S+|(?:javascript|vbscript|data):[ \t]*[^\s"'<>]*/gi,
+      '',
+    )
     .replace(/[ \t]{2,}/g, ' ')
     .trim()
 }

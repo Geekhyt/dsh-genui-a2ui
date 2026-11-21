@@ -1,5 +1,6 @@
 import { type CSSProperties, useMemo, useState } from 'react'
 import { CalloutApi, DiffViewApi, KeyValueApi, StepsApi } from '../../shared/catalog-schema.ts'
+import { useTransientFlag, useTransientKey } from '../dom-hooks.ts'
 import { parseFileTarget } from '../file-opener.tsx'
 import { useRuntimeMessages, useUiLocale } from '../i18n.ts'
 import { DshChevronDownIcon, DshChevronUpIcon, DshMarkdown, DshTag } from '../ui/primitives.tsx'
@@ -35,7 +36,7 @@ export const DshDiffViewImpl = defineComponent<{
   const [mode, setMode] = useState<'unified' | 'split'>(
     props.mode === 'split' ? 'split' : 'unified',
   )
-  const [copied, setCopied] = useState(false)
+  const [copied, markCopied] = useTransientFlag(1400)
 
   const diff = useMemo(() => computeLineDiff(beforeStr, afterStr), [beforeStr, afterStr])
   const splitRows = useMemo(
@@ -48,8 +49,7 @@ export const DshDiffViewImpl = defineComponent<{
 
   const handleCopyAfter = () => {
     copyToClipboardSafe(afterStr)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1400)
+    markCopied()
   }
 
   return (
@@ -229,6 +229,7 @@ export const DshCalloutImpl = defineComponent<{
   child?: ChildRef
   weight?: number
 }>(CalloutApi, function DshCallout({ props, buildChild }) {
+  const msg = useRuntimeMessages()
   const tone = props.tone ?? 'info'
   const title = props.title ? String(props.title) : ''
   const message = props.message !== undefined && props.message !== null ? String(props.message) : ''
@@ -254,6 +255,7 @@ export const DshCalloutImpl = defineComponent<{
               type="button"
               className={css.calloutToggle}
               aria-expanded={expanded}
+              aria-label={expanded ? msg.timelineCollapseDetail : msg.timelineExpandDetail}
               onClick={() => setExpanded((v) => !v)}
             >
               {expanded ? CHEVRON_UP_13 : CHEVRON_DOWN_13}
@@ -284,7 +286,7 @@ export const DshKeyValueImpl = defineComponent<{
     () => normalizeKeyValueItems(props.items, Boolean(props.copyable)),
     [props.items, props.copyable],
   )
-  const [copiedIdx, setCopiedIdx] = useState<number | null>(null)
+  const [copiedIdx, markCopiedIdx] = useTransientKey<number>(1300)
   const cols =
     typeof props.columns === 'number' && props.columns >= 1 && props.columns <= 4
       ? Math.trunc(props.columns)
@@ -294,11 +296,28 @@ export const DshKeyValueImpl = defineComponent<{
 
   const handleCopy = (idx: number, text: string) => {
     copyToClipboardSafe(text)
-    setCopiedIdx(idx)
-    setTimeout(() => {
-      setCopiedIdx((prev) => (prev === idx ? null : prev))
-    }, 1300)
+    markCopiedIdx(idx)
   }
+
+  const entrySpans = useMemo(() => {
+    let cursor = 0
+    return entries.map((entry, idx) => {
+      const explicitSpan = entry.span
+        ? Math.min(cols, Math.max(1, Math.trunc(entry.span)))
+        : undefined
+      if (explicitSpan !== undefined) {
+        if (cursor + explicitSpan > cols) cursor = 0
+        cursor = (cursor + explicitSpan) % cols
+        return explicitSpan
+      }
+      if (idx === entries.length - 1) {
+        const remaining = cols - cursor
+        return remaining > 1 && cursor > 0 ? remaining : 1
+      }
+      cursor = (cursor + 1) % cols
+      return 1
+    })
+  }, [entries, cols])
 
   return (
     <div
@@ -315,13 +334,7 @@ export const DshKeyValueImpl = defineComponent<{
         style={{ '--kv-cols': cols } as CSSProperties}
       >
         {entries.map((entry, idx) => {
-          const explicitSpan = entry.span ? Math.min(cols, entry.span) : undefined
-          const remainder = entries.length % cols
-          const autoLastSpan =
-            !explicitSpan && remainder !== 0 && idx === entries.length - 1
-              ? cols - remainder + 1
-              : 1
-          const spanCols = explicitSpan ?? autoLastSpan
+          const spanCols = entrySpans[idx] ?? 1
           return (
             <div
               key={`${entry.label}-${idx}`}

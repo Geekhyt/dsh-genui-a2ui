@@ -1,5 +1,11 @@
 .root {
+  --a2ui-z-modal: 1000;
+  --a2ui-z-popover-backdrop: 1099;
+  --a2ui-z-popover: 1100;
+  --a2ui-z-fullscreen: 1200;
+  --a2ui-z-toast: 1300;
   box-sizing: border-box;
+  container-type: inline-size;
   width: calc(
     100% -
     var(--dsh-composer-side-clearance, 16px) *
@@ -14,7 +20,7 @@
   );
   --dsw-elevation-stroke-color: var(--dsw-alias-border-l1, rgba(128, 128, 128, 0.22));
   border-radius: var(--dsw-radius-lg, 12px);
-  background: var(--dsw-specific-menu, var(--dsw-alias-bg-layer-1, #f7f8fa));
+  background: var(--dsw-specific-menu, var(--dsw-alias-bg-layer-1, light-dark(#f7f8fa, #1b1d24)));
   backdrop-filter: var(--dsw-menu-backdrop-filter, none);
   box-shadow: var(--dsw-elevation-panel, 0 4px 16px rgba(0, 0, 0, 0.08));
   border: 0.5px solid var(--dsw-alias-border-l1, rgba(128, 128, 128, 0.18));

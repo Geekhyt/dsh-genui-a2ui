@@ -23,7 +23,7 @@ export function isPluginStylesMounted(pluginId = DEFAULT_PLUGIN_ID): boolean {
 export function mountPluginCssSheets(pluginId = DEFAULT_PLUGIN_ID): void {
   const reg = getPluginCssRegistry(pluginId)
   reg.mounted = true
-  if (typeof document === 'undefined') return
+  if (typeof document === 'undefined' || !document.head) return
   for (const [tagId, css] of reg.sheets.entries()) {
     if (document.querySelector(`style[data-plugin-css=${JSON.stringify(tagId)}]`) === null) {
       const tag = document.createElement('style')

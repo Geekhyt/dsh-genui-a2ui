@@ -31,7 +31,8 @@ import { type TableColumnInput, TableWidget } from './TableWidget.tsx'
 import {
   defineComponent,
   InsideButtonContext,
-  isSafeMediaUrl,
+  isSafeAvMediaUrl,
+  isSafeImageUrl,
   SurfaceReadOnlyContext,
   weightStyle,
 } from './widget-helpers.tsx'
@@ -65,30 +66,53 @@ export const DshImageImpl = defineComponent<{
 }>(ImageApi, function DshImage({ props }) {
   const msg = useRuntimeMessages()
   const [lightboxOpen, setLightboxOpen] = useState(false)
-  if (!isSafeMediaUrl(props.url)) return null
+  if (!isSafeImageUrl(props.url)) return null
   const src = String(props.url)
-  const alt = props.description ? String(props.description) : ''
+  const alt =
+    props.description !== undefined && props.description !== null ? String(props.description) : ''
   const fit = props.fit === 'scaleDown' ? 'scale-down' : (props.fit ?? 'cover')
   const height = IMAGE_HEIGHTS[props.variant ?? 'mediumFeature'] ?? 168
   const isAvatar = props.variant === 'avatar' || props.variant === 'icon'
   const canZoom = props.variant !== 'icon'
 
+  const wrapStyle = {
+    ...weightStyle(props.weight, isAvatar ? height : 140),
+    width: isAvatar ? height : props.weight !== undefined ? undefined : '100%',
+    height,
+    borderRadius: props.variant === 'avatar' ? '999px' : undefined,
+    ...(canZoom ? { cursor: 'zoom-in', padding: 0, textAlign: 'left' as const } : {}),
+  }
+
   return (
     <>
-      <div
-        className={css.imageWrap}
-        style={{
-          ...weightStyle(props.weight, isAvatar ? height : 140),
-          width: isAvatar ? height : props.weight !== undefined ? undefined : '100%',
-          height,
-          borderRadius: props.variant === 'avatar' ? '999px' : undefined,
-          cursor: canZoom ? 'zoom-in' : undefined,
-        }}
-        title={canZoom ? msg.imageZoomHint : undefined}
-        onClick={canZoom ? () => setLightboxOpen(true) : undefined}
-      >
-        <img src={src} alt={alt} className={css.image} style={{ objectFit: fit }} loading="lazy" />
-      </div>
+      {canZoom ? (
+        <button
+          type="button"
+          className={css.imageWrap}
+          style={wrapStyle}
+          aria-label={alt || msg.imageZoomHint}
+          title={msg.imageZoomHint}
+          onClick={() => setLightboxOpen(true)}
+        >
+          <img
+            src={src}
+            alt={alt}
+            className={css.image}
+            style={{ objectFit: fit }}
+            loading="lazy"
+          />
+        </button>
+      ) : (
+        <div className={css.imageWrap} style={wrapStyle}>
+          <img
+            src={src}
+            alt={alt}
+            className={css.image}
+            style={{ objectFit: fit }}
+            loading="lazy"
+          />
+        </div>
+      )}
       {canZoom ? (
         <DshImageLightbox
           open={lightboxOpen}
@@ -107,7 +131,7 @@ export const DshVideoImpl = defineComponent<{
   url?: unknown
   weight?: number
 }>(VideoApi, function DshVideo({ props }) {
-  if (!isSafeMediaUrl(props.url)) return null
+  if (!isSafeAvMediaUrl(props.url)) return null
   return (
     <div className={css.imageWrap} style={weightStyle(props.weight)}>
       <video src={props.url} controls style={{ display: 'block', width: '100%', maxHeight: 320 }} />
@@ -120,10 +144,14 @@ export const DshAudioPlayerImpl = defineComponent<{
   description?: unknown
   weight?: number
 }>(AudioPlayerApi, function DshAudioPlayer({ props }) {
-  if (!isSafeMediaUrl(props.url)) return null
+  if (!isSafeAvMediaUrl(props.url)) return null
   return (
     <div className={css.field} style={weightStyle(props.weight)}>
-      {props.description ? <span className={css.label}>{String(props.description)}</span> : null}
+      {props.description !== undefined &&
+      props.description !== null &&
+      String(props.description) !== '' ? (
+        <span className={css.label}>{String(props.description)}</span>
+      ) : null}
       <audio src={props.url} controls style={{ width: '100%' }} />
     </div>
   )
@@ -227,7 +255,8 @@ export const DshProgressImpl = defineComponent<{
   weight?: number
 }>(ProgressApi, function DshProgress({ props }) {
   const msg = useRuntimeMessages()
-  const max = typeof props.max === 'number' && props.max > 0 ? props.max : 100
+  const max =
+    typeof props.max === 'number' && Number.isFinite(props.max) && props.max > 0 ? props.max : 100
   const raw = Number(props.value ?? 0)
   const val = Number.isFinite(raw) ? Math.min(max, Math.max(0, raw)) : 0
   const pct = Math.round((val / max) * 100)

@@ -147,14 +147,28 @@ export function surfaceIdsOf(messages: readonly AgentToRendererMessage[]): strin
   return [...ids]
 }
 
+function nonEmptyId(raw: unknown): string | undefined {
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim()
+    return trimmed !== '' ? trimmed : undefined
+  }
+  if (typeof raw === 'number' && Number.isFinite(raw)) return String(raw)
+  return undefined
+}
+
 export function sessionIdOf(exec: ToolExec | undefined): string {
-  const id = exec?.agent?.session?.id ?? exec?.agent?.session?.header?.id
-  return typeof id === 'string' || typeof id === 'number' ? String(id) : 'global'
+  return (
+    nonEmptyId(exec?.agent?.session?.id) ?? nonEmptyId(exec?.agent?.session?.header?.id) ?? 'global'
+  )
 }
 
 export function isSubagentCall(exec: ToolExec | undefined): boolean {
   if (!exec) return false
-  if (exec.parentCallId !== undefined) return true
+  if (typeof exec.parentCallId === 'string') {
+    if (exec.parentCallId.trim() !== '') return true
+  } else if (exec.parentCallId !== undefined && exec.parentCallId !== null) {
+    return true
+  }
   if (exec.agent?.isSubagent === true) return true
   if (exec.agent?.parent !== undefined && exec.agent?.parent !== null) return true
   if (exec.agent?.session?.parentId !== undefined && exec.agent?.session?.parentId !== null)

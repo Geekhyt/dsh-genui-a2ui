@@ -294,6 +294,7 @@ export interface TurnTailBatch {
   readonly superseded: boolean
 }
 
+const turnTailBySnapshot = new WeakMap<ChatTargetSnapshot, Map<number, TurnTailBatch | null>>()
 const turnTailMemo = new Map<string, { sig: string; batch: TurnTailBatch }>()
 const MAX_TURN_TAIL_MEMO = 256
 
@@ -301,8 +302,21 @@ export function resolveTurnTailBatch(
   snapshot: ChatTargetSnapshot | undefined,
   turnNumber: number,
 ): TurnTailBatch | null {
+  if (snapshot === undefined) return null
+  const snapMap = turnTailBySnapshot.get(snapshot)
+  if (snapMap?.has(turnNumber)) {
+    return snapMap.get(turnNumber) ?? null
+  }
   const allCalls = collectOrderedCalls(snapshot)
-  if (allCalls.length === 0) return null
+  let targetSnapMap = snapMap
+  if (allCalls.length === 0) {
+    if (targetSnapMap === undefined) {
+      targetSnapMap = new Map()
+      turnTailBySnapshot.set(snapshot, targetSnapMap)
+    }
+    targetSnapMap.set(turnNumber, null)
+    return null
+  }
 
   const upToTurn: SettledA2uiCall[] = []
   const inThisTurnAnswer: SettledA2uiCall[] = []
@@ -323,7 +337,15 @@ export function resolveTurnTailBatch(
     }
   }
 
-  if (inThisTurnAnswer.length === 0) return null
+  if (targetSnapMap === undefined) {
+    targetSnapMap = new Map()
+    turnTailBySnapshot.set(snapshot, targetSnapMap)
+  }
+
+  if (inThisTurnAnswer.length === 0) {
+    targetSnapMap.set(turnNumber, null)
+    return null
+  }
 
   const visibleSurfaceIds = new Set<string>()
   let lastTitle: string | null = null
@@ -338,7 +360,10 @@ export function resolveTurnTailBatch(
     }
   }
 
-  if (visibleSurfaceIds.size === 0) return null
+  if (visibleSurfaceIds.size === 0) {
+    targetSnapMap.set(turnNumber, null)
+    return null
+  }
 
   let superseded = true
   for (const id of visibleSurfaceIds) {
@@ -358,6 +383,9 @@ export function resolveTurnTailBatch(
   const sig = `${latestSeq}|${superseded ? 1 : 0}|${messages.length}|${[...visibleSurfaceIds].join(',')}|${lastTitle ?? ''}`
   const prev = turnTailMemo.get(memoKey)
   if (prev !== undefined && prev.sig === sig) {
+    turnTailMemo.delete(memoKey)
+    turnTailMemo.set(memoKey, prev)
+    targetSnapMap.set(turnNumber, prev.batch)
     return prev.batch
   }
 
@@ -368,11 +396,13 @@ export function resolveTurnTailBatch(
     latestSeq,
     superseded,
   }
+  turnTailMemo.delete(memoKey)
   if (turnTailMemo.size >= MAX_TURN_TAIL_MEMO) {
     const oldest = turnTailMemo.keys().next().value
     if (oldest !== undefined) turnTailMemo.delete(oldest)
   }
   turnTailMemo.set(memoKey, { sig, batch })
+  targetSnapMap.set(turnNumber, batch)
   return batch
 }
 
@@ -383,11 +413,20 @@ export interface DockBatch {
   readonly latestSeq: number
 }
 
-let lastDockMemo: { sig: string; batch: DockBatch } | null = null
+const dockBySnapshot = new WeakMap<ChatTargetSnapshot, DockBatch | null>()
+const dockMemoByKey = new Map<string, { sig: string; batch: DockBatch }>()
+const MAX_DOCK_MEMO = 64
 
 export function resolveDockBatch(snapshot: ChatTargetSnapshot | undefined): DockBatch | null {
+  if (snapshot === undefined) return null
+  if (dockBySnapshot.has(snapshot)) {
+    return dockBySnapshot.get(snapshot) ?? null
+  }
   const allCalls = collectOrderedCalls(snapshot)
-  if (allCalls.length === 0) return null
+  if (allCalls.length === 0) {
+    dockBySnapshot.set(snapshot, null)
+    return null
+  }
 
   const dockedIds = new Set<string>()
   let lastTitle: string | null = null
@@ -404,15 +443,23 @@ export function resolveDockBatch(snapshot: ChatTargetSnapshot | undefined): Dock
     if (call.seq > latestSeq) latestSeq = call.seq
   }
 
-  if (dockedIds.size === 0) return null
+  if (dockedIds.size === 0) {
+    dockBySnapshot.set(snapshot, null)
+    return null
+  }
 
   const messages = filterMessagesBySurfaceIds(
     allCalls.flatMap((call) => call.messages),
     dockedIds,
   )
-  const sig = `${allCalls[0]?.callId ?? ''}::${latestSeq}|${messages.length}|${[...dockedIds].join(',')}|${lastTitle ?? ''}`
-  if (lastDockMemo !== null && lastDockMemo.sig === sig) {
-    return lastDockMemo.batch
+  const memoKey = allCalls[0]?.callId ?? 'dock'
+  const sig = `${memoKey}::${latestSeq}|${messages.length}|${[...dockedIds].join(',')}|${lastTitle ?? ''}`
+  const prev = dockMemoByKey.get(memoKey)
+  if (prev !== undefined && prev.sig === sig) {
+    dockMemoByKey.delete(memoKey)
+    dockMemoByKey.set(memoKey, prev)
+    dockBySnapshot.set(snapshot, prev.batch)
+    return prev.batch
   }
   const batch: DockBatch = {
     title: lastTitle,
@@ -420,7 +467,13 @@ export function resolveDockBatch(snapshot: ChatTargetSnapshot | undefined): Dock
     messages,
     latestSeq,
   }
-  lastDockMemo = { sig, batch }
+  dockMemoByKey.delete(memoKey)
+  if (dockMemoByKey.size >= MAX_DOCK_MEMO) {
+    const oldest = dockMemoByKey.keys().next().value
+    if (oldest !== undefined) dockMemoByKey.delete(oldest)
+  }
+  dockMemoByKey.set(memoKey, { sig, batch })
+  dockBySnapshot.set(snapshot, batch)
   return batch
 }
 

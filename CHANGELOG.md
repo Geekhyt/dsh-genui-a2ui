@@ -2,6 +2,38 @@
 
 All notable changes to `dsh-genui-a2ui` are documented in this file.
 
+## [0.4.4] - 2026-11-21
+
+### Fixed
+- **CLS-1: Security, SVG/CSS Isolation & Protocol Boundaries (`mermaid-safe.ts`, `mermaid-chunk.ts`, `file-opener.tsx`, `widget-helpers.tsx`, `action-protocol.ts`, `v4-helpers.ts`)**:
+  - Looped Mermaid `stripUnsafeDirectives` for nested `%%{init}%%` / YAML frontmatter and re-applied after `repairMermaidSource` backtick cleanup; upgraded `scopeMermaidStyleRules` to filter CSS rules individually (rejecting unscoped selectors, `@import`, external `url()`, and unsafe inline styles like `position`/`z-index`/`inset` while preserving valid scoped `@media` rules); blocked `<animateTransform>`/`<animateMotion>`/`<image>`/`<feImage>` in `assertSafeSvg` and `DOMPurify`.
+  - Added strict static SVG validation (`isSafeStaticSvgImage`) for `data:image/svg+xml` image URIs (including `;utf8,` shorthand) while rejecting all `data:` URIs for `AudioPlayer` and `Video`.
+  - Hardened `parseFileTarget` and `isPathWithinWorkspace` against UNC prefixes (`\/`, `/\`), percent-encoded traversal (`%2e`, `%00`), and sibling-prefix workspace escapes; sanitized `ApiEndpoint` `baseUrl` / headers against non-HTTP schemes and CR/LF injection; anchored `action-protocol` header parsing to prevent spoofed user-text blocks.
+- **CLS-2: End-to-End Credential & Obscured Pointer Redaction (`constants.ts`, `ask-tool.ts`, `persistence.ts`, `SurfaceView.tsx`)**:
+  - Extended `isSecretKey` to cover camelCase/snake_case suffixes and plural variants (`cardPin`, `card_pin`, `api_keys`, `access_tokens`, `masterKey`, etc.) without false-positiving benign metrics (`promptTokens`, `totalTokens`).
+  - Added server-side `collectObscuredPointersFromMessages` so `PendingAskRegistry.settle()` re-sanitizes both `context` and `dataModels` against `TextField(..., variant="obscured")` pointers before returning to the model.
+- **CLS-3: Linear `O(N)` Express Compiler & Data Integrity (`express-preprocess.ts`, `calc-engine.ts`, `constants.ts`, `generator.ts`, `render-tool.ts`)**:
+  - Rewrote Express preprocessing around a single-pass `Int32Array` bracket map and unified string/comment scanner (handling triple-quoted/raw strings and comments in strictly linear time); preserved outer `round()` and collision-safe variable aliasing in chained `calc()`; fixed symmetric half-away-from-zero rounding (`round(-2.5, 0) === -3`, `round(35.855, 2) === 35.86`); switched `safeStringifyJson` to ancestor-stack cycle detection so shared DAG references are preserved; tightened `isSubagentCall` against empty/null `parentCallId` and enforced `maxCompiledBytes` (`512 KB`).
+- **CLS-4: 19-Kind ECharts `276px` Compact QA & Crisp Filled-Shape Halos (`echarts-chunk.ts`, `EChartsWidget.tsx`, `src/shared/chart-i18n.ts`)**:
+  - Replaced thick black text strokes on `sunburst` (including level 4+), `treemap`, `funnel`, `waterfall` inside labels, and high-intensity `heatmap` cells with a shared crisp thin halo (`FILLED_SHAPE_LABEL`: `textBorderWidth: 0.8`, `textShadowBlur: 3`) verified across Dark and Light modes.
+  - Added smart legend collision disambiguation in `buildLegendOption` (rendering full names for colliding 2-series legends `<= 14` units such as `DeepSeek-R1` / `DeepSeek-V3`, and middle-ellipsis for 3+ collisions such as `DeepS…528` / `DeepS…324`).
+  - Added narrow-bar width checking (`fitsInsideBar`) in `waterfall` so `276px` bars place `+165` cleanly at `position: 'bottom'` while wide `520px` bars retain `'inside'`; tracked `stepDeltas[]` and `isTotalFlags[]` to fix negative-region `--20` and zero-crossing tooltips.
+  - Hardened `boxplot` quantiles for `> 5` samples, `scatter` `seriesField` grouping + legends, `sankey` duplicate-edge aggregation, `calendar` Unix timestamps & invalid-date rejection, `heatmap` axis field exclusion, `combo` dual-axis colors/labels, `gauge`/`candlestick` compact sizing, and decoupled ECharts strings into `src/shared/chart-i18n.ts` (`-22.6 kB` bundle reduction).
+- **CLS-5: Shared Zero-Effect Hooks, Portal Ergonomics, Temporal & ProTable Accuracy (`dom-hooks.ts`, `src/shared/temporal.ts`, `TableWidget.tsx`, `AntdParityWidgets.tsx`, `InputWidgets.tsx`, `ExtendedWidgets.tsx`, `v4-helpers.ts`, `v5-helpers.ts`, `functions.ts`)**:
+  - Consolidated `usePortalPopover` (with upward `bottom`-anchored clamping and `Escape` focus restoration), `useTransientFlag`, `useTransientKey`, and `useEscapeKey` in `src/client/dom-hooks.ts`; guarded `useEChartsMount` against zero-size hidden containers and hardened `useMermaidViewportDom` `blur`/fullscreen drag cleanup.
+  - Fixed `Tree` `allOpen` accuracy via `collectBranchDepths` (`showcase-21` now accurately shows `"全部收起"` when expanded and toggles cleanly), `Select`/`MultiSelect`/`TreeSelect` popover keyboard navigation & `readOnly` guards, `Button` accessible disabled check triggers, `Schedule` overnight ranges, `DateRange`/`DateTimeInput` local date formatting (`src/shared/temporal.ts`), and per-instance Mermaid SVG ID namespacing (`namespaceSvgIds`).
+  - Upgraded `ProTable` with formatted numeric sorting (`¥1,200`, `-¥500`, `99.95%`), sorted CSV/Markdown export, date/blank-safe numeric summaries, and tightened prefix-boundary cross-filtering (`filterTableRowsByField`).
+- **CLS-6 & CLS-7: Build Purity, Cross-Chunk Locale, Lifecycle & CSS Invariants (`build/preset.ts`, `src/shared/locale.ts`, `chunk-loader.ts`, `style-lifecycle.ts`, `TierControl.tsx`, `turn-surfaces.ts`, `ErrorBoundary.tsx`, `Catalog.module.css`)**:
+  - Enabled browser-platform production bundling in `build/preset.ts` (eliminating `litServerRoot` and all build warnings) and tightened the cold-boot gate to `100 kB` (`lib/client.js = 65.80 kB / 18.58 kB gzip`).
+  - Shared client locale overrides across all CJS chunks via `src/shared/locale.ts` (`globalThis.__dshA2uiI18n__`), cleaned up `document.adoptedStyleSheets`, added chunk load failure retry UI + active Mermaid LRU protection, added `TierControl` failed-sync rollback, bounded `turn-surfaces` caches with true LRU + `WeakMap`, and handled non-Error throws in `ErrorBoundary`.
+  - Fixed `@container` cascade ordering for `.chartActions` / `.kvCell`, separated `.chartCard > .chartInner` and `.containerHost` to avoid self-queries, added `.selectSearchRow > * { width: 100% }` (`showcase-23` full-width popover search), added `contain: layout paint` on Mermaid containers, standardized 4-tier z-index tokens, and replaced hardcoded theme fallbacks with `light-dark(...)`.
+
+### Changed
+- **CLS-8: Regression Coverage, Host API Contract Gate, CI & Docs Sync**:
+  - Added `tests/review-v044-hardening.spec.ts` covering `CLS-1..CLS-8`, all 19 ECharts kinds at `276px`, all 57 catalog components, and all 7 Slot Views (**28 suites / 147 tests**).
+  - Scoped `noDangerouslySetInnerHtml` exception in `biome.json` strictly to `src/client/catalog/ExtendedWidgets.tsx`; expanded `scripts/check-host-api.mjs` to verify **93 host contracts** (`12` platform modules, `7` injected client modules, `30` primitives, `5` slots, `39` CSS tokens); upgraded `.github/workflows/ci.yml` with `concurrency`, `macos-latest`, and `biome format` check; fixed `scripts/eval-llm.mjs` `--max-repairs=0` handling.
+  - Synchronized `docs/DEVELOPMENT.md`, `docs/DEVELOPMENT.zh-CN.md`, `docs/adr/ADR-0002/0004/0006/0007`, `CONTRIBUTING.md`, `SECURITY.md`, `THIRD_PARTY_NOTICES.md`, and `.github/ISSUE_TEMPLATE/bug_report.yml`, and removed orphaned `docs/dsh-genui-a2ui-component-library.html`.
+
 ## [0.4.3] - 2026-11-21
 
 ### Fixed

@@ -476,6 +476,15 @@ function coerceVarValue(raw: unknown): number {
   return 0
 }
 
+function roundSymmetric(value: number, decimals: number): number {
+  if (!Number.isFinite(value) || value === 0) return 0
+  const f = 10 ** decimals
+  const scaled = Math.abs(value) * f
+  if (!Number.isFinite(scaled)) return value
+  const rounded = (Math.sign(value) * Math.round(scaled + Number.EPSILON * Math.max(1, scaled))) / f
+  return rounded === 0 ? 0 : rounded
+}
+
 function evalBuiltinCall(fn: string, args: readonly number[]): number {
   const a0 = args[0] ?? 0
   const a1 = args[1] ?? 0
@@ -506,11 +515,7 @@ function evalBuiltinCall(fn: string, args: readonly number[]): number {
       return Math.ceil(a0)
     case 'round': {
       const d = args.length >= 2 && Number.isInteger(a1) ? Math.min(8, Math.max(0, a1)) : 0
-      const f = 10 ** d
-      const scaled = (a0 + Math.sign(a0) * Number.EPSILON) * f
-      if (!Number.isFinite(scaled)) return a0
-      const rounded = Math.round(scaled) / f
-      return rounded === 0 ? 0 : rounded
+      return roundSymmetric(a0, d)
     }
     case 'min':
       return args.length === 0 ? 0 : Math.min(...args)
@@ -639,11 +644,7 @@ export function evaluateCalcExpression(expr: unknown, vars?: unknown, decimals?:
     decimals >= 0 &&
     decimals <= 8
   ) {
-    const factor = 10 ** decimals
-    const scaled = (raw + Math.sign(raw) * Number.EPSILON) * factor
-    if (!Number.isFinite(scaled)) return raw
-    const rounded = Math.round(scaled) / factor
-    return rounded === 0 ? 0 : rounded
+    return roundSymmetric(raw, decimals)
   }
   const normalized = Number(raw.toPrecision(14))
   return normalized === 0 ? 0 : normalized

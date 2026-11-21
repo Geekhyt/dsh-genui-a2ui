@@ -1,6 +1,6 @@
 import { type AgentToRendererMessage, ExpressParser } from '@a2ui/agent'
 import { dshSchemaCatalog } from '../shared/catalog-schema.ts'
-import { preprocessExpressProgram } from '../shared/express-preprocess.ts'
+import { extractUpdateSurfaceIds, preprocessExpressProgram } from '../shared/express-preprocess.ts'
 
 const LEADING_WRAP_RE = /^\s*(?:<a2ui>\s*|```[\w-]*[ \t]*\r?\n)/i
 const TRAILING_WRAP_RE = /(?:\s*<\/a2ui>|\r?\n?[ \t]*```)\s*$/i
@@ -27,16 +27,6 @@ function collectSurfaceIds(messages: readonly AgentToRendererMessage[], target: 
   }
 }
 
-function extractUpdateIds(program: string): string[] {
-  const ids: string[] = []
-  const re = /\bsurface\(\s*"([^"]+)"[^)]*\bupdate\s*=\s*true/g
-  let m: RegExpExecArray | null
-  while ((m = re.exec(program)) !== null) {
-    if (m[1]) ids.push(m[1])
-  }
-  return ids
-}
-
 export class StreamingExpressSession {
   private readonly parser = new ExpressParser([dshSchemaCatalog])
   private stream = this.parser.openStream({ wrapped: false })
@@ -46,11 +36,36 @@ export class StreamingExpressSession {
   private readonly seededUpdateIds = new Set<string>()
   private seedWarnings: string[] = []
   private lastError: string | null = null
+  private lastSnapshot: StreamingCompileSnapshot | null = null
+  private lastSnapshotMessages: readonly AgentToRendererMessage[] | null = null
+  private lastSnapshotError: string | null = null
+  private lastSnapshotWarningsCount = 0
 
   private closed = false
 
   getSeedWarnings(): readonly string[] {
     return this.seedWarnings
+  }
+
+  private buildSnapshot(): StreamingCompileSnapshot {
+    if (
+      this.lastSnapshot !== null &&
+      this.lastSnapshotMessages === this.messages &&
+      this.lastSnapshotError === this.lastError &&
+      this.lastSnapshotWarningsCount === this.seedWarnings.length
+    ) {
+      return this.lastSnapshot
+    }
+    this.lastSnapshotMessages = this.messages
+    this.lastSnapshotError = this.lastError
+    this.lastSnapshotWarningsCount = this.seedWarnings.length
+    this.lastSnapshot = {
+      messages: this.messages,
+      surfaceIds: [...this.surfaceIdSet],
+      error: this.lastError,
+      ...(this.seedWarnings.length > 0 ? { seedWarnings: [...this.seedWarnings] } : {}),
+    }
+    return this.lastSnapshot
   }
 
   reset(preserveSeeds = false): void {
@@ -77,13 +92,17 @@ export class StreamingExpressSession {
     this.messages = []
     this.surfaceIdSet.clear()
     this.lastError = null
+    this.lastSnapshot = null
     this.closed = false
   }
 
   advance(rawUi: string, final = false): StreamingCompileSnapshot {
     const rawClean = normalizeStreamingProgram(rawUi)
     if (rawClean === '') {
-      return { messages: this.messages, surfaceIds: [...this.surfaceIdSet], error: null }
+      if (this.fed !== '' || this.messages.length > 0 || this.lastError !== null) {
+        this.reset(false)
+      }
+      return this.buildSnapshot()
     }
     let clean: string
     if (final) {
@@ -97,7 +116,10 @@ export class StreamingExpressSession {
       }
     }
     if (!clean.startsWith(this.fed) || (this.closed && clean !== this.fed)) {
-      this.reset(true)
+      const sameUpdateTargets = extractUpdateSurfaceIds(clean).some((id) =>
+        this.seededUpdateIds.has(id),
+      )
+      this.reset(sameUpdateTargets)
     }
     const delta = clean.slice(this.fed.length)
     if (delta.length > 0 && !this.closed) {
@@ -113,7 +135,9 @@ export class StreamingExpressSession {
         this.lastError = null
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
-        const unseeded = extractUpdateIds(clean).filter((id) => !this.seededUpdateIds.has(id))
+        const unseeded = extractUpdateSurfaceIds(clean).filter(
+          (id) => !this.seededUpdateIds.has(id),
+        )
         if (unseeded.length > 0 && /not exist|not found|unknown surface|createSurface/i.test(msg)) {
           for (const id of unseeded) this.seededUpdateIds.add(id)
           this.reset(true)
@@ -148,11 +172,6 @@ export class StreamingExpressSession {
         this.lastError = err instanceof Error ? err.message : String(err)
       }
     }
-    return {
-      messages: this.messages,
-      surfaceIds: [...this.surfaceIdSet],
-      error: this.lastError,
-      ...(this.seedWarnings.length > 0 ? { seedWarnings: [...this.seedWarnings] } : {}),
-    }
+    return this.buildSnapshot()
   }
 }

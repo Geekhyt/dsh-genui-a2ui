@@ -1,5 +1,5 @@
 .trigger {
-  border-radius: var(--dsw-radius-full, 999px);
+  border-radius: 999px;
   min-width: 0;
   height: 28px;
   cursor: pointer;

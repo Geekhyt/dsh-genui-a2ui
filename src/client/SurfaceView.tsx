@@ -21,6 +21,7 @@ import {
   useState,
   useSyncExternalStore,
 } from 'react'
+import { isDangerousObjectKey } from '../shared/constants.ts'
 import { enrichActionWithSelection, formatActionMessage } from './action-protocol.ts'
 import { DSH_CLIENT_CATALOGS } from './catalog/index.ts'
 import {
@@ -117,6 +118,70 @@ export function readSanitizedDataModels(
   return result
 }
 
+function collectBlockedSecretValues(
+  surface: SurfaceModel<ReactCatalogComponent>,
+  obscuredPointers: ReadonlySet<string>,
+): { readonly blocked: Set<string>; readonly failed: boolean } {
+  const blocked = new Set<string>()
+  const collectLeaves = (node: unknown, path: string, depth: number) => {
+    if (depth > 8 || node === null || node === undefined) return
+    if (typeof node === 'string') {
+      if (node.length >= 4 && isPointerObscuredOrParent(path, obscuredPointers)) {
+        blocked.add(node)
+      }
+      return
+    }
+    if (Array.isArray(node)) {
+      for (let i = 0; i < node.length; i++) {
+        collectLeaves(node[i], path === '/' ? `/${i}` : `${path}/${i}`, depth + 1)
+      }
+      return
+    }
+    if (typeof node === 'object') {
+      for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
+        collectLeaves(v, path === '/' ? `/${k}` : `${path}/${k}`, depth + 1)
+      }
+    }
+  }
+  let hasRelative = false
+  for (const pointer of obscuredPointers) {
+    if (!pointer.trim().startsWith('/')) {
+      hasRelative = true
+      continue
+    }
+    try {
+      const secretVal = surface.dataModel.get(normalizePointerPath(pointer))
+      if (typeof secretVal === 'string' && secretVal.length >= 4) {
+        blocked.add(secretVal)
+      }
+    } catch {
+      return { blocked, failed: true }
+    }
+  }
+  if (hasRelative) {
+    try {
+      collectLeaves(surface.dataModel.get('/'), '/', 0)
+    } catch {
+      return { blocked, failed: true }
+    }
+  }
+  return { blocked, failed: false }
+}
+
+function scrubStringWithBlockedValues(
+  input: string,
+  blockedValues: ReadonlySet<string>,
+): string | undefined {
+  if (blockedValues.has(input)) return undefined
+  let out = input
+  for (const secret of blockedValues) {
+    if (secret.length >= 4 && out.includes(secret)) {
+      out = out.split(secret).join('[REDACTED]')
+    }
+  }
+  return out
+}
+
 function stripObscuredFromContext(
   value: unknown,
   rawBinding: unknown,
@@ -134,7 +199,7 @@ function stripObscuredFromContext(
     }
   }
   if (typeof value === 'string') {
-    return blockedValues.has(value) ? undefined : value
+    return scrubStringWithBlockedValues(value, blockedValues)
   }
   if (Array.isArray(value)) {
     const rawArr = Array.isArray(rawBinding) ? rawBinding : undefined
@@ -165,6 +230,48 @@ function stripObscuredFromContext(
   return value
 }
 
+function deepMergePlainObjects(
+  base: Record<string, unknown>,
+  patch: Record<string, unknown>,
+  depth = 0,
+): Record<string, unknown> {
+  if (depth > 8) return { ...base }
+  const out: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(base)) {
+    if (isDangerousObjectKey(k)) continue
+    Object.defineProperty(out, k, {
+      value: v,
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    })
+  }
+  for (const [k, v] of Object.entries(patch)) {
+    if (isDangerousObjectKey(k)) continue
+    const existing = Object.hasOwn(out, k) ? out[k] : undefined
+    const nextVal =
+      typeof existing === 'object' &&
+      existing !== null &&
+      !Array.isArray(existing) &&
+      typeof v === 'object' &&
+      v !== null &&
+      !Array.isArray(v)
+        ? deepMergePlainObjects(
+            existing as Record<string, unknown>,
+            v as Record<string, unknown>,
+            depth + 1,
+          )
+        : v
+    Object.defineProperty(out, k, {
+      value: nextVal,
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    })
+  }
+  return out
+}
+
 export function sanitizeActionContextForSurface(
   surface: SurfaceModel<ReactCatalogComponent> | undefined,
   action: ActionPayload,
@@ -193,7 +300,7 @@ export function sanitizeActionContextForSurface(
             (val as { path?: unknown; '@path'?: unknown }).path ??
             (val as { '@path'?: unknown })['@path']
           if (typeof rawPath === 'string' && rawPath.trim() !== '') {
-            obscuredPointers.add(normalizePointerPath(rawPath))
+            obscuredPointers.add(rawPath.trim())
           }
         }
       }
@@ -229,17 +336,8 @@ export function sanitizeActionContextForSurface(
     return {}
   }
   if (obscuredPointers.size === 0) return sanitizeDataModel(rawContext)
-  const blockedValues = new Set<string>()
-  for (const pointer of obscuredPointers) {
-    try {
-      const secretVal = surface.dataModel.get(pointer)
-      if (typeof secretVal === 'string' && secretVal.length >= 4) {
-        blockedValues.add(secretVal)
-      }
-    } catch {
-      return {}
-    }
-  }
+  const { blocked: blockedValues, failed } = collectBlockedSecretValues(surface, obscuredPointers)
+  if (failed) return {}
   const stripped = stripObscuredFromContext(
     rawContext,
     rawActionCtx,
@@ -249,6 +347,56 @@ export function sanitizeActionContextForSurface(
   return sanitizeDataModel(
     typeof stripped === 'object' && stripped !== null && !Array.isArray(stripped) ? stripped : {},
   )
+}
+
+function sanitizeActionPayloadForSurface(
+  surface: SurfaceModel<ReactCatalogComponent> | undefined,
+  action: ActionPayload,
+): ActionPayload {
+  const safeContext = sanitizeActionContextForSurface(surface, action)
+  const enriched = enrichActionWithSelection({ ...action, context: safeContext })
+  if (surface === undefined) return enriched
+  const obscured = collectObscuredPointers(surface)
+  if (obscured === null) {
+    return {
+      ...enriched,
+      context: {},
+      ...(enriched.userMessage !== undefined ? { userMessage: undefined } : {}),
+    }
+  }
+  if (obscured.size === 0) return enriched
+  const { blocked, failed } = collectBlockedSecretValues(surface, obscured)
+  if (failed) {
+    return {
+      ...enriched,
+      context: {},
+      ...(enriched.userMessage !== undefined ? { userMessage: undefined } : {}),
+    }
+  }
+  const safeUserMessage =
+    typeof enriched.userMessage === 'string'
+      ? scrubStringWithBlockedValues(enriched.userMessage, blocked)
+      : undefined
+  const safeEnrichedContext = stripObscuredFromContext(
+    enriched.context ?? {},
+    undefined,
+    obscured,
+    blocked,
+  )
+  return {
+    ...enriched,
+    ...(safeUserMessage !== undefined
+      ? { userMessage: safeUserMessage }
+      : { userMessage: undefined }),
+    context: sanitizeDataModel(
+      typeof safeEnrichedContext === 'object' &&
+        safeEnrichedContext !== null &&
+        !Array.isArray(safeEnrichedContext)
+        ? safeEnrichedContext
+        : {},
+      obscured,
+    ),
+  }
 }
 
 export { formatActionMessage }
@@ -295,6 +443,11 @@ export class SurfaceSessionStore {
     SurfaceModel<ReactCatalogComponent>,
     { unsubscribe(): void }
   >()
+  private readonly pendingDraftWrites = new Map<
+    string,
+    { timer: ReturnType<typeof setTimeout>; flush: () => void }
+  >()
+  private readonly lastDraftWriteAt = new Map<string, number>()
 
   constructor() {
     this.processor = new MessageProcessor<ReactCatalogComponent>(
@@ -309,8 +462,7 @@ export class SurfaceSessionStore {
 
         const dataModels = readSanitizedDataModels(this.processor, this.visibleSurfaceIds)
         const targetSurface = this.processor.getSurfaces().get(action.surfaceId)
-        const safeContext = sanitizeActionContextForSurface(targetSurface, action)
-        const cleanAction = enrichActionWithSelection({ ...action, context: safeContext })
+        const cleanAction = sanitizeActionPayloadForSurface(targetSurface, action)
         handler(formatActionMessage(cleanAction, dataModels), cleanAction, dataModels)
       },
       {
@@ -345,6 +497,43 @@ export class SurfaceSessionStore {
     return true
   }
 
+  private scheduleDraftSave(
+    sid: string,
+    surface: SurfaceModel<ReactCatalogComponent>,
+    fp: string,
+    rootVal: Record<string, unknown>,
+  ): void {
+    const key = `${sid}::${surface.id}::${fp}`
+    const commit = () => {
+      this.pendingDraftWrites.delete(key)
+      this.lastDraftWriteAt.set(key, Date.now())
+      const obscured = collectObscuredPointers(surface)
+      if (obscured === null) return
+      saveSurfaceDraft(sid, surface.id, fp, rootVal, obscured)
+    }
+    const prev = this.pendingDraftWrites.get(key)
+    if (prev !== undefined) clearTimeout(prev.timer)
+    const now = Date.now()
+    const lastAt = this.lastDraftWriteAt.get(key) ?? 0
+    if (now - lastAt >= 280) {
+      commit()
+      return
+    }
+    const delay = Math.max(16, 280 - (now - lastAt))
+    const timer = setTimeout(commit, delay)
+    ;(timer as unknown as { unref?: () => void }).unref?.()
+    this.pendingDraftWrites.set(key, { timer, flush: commit })
+  }
+
+  private flushPendingDraftWrites(): void {
+    const entries = [...this.pendingDraftWrites.values()]
+    this.pendingDraftWrites.clear()
+    for (const entry of entries) {
+      clearTimeout(entry.timer)
+      entry.flush()
+    }
+  }
+
   private syncDraftSubscriptions(): void {
     if (this.mountedListeners === 0) return
     const activeSet = new Set(this.processor.getSurfaces().values())
@@ -361,15 +550,14 @@ export class SurfaceSessionStore {
         const sid = this.sessionId
         const fp = this.fingerprint
         if (!sid || !fp || typeof rootVal !== 'object' || rootVal === null) return
-        const obscured = collectObscuredPointers(surface)
-        if (obscured === null) return
-        saveSurfaceDraft(sid, surface.id, fp, rootVal as Record<string, unknown>, obscured)
+        this.scheduleDraftSave(sid, surface, fp, rootVal as Record<string, unknown>)
       })
       this.draftSubs.set(surface, sub)
     }
   }
 
   private clearDraftSubscriptions(): void {
+    this.flushPendingDraftWrites()
     for (const sub of this.draftSubs.values()) {
       sub.unsubscribe()
     }
@@ -455,11 +643,15 @@ export class SurfaceSessionStore {
           const draft = loadSurfaceDraft(options.sessionId, surface.id, options.fingerprint)
           if (draft !== null && typeof draft === 'object' && !Array.isArray(draft)) {
             try {
+              const obscured = collectObscuredPointers(surface)
+              if (obscured === null) continue
+              const safeDraft = sanitizeDataModel(draft, obscured)
+              if (Object.keys(safeDraft).length === 0) continue
               const current = surface.dataModel.get('/')
               const merged =
                 typeof current === 'object' && current !== null && !Array.isArray(current)
-                  ? { ...(current as Record<string, unknown>), ...draft }
-                  : { ...draft }
+                  ? deepMergePlainObjects(current as Record<string, unknown>, safeDraft)
+                  : safeDraft
               surface.dataModel.set('/', merged)
             } catch (err) {
               console.warn('[dsh-genui-a2ui] Discarding malformed draft restoration:', err)

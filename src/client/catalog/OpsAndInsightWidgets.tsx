@@ -9,6 +9,7 @@ import {
   SourceListApi,
   TimelineApi,
 } from '../../shared/catalog-schema.ts'
+import { useTransientFlag } from '../dom-hooks.ts'
 import { useRuntimeMessages } from '../i18n.ts'
 import {
   DshButton,
@@ -269,7 +270,7 @@ export const DshLogViewerImpl = defineComponent<{
     const firstErr = entries.find((e) => e.level === 'error' && e.detail !== '')
     return firstErr ? new Set([firstErr.id]) : new Set()
   })
-  const [copiedAll, setCopiedAll] = useState(false)
+  const [copiedAll, markCopiedAll] = useTransientFlag(1300)
 
   const counts = useMemo(() => {
     const c = { all: entries.length, error: 0, warn: 0, info: 0, debug: 0 }
@@ -319,8 +320,7 @@ export const DshLogViewerImpl = defineComponent<{
       )
       .join('\n')
     copyToClipboardSafe(text)
-    setCopiedAll(true)
-    setTimeout(() => setCopiedAll(false), 1300)
+    markCopiedAll()
   }
 
   return (
@@ -813,7 +813,10 @@ export const DshMetricRingImpl = defineComponent<{
   const label = props.label !== undefined && props.label !== null ? String(props.label) : ''
   const sublabel =
     props.sublabel !== undefined && props.sublabel !== null ? String(props.sublabel) : ''
-  const maxVal = typeof props.max === 'number' && props.max > 0 ? props.max : 100
+  const maxVal =
+    typeof props.max === 'number' && Number.isFinite(props.max) && props.max > 0 ? props.max : 100
+  const rawMetricNum = Number(props.value)
+  const safeAriaNow = Number.isFinite(rawMetricNum) ? rawMetricNum : 0
   const unit =
     props.unit !== undefined && props.unit !== null ? String(props.unit) : maxVal === 100 ? '%' : ''
   const geom = useMemo(
@@ -841,7 +844,7 @@ export const DshMetricRingImpl = defineComponent<{
         style={{ width: geom.size, height: geom.size }}
         role="meter"
         aria-label={label}
-        aria-valuenow={Number(props.value) || 0}
+        aria-valuenow={safeAriaNow}
         aria-valuemin={0}
         aria-valuemax={maxVal}
       >

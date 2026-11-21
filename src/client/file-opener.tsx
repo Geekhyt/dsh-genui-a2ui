@@ -31,17 +31,37 @@ export function sessionFileAddress(sessionId: string, path: string): string {
   return `${FILE_ADDRESS_PREFIX}session/${encodeSegment(sessionId)}/${encodePath(normalized)}`
 }
 
+function normalizeForPrefixCompare(p: string): string {
+  const slashes = p.replace(/\\/g, '/').replace(/\/+$/, '')
+  return isWindowsStylePath(slashes) ? slashes.toLowerCase() : slashes
+}
+
+export function isPathWithinWorkspace(targetPath: string, cwd: string | undefined): boolean {
+  const normalized = targetPath.replace(/\\/g, '/')
+  if (hasPathTraversalSegment(normalized) || normalized.startsWith('//')) return false
+  if (!isAbsoluteWorkspacePath(normalized)) return true
+  if (!cwd || cwd.trim() === '') return false
+  const rootCmp = normalizeForPrefixCompare(cwd)
+  const targetCmp = normalizeForPrefixCompare(normalized)
+  if (rootCmp === '') return false
+  return targetCmp === rootCmp || targetCmp.startsWith(`${rootCmp}/`)
+}
+
 export function fileAddressFor(sessionId: string, cwd: string | undefined, path: string): string {
   const normalized = path.replace(/\\/g, '/')
   if (!isAbsoluteWorkspacePath(normalized)) {
     return sessionFileAddress(sessionId, normalized)
   }
   const root = cwd === undefined ? '' : cwd.replace(/\\/g, '/').replace(/\/+$/, '')
-  if (root !== '' && normalized === root) {
-    return sessionFileAddress(sessionId, '')
-  }
-  if (root !== '' && normalized.startsWith(`${root}/`)) {
-    return sessionFileAddress(sessionId, normalized.slice(root.length + 1))
+  if (root !== '') {
+    const rootCmp = normalizeForPrefixCompare(root)
+    const normCmp = normalizeForPrefixCompare(normalized)
+    if (normCmp === rootCmp) {
+      return sessionFileAddress(sessionId, '')
+    }
+    if (normCmp.startsWith(`${rootCmp}/`)) {
+      return sessionFileAddress(sessionId, normalized.slice(root.length + 1))
+    }
   }
   return sessionFileAddress(sessionId, normalized)
 }
@@ -60,12 +80,16 @@ export interface ParsedFileTarget {
 
 const URI_SCHEME_RE = /^[A-Za-z][A-Za-z0-9+.-]*:/
 const CONTROL_CHAR_RE = /[\u0000-\u001f\u007f]/
+const ENCODED_TRAVERSAL_RE = /%(?:2e%2e|2f|5c|00)/i
 
 export function parseFileTarget(rawPath: unknown, explicitLine?: unknown): ParsedFileTarget | null {
   if (typeof rawPath !== 'string') return null
   const trimmed = rawPath.trim()
-  if (trimmed === '' || CONTROL_CHAR_RE.test(trimmed)) return null
-  if (trimmed.startsWith('\\\\') || trimmed.startsWith('//')) return null
+  if (trimmed === '' || CONTROL_CHAR_RE.test(trimmed) || ENCODED_TRAVERSAL_RE.test(trimmed)) {
+    return null
+  }
+  const slashNorm = trimmed.replace(/\\/g, '/')
+  if (slashNorm.startsWith('//')) return null
   if (!isWindowsStylePath(trimmed) && URI_SCHEME_RE.test(trimmed)) return null
 
   let cleanPath = trimmed

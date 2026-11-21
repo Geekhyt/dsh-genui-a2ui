@@ -44,9 +44,6 @@
         "useFocusableInteractive": "off",
         "noNoninteractiveElementToInteractiveRole": "off"
       },
-      "security": {
-        "noDangerouslySetInnerHtml": "off"
-      },
       "style": {
         "noNonNullAssertion": "off",
         "noDescendingSpecificity": "off"
@@ -61,6 +58,16 @@
     }
   },
   "overrides": [
+    {
+      "includes": ["src/client/catalog/ExtendedWidgets.tsx"],
+      "linter": {
+        "rules": {
+          "security": {
+            "noDangerouslySetInnerHtml": "off"
+          }
+        }
+      }
+    },
     {
       "includes": ["src/**/*.tsx"],
       "linter": {

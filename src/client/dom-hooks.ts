@@ -1,4 +1,4 @@
-import { type RefObject, useCallback, useEffect, useLayoutEffect, useRef } from 'react'
+import { type RefObject, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { EchartsChunkModule } from './chunk-loader.ts'
 
 const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect
@@ -15,6 +15,141 @@ export function useAutoDismissTimer(holdMs: number, onDone: () => void): void {
       clearTimeout(timer)
     }
   }, [holdMs])
+}
+
+export function useTransientFlag(durationMs = 1500): readonly [boolean, () => void] {
+  const [active, setActive] = useState(false)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current !== null) {
+        clearTimeout(timerRef.current)
+        timerRef.current = null
+      }
+    }
+  }, [])
+
+  const trigger = useCallback(() => {
+    if (timerRef.current !== null) {
+      clearTimeout(timerRef.current)
+    }
+    setActive(true)
+    timerRef.current = setTimeout(() => {
+      timerRef.current = null
+      setActive(false)
+    }, durationMs)
+  }, [durationMs])
+
+  return [active, trigger] as const
+}
+
+export function useTransientKey<T>(durationMs = 1500): readonly [T | null, (key: T) => void] {
+  const [activeKey, setActiveKey] = useState<T | null>(null)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current !== null) {
+        clearTimeout(timerRef.current)
+        timerRef.current = null
+      }
+    }
+  }, [])
+
+  const trigger = useCallback(
+    (key: T) => {
+      if (timerRef.current !== null) {
+        clearTimeout(timerRef.current)
+      }
+      setActiveKey(key)
+      timerRef.current = setTimeout(() => {
+        timerRef.current = null
+        setActiveKey(null)
+      }, durationMs)
+    },
+    [durationMs],
+  )
+
+  return [activeKey, trigger] as const
+}
+
+export function useEscapeKey(active: boolean, onEscape: () => void): void {
+  const onEscapeRef = useRef(onEscape)
+  onEscapeRef.current = onEscape
+
+  useEffect(() => {
+    if (!active || typeof window === 'undefined') return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation()
+        onEscapeRef.current()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown, { capture: true })
+    return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
+  }, [active])
+}
+
+export function usePortalPopover(params: {
+  readonly open: boolean
+  readonly triggerRef: RefObject<HTMLElement | null>
+  readonly popoverRef: RefObject<HTMLElement | null>
+  readonly onClose: () => void
+  readonly onReposition?: (() => void) | undefined
+}): void {
+  const { open, triggerRef, popoverRef, onClose, onReposition } = params
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
+  const onRepositionRef = useRef(onReposition)
+  onRepositionRef.current = onReposition
+  const wasOpenRef = useRef(false)
+
+  useEffect(() => {
+    if (open) {
+      wasOpenRef.current = true
+    } else if (wasOpenRef.current) {
+      wasOpenRef.current = false
+      const trigger = triggerRef.current
+      if (trigger && typeof document !== 'undefined') {
+        const active = document.activeElement
+        if (active === null || active === document.body || popoverRef.current?.contains(active)) {
+          trigger.focus?.()
+        }
+      }
+    }
+  }, [open, popoverRef, triggerRef])
+
+  useEffect(() => {
+    if (!open || typeof window === 'undefined') return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        e.stopPropagation()
+        onCloseRef.current()
+      }
+    }
+    const handleResize = () => {
+      if (onRepositionRef.current) onRepositionRef.current()
+      else onCloseRef.current()
+    }
+    const handleScroll = (e: Event) => {
+      const target = e.target
+      if (popoverRef.current && target instanceof Node && popoverRef.current.contains(target)) {
+        return
+      }
+      if (onRepositionRef.current) onRepositionRef.current()
+      else onCloseRef.current()
+    }
+    window.addEventListener('keydown', handleKeyDown, { capture: true })
+    window.addEventListener('resize', handleResize, { passive: true })
+    window.addEventListener('scroll', handleScroll, { capture: true, passive: true })
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown, { capture: true })
+      window.removeEventListener('resize', handleResize)
+      window.removeEventListener('scroll', handleScroll, { capture: true })
+    }
+  }, [open, popoverRef])
 }
 
 export interface EChartsClickParams {
@@ -42,6 +177,13 @@ export function useEChartsMount(params: {
   const onContainerWidthRef = useRef(onContainerWidth)
   onContainerWidthRef.current = onContainerWidth
 
+  useIsomorphicLayoutEffect(() => {
+    const el = hostRef.current
+    if (!el) return
+    const initialW = Math.round(el.clientWidth)
+    if (initialW > 0) onContainerWidthRef.current(initialW)
+  }, [chunk, hostRef])
+
   useEffect(() => {
     if (!chunk) return
     const el = hostRef.current
@@ -59,9 +201,9 @@ export function useEChartsMount(params: {
       typeof ResizeObserver !== 'undefined'
         ? new ResizeObserver(() => {
             const nextW = Math.round(el.clientWidth)
-            if (nextW > 0) {
-              onContainerWidthRef.current(nextW)
-            }
+            const nextH = Math.round(el.clientHeight)
+            if (nextW === 0 || nextH === 0) return
+            onContainerWidthRef.current(nextW)
             instance.resize()
           })
         : null
@@ -82,7 +224,8 @@ export function useEChartsMount(params: {
 
   const exportPng = useCallback((filename: string, backgroundColor: string): boolean => {
     const inst = chartRef.current
-    if (!inst || typeof document === 'undefined') return false
+    if (!inst || typeof document === 'undefined' || !document.body) return false
+    let anchor: HTMLAnchorElement | null = null
     try {
       const dataUrl = inst.getDataURL({
         type: 'png',
@@ -94,16 +237,19 @@ export function useEChartsMount(params: {
         .trim()
         .replace(/[^\w\u4e00-\u9fa5-]+/g, '-')
         .replace(/^-+|-+$/g, '')
-      const a = document.createElement('a')
-      a.href = dataUrl
-      a.download = `${slug || 'a2ui-chart'}.png`
-      a.style.display = 'none'
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
+      anchor = document.createElement('a')
+      anchor.href = dataUrl
+      anchor.download = `${slug || 'a2ui-chart'}.png`
+      anchor.style.display = 'none'
+      document.body.appendChild(anchor)
+      anchor.click()
       return true
     } catch {
       return false
+    } finally {
+      if (anchor?.parentNode) {
+        anchor.parentNode.removeChild(anchor)
+      }
     }
   }, [])
 
@@ -169,10 +315,29 @@ export function useMermaidViewportDom(params: {
   onCloseFullscreenRef.current = onCloseFullscreen
 
   useEffect(() => {
+    const onBlur = () => {
+      dragCleanupRef.current?.()
+    }
+    if (typeof window !== 'undefined') {
+      window.addEventListener('blur', onBlur)
+    }
     return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('blur', onBlur)
+      }
       dragCleanupRef.current?.()
     }
   }, [dragCleanupRef])
+
+  useEffect(() => {
+    if (!activeFullscreen || !canZoom) {
+      dragCleanupRef.current?.()
+      const anchor = pendingAnchorRef.current
+      if (anchor && (!canZoom || (anchor.inDialog && !activeFullscreen))) {
+        ;(pendingAnchorRef as { current: PendingMermaidZoomAnchor | null }).current = null
+      }
+    }
+  }, [activeFullscreen, canZoom, dragCleanupRef, pendingAnchorRef])
 
   useEffect(() => {
     if (!activeFullscreen || typeof window === 'undefined') return

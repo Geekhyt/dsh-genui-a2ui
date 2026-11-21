@@ -1,29 +1,108 @@
 import { ALLOWED_CALC_FUNCTIONS } from './calc-engine.ts'
+import { isDangerousObjectKey } from './constants.ts'
 
 const CALC_BUILTINS = ALLOWED_CALC_FUNCTIONS
+const CALC_CONSTANTS = new Set(['PI', 'E'])
+const MAX_PREPROCESS_DEPTH = 64
+
+function isIdentChar(ch: string | undefined): boolean {
+  return ch !== undefined && /[A-Za-z0-9_$]/.test(ch)
+}
+
+function scanStringOrComment(src: string, idx: number): number {
+  const ch = src[idx]
+  if (ch === '/' && src[idx + 1] === '/') {
+    const nl = src.indexOf('\n', idx + 2)
+    return nl === -1 ? src.length : nl
+  }
+  if (ch === '/' && src[idx + 1] === '*') {
+    const end = src.indexOf('*/', idx + 2)
+    return end === -1 ? src.length : end + 2
+  }
+  if (ch === 'r' && src[idx + 1] === '"' && (idx === 0 || !isIdentChar(src[idx - 1]))) {
+    if (src[idx + 2] === '"' && src[idx + 3] === '"') {
+      const end = src.indexOf('"""', idx + 4)
+      return end === -1 ? src.length : end + 3
+    }
+    const end = src.indexOf('"', idx + 2)
+    return end === -1 ? src.length : end + 1
+  }
+  if (ch === '"' && src[idx + 1] === '"' && src[idx + 2] === '"') {
+    let i = idx + 3
+    while (i < src.length) {
+      if (src[i] === '\\') {
+        i += 2
+        continue
+      }
+      if (src[i] === '"' && src[i + 1] === '"' && src[i + 2] === '"') {
+        return i + 3
+      }
+      i += 1
+    }
+    return src.length
+  }
+  if (ch === '"' || ch === "'") {
+    let i = idx + 1
+    while (i < src.length) {
+      if (src[i] === '\\') {
+        i += 2
+        continue
+      }
+      if (src[i] === ch) return i + 1
+      i += 1
+    }
+    return src.length
+  }
+  return -1
+}
+
+function buildBracketMap(src: string): Int32Array {
+  const map = new Int32Array(src.length)
+  map.fill(-1)
+  const openIdxStack: number[] = []
+  const closeCharStack: string[] = []
+  let i = 0
+  while (i < src.length) {
+    const skipped = scanStringOrComment(src, i)
+    if (skipped !== -1) {
+      i = skipped
+      continue
+    }
+    const ch = src[i]!
+    if (ch === '(' || ch === '[' || ch === '{') {
+      openIdxStack.push(i)
+      closeCharStack.push(ch === '(' ? ')' : ch === '[' ? ']' : '}')
+    } else if (ch === ')' || ch === ']' || ch === '}') {
+      for (let k = closeCharStack.length - 1; k >= 0; k--) {
+        if (closeCharStack[k] === ch) {
+          const openIdx = openIdxStack[k]!
+          map[openIdx] = i
+          openIdxStack.length = k
+          closeCharStack.length = k
+          break
+        }
+      }
+    }
+    i += 1
+  }
+  return map
+}
 
 function splitTopLevel(src: string, sep: string): string[] {
   const parts: string[] = []
   let depthParen = 0
   let depthBracket = 0
   let depthBrace = 0
-  let quote: '"' | "'" | null = null
   let start = 0
+  let i = 0
 
-  for (let i = 0; i < src.length; i++) {
+  while (i < src.length) {
+    const skipped = scanStringOrComment(src, i)
+    if (skipped !== -1) {
+      i = skipped
+      continue
+    }
     const ch = src[i]!
-    if (quote !== null) {
-      if (ch === '\\') {
-        i += 1
-      } else if (ch === quote) {
-        quote = null
-      }
-      continue
-    }
-    if (ch === '"' || ch === "'") {
-      quote = ch
-      continue
-    }
     if (ch === '(') depthParen += 1
     else if (ch === ')') depthParen = Math.max(0, depthParen - 1)
     else if (ch === '[') depthBracket += 1
@@ -34,6 +113,7 @@ function splitTopLevel(src: string, sep: string): string[] {
       parts.push(src.slice(start, i))
       start = i + 1
     }
+    i += 1
   }
   parts.push(src.slice(start))
   return parts
@@ -43,22 +123,15 @@ function findTopLevelChar(src: string, target: string): number {
   let depthParen = 0
   let depthBracket = 0
   let depthBrace = 0
-  let quote: '"' | "'" | null = null
+  let i = 0
 
-  for (let i = 0; i < src.length; i++) {
+  while (i < src.length) {
+    const skipped = scanStringOrComment(src, i)
+    if (skipped !== -1) {
+      i = skipped
+      continue
+    }
     const ch = src[i]!
-    if (quote !== null) {
-      if (ch === '\\') {
-        i += 1
-      } else if (ch === quote) {
-        quote = null
-      }
-      continue
-    }
-    if (ch === '"' || ch === "'") {
-      quote = ch
-      continue
-    }
     if (ch === '(') depthParen += 1
     else if (ch === ')') depthParen = Math.max(0, depthParen - 1)
     else if (ch === '[') depthBracket += 1
@@ -68,32 +141,7 @@ function findTopLevelChar(src: string, target: string): number {
     else if (ch === target && depthParen === 0 && depthBracket === 0 && depthBrace === 0) {
       return i
     }
-  }
-  return -1
-}
-
-function findMatchingClose(src: string, openIdx: number, open: string, close: string): number {
-  let depth = 1
-  let quote: '"' | "'" | null = null
-  for (let i = openIdx + 1; i < src.length; i++) {
-    const ch = src[i]!
-    if (quote !== null) {
-      if (ch === '\\') {
-        i += 1
-      } else if (ch === quote) {
-        quote = null
-      }
-      continue
-    }
-    if (ch === '"' || ch === "'") {
-      quote = ch
-      continue
-    }
-    if (ch === open) depth += 1
-    else if (ch === close) {
-      depth -= 1
-      if (depth === 0) return i
-    }
+    i += 1
   }
   return -1
 }
@@ -103,40 +151,28 @@ function isStringLikeConcatTerm(term: string): boolean {
   return (
     t.startsWith('"') ||
     t.startsWith("'") ||
+    t.startsWith('r"') ||
     /^(?:formatNumber|formatCurrency|formatDate|formatString|concat)\s*\(/.test(t)
   )
 }
 
-const MAX_PREPROCESS_DEPTH = 64
-
 function rewriteInnerBracketsForConcat(src: string, depth: number): string {
   if (depth >= MAX_PREPROCESS_DEPTH) return src
+  const brackets = buildBracketMap(src)
   let out = ''
-  let quote: '"' | "'" | null = null
   let i = 0
   while (i < src.length) {
+    const skipped = scanStringOrComment(src, i)
+    if (skipped !== -1) {
+      out += src.slice(i, skipped)
+      i = skipped
+      continue
+    }
     const ch = src[i]!
-    if (quote !== null) {
-      out += ch
-      if (ch === '\\' && i + 1 < src.length) {
-        out += src[i + 1]!
-        i += 2
-        continue
-      }
-      if (ch === quote) quote = null
-      i += 1
-      continue
-    }
-    if (ch === '"' || ch === "'") {
-      quote = ch
-      out += ch
-      i += 1
-      continue
-    }
     if (ch === '(' || ch === '[' || ch === '{') {
-      const close = ch === '(' ? ')' : ch === '[' ? ']' : '}'
-      const closeIdx = findMatchingClose(src, i, ch, close)
+      const closeIdx = brackets[i] ?? -1
       if (closeIdx !== -1) {
+        const close = src[closeIdx]!
         const inner = src.slice(i + 1, closeIdx)
         const transformed = splitTopLevel(inner, ',')
           .map((item) => transformConcatChunk(item, ch === '{' ? ':' : '=', depth + 1))
@@ -197,34 +233,39 @@ function isStaticScalarLiteral(expr: string): boolean {
   if (/^-?\d+(?:\.\d+)?$/.test(t)) return true
   if (t === 'true' || t === 'false') return true
   if ((t.startsWith('"') && t.endsWith('"')) || (t.startsWith("'") && t.endsWith("'"))) {
-    const q = t[0]!
-    let i = 1
-    while (i < t.length - 1) {
-      if (t[i] === '\\') {
-        i += 2
-        continue
-      }
-      if (t[i] === q) return false
-      i += 1
-    }
-    return true
+    const end = scanStringOrComment(t, 0)
+    return end === t.length
   }
   return false
+}
+
+function parseJsonStringLiteral(literal: string): string | null {
+  if (!literal.startsWith('"') || !literal.endsWith('"') || !isStaticScalarLiteral(literal)) {
+    return null
+  }
+  try {
+    const parsed = JSON.parse(literal)
+    return typeof parsed === 'string' ? parsed : null
+  } catch {
+    return null
+  }
 }
 
 function parseEqLiteralCall(expr: string): { keyExpr: string; matchKey: string } | null {
   const t = expr.trim()
   if (!t.startsWith('eq(') || !t.endsWith(')')) return null
-  if (findMatchingClose(t, 2, '(', ')') !== t.length - 1) return null
+  const brackets = buildBracketMap(t)
+  if (brackets[2] !== t.length - 1) return null
   const args = splitTopLevel(t.slice(3, -1), ',')
   if (args.length !== 2) return null
   const a = args[0]!.trim()
   const b = args[1]!.trim()
-  const isStr = (s: string) => s.startsWith('"') && s.endsWith('"') && isStaticScalarLiteral(s)
-  if (isStr(b) && !isStr(a)) {
+  const aStr = parseJsonStringLiteral(a)
+  const bStr = parseJsonStringLiteral(b)
+  if (bStr !== null && aStr === null && !isDangerousObjectKey(bStr)) {
     return { keyExpr: a, matchKey: b }
   }
-  if (isStr(a) && !isStr(b)) {
+  if (aStr !== null && bStr === null && !isDangerousObjectKey(aStr)) {
     return { keyExpr: b, matchKey: a }
   }
   return null
@@ -237,7 +278,8 @@ function tryFoldCondChain(condCall: string): string | null {
   const seenKeys = new Set<string>()
 
   while (cur.startsWith('cond(') && cur.endsWith(')')) {
-    if (findMatchingClose(cur, 4, '(', ')') !== cur.length - 1) break
+    const brackets = buildBracketMap(cur)
+    if (brackets[4] !== cur.length - 1) break
     const args = splitTopLevel(cur.slice(5, -1), ',')
     if (args.length !== 3) break
     const eqInfo = parseEqLiteralCall(args[0]!)
@@ -262,33 +304,21 @@ function tryFoldCondChain(condCall: string): string | null {
 
 export function foldNestedCondToLookup(ui: string): string {
   if (!ui.includes('cond(')) return ui
+  const brackets = buildBracketMap(ui)
   let out = ''
-  let quote: '"' | "'" | null = null
   let i = 0
   while (i < ui.length) {
-    const ch = ui[i]!
-    if (quote !== null) {
-      out += ch
-      if (ch === '\\' && i + 1 < ui.length) {
-        out += ui[i + 1]!
-        i += 2
-        continue
-      }
-      if (ch === quote) quote = null
-      i += 1
+    const skipped = scanStringOrComment(ui, i)
+    if (skipped !== -1) {
+      out += ui.slice(i, skipped)
+      i = skipped
       continue
     }
-    if (ch === '"' || ch === "'") {
-      quote = ch
-      out += ch
-      i += 1
-      continue
-    }
-    if (ui.startsWith('cond(', i) && (i === 0 || !/[A-Za-z0-9_$]/.test(ui[i - 1]!))) {
+    if (ui.startsWith('cond(', i) && (i === 0 || !isIdentChar(ui[i - 1]))) {
       let argStart = i + 5
       while (argStart < ui.length && /\s/.test(ui[argStart]!)) argStart += 1
       if (ui.startsWith('eq(', argStart)) {
-        const closeIdx = findMatchingClose(ui, i + 4, '(', ')')
+        const closeIdx = brackets[i + 4] ?? -1
         if (closeIdx !== -1) {
           const call = ui.slice(i, closeIdx + 1)
           const folded = tryFoldCondChain(call)
@@ -300,7 +330,7 @@ export function foldNestedCondToLookup(ui: string): string {
         }
       }
     }
-    out += ch
+    out += ui[i]!
     i += 1
   }
   return out
@@ -309,22 +339,41 @@ export function foldNestedCondToLookup(ui: string): string {
 interface CalcDef {
   readonly expr: string
   readonly vars: Record<string, string>
+  readonly decimals: number | null
+  readonly hasDynamicDecimals: boolean
+}
+
+function parseDecimalsLiteral(arg: string | null): {
+  readonly value: number | null
+  readonly dynamic: boolean
+} {
+  if (arg === null) return { value: null, dynamic: false }
+  let raw = arg.trim()
+  const eqIdx = findTopLevelChar(raw, '=')
+  if (eqIdx !== -1 && raw.slice(0, eqIdx).trim() === 'decimals') {
+    raw = raw.slice(eqIdx + 1).trim()
+  }
+  if (/^[0-8]$/.test(raw)) {
+    return { value: Number(raw), dynamic: false }
+  }
+  return { value: null, dynamic: true }
 }
 
 function parseSimpleObjectLiteral(src: string): Record<string, string> | null {
   const t = src.trim()
   if (!t.startsWith('{') || !t.endsWith('}')) return null
-  if (findMatchingClose(t, 0, '{', '}') !== t.length - 1) return null
+  const brackets = buildBracketMap(t)
+  if (brackets[0] !== t.length - 1) return null
   const body = t.slice(1, -1).trim()
-  if (body === '') return {}
+  const out = Object.create(null) as Record<string, string>
+  if (body === '') return out
   const entries = splitTopLevel(body, ',')
-  const out: Record<string, string> = {}
   for (const entry of entries) {
     const colonIdx = findTopLevelChar(entry, ':')
     if (colonIdx === -1) return null
     const rawKey = entry.slice(0, colonIdx).trim()
     const key = rawKey.replace(/^["']|["']$/g, '')
-    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) return null
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) || isDangerousObjectKey(key)) return null
     const val = entry.slice(colonIdx + 1).trim()
     if (val === '') return null
     out[key] = val
@@ -338,20 +387,18 @@ function parseCalcCall(
 ): { expr: string; vars: Record<string, string>; decimalsArg: string | null } | null {
   const t = rhs.trim()
   if (!t.startsWith('calc(') || !t.endsWith(')')) return null
-  if (findMatchingClose(t, 4, '(', ')') !== t.length - 1) return null
+  const brackets = buildBracketMap(t)
+  if (brackets[4] !== t.length - 1) return null
   const args = splitTopLevel(t.slice(5, -1), ',')
   if (args.length < 2 || args.length > 3) return null
 
-  const exprArg = args[0]!.trim()
-  if (!exprArg.startsWith('"') || !exprArg.endsWith('"') || !isStaticScalarLiteral(exprArg)) {
-    return null
+  let exprArg = args[0]!.trim()
+  const exprNamedEq = findTopLevelChar(exprArg, '=')
+  if (exprNamedEq !== -1 && exprArg.slice(0, exprNamedEq).trim() === 'expr') {
+    exprArg = exprArg.slice(exprNamedEq + 1).trim()
   }
-  let expr: string
-  try {
-    expr = JSON.parse(exprArg) as string
-  } catch {
-    return null
-  }
+  const expr = parseJsonStringLiteral(exprArg)
+  if (expr === null) return null
 
   let varsArg = args[1]!.trim()
   const varsNamedEq = findTopLevelChar(varsArg, '=')
@@ -363,8 +410,12 @@ function parseCalcCall(
     (/^[A-Za-z_][A-Za-z0-9_]*$/.test(varsArg) ? (localMaps.get(varsArg) ?? null) : null)
   if (!vars) return null
 
+  const varsCopy = Object.create(null) as Record<string, string>
+  for (const [k, v] of Object.entries(vars)) {
+    if (!isDangerousObjectKey(k)) varsCopy[k] = v
+  }
   const decimalsArg = args[2] !== undefined ? args[2].trim() : null
-  return { expr, vars: { ...vars }, decimalsArg }
+  return { expr, vars: varsCopy, decimalsArg }
 }
 
 function countFormulaIdentOccurrences(formula: string, name: string): number {
@@ -379,13 +430,25 @@ function countFormulaIdentOccurrences(formula: string, name: string): number {
   return count
 }
 
-function replaceFormulaIdent(formula: string, oldName: string, replacement: string): string {
-  const re = new RegExp(`\\b${oldName}\\b`, 'g')
-  return formula.replace(re, (match, offset: number, full: string) => {
+function replaceFormulaIdents(formula: string, replacements: ReadonlyMap<string, string>): string {
+  if (replacements.size === 0) return formula
+  return formula.replace(/\b[A-Za-z_][A-Za-z0-9_]*\b/g, (match, offset: number, full: string) => {
+    const next = replacements.get(match)
+    if (next === undefined) return match
     const after = full.slice(offset + match.length).trimStart()
-    if (after.startsWith('(') && CALC_BUILTINS.has(oldName)) return match
-    return replacement
+    if (after.startsWith('(') && CALC_BUILTINS.has(match)) return match
+    return next
   })
+}
+
+function usesUnboundBuiltinConstant(formula: string, vars: Record<string, string>): string[] {
+  const used: string[] = []
+  for (const c of CALC_CONSTANTS) {
+    if (!Object.hasOwn(vars, c) && countFormulaIdentOccurrences(formula, c) > 0) {
+      used.push(c)
+    }
+  }
+  return used
 }
 
 function inlineSingleCalcCall(
@@ -398,41 +461,66 @@ function inlineSingleCalcCall(
   if (!parsed) return null
 
   let mergedExpr = parsed.expr
-  const mergedVars: Record<string, string> = {}
+  const mergedVars = Object.create(null) as Record<string, string>
   let didInline = false
 
   for (const [k, rawVal] of Object.entries(parsed.vars)) {
     const refCalc = /^[A-Za-z_][A-Za-z0-9_]*$/.test(rawVal) ? calcDefs.get(rawVal) : undefined
-    if (!refCalc) {
+    if (!refCalc || refCalc.hasDynamicDecimals) {
+      mergedVars[k] = rawVal
+      continue
+    }
+
+    const refConstants = usesUnboundBuiltinConstant(refCalc.expr, refCalc.vars)
+    if (refConstants.some((c) => Object.hasOwn(parsed.vars, c) || Object.hasOwn(mergedVars, c))) {
       mergedVars[k] = rawVal
       continue
     }
 
     const occurrences = countFormulaIdentOccurrences(mergedExpr, k)
+    const extraRoundingLen = refCalc.decimals !== null ? 10 : 0
     const projectedLen =
-      mergedExpr.length + occurrences * Math.max(0, refCalc.expr.length + 2 - k.length)
+      mergedExpr.length +
+      occurrences * Math.max(0, refCalc.expr.length + 2 + extraRoundingLen - k.length)
     if (occurrences === 0 || projectedLen > 520) {
       mergedVars[k] = rawVal
       continue
     }
 
-    let inlinedSub = refCalc.expr
+    const renameMap = new Map<string, string>()
+    const reserved = new Set<string>([
+      ...Object.keys(mergedVars),
+      ...Object.keys(parsed.vars),
+      ...Object.keys(refCalc.vars),
+    ])
+    const pendingEntries: Array<[string, string]> = []
+
     for (const [subKey, subVal] of Object.entries(refCalc.vars)) {
-      if (mergedVars[subKey] === subVal || parsed.vars[subKey] === subVal) {
-        mergedVars[subKey] = subVal
+      const sameMerged = Object.hasOwn(mergedVars, subKey) && mergedVars[subKey] === subVal
+      const sameOuter = Object.hasOwn(parsed.vars, subKey) && parsed.vars[subKey] === subVal
+      if (sameMerged || sameOuter) {
+        pendingEntries.push([subKey, subVal])
         continue
       }
       let targetKey = subKey
-      while (Object.hasOwn(mergedVars, targetKey) || Object.hasOwn(parsed.vars, targetKey)) {
-        targetKey = `_${subKey}_${nextAlias()}`
+      if (Object.hasOwn(mergedVars, targetKey) || Object.hasOwn(parsed.vars, targetKey)) {
+        do {
+          targetKey = `_${subKey}_${nextAlias()}`
+        } while (reserved.has(targetKey) || CALC_CONSTANTS.has(targetKey))
+        reserved.add(targetKey)
+        renameMap.set(subKey, targetKey)
       }
-      if (targetKey !== subKey) {
-        inlinedSub = replaceFormulaIdent(inlinedSub, subKey, targetKey)
-      }
+      pendingEntries.push([targetKey, subVal])
+    }
+
+    for (const [targetKey, subVal] of pendingEntries) {
       mergedVars[targetKey] = subVal
     }
 
-    mergedExpr = replaceFormulaIdent(mergedExpr, k, `(${inlinedSub})`)
+    const renamedSub = replaceFormulaIdents(refCalc.expr, renameMap)
+    const wrappedSub =
+      refCalc.decimals !== null ? `round(${renamedSub}, ${refCalc.decimals})` : `(${renamedSub})`
+    mergedExpr = replaceFormulaIdents(mergedExpr, new Map([[k, wrappedSub]]))
     didInline = true
   }
 
@@ -440,8 +528,14 @@ function inlineSingleCalcCall(
     .map(([k, v]) => `${k}: ${v}`)
     .join(', ')
   const decSuffix = parsed.decimalsArg !== null ? `, ${parsed.decimalsArg}` : ''
+  const decMeta = parseDecimalsLiteral(parsed.decimalsArg)
   return {
-    def: { expr: mergedExpr, vars: mergedVars },
+    def: {
+      expr: mergedExpr,
+      vars: mergedVars,
+      decimals: decMeta.value,
+      hasDynamicDecimals: decMeta.dynamic,
+    },
     rewritten: `calc(${JSON.stringify(mergedExpr)}, { ${varsStr} }${decSuffix})`,
     didInline,
   }
@@ -454,30 +548,18 @@ function rewriteInlineCalcsInStatement(
   nextAlias: () => number,
 ): string {
   if (!stmt.includes('calc(') || calcDefs.size === 0) return stmt
+  const brackets = buildBracketMap(stmt)
   let out = ''
-  let quote: '"' | "'" | null = null
   let i = 0
   while (i < stmt.length) {
-    const ch = stmt[i]!
-    if (quote !== null) {
-      out += ch
-      if (ch === '\\' && i + 1 < stmt.length) {
-        out += stmt[i + 1]!
-        i += 2
-        continue
-      }
-      if (ch === quote) quote = null
-      i += 1
+    const skipped = scanStringOrComment(stmt, i)
+    if (skipped !== -1) {
+      out += stmt.slice(i, skipped)
+      i = skipped
       continue
     }
-    if (ch === '"' || ch === "'") {
-      quote = ch
-      out += ch
-      i += 1
-      continue
-    }
-    if (stmt.startsWith('calc(', i) && (i === 0 || !/[A-Za-z0-9_$]/.test(stmt[i - 1]!))) {
-      const closeIdx = findMatchingClose(stmt, i + 4, '(', ')')
+    if (stmt.startsWith('calc(', i) && (i === 0 || !isIdentChar(stmt[i - 1]))) {
+      const closeIdx = brackets[i + 4] ?? -1
       if (closeIdx !== -1) {
         const callSrc = stmt.slice(i, closeIdx + 1)
         const inlined = inlineSingleCalcCall(callSrc, localMaps, calcDefs, nextAlias)
@@ -488,7 +570,7 @@ function rewriteInlineCalcsInStatement(
         }
       }
     }
-    out += ch
+    out += stmt[i]!
     i += 1
   }
   return out
@@ -517,15 +599,20 @@ export function flattenChainedCalc(ui: string): string {
 
     const objMap = parseSimpleObjectLiteral(rhs)
     if (objMap !== null) {
+      calcDefs.delete(varName)
       localMaps.set(varName, objMap)
       return stmt
     }
 
     const inlined = inlineSingleCalcCall(rhs, localMaps, calcDefs, nextAlias)
     if (!inlined) {
-      return rewriteInlineCalcsInStatement(stmt, localMaps, calcDefs, nextAlias)
+      const rewritten = rewriteInlineCalcsInStatement(stmt, localMaps, calcDefs, nextAlias)
+      calcDefs.delete(varName)
+      localMaps.delete(varName)
+      return rewritten
     }
 
+    localMaps.delete(varName)
     calcDefs.set(varName, inlined.def)
     if (!inlined.didInline) return stmt
 
@@ -534,6 +621,50 @@ export function flattenChainedCalc(ui: string): string {
   })
 
   return outStmts.join('\n')
+}
+
+export function extractUpdateSurfaceIds(cleanedUi: string): string[] {
+  if (!cleanedUi.includes('surface(')) return []
+  const brackets = buildBracketMap(cleanedUi)
+  const ids: string[] = []
+  let i = 0
+  while (i < cleanedUi.length) {
+    const skipped = scanStringOrComment(cleanedUi, i)
+    if (skipped !== -1) {
+      i = skipped
+      continue
+    }
+    if (cleanedUi.startsWith('surface(', i) && (i === 0 || !isIdentChar(cleanedUi[i - 1]))) {
+      const closeIdx = brackets[i + 7] ?? -1
+      if (closeIdx !== -1) {
+        const args = splitTopLevel(cleanedUi.slice(i + 8, closeIdx), ',')
+        let surfaceId: string | null = null
+        let isUpdate = false
+        for (let idx = 0; idx < args.length; idx++) {
+          const arg = args[idx]!.trim()
+          const eqIdx = findTopLevelChar(arg, '=')
+          if (eqIdx !== -1) {
+            const k = arg.slice(0, eqIdx).trim()
+            const v = arg.slice(eqIdx + 1).trim()
+            if (k === 'id' || k === 'surfaceId') {
+              surfaceId = parseJsonStringLiteral(v)
+            } else if (k === 'update' && v === 'true') {
+              isUpdate = true
+            }
+          } else if (idx === 0) {
+            surfaceId = parseJsonStringLiteral(arg)
+          }
+        }
+        if (isUpdate && surfaceId !== null && surfaceId !== '') {
+          ids.push(surfaceId)
+        }
+        i = closeIdx + 1
+        continue
+      }
+    }
+    i += 1
+  }
+  return ids
 }
 
 export function preprocessExpressProgram(ui: string): string {

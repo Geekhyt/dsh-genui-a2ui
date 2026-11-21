@@ -20,7 +20,7 @@ const HEAVY_VIZ_ONLY = /^(echarts|zrender|mermaid|dagre-d3-es|cytoscape|katex)(\
 const RUNTIME_CHUNK_ONLY =
   /^(@a2ui\/(web_core|react|agent)|antlr4ng|@tanstack\/react-table|react-aria-components)(\/|$)/
 
-const MAX_MAIN_CLIENT_BYTES = 500 * 1024
+const MAX_MAIN_CLIENT_BYTES = 100 * 1024
 
 const localRequire = createRequire(import.meta.url)
 const uuidPkgDir = dirname(localRequire.resolve('uuid/package.json'))
@@ -30,7 +30,24 @@ const UUID_BROWSER_ENTRY = existsSync(resolve(uuidPkgDir, 'dist/esm-browser/inde
 
 export const CLIENT_EXTERNALS: readonly string[] = [...PLATFORM_MODULES]
 
-const NODE_ENV = JSON.stringify(process.env.NODE_ENV ?? 'production')
+const BUILD_MODE = process.env.A2UI_DEV_BUILD === '1' ? 'development' : 'production'
+const NODE_ENV = JSON.stringify(BUILD_MODE)
+
+function browserChunkInputOptions(): NonNullable<UserConfig['inputOptions']> {
+  return {
+    platform: 'browser',
+    onLog(level, log, defaultHandler) {
+      if (
+        log.code === 'MODULE_LEVEL_DIRECTIVE' &&
+        typeof log.message === 'string' &&
+        log.message.includes('use client')
+      ) {
+        return
+      }
+      defaultHandler(level, log)
+    },
+  }
+}
 
 export interface PluginBuildOptions {
   readonly libExternal?: readonly (string | RegExp)[]
@@ -150,9 +167,10 @@ function clientChunkConfig(
     define: {
       'process.env.NODE_ENV': NODE_ENV,
       'import.meta.env.MODE': NODE_ENV,
-      'import.meta.env': JSON.stringify({ MODE: process.env.NODE_ENV ?? 'production' }),
+      'import.meta.env': JSON.stringify({ MODE: BUILD_MODE }),
       __DSH_BUNDLED_CLIENT__: 'true',
     },
+    inputOptions: browserChunkInputOptions(),
     plugins: [
       ...sharedBrowserPlugins(id, { forbidVizEngines, forbidA2uiRuntime: false }),
       {
@@ -217,9 +235,10 @@ function clientConfig(id: string): UserConfig {
     define: {
       'process.env.NODE_ENV': NODE_ENV,
       'import.meta.env.MODE': NODE_ENV,
-      'import.meta.env': JSON.stringify({ MODE: process.env.NODE_ENV ?? 'production' }),
+      'import.meta.env': JSON.stringify({ MODE: BUILD_MODE }),
       __DSH_BUNDLED_CLIENT__: 'true',
     },
+    inputOptions: browserChunkInputOptions(),
     plugins: [
       ...sharedBrowserPlugins(id, { forbidVizEngines: true, forbidA2uiRuntime: true }),
       {
@@ -317,7 +336,7 @@ function cssInlinePlugin(id: string) {
         `const regKey = ${JSON.stringify(regKey)};`,
         'const reg = globalThis[regKey] || (globalThis[regKey] = { mounted: true, sheets: new Map() });',
         'reg.sheets.set(tagId, css);',
-        "if (reg.mounted && typeof document !== 'undefined' && document.querySelector('style[data-plugin-css=' + JSON.stringify(tagId) + ']') === null) {",
+        "if (reg.mounted && typeof document !== 'undefined' && document.head && document.querySelector('style[data-plugin-css=' + JSON.stringify(tagId) + ']') === null) {",
         "  const tag = document.createElement('style');",
         `  tag.dataset.plugin = ${JSON.stringify(id)};`,
         '  tag.dataset.pluginCss = tagId;',

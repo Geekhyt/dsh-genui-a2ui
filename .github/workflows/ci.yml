@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -19,6 +23,8 @@ jobs:
         include:
           - os: ubuntu-latest
             node: 26
+          - os: macos-latest
+            node: 24
           - os: windows-latest
             node: 26
           - os: ubuntu-latest
@@ -38,6 +44,9 @@ jobs:
       - name: Install dependencies from lockfile
         run: npm ci
 
+      - name: Format Check
+        run: npx biome format .
+
       - name: Lint
         run: npm run lint
 
@@ -51,4 +60,4 @@ jobs:
         run: npm test
 
       - name: Verify npm Tarball Contents
-        run: npm pack --dry-run
+        run: npm pack --dry-run --ignore-scripts

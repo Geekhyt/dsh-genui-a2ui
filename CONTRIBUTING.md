@@ -1,6 +1,6 @@
 # Contributing to `dsh-genui-a2ui`
 
-Thank you for helping improve `dsh-genui-a2ui`! By participating in this project, you agree to abide by our [Code of Conduct](./CODE_OF_CONDUCT.md). For a deep dive into the three-stage pipeline, A2UI 1.0 protocol mapping, 4-chunk bundle architecture, and full 32-component Express DSL contracts, read [docs/DEVELOPMENT.md](./docs/DEVELOPMENT.md) ([简体中文](./docs/DEVELOPMENT.zh-CN.md)) first.
+Thank you for helping improve `dsh-genui-a2ui`! By participating in this project, you agree to abide by our [Code of Conduct](./CODE_OF_CONDUCT.md). For a deep dive into the three-stage pipeline, A2UI 1.0 protocol mapping, 4-chunk bundle architecture, and full 57-component Express DSL contracts, read [docs/DEVELOPMENT.md](./docs/DEVELOPMENT.md) ([简体中文](./docs/DEVELOPMENT.zh-CN.md)) first.
 
 To keep the plugin fast, safe, and 100% aligned with both **Google A2UI 1.0** and **DeepSeek Harness (DSH)** official plugin APIs, please follow the architectural guardrails below.
 
@@ -13,7 +13,7 @@ To keep the plugin fast, safe, and 100% aligned with both **Google A2UI 1.0** an
 2. **Zero Host Hacks**:
    - Only consume documented DSH extension seams (`tools`, `skills`, `commands`, `systemPrompt`, official UI Slots, `@deepseek-ai/dsh-client-ui-primitives`, `sidebarRight`, and `window.__ModuleLoader__`).
    - Style exclusively with Light-DOM CSS Modules and `--dsw-*` design tokens so surfaces inherit light/dark themes and third-party DSH skins automatically.
-3. **Cold-Boot Budget (`< 500 kB` Hard Gate, `< 60 kB` Target)**:
+3. **Cold-Boot Budget (`< 100 kB` Hard Gate, `~65 kB` Target)**:
    - Keep heavy visualization libraries (`echarts`, `mermaid`, `@a2ui/react`, `@tanstack/react-table`) inside lazy chunks (`src/client/chunks/*`), never imported eagerly from `src/client/index.ts`.
 
 ## Local Development Workflow (macOS, Linux, & Windows)

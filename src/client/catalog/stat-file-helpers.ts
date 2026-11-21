@@ -128,7 +128,7 @@ export function normalizeFileEntries(rawItems: unknown): NormalizedFileEntry[] {
       const clean = rawPath
         .replace(/\\/g, '/')
         .replace(/^(?:\.\/)+/, '')
-        .replace(/\/+$/, '')
+        .replace(/^\/+|\/+$/g, '')
         .trim()
       if (clean === '') continue
       const explicitKind =

@@ -346,6 +346,8 @@ export const A2uiAskToolView = memo(function A2uiAskToolView({
             readOnly={true}
             readOnlyLabel={statusLabel}
           />
+        ) : argUi.trim() !== '' ? (
+          <pre className={css.reason}>{argUi}</pre>
         ) : null}
         {settledMeta?.context && Object.keys(settledMeta.context).length > 0 ? (
           <pre className={css.reason}>{JSON.stringify(settledMeta.context, null, 2)}</pre>

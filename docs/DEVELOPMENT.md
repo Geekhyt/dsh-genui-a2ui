@@ -87,11 +87,11 @@ flowchart TB
 
 | Bundle Target | Raw Size | Gzip Size | Role & Load Trigger |
 | :--- | :--- | :--- | :--- |
-| `lib/client.js` | **`60.5 kB`** | **`17.1 kB`** | Cold-boot shell: registers UI Slots, bilingual chrome, empty-session toast feedback, and composer pill (enforced by `< 100 kB` build & test gate). |
-| `lib/client.runtime.js` | `1.32 MB` | ~`354 kB` | Loaded on first A2UI surface mount (`@a2ui/react`, 57-component catalog, TanStack Table, 0ms cross-filtering & anti-jank streaming). |
-| `lib/client.echarts.js` | `875.3 kB` | ~`289 kB` | Loaded only when a surface renders `Chart` (ECharts 6 modular registration for 19 chart kinds, threshold markLines, cross-filter highlight, 2× PNG export & 276px compact adaptation). |
-| `lib/client.mermaid.js` | `3.51 MB` | ~`943 kB` | Loaded only when a surface renders `Mermaid` (Mermaid 11 under `securityLevel: "strict"` + SVG sanitizer + LRU-64 cache). |
-| `lib/index.js` | `747.9 kB` | `205.6 kB` | Self-contained Host ESM bundle (`@a2ui/agent`, domain skill compactor, Express lowering passes & Zod catalog) — ships with zero runtime `dependencies`. |
+| `lib/client.js` | **`65.8 kB`** | **`18.6 kB`** | Cold-boot shell: registers UI Slots, bilingual chrome, empty-session toast feedback, and composer pill (enforced by `< 100 kB` build & test gate). |
+| `lib/client.runtime.js` | `1.34 MB` | ~`355 kB` | Loaded on first A2UI surface mount (`@a2ui/react`, 57-component catalog, TanStack Table, 0ms cross-filtering & anti-jank streaming). |
+| `lib/client.echarts.js` | `869.4 kB` | `286.6 kB` | Loaded only when a surface renders `Chart` (ECharts 6 modular registration for 19 chart kinds, threshold markLines, cross-filter highlight, 2× PNG export & 276px compact adaptation). |
+| `lib/client.mermaid.js` | `3.47 MB` | ~`930 kB` | Loaded only when a surface renders `Mermaid` (Mermaid 11 under `securityLevel: "strict"` + per-rule CSS scoping + SVG sanitizer + LRU-64 cache). |
+| `lib/index.js` | `755.0 kB` | `208.0 kB` | Self-contained Host ESM bundle (`@a2ui/agent`, domain skill compactor, linear Express lowering passes & Zod catalog) — ships with zero runtime `dependencies`. |
 
 ---
 
@@ -112,6 +112,7 @@ flowchart TB
 - `maxSurfacesPerCall`: `8` surfaces
 - `maxComponentsPerSurface`: `250` flat component nodes
 - `maxDataModelBytes`: `256,000` UTF-8 bytes
+- `maxCompiledBytes`: `512,000` UTF-8 bytes per compiled payload
 - `maxRepairsPerTurn`: `2` compiler diagnostic self-healing retries per turn
 
 ---
@@ -125,7 +126,7 @@ Every surface begins with `surface("snake_id")` (or `surface("snake_id", update=
 | Component | Express DSL Signature | Technical Notes |
 | :--- | :--- | :--- |
 | `Card` | `Card(child)` | Surface container card using `--dsw-*` border & background tokens. |
-| `Column` | `Column([c1, c2, ...], align?, justify?)` | Vertical flex stack; direct children accept numeric `weight`. |
+| `Column` | `Column([c1, c2, ...], justify?, align?)` | Vertical flex stack; direct children accept numeric `weight`. |
 | `Row` | `Row([c1, c2, ...], justify?, align?)` | Horizontal flex row (`justify`: `"spaceBetween" \| "start" \| "center" \| "end"`). |
 | `Grid` | `Grid([c1, c2, ...], columns?=3, gap?="sm"\|"md"\|"lg")` | Responsive multi-row equal-width CSS Grid container (falls back to 1 column on mobile). |
 | `Tabs` | `Tabs([{ title, child }, ...])` | Preserves surface `dataModel` bindings across tab switches. |
@@ -148,10 +149,10 @@ Every surface begins with `surface("snake_id")` (or `surface("snake_id", update=
 
 | Component | Express DSL Signature | Technical Notes |
 | :--- | :--- | :--- |
-| `Stat` | `Stat(label, value, delta?, trend?="up"\|"down"\|"neutral", caption?, spark?)` | KPI card with unit split, trend badge, and inline SVG `spark` array (`[10, 14, 19]`). |
+| `Stat` | `Stat(label, value, delta?, trend?="up"\|"down"\|"neutral", spark?, caption?)` | KPI card with unit split, trend badge, and inline SVG `spark` array (`[10, 14, 19]`). |
 | `MetricRing` | `MetricRing(label, value, max?=100, unit?, sublabel?, tone?="auto", size?=88)` | Radial gauge ring with automatic threshold coloring (`tone="auto"`). |
 | `Tracker` | `Tracker(data, title?, summary?, mode?="uptime"\|"category")` | Tremor SLA uptime strip (with host `HoverCard` tooltips) & multi-segment category bar. |
-| `KeyValue` | `KeyValue(items, title?, columns?=1..3, copyable?, bordered?=false)` | AntD `<Descriptions>` with `bordered=true` table mode and item-level `span: 1..3`. |
+| `KeyValue` | `KeyValue(items, title?, columns?=1..3, bordered?=false, copyable?)` | AntD `<Descriptions>` with `bordered=true` table mode and item-level `span: 1..3`. |
 | `Steps` | `Steps(items, current?, direction?="vertical"\|"horizontal", title?)` | Items: `{ title, description?, status?: "done"\|"active"\|"pending"\|"error", meta? }`. |
 | `Timeline` | `Timeline(items, title?, badge?)` | Chronological stream supporting collapsible `detail` and nested `child` components. |
 | `Schedule` | `Schedule(items, title?, range?, now?, action?)` | Maintenance window & Gantt timeline bar with current-time marker. |
@@ -162,12 +163,12 @@ Every surface begins with `surface("snake_id")` (or `surface("snake_id", update=
 
 | Component | Express DSL Signature | Technical Notes |
 | :--- | :--- | :--- |
-| `Chart` | `Chart(kind, data, title?, xField?, yField?, y2Field?, seriesField?, sizeField?, referenceLine?, referenceLabel?, stacked?, horizontal?, zoom?, height?, action?)` | 19 kinds: `"bar" \| "line" \| "area" \| "combo" \| "waterfall" \| "pie" \| "scatter" \| "radar" \| "parallel" \| "funnel" \| "gauge" \| "heatmap" \| "calendar" \| "treemap" \| "sunburst" \| "sankey" \| "boxplot" \| "graph" \| "candlestick"`. |
+| `Chart` | `Chart(kind, data, title?, xField?, yField?, y2Field?, seriesField?, sizeField?, referenceLine?, referenceLabel?, stacked?, horizontal?, zoom?, height?, selected?, exportable?, action?)` | 19 kinds: `"bar" \| "line" \| "area" \| "combo" \| "waterfall" \| "pie" \| "scatter" \| "radar" \| "parallel" \| "funnel" \| "gauge" \| "heatmap" \| "calendar" \| "treemap" \| "sunburst" \| "sankey" \| "boxplot" \| "graph" \| "candlestick"`. |
 | `ServiceGraph` | `ServiceGraph(nodes, edges?, title?, direction?="LR"\|"TB", action?)` | Zero-dependency health-colored DAG with upstream/downstream highlighting. |
-| `Mermaid` | `Mermaid(code, title?, caption?)` | 11 diagram families with `10%–2000%` vector zoom, drag-to-pan, and fullscreen view. |
+| `Mermaid` | `Mermaid(code, title?, caption?)` | 15 allowed diagram kinds (`flowchart`/`graph`, `sequenceDiagram`, `classDiagram`, `stateDiagram`/`-v2`, `erDiagram`, `gantt`, `pie`, `journey`, `gitGraph`, `mindmap`, `timeline`, `quadrantChart`, `xychart-beta`) with `10%–2000%` vector zoom, drag-to-pan, and fullscreen view. |
 | `Comparison` | `Comparison(options, rows, title?, action?)` | Multi-option trade-off matrix (`ok:` / `warn:` / `no:` cell prefixes & recommendation column). |
 | `Matrix` | `Matrix(rows, columns, values, title?, cornerLabel?, unit?, colorScale?, showTotals?)` | Conditional-formatting heat cross-tabulation & RBAC permission matrix. |
-| `Table` | `Table(rows, columns?, title?, searchable?, pageSize?, exportable?, selectable?, batchLabel?, showSummary?, expandKey?, action?)` | Enterprise `ProTable` with sort, search, pagination, density toggle, CSV/MD export, multi-select batch action, summary footer, and `expandKey` inline detail drawer. |
+| `Table` | `Table(rows, columns?, title?, searchable?, pageSize?, exportable?, selectable?, batchLabel?, showSummary?, expandKey?, filterField?, filterValue?, action?)` | Enterprise `ProTable` with formatted numeric sort, search, pagination, density toggle, sorted CSV/MD export, multi-select batch action, summary footer, 0ms cross-filter (`filterField`/`filterValue`), and `expandKey` inline detail drawer. |
 | `Tree` | `Tree(nodes, title?, summary?, searchable?, expandedDepth?=3, action?)` | Hierarchy & APM trace waterfall tree with `sharePct` bars and host `StateDot`. |
 | `Kanban` | `Kanban(columns, title?, action?)` | Multi-lane sprint & incident triage board. |
 
@@ -179,7 +180,7 @@ Every surface begins with `surface("snake_id")` (or `surface("snake_id", update=
 | `Terminal` | `Terminal(commands, title?, cwd?, shell?="zsh", maxHeight?)` | Runbook terminal separating `$ cmd`, `stdout`, `stderr`, and `exitCode` (copies clean command only). |
 | `ApiEndpoint` | `ApiEndpoint(method, path, summary?, status?, latency?, baseUrl?, params?, headers?, requestBody?, responseBody?, action?)` | HTTP API contract workbench reusing host `JsonTree` and shell-safe `cURL` copy. |
 | `ApprovalCard` | `ApprovalCard(title, summary?, severity?="high", scope?, impacts?, confirmLabel?, approveLabel?, rejectLabel?, approveAction?, rejectAction?)` | High-risk production approval gate gated by host `Switch` acknowledgement. |
-| `DiffView` | `DiffView(before, after, title?, language?, mode?="unified"\|"split", filePath?, line?)` | Line diff engine with `+added/-removed` counts, Unified/Split toggle, and `filePath` jump. |
+| `DiffView` | `DiffView(before, after, title?, filePath?, line?, language?, mode?="unified"\|"split")` | Line diff engine with `+added/-removed` counts, Unified/Split toggle, and `filePath` jump. |
 | `LogViewer` | `LogViewer(entries, title?, searchable?, defaultLevel?, maxHeight?, action?)` | Structured log & stack trace console with level pills and sidebar file links. |
 | `FileTree` | `FileTree(items, title?, expandedDepth?, action?)` | Workspace file tree powered by host `FileTypeIcon` and `PathLabel`. |
 | `JsonTree` | `JsonTree(data, title?, expandedDepth?, copyable?)` | Powered by `@deepseek-ai/dsh-client-ui-primitives` `JsonTree`. |
@@ -199,20 +200,20 @@ Every surface begins with `surface("snake_id")` (or `surface("snake_id", update=
 | `Select` | `Select(label, options, value=$/str, placeholder?, searchable?)` | Single-select dropdown (host `Menu` when ≤8 unsearchable items, searchable glass popover otherwise). |
 | `Switch` | `Switch(label, $/bool, description?)` | Boolean toggle row backed by host `Switch`. |
 | `Slider` | `Slider(label, min, max, $/value, steps?)` | `steps = (max - min) / stepSize`; static numeric bounds. |
-| `ChoicePicker` | `ChoicePicker(label, options, value=$/list, variant?="mutuallyExclusive"\|"multipleSelection", displayStyle?="chips"\|"checkbox")` | Bound value is always an array of selected option values (`["opt_a"]`). |
-| `TextField` | `TextField(label, value=$/text, variant?="shortText"\|"longText"\|"number", placeholder?)` | Supports live validation `?checks`. |
+| `ChoicePicker` | `ChoicePicker(label?, variant?="mutuallyExclusive"\|"multipleSelection", options, value=$/list, displayStyle?="chips"\|"checkbox", filterable?)` | Bound value is always an array of selected option values (`["opt_a"]`). |
+| `TextField` | `TextField(label, value?=$/text, placeholder?, variant?="shortText"\|"longText"\|"number"\|"obscured")` | Supports live validation `?checks` and automatic redaction for `variant="obscured"`. |
 | `CheckBox` | `CheckBox(label, value=$/flag)` | Boolean data-model binding. |
-| `DateTimeInput` | `DateTimeInput(label, value=$/iso, enableDate?, enableTime?, min?, max?)` | ISO 8601 string binding. |
-| `Image` | `Image(url, alt?, fit?)` | Click-to-zoom preview powered by host `ImageLightbox`. |
+| `DateTimeInput` | `DateTimeInput(value=$/iso, enableDate?, enableTime?, min?, max?, label?)` | ISO 8601 string binding. |
+| `Image` | `Image(url, description?, fit?, variant?)` | Click-to-zoom preview powered by host `ImageLightbox`. |
 | `AudioPlayer` | `AudioPlayer(url, description?)` | Native audio playback control. |
-| `Video` | `Video(url)` | Native HTML5 video element. |
+| `Video` | `Video(url, posterUrl?)` | Native HTML5 video element. |
 
 ---
 
 ## 6. Client-Side Functions Reference (25 Functions)
 
 - **Algebraic, Lookup & Aggregate Math (5)**:
-  - `calc(expr, vars, decimals?)`: Safe recursive-descent formula evaluator supporting `+ - * / ^ % ( ) ? : == != < <= > >= && ||` and `pow, sqrt, exp, log, ln, log10, abs, min, max, clamp, round, floor, ceil, pmt(ratePerPeriod, nper, pv)`. Validated statically at compile time (max true nesting depth `36`, max AST nodes `128`).
+  - `calc(expr, vars, decimals?)`: Safe recursive-descent formula evaluator supporting `+ - * / ^ % ( ) ? : == != < <= > >= && ||` and `pow, sqrt, exp, log, ln, log10, abs, min, max, clamp, round, floor, ceil, pmt(ratePerPeriod, nper, pv), sin, cos, tan`. Validated statically at compile time (max true nesting depth `36`, max AST nodes `128`).
   - `lookup(key, table, fallback?)`: Depth-1 map lookup (auto-unwraps single-select `ChoicePicker` arrays) replacing deeply nested `cond(eq(...))` chains.
   - `cond(condition, truthy, falsy)`, `sum(items, field?)`, `avg(items, field?)`
 - **Comparators & Boolean Logic (7)**:
@@ -230,25 +231,28 @@ Every surface begins with `surface("snake_id")` (or `surface("snake_id", update=
 # Install dependencies from lockfile
 npm ci
 
+# Format & lint check (includes zero-comment ratchet gate)
+npm run lint
+
 # TypeScript strict check
 npm run typecheck
 
 # Build Host ESM + 4 Client CJS chunks (enforces < 100 kB cold-boot size gate)
 npm run build
 
-# Run all 22 Vitest suites / 94 unit, React best-practice, contract, and bundle tests
+# Run all 28 Vitest suites / 147 unit, React best-practice, security, contract, and bundle tests
 npm test
 
 # Run 28-case LLM generation & self-repair eval benchmark (--mode=mock or --mode=live --model=deepseek-chat)
 npm run eval:llm -- --mode=mock --strategy=both
 
-# Verify compatibility against 27 installed DeepSeek Harness.app platform exports & slots
+# Verify compatibility against installed DeepSeek Harness.app (12 platform modules, 7 injected modules, 30 primitives, 5 slots, 39 CSS tokens)
 npm run check:host-api
 
 # Inspect npm publish tarball contents (exact 18 files)
-npm pack --dry-run
+npm pack --dry-run --ignore-scripts
 
-# Launch isolated DSH Web profile (.dsh-dev) + scripted Mock LLM on http://127.0.0.1:18991
+# Launch isolated DSH Web profile (.dsh-dev) on http://127.0.0.1:18992 + scripted Mock LLM (18991)
 node scripts/dev-env.mjs setup
 node scripts/dev-env.mjs serve
 ```
@@ -257,8 +261,8 @@ node scripts/dev-env.mjs serve
 
 - `src/index.ts` — Host Cordis plugin entry (`tools`, 4-domain `skills`, `commands`, `systemPrompt`)
 - `src/host/` — `a2ui_render`, `a2ui_ask`, `SurfaceSessions` compiler (with transactional rollback), domain skill compactor (`prompt-compact.ts`), and 28-case eval suite (`eval-suite.ts`)
-- `src/shared/` — Isomorphic `dshSchemaCatalog` (57 components / 25 functions), Express lowering passes (`express-preprocess.ts`), Host/Client `wire-types.ts`, `calc` parser/evaluator, secret/prototype sanitizers, and bilingual i18n
-- `src/client/index.ts` — `60.5 kB` cold-boot UI slot shell & composer toggle pill
+- `src/shared/` — Isomorphic `dshSchemaCatalog` (57 components / 25 functions), Express lowering passes (`express-preprocess.ts`), Host/Client `wire-types.ts`, `calc` parser/evaluator, secret/prototype sanitizers, temporal helpers, and shared cross-chunk i18n
+- `src/client/index.ts` — `65.8 kB` cold-boot UI slot shell & composer toggle pill
 - `src/client/dom-hooks.ts` — Sole low-level DOM / ECharts PNG export / streaming height stabilizer / Mermaid lifecycle boundary (`0` `useEffect` in `.tsx` files)
 - `src/client/chunks/` — On-demand entrypoints (`runtime-chunk.ts`, `echarts-chunk.ts`, `mermaid-chunk.ts`)
 - `src/client/catalog/` — Light-DOM React implementations of all 57 components & 25 functions

@@ -1,4 +1,5 @@
 import { safeStringifyJson } from '../../shared/constants.ts'
+import { parseLocalDateAnchor } from '../../shared/temporal.ts'
 
 export type TrackerSliceStatus = 'ok' | 'warning' | 'error' | 'unknown'
 export type TrackerSegmentTone = 'brand' | 'success' | 'warning' | 'danger' | 'neutral'
@@ -248,6 +249,22 @@ function shellEscapeSingle(s: string): string {
   return `'${s.replace(/'/g, `'\\''`)}'`
 }
 
+function stripCrlf(value: string): string {
+  return value.replace(/[\r\n]+/g, ' ').trim()
+}
+
+function normalizeSafeBaseUrl(raw: string | undefined): string {
+  const candidate = stripCrlf(raw ?? '')
+  if (candidate === '') return 'https://api.example.com'
+  try {
+    const parsed = new URL(candidate)
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+      return candidate.replace(/\/+$/, '')
+    }
+  } catch {}
+  return 'https://api.example.com'
+}
+
 export function buildEndpointCurl(params: {
   readonly method: string
   readonly path: string
@@ -255,8 +272,9 @@ export function buildEndpointCurl(params: {
   readonly headers?: unknown
   readonly requestBody?: unknown
 }): string {
-  const origin = (params.baseUrl?.trim() || 'https://api.example.com').replace(/\/+$/, '')
-  const cleanPath = params.path.startsWith('/') ? params.path : `/${params.path}`
+  const origin = normalizeSafeBaseUrl(params.baseUrl)
+  const cleanedRawPath = stripCrlf(params.path)
+  const cleanPath = cleanedRawPath.startsWith('/') ? cleanedRawPath : `/${cleanedRawPath}`
   const rawMethod = typeof params.method === 'string' ? params.method.trim().toUpperCase() : 'GET'
   const safeMethod = /^[A-Z]+$/.test(rawMethod) ? rawMethod : 'GET'
   const parts: string[] = [`curl -X ${safeMethod} ${shellEscapeSingle(`${origin}${cleanPath}`)}`]
@@ -265,14 +283,16 @@ export function buildEndpointCurl(params: {
     for (const item of params.headers) {
       if (typeof item !== 'object' || item === null) continue
       const rec = item as Record<string, unknown>
-      const name = String(rec.name ?? rec.key ?? '').trim()
+      const name = stripCrlf(String(rec.name ?? rec.key ?? ''))
       if (!name) continue
-      const val = String(rec.value ?? rec.example ?? '')
+      const val = stripCrlf(String(rec.value ?? rec.example ?? ''))
       parts.push(`-H ${shellEscapeSingle(`${name}: ${val}`)}`)
     }
   } else if (typeof params.headers === 'object' && params.headers !== null) {
     for (const [k, v] of Object.entries(params.headers as Record<string, unknown>)) {
-      parts.push(`-H ${shellEscapeSingle(`${k}: ${String(v ?? '')}`)}`)
+      const safeK = stripCrlf(k)
+      if (!safeK) continue
+      parts.push(`-H ${shellEscapeSingle(`${safeK}: ${stripCrlf(String(v ?? ''))}`)}`)
     }
   }
   if (params.requestBody !== undefined && params.requestBody !== null) {
@@ -280,7 +300,7 @@ export function buildEndpointCurl(params: {
     const bodyStr =
       typeof params.requestBody === 'string'
         ? params.requestBody
-        : JSON.stringify(params.requestBody)
+        : safeStringifyJson(params.requestBody, 0)
     parts.push(`-d ${shellEscapeSingle(bodyStr)}`)
   }
   return parts.join(' \\\n  ')
@@ -310,6 +330,7 @@ export interface NormalizedScheduleModel {
 }
 
 const HHMM_RE = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/
+const SCHEDULE_DATE_ONLY_RE = /^(\d{4})-(\d{1,2})-(\d{1,2})$/
 
 function parseTemporalPosition(
   val: unknown,
@@ -329,6 +350,12 @@ function parseTemporalPosition(
   if (/^-?\d+(?:\.\d+)?$/.test(s)) {
     return { numeric: Number.parseFloat(s), kind: 'num' }
   }
+  if (SCHEDULE_DATE_ONLY_RE.test(s)) {
+    const localDate = parseLocalDateAnchor(s)
+    if (!Number.isNaN(localDate.getTime())) {
+      return { numeric: localDate.getTime(), kind: 'date' }
+    }
+  }
   const ts = Date.parse(s)
   if (!Number.isNaN(ts)) {
     return { numeric: ts, kind: 'date' }
@@ -338,7 +365,7 @@ function parseTemporalPosition(
 
 function formatTickValue(val: number, kind: 'hhmm' | 'date' | 'num'): string {
   if (kind === 'hhmm') {
-    const mins = Math.round(val)
+    const mins = ((Math.round(val) % 1440) + 1440) % 1440
     const hh = String(Math.floor(mins / 60)).padStart(2, '0')
     const mm = String(mins % 60).padStart(2, '0')
     return `${hh}:${mm}`
@@ -401,8 +428,10 @@ export function normalizeScheduleItems(
     const pStart = parseTemporalPosition(rec.start)
     const pEnd = parseTemporalPosition(rec.end)
     if (!pStart || !pEnd) return
-    const sNum = Math.min(pStart.numeric, pEnd.numeric)
-    const eNum = Math.max(pStart.numeric, pEnd.numeric)
+    const isOvernightHhmm =
+      pStart.kind === 'hhmm' && pEnd.kind === 'hhmm' && pEnd.numeric < pStart.numeric
+    const sNum = isOvernightHhmm ? pStart.numeric : Math.min(pStart.numeric, pEnd.numeric)
+    const eNum = isOvernightHhmm ? pEnd.numeric + 1440 : Math.max(pStart.numeric, pEnd.numeric)
     const prog =
       typeof rec.progress === 'number' && Number.isFinite(rec.progress)
         ? Math.max(0, Math.min(100, Math.round(rec.progress)))
@@ -644,7 +673,30 @@ export function formatTableToMarkdown(
   return [head, sep, ...body].join('\n')
 }
 
-const NUMERIC_LIKE_RE = /^[¥$€£+-]?\s*\d[\d,]*(?:\.\d+)?\s*%?$/
+const NUMERIC_LIKE_RE = /^[+-]?\s*[¥$€£]?\s*[+-]?\s*\d[\d,]*(?:\.\d+)?\s*%?$/
+
+export function parseFormattedNumericCell(raw: unknown): number | null {
+  if (typeof raw === 'number') return Number.isFinite(raw) ? raw : null
+  if (typeof raw !== 'string') return null
+  const t = raw.trim()
+  if (t === '' || !NUMERIC_LIKE_RE.test(t)) return null
+  const cleaned = t.replace(/[¥$€£,\s%]/g, '')
+  const n = Number(cleaned)
+  return Number.isFinite(n) ? n : null
+}
+
+export function compareFormattedNumericCells(a: unknown, b: unknown): number {
+  const numA = parseFormattedNumericCell(a)
+  const numB = parseFormattedNumericCell(b)
+  if (numA !== null && numB !== null) {
+    return numA === numB ? 0 : numA > numB ? 1 : -1
+  }
+  if (numA !== null) return -1
+  if (numB !== null) return 1
+  const sa = a === null || a === undefined ? '' : String(a)
+  const sb = b === null || b === undefined ? '' : String(b)
+  return sa.localeCompare(sb)
+}
 
 export function detectNumericColumnKeys(
   columns: readonly { key: string; align?: 'left' | 'center' | 'right' }[],
@@ -665,9 +717,7 @@ export function detectNumericColumnKeys(
       const v = r[col.key]
       if (v === undefined || v === null || v === '') continue
       nonEmpty += 1
-      if (typeof v === 'number' && Number.isFinite(v)) {
-        numericHits += 1
-      } else if (typeof v === 'string' && NUMERIC_LIKE_RE.test(v.trim())) {
+      if (parseFormattedNumericCell(v) !== null) {
         numericHits += 1
       }
     }
@@ -682,40 +732,52 @@ export function computeTableNumericSummary(
   columns: readonly { key: string }[],
   rows: readonly Record<string, unknown>[],
   numericKeys: ReadonlySet<string>,
+  formatAvg: (pctStr: string) => string = (pctStr) => `Avg ${pctStr}`,
 ): Readonly<Record<string, string>> {
   const summary: Record<string, string> = {}
   for (const col of columns) {
     if (!numericKeys.has(col.key)) continue
     let sum = 0
     let count = 0
+    let nonNumericCount = 0
     let allPercent = true
     let prefix = ''
     for (const r of rows) {
       const v = r[col.key]
-      if (typeof v === 'number' && Number.isFinite(v)) {
+      if (v === undefined || v === null) continue
+      if (typeof v === 'string') {
+        const t = v.trim()
+        if (t === '' || t === '—' || t === '-') continue
+        const n = parseFormattedNumericCell(t)
+        if (n === null) {
+          nonNumericCount += 1
+          continue
+        }
+        if (!t.endsWith('%')) allPercent = false
+        if (!prefix) {
+          const curMatch = /[¥$€£]/.exec(t)
+          if (curMatch) prefix = curMatch[0]!
+        }
+        sum += n
+        count += 1
+      } else if (typeof v === 'number' && Number.isFinite(v)) {
         sum += v
         count += 1
         allPercent = false
-      } else if (typeof v === 'string') {
-        const t = v.trim()
-        if (!t.endsWith('%')) allPercent = false
-        if (!prefix && /^[¥$€£]/.test(t)) prefix = t[0]!
-        const cleaned = t.replace(/^[¥$€£+]/, '').replace(/[,%\s]/g, '')
-        const n = Number.parseFloat(cleaned)
-        if (Number.isFinite(n)) {
-          sum += n
-          count += 1
-        }
+      } else {
+        nonNumericCount += 1
       }
     }
-    if (count > 0) {
+    if (count > 0 && nonNumericCount === 0) {
       if (allPercent) {
-        summary[col.key] = `Avg ${(sum / count).toFixed(1)}%`
+        summary[col.key] = formatAvg(`${(sum / count).toFixed(1)}%`)
       } else {
-        const formatted = Number.isInteger(sum)
-          ? sum.toLocaleString('en-US')
-          : sum.toLocaleString('en-US', { maximumFractionDigits: 2 })
-        summary[col.key] = `${prefix}${formatted}`
+        const sign = sum < 0 ? '-' : ''
+        const absVal = Math.abs(sum)
+        const formatted = Number.isInteger(absVal)
+          ? absVal.toLocaleString('en-US')
+          : absVal.toLocaleString('en-US', { maximumFractionDigits: 2 })
+        summary[col.key] = `${sign}${prefix}${formatted}`
       }
     }
   }
@@ -732,6 +794,14 @@ export function computeNextCrossFilterSelection(
   return cur !== '' && cur.toLowerCase() === next.toLowerCase() ? '' : next
 }
 
+function matchesPrefixBoundary(haystack: string, needle: string): boolean {
+  if (needle.length < 2) return false
+  if (!haystack.startsWith(needle)) return false
+  if (haystack.length === needle.length) return true
+  const nextCh = haystack[needle.length]!
+  return /[\s([（·•:：/|,，]/.test(nextCh)
+}
+
 export function filterTableRowsByField(
   rows: readonly Record<string, unknown>[],
   filterField: string | undefined,
@@ -743,7 +813,7 @@ export function filterTableRowsByField(
 
   const cellText = (v: unknown): string => {
     if (v === null || v === undefined) return ''
-    if (typeof v === 'object') return JSON.stringify(v).toLowerCase()
+    if (typeof v === 'object') return safeStringifyJson(v, 0).toLowerCase()
     return String(v).trim().toLowerCase()
   }
 
@@ -753,15 +823,15 @@ export function filterTableRowsByField(
   })
   if (exact.length > 0) return exact
 
+  const fuzzyMatch = (t: string): boolean => {
+    if (t === '') return false
+    if (q.length >= 2 && t.includes(q)) return true
+    return matchesPrefixBoundary(q, t)
+  }
+
   return rows.filter((row) => {
-    if (field) {
-      const t = cellText(row[field])
-      return t !== '' && (t.includes(q) || q.includes(t))
-    }
-    return Object.values(row).some((val) => {
-      const t = cellText(val)
-      return t !== '' && (t.includes(q) || q.includes(t))
-    })
+    if (field) return fuzzyMatch(cellText(row[field]))
+    return Object.values(row).some((val) => fuzzyMatch(cellText(val)))
   })
 }
 

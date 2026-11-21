@@ -125,6 +125,8 @@ export function resetPersistenceForTests(): void {
   fallbackDefaultEnabled = true
   cachedDockRaw = undefined
   cachedDockMap = {}
+  cachedDraftsRaw = undefined
+  cachedDraftsList = []
   cachedEnabledRaw = undefined
   cachedEnabledStore = { defaultEnabled: true, bySession: {} }
   lastAppliedCommandSeqBySession.clear()
@@ -166,9 +168,13 @@ export function normalizePointerPath(pointer: string): string {
 export function isPointerObscured(pointer: string, obscuredPointers: ReadonlySet<string>): boolean {
   const norm = normalizePointerPath(pointer)
   for (const rawObs of obscuredPointers) {
-    const obs = normalizePointerPath(rawObs)
+    const trimmed = rawObs.trim()
+    if (trimmed === '') continue
+    const isRelative = !trimmed.startsWith('/')
+    const obs = normalizePointerPath(trimmed)
     if (obs === '/') return true
     if (norm === obs || norm.startsWith(`${obs}/`)) return true
+    if (isRelative && (norm.endsWith(obs) || norm.includes(`${obs}/`))) return true
   }
   return false
 }
@@ -180,11 +186,15 @@ export function isPointerObscuredOrParent(
   const norm = normalizePointerPath(pointer)
   if (norm === '/') return obscuredPointers.size > 0
   for (const rawObs of obscuredPointers) {
-    const obs = normalizePointerPath(rawObs)
+    const trimmed = rawObs.trim()
+    if (trimmed === '') continue
+    const isRelative = !trimmed.startsWith('/')
+    const obs = normalizePointerPath(trimmed)
     if (obs === '/') return true
     if (norm === obs || obs.startsWith(`${norm}/`) || norm.startsWith(`${obs}/`)) {
       return true
     }
+    if (isRelative && (norm.endsWith(obs) || norm.includes(`${obs}/`))) return true
   }
   return false
 }
@@ -197,7 +207,8 @@ export function sanitizeDataModel(
   const blocked = new Set<string>()
   if (obscuredPointers !== undefined) {
     for (const p of obscuredPointers) {
-      if (p.trim() !== '') blocked.add(normalizePointerPath(p))
+      const t = p.trim()
+      if (t !== '') blocked.add(t)
     }
   }
 
@@ -237,20 +248,34 @@ function draftKeyOf(sessionId: string, surfaceId: string, fingerprint: string): 
   return `${sessionId}::${surfaceId}::${fingerprint}`
 }
 
+let cachedDraftsRaw: string | null | undefined
+let cachedDraftsList: DraftEntry[] = []
+
 function readDraftList(): DraftEntry[] {
   const raw = readStorage(DRAFTS_STORAGE_KEY)
-  if (!raw) return []
+  if (raw === cachedDraftsRaw) return [...cachedDraftsList]
+  cachedDraftsRaw = raw
+  if (!raw) {
+    cachedDraftsList = []
+    return []
+  }
   const parsed = parseStoredJson(DRAFTS_STORAGE_KEY, raw)
-  if (!parsed.ok) return []
+  if (!parsed.ok) {
+    cachedDraftsRaw = null
+    cachedDraftsList = []
+    return []
+  }
   if (!Array.isArray(parsed.value)) {
     warnOnceForKey(
       `shape:${DRAFTS_STORAGE_KEY}`,
       `Evicting non-array draft payload stored under "${DRAFTS_STORAGE_KEY}".`,
     )
     removeStorage(DRAFTS_STORAGE_KEY)
+    cachedDraftsRaw = null
+    cachedDraftsList = []
     return []
   }
-  return parsed.value.filter(
+  cachedDraftsList = parsed.value.filter(
     (item): item is DraftEntry =>
       typeof item === 'object' &&
       item !== null &&
@@ -259,6 +284,7 @@ function readDraftList(): DraftEntry[] {
       (item as DraftEntry).data !== null &&
       !Array.isArray((item as DraftEntry).data),
   )
+  return [...cachedDraftsList]
 }
 
 export function removeSurfaceDraft(
@@ -286,6 +312,8 @@ function writeDraftList(entries: DraftEntry[]): void {
     working.shift()
     payload = JSON.stringify(working)
   }
+  cachedDraftsRaw = payload
+  cachedDraftsList = working
 }
 
 export function loadSurfaceDraft(
@@ -358,7 +386,21 @@ function readDockMap(): Record<string, DockUiEntry> {
   const parsed = parseStoredJson(DOCK_STORAGE_KEY, raw)
   if (parsed.ok) {
     if (typeof parsed.value === 'object' && parsed.value !== null && !Array.isArray(parsed.value)) {
-      cachedDockMap = parsed.value as Record<string, DockUiEntry>
+      const cleaned: Record<string, DockUiEntry> = {}
+      for (const [k, v] of Object.entries(parsed.value as Record<string, unknown>)) {
+        if (isDangerousObjectKey(k) || typeof v !== 'object' || v === null || Array.isArray(v)) {
+          continue
+        }
+        const rec = v as Record<string, unknown>
+        cleaned[k] = {
+          collapsed: typeof rec.collapsed === 'boolean' ? rec.collapsed : false,
+          dismissedSeq:
+            typeof rec.dismissedSeq === 'number' && Number.isFinite(rec.dismissedSeq)
+              ? rec.dismissedSeq
+              : -1,
+        }
+      }
+      cachedDockMap = cleaned
       return cachedDockMap
     }
     warnOnceForKey(

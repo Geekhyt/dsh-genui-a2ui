@@ -67,7 +67,12 @@ const REQUIRED_PRIMITIVE_EXPORTS = [
   'IconAppsAddOutlineRegular',
   'IconSearchOutlineRegular',
   'IconWarningOutlineRegular',
+  'IconChevronDownOutlineRegular',
+  'IconChevronUpOutlineRegular',
+  'IconCheckOutlineRegular',
 ]
+
+const OPTIONAL_HOST_TOKENS = new Set(['--dsw-font-family-mono'])
 
 const REQUIRED_SLOTS = [
   'tool.call.toolview',
@@ -105,8 +110,16 @@ for (const slot of REQUIRED_SLOTS) {
   }
 }
 
+const pkgJson = JSON.parse(readFileSync(resolve(import.meta.dirname, '../package.json'), 'utf8'))
+const injectModules = Array.isArray(pkgJson?.dsh?.client?.inject) ? pkgJson.dsh.client.inject : []
+for (const mod of injectModules) {
+  if (!raw.includes(`"${mod}"`) && !raw.includes(`'${mod}'`)) {
+    errors.push(`missing dsh.client.inject module "${mod}"`)
+  }
+}
+
 const srcRoot = resolve(import.meta.dirname, '../src')
-const usedAliasTokens = new Set()
+const usedTokens = new Set()
 const scanSourceForTokens = (dir) => {
   for (const ent of readdirSync(dir, { withFileTypes: true })) {
     const full = join(dir, ent.name)
@@ -114,15 +127,16 @@ const scanSourceForTokens = (dir) => {
       scanSourceForTokens(full)
     } else if (/\.(?:css|ts|tsx)$/.test(ent.name)) {
       const text = readFileSync(full, 'utf8')
-      for (const m of text.matchAll(/--dsw-alias-[a-z0-9-]+/g)) {
-        usedAliasTokens.add(m[0])
+      for (const m of text.matchAll(/--dsw-[a-z0-9-]+/g)) {
+        usedTokens.add(m[0])
       }
     }
   }
 }
 scanSourceForTokens(srcRoot)
 
-for (const token of [...usedAliasTokens].sort()) {
+for (const token of [...usedTokens].sort()) {
+  if (OPTIONAL_HOST_TOKENS.has(token)) continue
   if (!raw.includes(token)) {
     errors.push(`unknown host CSS token "${token}" not found in app.asar`)
   }
@@ -134,5 +148,5 @@ if (errors.length > 0) {
 }
 
 console.log(
-  `[check-host-api] OK: verified ${REQUIRED_PLATFORM_MODULES.length} platform modules, ${REQUIRED_PRIMITIVE_EXPORTS.length} primitives, ${REQUIRED_SLOTS.length} slots, and ${usedAliasTokens.size} CSS alias tokens against ${ASAR_PATH}.`,
+  `[check-host-api] OK: verified ${REQUIRED_PLATFORM_MODULES.length} platform modules, ${injectModules.length} injected client modules, ${REQUIRED_PRIMITIVE_EXPORTS.length} primitives, ${REQUIRED_SLOTS.length} slots, and ${usedTokens.size} CSS tokens against ${ASAR_PATH}.`,
 )

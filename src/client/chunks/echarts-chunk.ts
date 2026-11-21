@@ -30,8 +30,8 @@ import * as echarts from 'echarts/core'
 import { LabelLayout, LegacyGridContainLabel } from 'echarts/features'
 import { CanvasRenderer } from 'echarts/renderers'
 import type { ChartKind } from '../../shared/catalog-schema.ts'
+import { CHART_MESSAGES, resolveClientLocale } from '../../shared/chart-i18n.ts'
 import { sanitizeInlineUrlText } from '../../shared/constants.ts'
-import { RUNTIME_MESSAGES, resolveClientLocale } from '../../shared/i18n.ts'
 
 echarts.use([
   BarChart,
@@ -168,21 +168,31 @@ function quantile(sorted: readonly number[], q: number): number {
   return Number((sorted[base]! + rest * (next - sorted[base]!)).toFixed(2))
 }
 
+const FILLED_SHAPE_LABEL = {
+  color: '#ffffff',
+  fontWeight: 600,
+  textBorderColor: 'rgba(15, 23, 42, 0.55)',
+  textBorderWidth: 0.8,
+  textShadowColor: 'rgba(15, 23, 42, 0.48)',
+  textShadowBlur: 3,
+  textShadowOffsetY: 1,
+} as const
+
 function extractBoxplotFive(
   row: Record<string, unknown>,
 ): [number, number, number, number, number] {
-  if (Array.isArray(row.values) && row.values.length >= 5) {
-    const nums = row.values
-      .slice(0, 5)
-      .map(toNumber)
-      .sort((a, b) => a - b)
+  if (Array.isArray(row.values) && row.values.length === 5) {
+    const nums = row.values.map(toNumber).sort((a, b) => a - b)
     return [nums[0]!, nums[1]!, nums[2]!, nums[3]!, nums[4]!]
   }
-  const sampleArr = Array.isArray(row.samples)
-    ? row.samples
-    : Array.isArray(row.data)
-      ? row.data
-      : null
+  const sampleArr =
+    Array.isArray(row.values) && row.values.length > 0
+      ? row.values
+      : Array.isArray(row.samples)
+        ? row.samples
+        : Array.isArray(row.data)
+          ? row.data
+          : null
   if (sampleArr && sampleArr.length > 0) {
     const sorted = sampleArr.map(toNumber).sort((a, b) => a - b)
     return [
@@ -290,24 +300,31 @@ function computeRefAxisBounds(
   let max: number | undefined
   let min: number | undefined
 
-  const dataSpan = Math.max(1, dataMax - dataMin)
+  const rawSpan = dataMax - dataMin
+  const magRef = Math.max(Math.abs(dataMax), Math.abs(dataMin), Math.abs(refLine))
+  const dataSpan = rawSpan > 0 ? rawSpan : magRef > 0 ? magRef * 0.2 : 1
 
   if (refLine > 0 && refLine >= dataMax * 0.94) {
     if (scale && dataSpan < dataMax * 0.35) {
-      const target = Math.max(dataMax, refLine) + Math.max(1, dataSpan * 0.28)
-      const step = 10 ** Math.max(0, Math.floor(Math.log10(dataSpan)) - 1)
-      max = Math.ceil(target / step) * step
+      const target = Math.max(dataMax, refLine) + dataSpan * 0.28
+      const step = 10 ** Math.floor(Math.log10(Math.max(1e-9, dataSpan)) - 1)
+      max = Number((Math.ceil(target / step) * step).toPrecision(6))
     } else {
       max = niceUpperBound(Math.max(dataMax, refLine) * 1.1)
     }
   } else if (refLine <= 0 && refLine > dataMax) {
-    max = Math.ceil(refLine + Math.max(1, Math.abs(dataMin - refLine) * 0.1))
+    max = Number(
+      (refLine + Math.max(dataSpan * 0.1, Math.abs(dataMin - refLine) * 0.1)).toPrecision(6),
+    )
   }
 
   if (refLine < 0 && refLine <= dataMin * 0.94) {
     min = -niceUpperBound(Math.abs(Math.min(dataMin, refLine)) * 1.1)
   } else if (scale && refLine < dataMin) {
-    min = refLine >= 0 ? Math.floor(refLine * 0.92) : -niceUpperBound(Math.abs(refLine) * 1.1)
+    min =
+      refLine >= 0
+        ? Number((refLine * 0.92).toPrecision(6))
+        : -niceUpperBound(Math.abs(refLine) * 1.1)
   }
 
   return { min, max }
@@ -320,11 +337,20 @@ function pickMarkLinePosition(
 ): 'insideStartTop' | 'insideEndTop' {
   if (refLine === undefined || !Number.isFinite(refLine)) return 'insideEndTop'
   if (leftValues.length === 0 || rightValues.length === 0) return 'insideEndTop'
-  const bandLow = refLine - Math.max(1, Math.abs(refLine) * 0.05)
+  const allVals = [...leftValues, ...rightValues].filter(Number.isFinite)
+  const span =
+    allVals.length > 0
+      ? Math.max(1e-9, Math.max(...allVals) - Math.min(...allVals))
+      : Math.max(1e-9, Math.abs(refLine))
+  const tolerance = Math.max(span * 0.05, Math.abs(refLine) * 0.05)
+  const bandLow = refLine - tolerance
+  const proxScale = Math.max(1e-9, span * 0.5)
   const obstruction = (vals: readonly number[]) =>
     vals.reduce(
       (score, v) =>
-        v >= bandLow ? score + 1000 + Math.max(0, 200 - Math.abs(v - refLine)) : score,
+        v >= bandLow
+          ? score + 1000 + Math.max(0, 200 * (1 - Math.abs(v - refLine) / proxScale))
+          : score,
       0,
     )
   const leftScore = obstruction(leftValues)
@@ -404,7 +430,7 @@ function buildHierarchyTree(
 
   if (groupField) {
     const groups = new Map<string, { name: string; value: number }[]>()
-    const otherLabel = RUNTIME_MESSAGES[resolveClientLocale()].chartOtherGroup
+    const otherLabel = CHART_MESSAGES[resolveClientLocale()].chartOtherGroup
     for (const r of rows) {
       const g = sanitizeChartLabel(r[groupField] ?? otherLabel)
       const list = groups.get(g) ?? []
@@ -423,19 +449,49 @@ function buildHierarchyTree(
   }))
 }
 
+function isValidCalendarDate(year: number, month: number, day: number): boolean {
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return false
+  if (month < 1 || month > 12 || day < 1 || day > 31) return false
+  const check = new Date(Date.UTC(year, month - 1, day))
+  return (
+    check.getUTCFullYear() === year &&
+    check.getUTCMonth() + 1 === month &&
+    check.getUTCDate() === day
+  )
+}
+
 function normalizeIsoDate(raw: unknown): string | null {
-  if (typeof raw !== 'string' && typeof raw !== 'number') return null
-  const text = String(raw).trim()
-  const isoMatch = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(text)
+  if (typeof raw === 'number') {
+    if (!Number.isFinite(raw)) return null
+    const ms = Math.abs(raw) < 1e11 ? raw * 1000 : raw
+    const d = new Date(ms)
+    if (Number.isNaN(d.getTime())) return null
+    return d.toISOString().slice(0, 10)
+  }
+  if (typeof raw !== 'string') return null
+  const text = raw.trim()
+  if (text === '') return null
+  if (/^-?\d{9,13}$/.test(text)) {
+    return normalizeIsoDate(Number(text))
+  }
+  const isoMatch = /^(\d{4})-(\d{1,2})-(\d{1,2})(?:$|[T\s])/.exec(text)
   if (isoMatch) {
-    const y = isoMatch[1]!
-    const m = isoMatch[2]!.padStart(2, '0')
-    const d = isoMatch[3]!.padStart(2, '0')
-    return `${y}-${m}-${d}`
+    const y = Number(isoMatch[1])
+    const m = Number(isoMatch[2])
+    const d = Number(isoMatch[3])
+    if (!isValidCalendarDate(y, m, d)) return null
+    return `${isoMatch[1]!}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
   }
   const parsed = new Date(text)
   if (Number.isNaN(parsed.getTime())) return null
-  return parsed.toISOString().slice(0, 10)
+  const hasExplicitTz = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(text)
+  if (hasExplicitTz) {
+    return parsed.toISOString().slice(0, 10)
+  }
+  const y = String(parsed.getFullYear()).padStart(4, '0')
+  const m = String(parsed.getMonth() + 1).padStart(2, '0')
+  const d = String(parsed.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
 }
 
 function extractCategoryAxisLabels(option: Record<string, unknown>): readonly string[] | null {
@@ -456,6 +512,14 @@ function extractCategoryAxisLabels(option: Record<string, unknown>): readonly st
   return null
 }
 
+function visualWidthOf(raw: string): number {
+  let units = 0
+  for (const ch of raw) {
+    units += (ch.codePointAt(0) ?? 0) > 0xff ? 2 : 1
+  }
+  return units
+}
+
 function truncateByVisualWidth(raw: string, maxUnits: number): string {
   let units = 0
   let out = ''
@@ -470,6 +534,34 @@ function truncateByVisualWidth(raw: string, maxUnits: number): string {
   return raw
 }
 
+function truncateMiddleByVisualWidth(raw: string, maxUnits: number): string {
+  if (visualWidthOf(raw) <= maxUnits) return raw
+  const chars = [...raw]
+  const budget = Math.max(4, maxUnits - 1)
+  const tailBudget = Math.max(2, Math.floor(budget * 0.42))
+  const headBudget = Math.max(2, budget - tailBudget)
+  let head = ''
+  let hUnits = 0
+  let headIdx = 0
+  for (; headIdx < chars.length; headIdx++) {
+    const ch = chars[headIdx]!
+    const w = (ch.codePointAt(0) ?? 0) > 0xff ? 2 : 1
+    if (hUnits + w > headBudget) break
+    head += ch
+    hUnits += w
+  }
+  let tail = ''
+  let tUnits = 0
+  for (let i = chars.length - 1; i >= headIdx; i--) {
+    const ch = chars[i]!
+    const w = (ch.codePointAt(0) ?? 0) > 0xff ? 2 : 1
+    if (tUnits + w > tailBudget) break
+    tail = ch + tail
+    tUnits += w
+  }
+  return `${head}…${tail}`
+}
+
 function buildLegendOption(opts: {
   readonly isCompact: boolean
   readonly scroll: boolean
@@ -479,8 +571,38 @@ function buildLegendOption(opts: {
   readonly itemWidth?: number | undefined
   readonly itemHeight?: number | undefined
   readonly data?: readonly string[] | undefined
+  readonly names?: readonly string[] | undefined
 }): Record<string, unknown> {
   const { isCompact, scroll, textColor } = opts
+  const candidateNames = opts.names ?? opts.data
+  let compactFormatter: ((name: string) => string) | undefined
+  if (isCompact) {
+    const uniqueNames = candidateNames ? [...new Set(candidateNames)] : []
+    const baseMaxUnits = 8
+    const collided = new Set<string>()
+    if (uniqueNames.length > 1) {
+      const seen = new Map<string, string>()
+      for (const n of uniqueNames) {
+        const truncated = truncateByVisualWidth(n, baseMaxUnits)
+        const existing = seen.get(truncated)
+        if (existing !== undefined && existing !== n) {
+          collided.add(existing)
+          collided.add(n)
+        } else {
+          seen.set(truncated, n)
+        }
+      }
+    }
+    const wideTwoSeriesFit =
+      uniqueNames.length <= 2 && uniqueNames.every((n) => visualWidthOf(n) <= 14)
+    compactFormatter = (name: string) => {
+      if (collided.has(name)) {
+        if (wideTwoSeriesFit) return name
+        return truncateMiddleByVisualWidth(name, 9)
+      }
+      return truncateByVisualWidth(name, baseMaxUnits)
+    }
+  }
   return {
     type: scroll ? 'scroll' : 'plain',
     bottom: opts.bottom ?? 0,
@@ -490,7 +612,7 @@ function buildLegendOption(opts: {
     itemHeight: opts.itemHeight ?? 8,
     itemGap: 8,
     ...(scroll ? { pageButtonGap: 8, pageIconSize: 10 } : {}),
-    ...(isCompact ? { formatter: (name: string) => truncateByVisualWidth(name, 8) } : {}),
+    ...(compactFormatter ? { formatter: compactFormatter } : {}),
     ...(opts.data ? { data: [...opts.data] } : {}),
     textStyle: { color: textColor, fontSize: opts.fontSize ?? 11 },
   }
@@ -693,7 +815,8 @@ function buildChartOptionInternal(
       },
       legend: buildLegendOption({
         isCompact,
-        scroll: isCompact && items.length >= 4,
+        scroll: isCompact || items.length >= 4,
+        names: items.map((item) => item.name),
         textColor: theme.textSecondary,
       }),
       series: [
@@ -711,10 +834,12 @@ function buildChartOptionInternal(
                   scaleSize: 4,
                   label: {
                     show: true,
-                    fontSize: 13,
+                    fontSize: isCompact ? 11.5 : 13,
                     fontWeight: 600,
-                    lineHeight: 18,
+                    lineHeight: isCompact ? 15 : 18,
                     color: theme.textPrimary,
+                    width: isCompact ? 76 : 112,
+                    overflow: 'truncate',
                     formatter: '{b}\n{d}%',
                   },
                 },
@@ -746,11 +871,8 @@ function buildChartOptionInternal(
               label: isCompact
                 ? {
                     position: 'inside',
-                    color: '#ffffff',
-                    textBorderColor: 'rgba(15, 23, 42, 0.72)',
-                    textBorderWidth: 2,
+                    ...FILLED_SHAPE_LABEL,
                     fontSize: 10,
-                    fontWeight: 500,
                     overflow: 'truncate',
                     width: 112,
                   }
@@ -764,22 +886,40 @@ function buildChartOptionInternal(
   if (props.kind === 'gauge') {
     const first = rows[0] ?? {}
     const val = toNumber(first[primaryY] ?? first.value ?? 0)
+    const rawMax = first.max ?? first.target
+    const parsedMax = rawMax !== undefined ? toNumber(rawMax) : 100
+    const gaugeMax = parsedMax > 0 ? Math.max(parsedMax, val) : 100
     const name = sanitizeChartLabel(first[xKey] ?? first.name ?? props.title ?? '')
+    const arcWidth = isCompact ? 9 : 12
+    const estGaugeW = containerWidth !== undefined && containerWidth > 0 ? containerWidth : 480
     return {
       color: theme.colors,
+      tooltip: { ...baseTooltip, trigger: 'item' },
       series: [
         {
           type: 'gauge',
-          progress: { show: true, width: 12 },
-          axisLine: { lineStyle: { width: 12, color: [[1, theme.border]] } },
-          axisLabel: { color: theme.textSecondary, fontSize: 10 },
+          max: gaugeMax,
+          radius: isCompact ? '86%' : '82%',
+          progress: { show: true, width: arcWidth },
+          axisLine: { lineStyle: { width: arcWidth, color: [[1, theme.border]] } },
+          axisLabel: {
+            color: theme.textSecondary,
+            fontSize: isCompact ? 9 : 10,
+            distance: isCompact ? 12 : 16,
+          },
           detail: {
             valueAnimation: true,
-            fontSize: 20,
+            fontSize: isCompact ? 16 : 20,
             color: theme.textPrimary,
-            offsetCenter: [0, '65%'],
+            offsetCenter: [0, '62%'],
           },
-          title: { color: theme.textSecondary, fontSize: 12, offsetCenter: [0, '90%'] },
+          title: {
+            color: theme.textSecondary,
+            fontSize: isCompact ? 10.5 : 12,
+            offsetCenter: [0, '88%'],
+            width: Math.max(96, Math.floor(estGaugeW * 0.7)),
+            overflow: 'truncate',
+          },
           data: [{ value: val, name }],
         },
       ],
@@ -841,6 +981,7 @@ function buildChartOptionInternal(
           ? buildLegendOption({
               isCompact,
               scroll: isCompact || yKeys.length >= 4,
+              names: yKeys.map(sanitizeChartLabel),
               textColor: theme.textSecondary,
             })
           : undefined,
@@ -880,9 +1021,12 @@ function buildChartOptionInternal(
     const hxKey = props.xField ?? stringKeys[0] ?? sampleKeys[0] ?? 'x'
     const explicitYStr = typeof props.yField === 'string' ? props.yField : undefined
     const hyKey =
-      explicitYStr && typeof sample[explicitYStr] === 'string'
+      explicitYStr && explicitYStr !== hxKey && typeof sample[explicitYStr] === 'string'
         ? explicitYStr
-        : (props.seriesField ?? stringKeys.find((k) => k !== hxKey) ?? sampleKeys[1] ?? 'y')
+        : (props.seriesField ??
+          stringKeys.find((k) => k !== hxKey) ??
+          sampleKeys.find((k) => k !== hxKey) ??
+          'y')
     const valKey =
       props.sizeField ??
       (explicitYStr && typeof sample[explicitYStr] === 'number' ? explicitYStr : undefined) ??
@@ -894,28 +1038,65 @@ function buildChartOptionInternal(
     const values = rows.map((r) => toNumber(r[valKey]))
     const minVal = values.length > 0 ? Math.min(...values) : 0
     const maxVal = values.length > 0 ? Math.max(...values) : 100
+    const valSpan = Math.max(1e-9, maxVal - minVal)
+    const showCellLabels = isCompact
+      ? xCats.length <= 6 && yCats.length <= 6 && rows.length <= 36
+      : rows.length <= 48
 
-    const cells = rows.map((r) => [
-      xCats.indexOf(sanitizeChartLabel(r[hxKey])),
-      yCats.indexOf(sanitizeChartLabel(r[hyKey])),
-      toNumber(r[valKey]),
-    ])
+    const cells = rows.map((r) => {
+      const val = toNumber(r[valKey])
+      const norm = (val - minVal) / valSpan
+      return {
+        value: [
+          xCats.indexOf(sanitizeChartLabel(r[hxKey])),
+          yCats.indexOf(sanitizeChartLabel(r[hyKey])),
+          val,
+        ],
+        label:
+          norm >= 0.48
+            ? { ...FILLED_SHAPE_LABEL, fontSize: isCompact ? 9.5 : 11 }
+            : { color: theme.textPrimary, fontSize: isCompact ? 9.5 : 11 },
+      }
+    })
+    const estHeatW = containerWidth !== undefined && containerWidth > 0 ? containerWidth : 520
 
     return {
       tooltip: { ...baseTooltip, position: 'top' },
-      grid: { top: 14, right: 18, bottom: 58, left: 12, containLabel: true },
+      grid: {
+        top: 14,
+        right: isCompact ? 10 : 18,
+        bottom: 58,
+        left: isCompact ? 6 : 12,
+        containLabel: true,
+      },
       xAxis: {
         type: 'category',
         data: xCats,
         splitArea: { show: true },
-        axisLabel: { color: theme.textSecondary, fontSize: 11, hideOverlap: true },
+        axisLabel: {
+          color: theme.textSecondary,
+          fontSize: isCompact ? 9.5 : 11,
+          hideOverlap: true,
+          ...(isCompact
+            ? {
+                width: Math.max(36, Math.floor((estHeatW - 60) / Math.max(1, xCats.length))),
+                overflow: 'truncate' as const,
+              }
+            : {}),
+        },
         axisLine: { lineStyle: { color: theme.border } },
       },
       yAxis: {
         type: 'category',
         data: yCats,
         splitArea: { show: true },
-        axisLabel: { color: theme.textSecondary, fontSize: 11 },
+        axisLabel: {
+          color: theme.textSecondary,
+          fontSize: isCompact ? 9.5 : 11,
+          ...(isCompact
+            ? { width: Math.min(80, Math.floor(estHeatW * 0.32)), overflow: 'truncate' as const }
+            : {}),
+        },
         axisLine: { lineStyle: { color: theme.border } },
       },
       visualMap: {
@@ -937,9 +1118,8 @@ function buildChartOptionInternal(
           type: 'heatmap',
           data: cells,
           label: {
-            show: cells.length <= 48,
-            color: theme.textPrimary,
-            fontSize: 11,
+            show: showCellLabels,
+            fontSize: isCompact ? 9.5 : 11,
           },
           itemStyle: {
             borderRadius: 3,
@@ -954,11 +1134,6 @@ function buildChartOptionInternal(
   if (props.kind === 'treemap' || props.kind === 'sunburst') {
     const treeData = buildHierarchyTree(rows, props, xKey, primaryY)
     const borderCol = dark ? '#18181b' : '#ffffff'
-    const innerSectorHalo = {
-      color: '#ffffff',
-      textBorderColor: 'rgba(15, 23, 42, 0.68)',
-      textBorderWidth: 2.2,
-    }
 
     if (props.kind === 'sunburst') {
       const useInnerOnly =
@@ -983,6 +1158,13 @@ function buildChartOptionInternal(
             minAngle: useInnerOnly ? 16 : 10,
             emphasis: { focus: 'ancestor' },
             labelLayout: { hideOverlap: true },
+            label: {
+              ...FILLED_SHAPE_LABEL,
+              rotate: 'tangential',
+              fontSize: 9.5,
+              overflow: 'truncate',
+              width: 60,
+            },
             itemStyle: {
               borderRadius: 5,
               borderColor: borderCol,
@@ -995,10 +1177,9 @@ function buildChartOptionInternal(
                     r0: '18%',
                     r: '44%',
                     label: {
-                      ...innerSectorHalo,
+                      ...FILLED_SHAPE_LABEL,
                       rotate: 'tangential',
                       fontSize: 10,
-                      fontWeight: 600,
                       overflow: 'truncate',
                       width: 58,
                     },
@@ -1007,10 +1188,9 @@ function buildChartOptionInternal(
                     r0: '44%',
                     r: '66%',
                     label: {
-                      ...innerSectorHalo,
+                      ...FILLED_SHAPE_LABEL,
                       rotate: 'tangential',
                       fontSize: 9.5,
-                      fontWeight: 500,
                       overflow: 'truncate',
                       width: 64,
                     },
@@ -1019,10 +1199,9 @@ function buildChartOptionInternal(
                     r0: '66%',
                     r: '85%',
                     label: {
-                      ...innerSectorHalo,
+                      ...FILLED_SHAPE_LABEL,
                       rotate: 'tangential',
                       fontSize: 9.5,
-                      fontWeight: 500,
                       minAngle: 22,
                       overflow: 'truncate',
                       width: 68,
@@ -1035,10 +1214,9 @@ function buildChartOptionInternal(
                     r0: '18%',
                     r: '43%',
                     label: {
-                      ...innerSectorHalo,
+                      ...FILLED_SHAPE_LABEL,
                       rotate: 'tangential',
                       fontSize: 10.5,
-                      fontWeight: 600,
                       overflow: 'truncate',
                       width: 68,
                     },
@@ -1047,10 +1225,9 @@ function buildChartOptionInternal(
                     r0: '43%',
                     r: '68%',
                     label: {
-                      ...innerSectorHalo,
+                      ...FILLED_SHAPE_LABEL,
                       rotate: 'tangential',
                       fontSize: 10,
-                      fontWeight: 500,
                       overflow: 'truncate',
                       width: 72,
                     },
@@ -1091,11 +1268,10 @@ function buildChartOptionInternal(
           },
           label: {
             show: true,
-            ...innerSectorHalo,
+            ...FILLED_SHAPE_LABEL,
             fontSize: isCompact ? 9.5 : 11.5,
-            lineHeight: isCompact ? 12 : 15,
+            lineHeight: isCompact ? 12.5 : 15,
             padding: isCompact ? [2, 3] : undefined,
-            fontWeight: 500,
             overflow: isCompact ? 'truncate' : 'break',
             ellipsis: '…',
             formatter: isCompact
@@ -1126,12 +1302,18 @@ function buildChartOptionInternal(
           ? normalizeChartRows((props.data as Record<string, unknown>).links)
           : rows
 
-    const rawLinks = sankeySourceRows.map((r) => ({
-      source: sanitizeChartLabel(r[srcField] ?? r.source ?? r.from),
-      target: sanitizeChartLabel(r[tgtField] ?? r.target ?? r.to),
-      value: Math.max(0, toNumber(r[valField] ?? r.value ?? r[primaryY])),
-    }))
-    const links = filterAcyclicLinks(rawLinks.filter((l) => l.value > 0))
+    const linkTotals = new Map<string, { source: string; target: string; value: number }>()
+    for (const r of sankeySourceRows) {
+      const source = sanitizeChartLabel(r[srcField] ?? r.source ?? r.from)
+      const target = sanitizeChartLabel(r[tgtField] ?? r.target ?? r.to)
+      const value = Math.max(0, toNumber(r[valField] ?? r.value ?? r[primaryY]))
+      if (!source || !target || value <= 0) continue
+      const key = `${source}\u0000${target}`
+      const prev = linkTotals.get(key)
+      if (prev) prev.value += value
+      else linkTotals.set(key, { source, target, value })
+    }
+    const links = filterAcyclicLinks([...linkTotals.values()])
     const nodeNames = [...new Set(links.flatMap((l) => [l.source, l.target]))]
     const sourceSet = new Set(links.map((l) => l.source))
     const rightSideLabels = nodeNames.filter((n) => !sourceSet.has(n))
@@ -1335,7 +1517,7 @@ function buildChartOptionInternal(
                 gravity: isCompact ? 0.22 : 0.1,
                 layoutAnimation: true,
               },
-          labelLayout: useCircularCompact ? undefined : { hideOverlap: true },
+          labelLayout: useCircularCompact && nodes.length <= 5 ? undefined : { hideOverlap: true },
           label: {
             show: true,
             position: isCompact ? 'bottom' : 'right',
@@ -1345,7 +1527,7 @@ function buildChartOptionInternal(
             overflow: 'truncate',
             width: isCompact ? 76 : 112,
             textBorderColor: dark ? 'rgba(15, 23, 42, 0.85)' : 'rgba(255, 255, 255, 0.9)',
-            textBorderWidth: 2,
+            textBorderWidth: 1.2,
           },
           lineStyle: {
             color: theme.border,
@@ -1354,13 +1536,16 @@ function buildChartOptionInternal(
             opacity: 0.85,
           },
           categories: categories.length > 0 ? categories : undefined,
-          data: nodes.map((n) => ({
-            ...n,
-            category:
+          data: nodes.map((n) => {
+            const catIdx =
               typeof n.category === 'string'
                 ? categories.findIndex((c) => c.name === n.category)
-                : undefined,
-          })),
+                : -1
+            return {
+              ...n,
+              category: catIdx >= 0 ? catIdx : undefined,
+            }
+          }),
           links,
         },
       ],
@@ -1427,23 +1612,26 @@ function buildChartOptionInternal(
         axisLine: { lineStyle: { color: theme.border } },
         axisLabel: {
           color: theme.textSecondary,
-          fontSize: compactWrapCat ? 9.5 : 11,
+          fontSize: compactWrapCat ? 9.5 : isCompact ? 10 : 11,
           lineHeight: 12,
           interval: compactWrapCat ? 0 : 'auto',
           hideOverlap: !compactWrapCat,
           formatter: compactWrapCat ? formatCompactCat : undefined,
+          ...(!compactWrapCat && isCompact
+            ? { width: Math.max(44, catSlotPx), overflow: 'truncate' as const }
+            : {}),
         },
       },
       yAxis: {
         type: 'value',
         ...bounds,
         splitLine: { lineStyle: { color: theme.border } },
-        axisLabel: { color: theme.textSecondary, fontSize: 11 },
+        axisLabel: { color: theme.textSecondary, fontSize: isCompact ? 10 : 11 },
       },
       series: [
         {
           name: sanitizeChartLabel(
-            props.title ?? RUNTIME_MESSAGES[resolveClientLocale()].chartBoxplotDefault,
+            props.title ?? CHART_MESSAGES[resolveClientLocale()].chartBoxplotDefault,
           ),
           type: 'boxplot',
           itemStyle: {
@@ -1489,25 +1677,32 @@ function buildChartOptionInternal(
     const bounds = computeRefAxisBounds(ohlc.flat(), props.referenceLine, true)
     return {
       tooltip: { ...baseTooltip, trigger: 'axis' },
-      grid: { top: 18, right: 18, bottom: props.zoom ? 38 : 16, left: 12, containLabel: true },
+      grid: {
+        top: 18,
+        right: isCompact ? 10 : 18,
+        bottom: props.zoom ? 38 : 16,
+        left: isCompact ? 6 : 12,
+        containLabel: true,
+      },
       dataZoom: zoomCfg,
       xAxis: {
         type: 'category',
         data: categories,
         axisLine: { lineStyle: { color: theme.border } },
-        axisLabel: { color: theme.textSecondary, fontSize: 11, hideOverlap: true },
+        axisLabel: { color: theme.textSecondary, fontSize: isCompact ? 10 : 11, hideOverlap: true },
       },
       yAxis: {
         type: 'value',
         scale: true,
         ...bounds,
+        splitNumber: isCompact ? 4 : undefined,
         splitLine: { lineStyle: { color: theme.border } },
-        axisLabel: { color: theme.textSecondary, fontSize: 11 },
+        axisLabel: { color: theme.textSecondary, fontSize: isCompact ? 10 : 11 },
       },
       series: [
         {
           name: sanitizeChartLabel(
-            props.title ?? RUNTIME_MESSAGES[resolveClientLocale()].chartCandlestickDefault,
+            props.title ?? CHART_MESSAGES[resolveClientLocale()].chartCandlestickDefault,
           ),
           type: 'candlestick',
           itemStyle: {
@@ -1524,13 +1719,14 @@ function buildChartOptionInternal(
   }
 
   if (props.kind === 'scatter') {
-    const numericX = typeof rows[0]?.[xKey] === 'number'
+    const firstNonNullX = rows.find((r) => r[xKey] !== undefined && r[xKey] !== null)?.[xKey]
+    const numericX = typeof firstNonNullX === 'number' && Number.isFinite(firstNonNullX)
     const sizeKey = props.sizeField
     const rawSizes = sizeKey ? rows.map((r) => Math.max(0, toNumber(r[sizeKey]))) : []
     const maxSize = rawSizes.length > 0 ? Math.max(...rawSizes, 1) : 1
-    const computeRadius = (idx: number): number => {
+    const computeRadiusForVal = (rawVal: number): number => {
       if (!sizeKey) return isCompact ? 9 : 11
-      const ratio = Math.sqrt((rawSizes[idx] ?? 0) / maxSize)
+      const ratio = Math.sqrt(Math.max(0, rawVal) / maxSize)
       return isCompact ? Math.round(6 + ratio * 20) : Math.round(8 + ratio * 32)
     }
 
@@ -1558,43 +1754,105 @@ function buildChartOptionInternal(
       isCompact,
     )
     const bounds = computeRefAxisBounds(scatterYVals, props.referenceLine)
+
+    const scatterSeries: Record<string, unknown>[] = props.seriesField
+      ? (() => {
+          const groupField = props.seriesField
+          const groups = [...new Set(rows.map((r) => sanitizeChartLabel(r[groupField])))]
+          const xCategories = numericX
+            ? []
+            : [...new Set(rows.map((r) => sanitizeChartLabel(r[xKey])))]
+          return groups.map((group, idx) => {
+            const grpRows = rows.filter((r) => sanitizeChartLabel(r[groupField]) === group)
+            return {
+              name: group,
+              type: 'scatter',
+              symbolSize: (val: unknown) => {
+                if (!sizeKey) return isCompact ? 9 : 11
+                if (Array.isArray(val) && val.length >= 3)
+                  return computeRadiusForVal(toNumber(val[2]))
+                return isCompact ? 9 : 11
+              },
+              itemStyle: sizeKey ? { opacity: 0.78 } : undefined,
+              markLine: idx === 0 ? refLine : undefined,
+              data: numericX
+                ? grpRows.map((r) =>
+                    sizeKey
+                      ? [toNumber(r[xKey]), toNumber(r[primaryY]), toNumber(r[sizeKey])]
+                      : [toNumber(r[xKey]), toNumber(r[primaryY])],
+                  )
+                : grpRows.map((r) => {
+                    const cx = xCategories.indexOf(sanitizeChartLabel(r[xKey]))
+                    return sizeKey
+                      ? [cx, toNumber(r[primaryY]), toNumber(r[sizeKey])]
+                      : [cx, toNumber(r[primaryY])]
+                  }),
+            }
+          })
+        })()
+      : yKeys.map((k, idx) => ({
+          name: sanitizeChartLabel(k),
+          type: 'scatter',
+          symbolSize: (_val: unknown, params?: { dataIndex?: number }) =>
+            computeRadiusForVal(rawSizes[params?.dataIndex ?? 0] ?? 0),
+          itemStyle: sizeKey ? { opacity: 0.78 } : undefined,
+          markLine: idx === 0 ? refLine : undefined,
+          data: numericX
+            ? rows.map((r) =>
+                sizeKey
+                  ? [toNumber(r[xKey]), toNumber(r[k]), toNumber(r[sizeKey])]
+                  : [toNumber(r[xKey]), toNumber(r[k])],
+              )
+            : rows.map((r) => toNumber(r[k])),
+        }))
+
+    const showScatterLegend = scatterSeries.length > 1
+    const scatterCategories = numericX
+      ? undefined
+      : props.seriesField
+        ? [...new Set(rows.map((r) => sanitizeChartLabel(r[xKey])))]
+        : rows.map((r) => sanitizeChartLabel(r[xKey]))
+
     return {
       color: theme.colors,
       tooltip: { ...baseTooltip, trigger: 'item' },
-      grid: { top: 18, right: 18, bottom: props.zoom ? 38 : 16, left: 12, containLabel: true },
+      legend: showScatterLegend
+        ? buildLegendOption({
+            isCompact,
+            scroll: isCompact || scatterSeries.length >= 4,
+            bottom: props.zoom ? 24 : 0,
+            names: scatterSeries.map((s) => String(s.name ?? '')),
+            textColor: theme.textSecondary,
+          })
+        : undefined,
+      grid: {
+        top: 18,
+        right: isCompact ? 12 : 18,
+        bottom: (showScatterLegend ? 32 : 16) + (props.zoom ? 24 : 0),
+        left: isCompact ? 8 : 12,
+        containLabel: true,
+      },
       dataZoom: zoomCfg,
       xAxis: {
         type: numericX ? 'value' : 'category',
-        data: numericX ? undefined : rows.map((r) => sanitizeChartLabel(r[xKey])),
-        axisLabel: { color: theme.textSecondary, fontSize: 11, hideOverlap: true },
+        data: scatterCategories,
+        splitNumber: numericX && isCompact ? 3 : undefined,
+        axisLabel: { color: theme.textSecondary, fontSize: isCompact ? 10 : 11, hideOverlap: true },
         splitLine: { lineStyle: { color: theme.border } },
       },
       yAxis: {
         type: 'value',
         ...bounds,
-        axisLabel: { color: theme.textSecondary, fontSize: 11 },
+        splitNumber: isCompact ? 3 : undefined,
+        axisLabel: { color: theme.textSecondary, fontSize: isCompact ? 10 : 11, hideOverlap: true },
         splitLine: { lineStyle: { color: theme.border } },
       },
-      series: yKeys.map((k, idx) => ({
-        name: sanitizeChartLabel(k),
-        type: 'scatter',
-        symbolSize: (_val: unknown, params?: { dataIndex?: number }) =>
-          computeRadius(params?.dataIndex ?? 0),
-        itemStyle: sizeKey ? { opacity: 0.78 } : undefined,
-        markLine: idx === 0 ? refLine : undefined,
-        data: numericX
-          ? rows.map((r) =>
-              sizeKey
-                ? [toNumber(r[xKey]), toNumber(r[k]), toNumber(r[sizeKey])]
-                : [toNumber(r[xKey]), toNumber(r[k])],
-            )
-          : rows.map((r) => toNumber(r[k])),
-      })),
+      series: scatterSeries,
     }
   }
 
   if (props.kind === 'waterfall') {
-    const localeMsg = RUNTIME_MESSAGES[resolveClientLocale()]
+    const localeMsg = CHART_MESSAGES[resolveClientLocale()]
     const valField =
       (typeof props.yField === 'string' && props.yField !== '' ? props.yField : undefined) ??
       primaryY
@@ -1602,6 +1860,8 @@ function buildChartOptionInternal(
 
     let running = 0
     const peaks: number[] = [0]
+    const stepDeltas: number[] = []
+    const isTotalFlags: boolean[] = []
     const baseData: number[] = []
     const baseNegData: number[] = []
     const totalData: Array<number | '-'> = []
@@ -1619,6 +1879,8 @@ function buildChartOptionInternal(
         isTotal && (rawVal === undefined || rawVal === null || rawVal === '')
           ? running
           : toNumber(rawVal)
+      stepDeltas.push(val)
+      isTotalFlags.push(isTotal)
       if (isTotal) {
         baseData.push(0)
         baseNegData.push(0)
@@ -1718,7 +1980,7 @@ function buildChartOptionInternal(
         : undefined
     const yMaxEst = bounds.max ?? niceUpperBound(Math.max(...peaks, refVal ?? 0, 1))
     const yMinEst = bounds.min ?? Math.min(0, ...peaks)
-    const ySpan = Math.max(1, yMaxEst - yMinEst)
+    const ySpan = Math.max(1e-9, yMaxEst - yMinEst)
     const refText =
       props.referenceLabel !== undefined && props.referenceLabel.trim() !== ''
         ? sanitizeChartLabel(props.referenceLabel)
@@ -1727,6 +1989,7 @@ function buildChartOptionInternal(
           : ''
     const estW = containerWidth !== undefined && containerWidth > 0 ? containerWidth : 520
     const barSlotW = Math.max(22, (estW - 56) / Math.max(1, rows.length))
+    const estBarW = Math.min(34, barSlotW * 0.62)
     let refTextPx = 18
     for (const ch of refText) {
       refTextPx += (ch.codePointAt(0) ?? 0) > 0xff ? 11.2 : 6.8
@@ -1749,18 +2012,20 @@ function buildChartOptionInternal(
       return high >= pillLow && low <= pillHigh
     }
 
+    const fitsInsideBar = (labelText: string, barHeight: number): boolean => {
+      const estLabelPx = labelText.length * barLabelFontSize * 0.62
+      return barHeight >= ySpan * 0.1 && estBarW >= estLabelPx + 4
+    }
+
     const insideHaloLabel = {
       position: 'inside' as const,
-      color: '#ffffff',
-      textBorderColor: 'rgba(15, 23, 42, 0.65)',
-      textBorderWidth: 1.8,
-      fontWeight: 600,
+      ...FILLED_SHAPE_LABEL,
     }
 
     const totalItems = totalData.map((val, i) => {
       if (typeof val !== 'number') return val
       if (showBarLabels && overlapsRefBand(i, val, val + ySpan * 0.085)) {
-        if (Math.abs(val) >= ySpan * 0.1) {
+        if (fitsInsideBar(String(val), Math.abs(val))) {
           return { value: val, label: insideHaloLabel }
         }
       }
@@ -1771,9 +2036,13 @@ function buildChartOptionInternal(
       if (typeof val !== 'number') return val
       const bottom = baseData[i] ?? 0
       const top = bottom + val
+      const text = `+${Math.abs(stepDeltas[i] ?? val)}`
       if (showBarLabels && overlapsRefBand(i, top, top + ySpan * 0.085)) {
         const mid = bottom + val / 2
-        if (val >= ySpan * 0.1 && !overlapsRefBand(i, mid - ySpan * 0.04, mid + ySpan * 0.04)) {
+        if (
+          fitsInsideBar(text, val) &&
+          !overlapsRefBand(i, mid - ySpan * 0.04, mid + ySpan * 0.04)
+        ) {
           return { value: val, label: insideHaloLabel }
         }
         if (!overlapsRefBand(i, bottom - ySpan * 0.085, bottom - ySpan * 0.015)) {
@@ -1790,16 +2059,65 @@ function buildChartOptionInternal(
       if (typeof val !== 'number') return val
       const bottom = baseData[i] ?? 0
       const top = bottom + val
+      const text = `-${Math.abs(stepDeltas[i] ?? val)}`
       if (showBarLabels && overlapsRefBand(i, bottom - ySpan * 0.085, bottom)) {
         if (!overlapsRefBand(i, top, top + ySpan * 0.085)) {
           return { value: val, label: { position: 'top' as const } }
         }
-        if (val >= ySpan * 0.1) {
+        if (fitsInsideBar(text, val)) {
           return { value: val, label: insideHaloLabel }
         }
       }
       return val
     })
+
+    const formatIncLabel = (p: { dataIndex?: number; value?: unknown }): string => {
+      const idx = typeof p.dataIndex === 'number' ? p.dataIndex : -1
+      const delta = idx >= 0 ? stepDeltas[idx] : undefined
+      return delta !== undefined ? `+${Math.abs(delta)}` : `+${sanitizeChartLabel(p.value)}`
+    }
+    const formatDecLabel = (p: { dataIndex?: number; value?: unknown }): string => {
+      const idx = typeof p.dataIndex === 'number' ? p.dataIndex : -1
+      const delta = idx >= 0 ? stepDeltas[idx] : undefined
+      return delta !== undefined ? `-${Math.abs(delta)}` : `-${sanitizeChartLabel(p.value)}`
+    }
+
+    const incNegItems = incNegData.map((val, i) => {
+      if (typeof val !== 'number') return val
+      const onlyNeg = incData[i] === '-'
+      return {
+        value: val,
+        label: {
+          show: showBarLabels && onlyNeg,
+          position: 'bottom' as const,
+          color: theme.success,
+          fontSize: barLabelFontSize,
+          formatter: () => `+${Math.abs(stepDeltas[i] ?? val)}`,
+        },
+      }
+    })
+    const decNegItems = decNegData.map((val, i) => {
+      if (typeof val !== 'number') return val
+      const onlyNeg = decData[i] === '-'
+      return {
+        value: val,
+        label: {
+          show: showBarLabels && onlyNeg,
+          position: 'bottom' as const,
+          color: theme.danger,
+          fontSize: barLabelFontSize,
+          formatter: () => `-${Math.abs(stepDeltas[i] ?? val)}`,
+        },
+      }
+    })
+
+    const wfLegendData = hasTotal
+      ? [
+          localeMsg.chartWaterfallTotal,
+          localeMsg.chartWaterfallIncrease,
+          localeMsg.chartWaterfallDecrease,
+        ]
+      : [localeMsg.chartWaterfallIncrease, localeMsg.chartWaterfallDecrease]
 
     return {
       tooltip: {
@@ -1809,11 +2127,23 @@ function buildChartOptionInternal(
         formatter: (params: unknown) => {
           if (!Array.isArray(params)) return ''
           const active = (
-            params as Array<{ name?: unknown; seriesName?: unknown; value?: unknown }>
+            params as Array<{
+              name?: unknown
+              seriesName?: unknown
+              value?: unknown
+              dataIndex?: unknown
+            }>
           ).find((p) => p.value !== '-' && p.value !== undefined && p.seriesName !== '')
           if (!active) return ''
           const title = sanitizeChartLabel(active.name)
           const sName = sanitizeChartLabel(active.seriesName)
+          const idx = typeof active.dataIndex === 'number' ? active.dataIndex : -1
+          if (idx >= 0 && idx < stepDeltas.length) {
+            const delta = stepDeltas[idx]!
+            const isTot = isTotalFlags[idx] === true
+            const formatted = isTot ? String(delta) : delta > 0 ? `+${delta}` : String(delta)
+            return `${title}\n${sName}: ${formatted}`
+          }
           const sign = sName === localeMsg.chartWaterfallDecrease ? '-' : ''
           return `${title}\n${sName}: ${sign}${sanitizeChartLabel(active.value)}`
         },
@@ -1823,13 +2153,7 @@ function buildChartOptionInternal(
         scroll: isCompact,
         bottom: props.zoom ? 24 : 0,
         textColor: theme.textSecondary,
-        data: hasTotal
-          ? [
-              localeMsg.chartWaterfallTotal,
-              localeMsg.chartWaterfallIncrease,
-              localeMsg.chartWaterfallDecrease,
-            ]
-          : [localeMsg.chartWaterfallIncrease, localeMsg.chartWaterfallDecrease],
+        data: wfLegendData,
       }),
       dataZoom: zoomCfg,
       grid: {
@@ -1844,13 +2168,13 @@ function buildChartOptionInternal(
         data: categories,
         axisLine: { lineStyle: { color: theme.border } },
         axisTick: { show: false },
-        axisLabel: { color: theme.textSecondary, fontSize: 11, hideOverlap: true },
+        axisLabel: { color: theme.textSecondary, fontSize: isCompact ? 10 : 11, hideOverlap: true },
       },
       yAxis: {
         type: 'value',
         ...bounds,
         splitLine: { lineStyle: { color: theme.border, type: 'dashed' } },
-        axisLabel: { color: theme.textSecondary, fontSize: 11 },
+        axisLabel: { color: theme.textSecondary, fontSize: isCompact ? 10 : 11 },
       },
       series: [
         {
@@ -1891,7 +2215,7 @@ function buildChartOptionInternal(
             position: 'top',
             color: theme.success,
             fontSize: barLabelFontSize,
-            formatter: '+{c}',
+            formatter: formatIncLabel,
           },
           markLine: !hasTotal ? refLine : undefined,
           data: incItems,
@@ -1908,7 +2232,7 @@ function buildChartOptionInternal(
             position: 'bottom',
             color: theme.danger,
             fontSize: barLabelFontSize,
-            formatter: '-{c}',
+            formatter: formatDecLabel,
           },
           data: decItems,
         },
@@ -1932,8 +2256,9 @@ function buildChartOptionInternal(
                 barGap: '-100%',
                 barMaxWidth: 34,
                 itemStyle: { color: theme.success, borderRadius: [0, 0, 4, 4] },
+                labelLayout: { hideOverlap: true },
                 label: { show: false },
-                data: incNegData,
+                data: incNegItems,
               },
               {
                 name: localeMsg.chartWaterfallDecrease,
@@ -1942,8 +2267,9 @@ function buildChartOptionInternal(
                 barGap: '-100%',
                 barMaxWidth: 34,
                 itemStyle: { color: theme.danger, borderRadius: [0, 0, 4, 4] },
+                labelLayout: { hideOverlap: true },
                 label: { show: false },
-                data: decNegData,
+                data: decNegItems,
               },
             ]
           : []),
@@ -2037,11 +2363,13 @@ function buildChartOptionInternal(
       data: barDataList[idx] ?? [],
     }))
 
-    const linePalette = [theme.colors[3] ?? theme.warn, theme.warn, theme.success, theme.danger]
+    const barKeySet = new Set(barKeys)
+    const lineColorStart = barKeys.length === 1 ? 3 : barKeys.length
     const lineSeries = lineKeys.map((k, idx) => {
-      const col = linePalette[idx % linePalette.length]!
+      const col = theme.colors[(lineColorStart + idx) % theme.colors.length]!
+      const label = sanitizeChartLabel(k)
       return {
-        name: sanitizeChartLabel(k),
+        name: barKeySet.has(k) ? `${label} (2)` : label,
         type: 'line' as const,
         yAxisIndex: 1,
         smooth: true,
@@ -2073,6 +2401,7 @@ function buildChartOptionInternal(
         bottom: legendBottom,
         itemWidth: isCompact ? 10 : 12,
         fontSize: isCompact ? 10.5 : 11.5,
+        names: [...barSeries.map((s) => s.name), ...lineSeries.map((s) => s.name)],
         textColor: theme.textSecondary,
       }),
       dataZoom: zoomCfg,
@@ -2120,7 +2449,7 @@ function buildChartOptionInternal(
               (typeof sample[k] === 'number' ||
                 (typeof sample[k] === 'string' &&
                   sample[k].trim() !== '' &&
-                  !Number.isNaN(Number(sample[k])))),
+                  Number.isFinite(Number(sample[k])))),
           )
     const effectiveDims = dimKeys.length > 0 ? dimKeys : yKeys.length > 0 ? yKeys : ['value']
     const labelField = props.seriesField ?? xKey
@@ -2190,6 +2519,7 @@ function buildChartOptionInternal(
             scroll: true,
             itemWidth: 14,
             itemHeight: 3,
+            names: parallelSeries.map((s) => s.name),
             textColor: theme.textSecondary,
           })
         : undefined,
@@ -2419,10 +2749,24 @@ function buildChartOptionInternal(
     })
   }
 
-  const cartesianEdgeVals = props.stacked
+  const stackedPosSums = props.stacked
     ? categories.map((_, cIdx) =>
-        series.reduce((sum, s) => sum + toNumber((s.data as unknown[])[cIdx]), 0),
+        series.reduce((sum, s) => {
+          const v = toNumber((s.data as unknown[])[cIdx])
+          return v > 0 ? sum + v : sum
+        }, 0),
       )
+    : []
+  const stackedNegSums = props.stacked
+    ? categories.map((_, cIdx) =>
+        series.reduce((sum, s) => {
+          const v = toNumber((s.data as unknown[])[cIdx])
+          return v < 0 ? sum + v : sum
+        }, 0),
+      )
+    : []
+  const cartesianEdgeVals = props.stacked
+    ? stackedPosSums
     : categories.map((_, cIdx) =>
         Math.max(...series.map((s) => toNumber((s.data as unknown[])[cIdx])), 0),
       )
@@ -2447,7 +2791,7 @@ function buildChartOptionInternal(
   }
 
   const cartesianVals = props.stacked
-    ? cartesianEdgeVals
+    ? [...stackedPosSums, ...stackedNegSums]
     : series.flatMap((s) => (s.data as unknown[]).map(toNumber))
   const cartesianBounds = computeRefAxisBounds(cartesianVals, props.referenceLine)
 
@@ -2456,6 +2800,9 @@ function buildChartOptionInternal(
   const maxHBarLabelW = isCompact
     ? Math.min(92, Math.floor(estCartW * 0.35))
     : Math.min(168, Math.floor(estCartW * 0.34))
+  const maxVBarLabelW = isCompact
+    ? Math.max(40, Math.floor((estCartW - 44) / Math.min(6, Math.max(2, categories.length))))
+    : undefined
   const categoryAxis = {
     type: 'category' as const,
     data: categories,
@@ -2469,7 +2816,14 @@ function buildChartOptionInternal(
           overflow: 'truncate' as const,
           ellipsis: '…',
         }
-      : { color: theme.textSecondary, fontSize: 11, hideOverlap: true },
+      : {
+          color: theme.textSecondary,
+          fontSize: isCompact ? 10 : 11,
+          hideOverlap: true,
+          ...(maxVBarLabelW !== undefined
+            ? { width: maxVBarLabelW, overflow: 'truncate' as const, ellipsis: '…' }
+            : {}),
+        },
   }
   const valueAxis = {
     type: 'value' as const,
@@ -2493,6 +2847,7 @@ function buildChartOptionInternal(
           scroll: isCompact || series.length >= 4,
           bottom: props.zoom && !isHorizontal ? 24 : 0,
           fontSize: 11.5,
+          names: series.map((s) => String(s.name ?? '')),
           textColor: theme.textSecondary,
         })
       : undefined,

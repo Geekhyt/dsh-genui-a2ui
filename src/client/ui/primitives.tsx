@@ -14,11 +14,12 @@ import {
   type InputHTMLAttributes,
   type ReactElement,
   type ReactNode,
+  useRef,
   useState,
 } from 'react'
 import { createPortal } from 'react-dom'
 import { SHELL_MESSAGES, type UiLocale } from '../../shared/i18n.ts'
-import { useAutoDismissTimer } from '../dom-hooks.ts'
+import { useAutoDismissTimer, useEscapeKey, useTransientFlag } from '../dom-hooks.ts'
 import { useShellMessages, useUiLocale } from '../i18n.ts'
 
 export type {
@@ -418,7 +419,9 @@ export function DshModal(props: {
   children?: ReactNode
   footer?: ReactNode
 }) {
-  if (hasComponent(raw.Modal)) {
+  const hasHostModal = hasComponent(raw.Modal)
+  useEscapeKey(!hasHostModal && props.open, props.onClose)
+  if (hasHostModal) {
     const HostModal = HostPrimitives.Modal
     return <HostModal {...props} />
   }
@@ -432,7 +435,7 @@ export function DshModal(props: {
       style={{
         position: 'fixed',
         inset: 0,
-        zIndex: 9999,
+        zIndex: 'var(--a2ui-z-modal, 1000)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -448,7 +451,8 @@ export function DshModal(props: {
           overflow: 'auto',
           padding: 20,
           borderRadius: 'var(--dsw-radius-xl, 16px)',
-          background: 'var(--dsw-alias-bg-layer-2, #1f1f24)',
+          background: 'var(--dsw-alias-bg-layer-2, light-dark(#ffffff, #1f1f24))',
+          color: 'var(--dsw-alias-label-primary, inherit)',
           border: '1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.25))',
         }}
       >
@@ -542,14 +546,13 @@ function FallbackJsonNode(props: {
 }) {
   const { name, value, depth, expandedDepth, copyable, copyLabel } = props
   const [open, setOpen] = useState(depth < expandedDepth)
-  const [copied, setCopied] = useState(false)
+  const [copied, markCopied] = useTransientFlag(1200)
 
   const handleCopy = (text: string) => {
     if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
       void navigator.clipboard.writeText(text).catch(() => {})
     }
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1200)
+    markCopied()
   }
 
   if (value === null || typeof value !== 'object') {
@@ -819,7 +822,7 @@ function FallbackToast(props: {
         top: 40,
         left: '50%',
         transform: 'translateX(-50%)',
-        zIndex: 1100,
+        zIndex: 'var(--a2ui-z-toast, 1300)',
         pointerEvents: 'none',
         display: 'flex',
         alignItems: 'center',
@@ -827,8 +830,10 @@ function FallbackToast(props: {
         maxWidth: 'min(640px, calc(100vw - 48px))',
         padding: '12px 16px',
         borderRadius: 'var(--dsw-radius-lg, 12px)',
-        background: 'var(--dsw-alias-toast-bg, var(--dsw-alias-bg-layer-2, #1f2329))',
-        color: 'var(--dsw-alias-toast-label, var(--dsw-alias-label-primary, #ffffff))',
+        background:
+          'var(--dsw-alias-toast-bg, var(--dsw-alias-bg-layer-2, light-dark(#ffffff, #1f2329)))',
+        color:
+          'var(--dsw-alias-toast-label, var(--dsw-alias-label-primary, light-dark(#18191e, #ffffff)))',
         fontSize: 14,
         lineHeight: '22px',
         boxShadow: 'var(--dsw-shadow-lv3, 0 8px 24px rgba(0,0,0,0.24))',
@@ -893,7 +898,11 @@ export function DshMenu(props: {
   side?: 'top' | 'bottom'
   anchor: ReactElement
 }) {
-  if (hasComponent(raw.Menu)) {
+  const hasHostMenu = hasComponent(raw.Menu)
+  const anchorWrapRef = useRef<HTMLSpanElement | null>(null)
+  useEscapeKey(!hasHostMenu && props.open, props.onClose)
+
+  if (hasHostMenu) {
     return (
       <HostPrimitives.Menu
         open={props.open}
@@ -907,27 +916,49 @@ export function DshMenu(props: {
       />
     )
   }
+
+  let menuStyle: { left: number; top?: number; bottom?: number } = { left: 16, top: 64 }
+  if (props.open && typeof window !== 'undefined' && anchorWrapRef.current) {
+    const rect = anchorWrapRef.current.getBoundingClientRect()
+    const vw = window.innerWidth || 1024
+    const vh = window.innerHeight || 768
+    const menuW = Math.max(180, Math.round(rect.width))
+    const left = Math.max(8, Math.min(Math.round(rect.left), vw - menuW - 8))
+    const preferTop = (props.side ?? 'top') === 'top'
+    if (preferTop && rect.top >= 120) {
+      menuStyle = { left, bottom: Math.max(8, Math.round(vh - rect.top + 6)) }
+    } else {
+      menuStyle = { left, top: Math.min(vh - 80, Math.round(rect.bottom + 6)) }
+    }
+  }
+
   return (
-    <span style={{ position: 'relative', display: 'inline-flex' }}>
+    <span ref={anchorWrapRef} style={{ position: 'relative', display: 'inline-flex' }}>
       {props.anchor}
       {props.open && typeof document !== 'undefined'
         ? createPortal(
             <div
               role="presentation"
               onClick={props.onClose}
-              style={{ position: 'fixed', inset: 0, zIndex: 9998 }}
+              style={{
+                position: 'fixed',
+                inset: 0,
+                zIndex: 'var(--a2ui-z-popover-backdrop, 1099)',
+              }}
             >
               <div
                 role="menu"
                 onClick={(e) => e.stopPropagation()}
                 style={{
                   position: 'fixed',
-                  left: 24,
-                  bottom: 64,
+                  ...menuStyle,
+                  zIndex: 'var(--a2ui-z-popover, 1100)',
                   minWidth: 180,
+                  maxWidth: 'calc(100vw - 16px)',
                   padding: 4,
                   borderRadius: 'var(--dsw-radius-md, 10px)',
-                  background: 'var(--dsw-specific-menu, var(--dsw-alias-bg-layer-2, #1f2329))',
+                  background:
+                    'var(--dsw-specific-menu, var(--dsw-alias-bg-layer-2, light-dark(#ffffff, #1f2329)))',
                   boxShadow: 'var(--dsw-elevation-panel, 0 8px 24px rgba(0,0,0,0.22))',
                   border: '0.5px solid var(--dsw-alias-border-l1, rgba(128,128,128,0.25))',
                 }}
@@ -969,7 +1000,59 @@ export function DshMenu(props: {
   )
 }
 
-export const DshDisclosureRow = HostPrimitives.DisclosureRow
+interface FallbackDisclosureRowProps {
+  readonly icon?: ReactNode
+  readonly title: ReactNode
+  readonly running?: boolean
+  readonly open?: boolean
+  readonly expandable?: boolean
+  readonly expandOnRowClick?: boolean
+  readonly keepContentWhenOpen?: boolean
+  readonly onToggle?: () => void
+  readonly collapsedContent?: ReactNode
+  readonly children?: ReactNode
+}
+
+function FallbackDisclosureRow(props: FallbackDisclosureRowProps) {
+  const canToggle = Boolean(props.expandable && props.onToggle)
+  const isOpen = Boolean(props.open && props.expandable)
+  return (
+    <div data-a2ui-disclosure="" data-open={isOpen || undefined}>
+      <button
+        type="button"
+        disabled={!canToggle}
+        aria-expanded={canToggle ? isOpen : undefined}
+        onClick={canToggle ? props.onToggle : undefined}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          width: '100%',
+          padding: '4px 6px',
+          border: 'none',
+          background: 'transparent',
+          color: 'var(--dsw-alias-label-secondary, inherit)',
+          fontSize: 12,
+          textAlign: 'left',
+          cursor: canToggle ? 'pointer' : 'default',
+        }}
+      >
+        {props.icon}
+        <span style={{ fontWeight: 500 }}>{props.title}</span>
+        {(!isOpen || props.keepContentWhenOpen) && props.collapsedContent ? (
+          <span style={{ minWidth: 0, flex: 1 }}>{props.collapsedContent}</span>
+        ) : null}
+      </button>
+      {isOpen && props.children ? (
+        <div style={{ padding: '6px 0 2px' }}>{props.children}</div>
+      ) : null}
+    </div>
+  )
+}
+
+export const DshDisclosureRow = hasComponent(raw.DisclosureRow)
+  ? HostPrimitives.DisclosureRow
+  : (FallbackDisclosureRow as typeof HostPrimitives.DisclosureRow)
 
 export function DshAppsIcon({ size = 14 }: { size?: number }) {
   if (hasComponent(raw.IconAppsAddOutlineRegular)) {
@@ -1095,8 +1178,10 @@ export function DshImageLightbox(props: {
   closeLabel: string
   onClose: () => void
 }) {
+  const hasHostLightbox = hasComponent(raw.ImageLightbox)
+  useEscapeKey(!hasHostLightbox && props.open, props.onClose)
   if (!props.open || typeof document === 'undefined') return null
-  if (hasComponent(raw.ImageLightbox)) {
+  if (hasHostLightbox) {
     return (
       <HostPrimitives.ImageLightbox
         src={props.src}
@@ -1115,7 +1200,7 @@ export function DshImageLightbox(props: {
       style={{
         position: 'fixed',
         inset: 0,
-        zIndex: 9999,
+        zIndex: 'var(--a2ui-z-fullscreen, 1200)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',

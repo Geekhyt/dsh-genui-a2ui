@@ -1,18 +1,23 @@
 .card {
-  --a2ui-color-background: var(--dsw-alias-bg-base, #ffffff);
-  --a2ui-color-on-background: var(--dsw-alias-label-primary, #1f2329);
-  --a2ui-color-surface: var(--dsw-alias-bg-layer-1, #f7f8fa);
-  --a2ui-color-on-surface: var(--dsw-alias-label-primary, #1f2329);
+  --a2ui-z-modal: 1000;
+  --a2ui-z-popover-backdrop: 1099;
+  --a2ui-z-popover: 1100;
+  --a2ui-z-fullscreen: 1200;
+  --a2ui-z-toast: 1300;
+  --a2ui-color-background: var(--dsw-alias-bg-base, light-dark(#ffffff, #18191e));
+  --a2ui-color-on-background: var(--dsw-alias-label-primary, light-dark(#1f2329, #eceef2));
+  --a2ui-color-surface: var(--dsw-alias-bg-layer-1, light-dark(#f7f8fa, #1e2027));
+  --a2ui-color-on-surface: var(--dsw-alias-label-primary, light-dark(#1f2329, #eceef2));
   --a2ui-color-primary: var(--dsw-alias-brand-primary, #4d6bfe);
   --a2ui-color-on-primary: var(--dsw-alias-label-primary-inverted, #ffffff);
-  --a2ui-color-secondary: var(--dsw-alias-interactive-bg-hover, rgba(0, 0, 0, 0.05));
-  --a2ui-color-on-secondary: var(--dsw-alias-label-primary, #1f2329);
-  --a2ui-color-border: var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.1));
+  --a2ui-color-secondary: var(--dsw-alias-interactive-bg-hover, rgba(128, 128, 128, 0.08));
+  --a2ui-color-on-secondary: var(--dsw-alias-label-primary, light-dark(#1f2329, #eceef2));
+  --a2ui-color-border: var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.18));
   --a2ui-border-radius: var(--dsw-radius-md, 8px);
   --a2ui-border-width: 0.5px;
   --a2ui-border: 0.5px solid var(--a2ui-color-border);
-  --a2ui-color-input: var(--dsw-alias-bg-base, #ffffff);
-  --a2ui-color-on-input: var(--dsw-alias-label-primary, #1f2329);
+  --a2ui-color-input: var(--dsw-alias-bg-base, light-dark(#ffffff, #18191e));
+  --a2ui-color-on-input: var(--dsw-alias-label-primary, light-dark(#1f2329, #eceef2));
   --a2ui-font-family-title: var(--dsw-font-family, inherit);
   --a2ui-font-family-monospace: var(
     --dsw-font-family-mono,
@@ -26,10 +31,10 @@
   box-sizing: border-box;
   width: 100%;
   container-type: inline-size;
-  border: 0.5px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.1));
+  border: 0.5px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.18));
   border-radius: var(--dsw-radius-lg, 12px);
-  background: var(--dsw-alias-bg-layer-1, #f7f8fa);
-  color: var(--dsw-alias-label-primary, #1f2329);
+  background: var(--dsw-alias-bg-layer-1, light-dark(#f7f8fa, #1e2027));
+  color: var(--dsw-alias-label-primary, light-dark(#1f2329, #eceef2));
   font-family: var(--dsw-font-family, inherit);
   font-size: var(--dsh-content-font-size, 14px);
   line-height: 1.55;

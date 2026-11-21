@@ -8,7 +8,9 @@ import {
   TextFieldApi,
 } from '@a2ui/web_core/v1_0'
 import {
+  type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
+  useCallback,
   useContext,
   useDeferredValue,
   useId,
@@ -27,6 +29,8 @@ import {
 } from 'react-aria-components'
 import { createPortal } from 'react-dom'
 import { SegmentedApi, SelectApi, SwitchApi } from '../../shared/catalog-schema.ts'
+import { formatNativeTemporalValue } from '../../shared/temporal.ts'
+import { usePortalPopover } from '../dom-hooks.ts'
 import { useRuntimeMessages } from '../i18n.ts'
 import { useDarkTheme } from '../theme.ts'
 import {
@@ -81,23 +85,27 @@ export function DshButtonView({
     props.variant === 'primary' ? 'primary' : props.variant === 'borderless' ? 'ghost' : 'outline'
 
   const invalid = props.isValid === false
-  const disabled = readOnly || invalid || typeof props.action !== 'function'
+  const hardDisabled = readOnly || typeof props.action !== 'function'
+  const softInvalidDisabled = !hardDisabled && invalid
   const errLabel = !readOnly && invalid ? (props.validationErrors ?? []).join('；') : ''
-  const needsInvalidGateWrap = !readOnly && invalid
 
   const btn = (
     <DshButton
       variant={variant}
-      disabled={disabled}
-      style={
-        needsInvalidGateWrap
-          ? props.weight !== undefined
-            ? { width: '100%' }
-            : undefined
-          : weightStyle(props.weight)
-      }
+      disabled={hardDisabled}
+      aria-disabled={softInvalidDisabled || undefined}
+      style={{
+        ...weightStyle(props.weight),
+        ...(softInvalidDisabled ? { opacity: 0.52, cursor: 'not-allowed' } : undefined),
+      }}
+      onClickCapture={softInvalidDisabled ? () => markSubmitAttempted() : undefined}
       onClick={() => {
-        if (!disabled && props.action) {
+        if (hardDisabled) return
+        if (softInvalidDisabled) {
+          markSubmitAttempted()
+          return
+        }
+        if (props.action) {
           markSubmitAttempted()
           void props.action()
           closeModal?.()
@@ -109,18 +117,6 @@ export function DshButtonView({
       </InsideButtonContext.Provider>
     </DshButton>
   )
-
-  if (needsInvalidGateWrap) {
-    const wrapped = (
-      <span
-        style={{ display: 'inline-flex', ...weightStyle(props.weight) }}
-        onClickCapture={() => markSubmitAttempted()}
-      >
-        {btn}
-      </span>
-    )
-    return errLabel ? <DshTooltip label={errLabel}>{wrapped}</DshTooltip> : wrapped
-  }
 
   return errLabel ? <DshTooltip label={errLabel}>{btn}</DshTooltip> : btn
 }
@@ -414,7 +410,7 @@ export const DshSliderImpl = defineComponent<{
   const rawMax = typeof props.max === 'number' && Number.isFinite(props.max) ? props.max : 100
   const max = rawMax > min ? rawMax : min + 1
   const step =
-    typeof props.steps === 'number' && props.steps > 0
+    typeof props.steps === 'number' && Number.isFinite(props.steps) && props.steps > 0
       ? Number(((max - min) / props.steps).toFixed(6))
       : 1
   const rawVal = Number(props.value ?? min)
@@ -476,16 +472,15 @@ export const DshDateTimeInputImpl = defineComponent<{
   const enableDate = props.enableDate !== false
   const enableTime = Boolean(props.enableTime)
   const type = enableDate && enableTime ? 'datetime-local' : enableTime ? 'time' : 'date'
-  const rawVal = typeof props.value === 'string' ? props.value : ''
-  const timeMatch = type === 'time' ? /T(\d{2}:\d{2})/.exec(rawVal) : null
-  const normalizedVal =
-    type === 'datetime-local'
-      ? rawVal.replace(/Z$/, '').slice(0, 16)
-      : type === 'date'
-        ? rawVal.slice(0, 10)
-        : timeMatch
-          ? timeMatch[1]
-          : rawVal.slice(0, 5)
+  const normalizedVal = formatNativeTemporalValue(props.value, type)
+  const normalizedMin =
+    typeof props.min === 'string' && props.min.trim() !== ''
+      ? formatNativeTemporalValue(props.min, type) || undefined
+      : undefined
+  const normalizedMax =
+    typeof props.max === 'string' && props.max.trim() !== ''
+      ? formatNativeTemporalValue(props.max, type) || undefined
+      : undefined
   const label = props.label ? String(props.label) : ''
   const showError = !readOnly && (touched || submitAttempted) && props.isValid === false
   const err = showError ? props.validationErrors?.[0] : undefined
@@ -513,8 +508,8 @@ export const DshDateTimeInputImpl = defineComponent<{
           disabled={readOnly}
           ariaLabel={label || type}
           ariaInvalid={showError || undefined}
-          min={typeof props.min === 'string' ? props.min : undefined}
-          max={typeof props.max === 'string' ? props.max : undefined}
+          min={normalizedMin}
+          max={normalizedMax}
           wrapClassName={css.dateInputWrap}
           inputClassName={css.dateInput}
           buttonClassName={css.datePickerBtn}
@@ -531,6 +526,28 @@ export const DshDateTimeInputImpl = defineComponent<{
 
 const CHEVRON_DOWN_14 = <DshChevronDownIcon size={14} />
 const CHECK_ICON_12 = <DshCheckIcon size={12} />
+
+function handleListboxArrowKey(
+  e: ReactKeyboardEvent<HTMLElement>,
+  container: HTMLElement | null,
+): void {
+  if (!container) return
+  if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp' && e.key !== 'Home' && e.key !== 'End') return
+  const items = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="option"]'))
+  if (items.length === 0) return
+  const active = typeof document !== 'undefined' ? document.activeElement : null
+  const idx = items.indexOf(active as HTMLButtonElement)
+  e.preventDefault()
+  if (e.key === 'Home') {
+    items[0]?.focus()
+  } else if (e.key === 'End') {
+    items[items.length - 1]?.focus()
+  } else if (e.key === 'ArrowDown') {
+    items[idx >= 0 ? (idx + 1) % items.length : 0]?.focus()
+  } else if (e.key === 'ArrowUp') {
+    items[idx > 0 ? idx - 1 : items.length - 1]?.focus()
+  }
+}
 
 export function DshSelectView({
   props,
@@ -556,6 +573,7 @@ export function DshSelectView({
   const [query, setQuery] = useState('')
   const deferredQuery = useDeferredValue(query)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
+  const popoverRef = useRef<HTMLDivElement | null>(null)
   const [popoverBox, setPopoverBox] = useState<ClampedPopoverBox | null>(null)
 
   const options = useMemo(() => normalizeSelectOptions(props.options), [props.options])
@@ -567,6 +585,7 @@ export function DshSelectView({
   const hasDescriptions = useMemo(() => options.some((opt) => Boolean(opt.description)), [options])
   const searchable = Boolean(props.searchable)
   const useCustomPopover = searchable || hasDescriptions
+  const effectiveOpen = open && !readOnly
 
   const filteredOptions = useMemo(() => {
     const q = deferredQuery.trim().toLowerCase()
@@ -589,6 +608,26 @@ export function DshSelectView({
   const showError = !readOnly && (touched || submitAttempted) && props.isValid === false
   const err = showError ? props.validationErrors?.[0] : undefined
 
+  const closePopover = useCallback(() => {
+    setOpen(false)
+    setTouched(true)
+  }, [])
+
+  const syncPopoverBox = useCallback(() => {
+    if (!triggerRef.current) return
+    const rect = triggerRef.current.getBoundingClientRect()
+    const estHeight = Math.min(280, options.length * 40 + (searchable ? 52 : 12))
+    setPopoverBox(computeClampedPopoverBox(rect, { minWidth: 180, estHeight }))
+  }, [options.length, searchable])
+
+  usePortalPopover({
+    open: effectiveOpen && useCustomPopover,
+    triggerRef,
+    popoverRef,
+    onClose: closePopover,
+    onReposition: syncPopoverBox,
+  })
+
   const commitSelect = (val: string) => {
     if (readOnly) return
     setTouched(true)
@@ -599,15 +638,12 @@ export function DshSelectView({
 
   const handleOpenToggle = () => {
     if (readOnly) return
-    if (open) {
-      setOpen(false)
-      setTouched(true)
+    if (effectiveOpen) {
+      closePopover()
       return
     }
-    if (useCustomPopover && triggerRef.current) {
-      const rect = triggerRef.current.getBoundingClientRect()
-      const estHeight = Math.min(280, options.length * 40 + (searchable ? 52 : 12))
-      setPopoverBox(computeClampedPopoverBox(rect, { minWidth: 180, estHeight }))
+    if (useCustomPopover) {
+      syncPopoverBox()
     }
     setOpen(true)
   }
@@ -620,7 +656,7 @@ export function DshSelectView({
       className={css.selectTrigger}
       disabled={readOnly}
       aria-haspopup="listbox"
-      aria-expanded={open}
+      aria-expanded={effectiveOpen}
       aria-invalid={showError || undefined}
       onClick={handleOpenToggle}
       data-placeholder={activeOption ? 'false' : 'true'}
@@ -652,34 +688,24 @@ export function DshSelectView({
       {useCustomPopover ? (
         <>
           {triggerButton}
-          {open && popoverBox && typeof document !== 'undefined'
+          {effectiveOpen && popoverBox && typeof document !== 'undefined'
             ? createPortal(
-                <div
-                  role="presentation"
-                  className={css.selectBackdrop}
-                  onClick={() => {
-                    setOpen(false)
-                    setTouched(true)
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Escape') {
-                      e.stopPropagation()
-                      setOpen(false)
-                      setTouched(true)
-                    }
-                  }}
-                >
+                <div role="presentation" className={css.selectBackdrop} onClick={closePopover}>
                   <div
+                    ref={popoverRef}
                     role="listbox"
                     aria-label={label || placeholder}
                     className={css.selectPopover}
                     style={{
-                      top: popoverBox.top,
+                      ...(popoverBox.placeAbove
+                        ? { bottom: popoverBox.bottom }
+                        : { top: popoverBox.top }),
                       left: popoverBox.left,
                       width: popoverBox.width,
                       maxHeight: popoverBox.maxHeight,
                     }}
                     onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => handleListboxArrowKey(e, popoverRef.current)}
                   >
                     {searchable ? (
                       <div className={css.selectSearchRow}>
@@ -732,15 +758,12 @@ export function DshSelectView({
       ) : (
         <div className={css.selectMenuHost}>
           <DshMenu
-            open={open}
+            open={effectiveOpen}
             items={menuItems}
             selectedId={selectedVal}
             side="bottom"
             onSelect={commitSelect}
-            onClose={() => {
-              setOpen(false)
-              setTouched(true)
-            }}
+            onClose={closePopover}
             anchor={triggerButton}
           />
         </div>

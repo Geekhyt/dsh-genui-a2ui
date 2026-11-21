@@ -395,7 +395,7 @@ export function classifyCompileError(errorMessage: string): CompileErrorBucket {
   ) {
     return 'EXPR_IN_DATA_MODEL'
   }
-  if (msg.includes('calc(') || msg.includes('ast') || msg.includes('formula')) {
+  if (msg.includes('calc(') || /\bast\b/.test(msg) || msg.includes('formula')) {
     return 'CALC_SAFETY_OR_SYNTAX'
   }
   if (msg.includes('table') && (msg.includes('scalar') || msg.includes('nested'))) {
@@ -485,12 +485,24 @@ export function gradeToolAttempt(
   ui?: string,
   placement?: string,
 ): EvalTurnRecord {
-  if (toolCalled === 'none' || ui === undefined) {
+  if (toolCalled === 'none') {
     return {
       attempt,
       toolCalled,
       placement,
       compiledOk: true,
+      usedComponents: [],
+      usedChartKinds: [],
+    }
+  }
+  if (ui === undefined) {
+    return {
+      attempt,
+      toolCalled,
+      placement,
+      compiledOk: false,
+      errorMessage: `${toolCalled}: missing required ui argument`,
+      errorBucket: 'INVALID_PROP_OR_ARG',
       usedComponents: [],
       usedChartKinds: [],
     }

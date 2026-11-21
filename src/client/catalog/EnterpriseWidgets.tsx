@@ -10,6 +10,7 @@ import {
   TerminalApi,
   TrackerApi,
 } from '../../shared/catalog-schema.ts'
+import { useTransientFlag, useTransientKey } from '../dom-hooks.ts'
 import { useRuntimeMessages } from '../i18n.ts'
 import {
   DshButton,
@@ -155,6 +156,7 @@ export const DshTrackerImpl = defineComponent<{
             gap: slices.length > 60 ? 1 : slices.length > 36 ? 2 : 3,
             gridTemplateColumns: `repeat(${slices.length}, minmax(1.5px, 1fr))`,
           }}
+          onMouseLeave={() => setActiveSliceId(null)}
         >
           {slices.map((s) => {
             const detail = s.note || statusText(s.status)
@@ -177,6 +179,7 @@ export const DshTrackerImpl = defineComponent<{
                     data-status={s.status}
                     aria-label={`${s.label}: ${detail}`}
                     onMouseEnter={() => setActiveSliceId(s.id)}
+                    onFocus={() => setActiveSliceId(s.id)}
                     onClick={() => setActiveSliceId(s.id)}
                   />
                 }
@@ -216,7 +219,7 @@ export const DshTerminalImpl = defineComponent<{
 }>(TerminalApi, function DshTerminal({ props }) {
   const msg = useRuntimeMessages()
   const steps = useMemo(() => normalizeTerminalCommands(props.commands), [props.commands])
-  const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [copiedId, markCopiedId] = useTransientKey<string>(1300)
 
   if (steps.length === 0) return null
 
@@ -233,10 +236,7 @@ export const DshTerminalImpl = defineComponent<{
 
   const handleCopyCmd = (id: string, cmd: string) => {
     copyToClipboardSafe(cmd)
-    setCopiedId(id)
-    setTimeout(() => {
-      setCopiedId((cur) => (cur === id ? null : cur))
-    }, 1300)
+    markCopiedId(id)
   }
 
   return (
@@ -311,12 +311,18 @@ export const DshApprovalCardImpl = defineComponent<{
   const msg = useRuntimeMessages()
   const readOnly = useContext(SurfaceReadOnlyContext)
   const severity = props.severity ?? 'high'
-  const [acknowledged, setAcknowledged] = useState(false)
-  const [decision, setDecision] = useState<'approved' | 'rejected' | null>(null)
-
   const title = props.title !== undefined && props.title !== null ? String(props.title) : ''
   const summary = props.summary !== undefined && props.summary !== null ? String(props.summary) : ''
   const scope = props.scope !== undefined && props.scope !== null ? String(props.scope) : ''
+  const targetKey = `${title}\u0000${scope}\u0000${summary}`
+  const [prevTargetKey, setPrevTargetKey] = useState(targetKey)
+  const [acknowledged, setAcknowledged] = useState(false)
+  const [decision, setDecision] = useState<'approved' | 'rejected' | null>(null)
+  if (prevTargetKey !== targetKey) {
+    setPrevTargetKey(targetKey)
+    if (acknowledged) setAcknowledged(false)
+    if (decision !== null) setDecision(null)
+  }
   const confirmText =
     props.confirmLabel !== undefined && props.confirmLabel !== null
       ? String(props.confirmLabel)
@@ -505,11 +511,17 @@ export const DshApiEndpointImpl = defineComponent<{
 
   const defaultTab = hasResp ? 'resp' : hasReq ? 'req' : 'params'
   const [tab, setTab] = useState<'resp' | 'req' | 'params'>(defaultTab)
-  const [copiedCurl, setCopiedCurl] = useState(false)
+  const activeTab: 'resp' | 'req' | 'params' =
+    (tab === 'resp' && hasResp) || (tab === 'req' && hasReq) || (tab === 'params' && hasParams)
+      ? tab
+      : defaultTab
+  const [copiedCurl, markCopiedCurl] = useTransientFlag(1300)
 
+  const rawStatusText =
+    props.status !== undefined && props.status !== null ? String(props.status).trim() : ''
   const statusNum =
-    props.status !== undefined && props.status !== null && Number.isFinite(Number(props.status))
-      ? Math.trunc(Number(props.status))
+    rawStatusText !== '' && Number.isFinite(Number(rawStatusText))
+      ? Math.trunc(Number(rawStatusText))
       : undefined
   const latency = props.latency !== undefined && props.latency !== null ? String(props.latency) : ''
   const summary = props.summary !== undefined && props.summary !== null ? String(props.summary) : ''
@@ -523,8 +535,7 @@ export const DshApiEndpointImpl = defineComponent<{
       requestBody: props.requestBody,
     })
     copyToClipboardSafe(curl)
-    setCopiedCurl(true)
-    setTimeout(() => setCopiedCurl(false), 1300)
+    markCopiedCurl()
   }
 
   const canAct = !readOnly && typeof props.action === 'function'
@@ -598,28 +609,43 @@ export const DshApiEndpointImpl = defineComponent<{
         <>
           <div className={css.apiTabBar} role="tablist">
             {hasResp ? (
-              <DshPill active={tab === 'resp'} onClick={() => setTab('resp')}>
+              <DshPill
+                role="tab"
+                aria-selected={activeTab === 'resp'}
+                active={activeTab === 'resp'}
+                onClick={() => setTab('resp')}
+              >
                 {msg.apiTabResponse}
               </DshPill>
             ) : null}
             {hasReq ? (
-              <DshPill active={tab === 'req'} onClick={() => setTab('req')}>
+              <DshPill
+                role="tab"
+                aria-selected={activeTab === 'req'}
+                active={activeTab === 'req'}
+                onClick={() => setTab('req')}
+              >
                 {msg.apiTabRequest}
               </DshPill>
             ) : null}
             {hasParams ? (
-              <DshPill active={tab === 'params'} onClick={() => setTab('params')}>
+              <DshPill
+                role="tab"
+                aria-selected={activeTab === 'params'}
+                active={activeTab === 'params'}
+                onClick={() => setTab('params')}
+              >
                 {`${msg.apiTabParams} (${paramRows.length})`}
               </DshPill>
             ) : null}
           </div>
 
           <div className={css.apiBody}>
-            {tab === 'resp' && hasResp ? (
+            {activeTab === 'resp' && hasResp ? (
               <DshJsonTree data={props.responseBody} label={msg.apiTabResponse} expandedDepth={2} />
-            ) : tab === 'req' && hasReq ? (
+            ) : activeTab === 'req' && hasReq ? (
               <DshJsonTree data={props.requestBody} label={msg.apiTabRequest} expandedDepth={2} />
-            ) : tab === 'params' && hasParams ? (
+            ) : activeTab === 'params' && hasParams ? (
               <table className={css.apiParamTable}>
                 <tbody>
                   {paramRows.map((p, i) => (

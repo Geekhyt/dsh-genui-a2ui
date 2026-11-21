@@ -17,10 +17,15 @@ import {
   getMermaidDiagramServerSnapshot,
   getMermaidDiagramSnapshot,
   MERMAID_RENDER_ERROR_SENTINEL,
+  retryMermaidDiagram,
   subscribeMermaidDiagram,
 } from '../chunk-loader.ts'
-import { type PendingMermaidZoomAnchor, useMermaidViewportDom } from '../dom-hooks.ts'
-import { useFileOpener } from '../file-opener.tsx'
+import {
+  type PendingMermaidZoomAnchor,
+  useMermaidViewportDom,
+  useTransientFlag,
+} from '../dom-hooks.ts'
+import { parseFileTarget, useFileOpener } from '../file-opener.tsx'
 import { useRuntimeMessages } from '../i18n.ts'
 import { prepareMermaidSvg } from '../mermaid-safe.ts'
 import { useDarkTheme } from '../theme.ts'
@@ -195,12 +200,11 @@ export const DshJsonTreeImpl = defineComponent<{
       ? Math.trunc(props.expandedDepth)
       : 2
   const copyable = props.copyable ?? true
-  const [copiedAll, setCopiedAll] = useState(false)
+  const [copiedAll, markCopiedAll] = useTransientFlag(1300)
 
   const handleCopyAll = () => {
     copyToClipboardSafe(safeStringifyJson(props.data ?? null, 2))
-    setCopiedAll(true)
-    setTimeout(() => setCopiedAll(false), 1300)
+    markCopiedAll()
   }
 
   return (
@@ -283,28 +287,43 @@ function FileTreeBranch(props: {
 
   const statusMeta = node.status ? STATUS_META[node.status] : undefined
   const displayName = node.line !== undefined ? `${node.name}:${node.line}` : node.name
+  const rowContent = (
+    <>
+      <span className={css.fileTreeFileIcon}>
+        <DshFileTypeIcon path={node.path} size={14} />
+      </span>
+      <span
+        className={css.fileTreeName}
+        data-deleted={node.status === 'deleted' ? 'true' : undefined}
+      >
+        {displayName}
+      </span>
+      {node.summary ? <span className={css.fileTreeSummary}>{node.summary}</span> : null}
+      {statusMeta ? <DshTag tone={statusMeta.tone}>{statusMeta.code}</DshTag> : null}
+    </>
+  )
 
   return (
     <li className={css.fileTreeLi} role="treeitem">
-      <button
-        type="button"
-        className={interactive ? `${css.fileTreeRow} ${css.fileTreeFileBtn}` : css.fileTreeRow}
-        style={{ paddingLeft: indent + 14 }}
-        onClick={() => onSelectFile(node)}
-        data-file-path={node.path}
-      >
-        <span className={css.fileTreeFileIcon}>
-          <DshFileTypeIcon path={node.path} size={14} />
-        </span>
-        <span
-          className={css.fileTreeName}
-          data-deleted={node.status === 'deleted' ? 'true' : undefined}
+      {interactive ? (
+        <button
+          type="button"
+          className={`${css.fileTreeRow} ${css.fileTreeFileBtn}`}
+          style={{ paddingLeft: indent + 14 }}
+          onClick={() => onSelectFile(node)}
+          data-file-path={node.path}
         >
-          {displayName}
-        </span>
-        {node.summary ? <span className={css.fileTreeSummary}>{node.summary}</span> : null}
-        {statusMeta ? <DshTag tone={statusMeta.tone}>{statusMeta.code}</DshTag> : null}
-      </button>
+          {rowContent}
+        </button>
+      ) : (
+        <div
+          className={css.fileTreeRow}
+          style={{ paddingLeft: indent + 14 }}
+          data-file-path={node.path}
+        >
+          {rowContent}
+        </div>
+      )}
     </li>
   )
 }
@@ -331,8 +350,10 @@ export const DshFileTreeImpl = defineComponent<{
 
   const handleSelectFile = (node: FileTreeNode) => {
     if (readOnly) return
+    const safeTarget = parseFileTarget(node.path, node.line)
+    if (safeTarget === null) return
     if (openFile && node.status !== 'deleted') {
-      openFile(node.path, node.line)
+      openFile(safeTarget.path, safeTarget.line)
     }
     if (activeAction) {
       void activeAction({
@@ -340,8 +361,8 @@ export const DshFileTreeImpl = defineComponent<{
           extensions: {
             dshSelection: {
               source: 'fileTree',
-              path: node.path,
-              ...(node.line !== undefined ? { line: node.line } : {}),
+              path: safeTarget.path,
+              ...(safeTarget.line !== undefined ? { line: safeTarget.line } : {}),
               ...(node.status !== undefined ? { status: node.status } : {}),
               ...(node.raw !== undefined ? { item: node.raw } : {}),
             },
@@ -426,17 +447,56 @@ export interface MermaidWidgetProps {
   weight?: number
 }
 
+export function namespaceSvgIds(markup: string, prefix: string): string {
+  const idMap = new Map<string, string>()
+  const idDeclRe = /\bid=(["'])([^"']+)\1/g
+  let m: RegExpExecArray | null = idDeclRe.exec(markup)
+  while (m !== null) {
+    const oldId = m[2]!
+    if (!idMap.has(oldId)) {
+      idMap.set(oldId, `${prefix}${oldId}`)
+    }
+    m = idDeclRe.exec(markup)
+  }
+  if (idMap.size === 0) return markup
+  let out = markup.replace(
+    /\bid=(["'])([^"']+)\1/g,
+    (_full, q: string, oldId: string) => `id=${q}${idMap.get(oldId) ?? oldId}${q}`,
+  )
+  out = out.replace(
+    /url\(\s*(["']?)#([^)"']+)\1\s*\)/g,
+    (_full, q: string, oldId: string) => `url(${q}#${idMap.get(oldId) ?? oldId}${q})`,
+  )
+  out = out.replace(
+    /\b((?:xlink:)?href)=(["'])#([^"']+)\2/g,
+    (_full, attr: string, q: string, oldId: string) =>
+      `${attr}=${q}#${idMap.get(oldId) ?? oldId}${q}`,
+  )
+  out = out.replace(
+    /<style([^>]*)>([\s\S]*?)<\/style>/gi,
+    (_full, attrs: string, cssBody: string) => {
+      const rewritten = cssBody.replace(/#([A-Za-z_][A-Za-z0-9_-]*)/g, (hit, oldId: string) => {
+        const next = idMap.get(oldId)
+        return next ? `#${next}` : hit
+      })
+      return `<style${attrs}>${rewritten}</style>`
+    },
+  )
+  return out
+}
+
 export function DshMermaidView({ props }: { props: MermaidWidgetProps }) {
   const dark = useDarkTheme()
   const msg = useRuntimeMessages()
   const readOnly = useContext(SurfaceReadOnlyContext)
+  const svgInstancePrefix = useId().replace(/[^a-zA-Z0-9_-]/g, '')
   const code = props.code === undefined || props.code === null ? '' : String(props.code).trim()
   const title = props.title !== undefined && props.title !== null ? String(props.title) : ''
   const caption = props.caption !== undefined && props.caption !== null ? String(props.caption) : ''
   const displayTitle = title || msg.mermaidDefaultTitle
 
   const [viewMode, setViewMode] = useState<'diagram' | 'source'>('diagram')
-  const [copied, setCopied] = useState(false)
+  const [copied, markCopied] = useTransientFlag(1300)
   const [inlineZoomMode, setInlineZoomMode] = useState<'fit' | 'manual'>('fit')
   const [inlineManualPct, setInlineManualPct] = useState(100)
   const [inlineFitPct, setInlineFitPct] = useState(100)
@@ -476,6 +536,20 @@ export function DshMermaidView({ props }: { props: MermaidWidgetProps }) {
     rawRenderError === MERMAID_RENDER_ERROR_SENTINEL ? msg.mermaidParseIncomplete : rawRenderError
 
   const preparedSvg = useMemo(() => (svg !== null ? prepareMermaidSvg(svg) : null), [svg])
+  const inlineSvgMarkup = useMemo(
+    () =>
+      preparedSvg !== null
+        ? namespaceSvgIds(preparedSvg.markup, `m_${svgInstancePrefix}_i_`)
+        : null,
+    [preparedSvg, svgInstancePrefix],
+  )
+  const dialogSvgMarkup = useMemo(
+    () =>
+      activeFullscreen && preparedSvg !== null
+        ? namespaceSvgIds(preparedSvg.markup, `m_${svgInstancePrefix}_d_`)
+        : null,
+    [activeFullscreen, preparedSvg, svgInstancePrefix],
+  )
   const inlineEffectivePct = inlineZoomMode === 'manual' ? inlineManualPct : inlineFitPct
   const dialogEffectivePct = dialogZoomMode === 'manual' ? dialogManualPct : dialogFitPct
 
@@ -615,8 +689,7 @@ export function DshMermaidView({ props }: { props: MermaidWidgetProps }) {
 
   const handleCopy = () => {
     copyToClipboardSafe(code)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1300)
+    markCopied()
   }
 
   const handleZoomOut = useCallback(
@@ -843,7 +916,35 @@ export function DshMermaidView({ props }: { props: MermaidWidgetProps }) {
         {code === '' ? (
           <div className={css.emptyCell}>{msg.mermaidEmpty}</div>
         ) : showSourceFallback ? (
-          <DshCodeBlock code={code} lang="mermaid" />
+          <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {renderError !== null && viewMode === 'diagram' ? (
+              <div
+                role="alert"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 8,
+                  flexWrap: 'wrap',
+                  padding: '6px 10px',
+                  borderRadius: 8,
+                  fontSize: 12,
+                  color: 'var(--dsw-alias-state-warn-label, #f59e0b)',
+                  background: 'var(--dsw-alias-bg-layer-2, rgba(128,128,128,0.08))',
+                }}
+              >
+                <span>{`${msg.mermaidRenderFailed}: ${renderError}`}</span>
+                <button
+                  type="button"
+                  className={css.diffCopyBtn}
+                  onClick={() => retryMermaidDiagram(code, dark)}
+                >
+                  {msg.retryLoad}
+                </button>
+              </div>
+            ) : null}
+            <DshCodeBlock code={code} lang="mermaid" />
+          </div>
         ) : preparedSvg !== null ? (
           <div
             ref={inDialog ? dialogStageRef : inlineStageRef}
@@ -851,7 +952,9 @@ export function DshMermaidView({ props }: { props: MermaidWidgetProps }) {
             data-a2ui-mermaid-svg=""
             data-zoomed={isManualZoom ? 'true' : 'false'}
             style={stageZoomStyle}
-            dangerouslySetInnerHTML={{ __html: preparedSvg.markup }}
+            dangerouslySetInnerHTML={{
+              __html: (inDialog ? dialogSvgMarkup : inlineSvgMarkup) ?? preparedSvg.markup,
+            }}
           />
         ) : (
           <div

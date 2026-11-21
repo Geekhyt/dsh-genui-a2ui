@@ -5,6 +5,7 @@ import {
 } from '@a2ui/react'
 import type { ComponentApi } from '@a2ui/web_core/v1_0'
 import { type CSSProperties, createContext, type FC, Fragment, type ReactNode } from 'react'
+import { isSafeStaticSvgImage } from '../mermaid-safe.ts'
 
 export type ChildRef =
   | string
@@ -43,10 +44,12 @@ export function weightStyle(weight: number | undefined, minWidth = 0): CSSProper
 }
 
 export interface ClampedPopoverBox {
-  readonly top: number
+  readonly top?: number | undefined
+  readonly bottom?: number | undefined
   readonly left: number
   readonly width: number
   readonly maxHeight: number
+  readonly placeAbove: boolean
 }
 
 export function computeClampedPopoverBox(
@@ -63,15 +66,20 @@ export function computeClampedPopoverBox(
   const availW = Math.max(120, viewportW - 16)
   const width = Math.min(availW, Math.max(opts.minWidth, Math.round(rect.width)))
   const left = Math.max(8, Math.min(Math.round(rect.left), viewportW - width - 8))
-  const spaceBelow = viewportH - rect.bottom - 12
-  const spaceAbove = rect.top - 12
+  const spaceBelow = Math.max(0, viewportH - rect.bottom - 12)
+  const spaceAbove = Math.max(0, rect.top - 12)
   const placeAbove = spaceBelow < opts.estHeight && spaceAbove > spaceBelow
-  const maxHeight = Math.max(140, Math.min(280, Math.floor(placeAbove ? spaceAbove : spaceBelow)))
-  const effectiveH = Math.min(opts.estHeight, maxHeight)
-  const top = placeAbove
-    ? Math.max(8, Math.round(rect.top - effectiveH - 4))
-    : Math.round(rect.bottom + 4)
-  return { top, left, width, maxHeight }
+  const availSpace = Math.floor(placeAbove ? spaceAbove : spaceBelow)
+  const maxHeight = Math.max(80, Math.min(280, availSpace))
+  if (placeAbove) {
+    const bottom = Math.max(
+      8,
+      Math.min(viewportH - maxHeight - 8, Math.round(viewportH - rect.top + 4)),
+    )
+    return { bottom, left, width, maxHeight, placeAbove: true }
+  }
+  const top = Math.max(8, Math.min(viewportH - maxHeight - 8, Math.round(rect.bottom + 4)))
+  return { top, left, width, maxHeight, placeAbove: false }
 }
 
 export function renderChildRef(
@@ -117,11 +125,32 @@ export const ALIGN_MAP: Record<string, CSSProperties['alignItems']> = {
   stretch: 'stretch',
 }
 
-export function isSafeMediaUrl(raw: unknown): raw is string {
+function decodeSvgDataUri(uri: string): string | null {
+  const match =
+    /^data:image\/svg\+xml\s*(?:;\s*(?:charset=[^;,]+|utf-?8))?(\s*;\s*base64)?\s*,([\s\S]*)$/i.exec(
+      uri,
+    )
+  if (!match) return null
+  const isBase64 = Boolean(match[1])
+  const payload = match[2] ?? ''
+  if (payload.length > 256_000) return null
+  try {
+    if (isBase64) {
+      if (typeof atob === 'function') {
+        return atob(payload.replace(/\s+/g, ''))
+      }
+      return Buffer.from(payload, 'base64').toString('utf8')
+    }
+    return decodeURIComponent(payload)
+  } catch {
+    return null
+  }
+}
+
+export function isSafeAvMediaUrl(raw: unknown): raw is string {
   if (typeof raw !== 'string') return false
   const trimmed = raw.trim()
   if (trimmed === '') return false
-  if (/^data:image\/(?:png|jpeg|jpg|gif|webp|svg\+xml)[;,]/i.test(trimmed)) return true
   try {
     const parsed = new URL(trimmed)
     if (parsed.protocol === 'https:') return true
@@ -135,6 +164,22 @@ export function isSafeMediaUrl(raw: unknown): raw is string {
   } catch {
     return false
   }
+}
+
+export function isSafeImageUrl(raw: unknown): raw is string {
+  if (typeof raw !== 'string') return false
+  const trimmed = raw.trim()
+  if (trimmed === '') return false
+  if (/^data:image\/(?:png|jpeg|jpg|gif|webp)[;,]/i.test(trimmed)) return true
+  if (/^data:image\/svg\+xml[;,]/i.test(trimmed)) {
+    const decoded = decodeSvgDataUri(trimmed)
+    return decoded !== null && isSafeStaticSvgImage(decoded)
+  }
+  return isSafeAvMediaUrl(trimmed)
+}
+
+export function isSafeMediaUrl(raw: unknown): raw is string {
+  return isSafeImageUrl(raw)
 }
 
 export { NativeDateField } from './NativeDateField.tsx'

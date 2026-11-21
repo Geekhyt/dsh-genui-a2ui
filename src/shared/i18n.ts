@@ -1,86 +1,13 @@
-export type UiLocale = 'zh' | 'en'
+import type { UiLocale } from './locale.ts'
 
-let localeOverride: UiLocale | null = null
-const overrideListeners = new Set<() => void>()
-
-export function setUiLocaleOverride(next: UiLocale | null): void {
-  if (localeOverride === next) return
-  localeOverride = next
-  for (const listener of overrideListeners) {
-    listener()
-  }
-}
-
-export function getUiLocaleOverride(): UiLocale | null {
-  return localeOverride
-}
-
-export function subscribeUiLocaleOverride(listener: () => void): () => void {
-  overrideListeners.add(listener)
-  return () => {
-    overrideListeners.delete(listener)
-  }
-}
-
-function parseLocaleTag(raw: unknown): UiLocale | null {
-  if (typeof raw !== 'string') return null
-  const trimmed = raw.trim().toLowerCase()
-  if (trimmed === '') return null
-  if (trimmed.startsWith('zh')) return 'zh'
-  if (trimmed.startsWith('en')) return 'en'
-  return null
-}
-
-function isVitestEnv(): boolean {
-  return (
-    typeof process !== 'undefined' &&
-    typeof process.env === 'object' &&
-    process.env !== null &&
-    Boolean(process.env.VITEST)
-  )
-}
-
-export function resolveClientLocale(): UiLocale {
-  if (localeOverride !== null) return localeOverride
-
-  const globalTag = parseLocaleTag(
-    (globalThis as { readonly __DSH_A2UI_LOCALE__?: unknown }).__DSH_A2UI_LOCALE__,
-  )
-  if (globalTag !== null) return globalTag
-
-  if (typeof document !== 'undefined') {
-    const htmlLang =
-      document.documentElement?.getAttribute?.('lang') ?? document.documentElement?.lang
-    if (typeof htmlLang === 'string' && htmlLang.trim() !== '') {
-      return htmlLang.trim().toLowerCase().startsWith('zh') ? 'zh' : 'en'
-    }
-  }
-
-  if (!isVitestEnv()) {
-    if (typeof process !== 'undefined' && process.env?.DSH_A2UI_LOCALE) {
-      const envTag = parseLocaleTag(process.env.DSH_A2UI_LOCALE)
-      if (envTag !== null) return envTag
-    }
-    if (typeof navigator !== 'undefined' && typeof navigator.language === 'string') {
-      const navTag = parseLocaleTag(navigator.language)
-      if (navTag !== null) return navTag
-    }
-  }
-
-  return 'zh'
-}
-
-export function resolveHostLocale(): UiLocale {
-  if (localeOverride !== null) return localeOverride
-  if (typeof process !== 'undefined' && process.env) {
-    const explicit = parseLocaleTag(process.env.DSH_A2UI_LOCALE)
-    if (explicit !== null) return explicit
-    if (process.env.VITEST) return 'zh'
-    const sys = parseLocaleTag(process.env.LC_ALL || process.env.LC_MESSAGES || process.env.LANG)
-    if (sys !== null) return sys
-  }
-  return 'zh'
-}
+export {
+  getUiLocaleOverride,
+  resolveClientLocale,
+  resolveHostLocale,
+  setUiLocaleOverride,
+  subscribeUiLocaleOverride,
+  type UiLocale,
+} from './locale.ts'
 
 export interface HostUiMessages {
   readonly tierCommandDesc: string
@@ -133,6 +60,8 @@ export interface ShellUiMessages {
   readonly rendered: string
   readonly readOnlySnapshot: string
   readonly loadingRuntime: string
+  readonly loadingRuntimeFailed: string
+  readonly retryLoad: string
   readonly askDefaultTitle: string
   readonly askRowTitle: string
   readonly askGenerating: string
@@ -196,6 +125,8 @@ export const SHELL_MESSAGES: Record<UiLocale, ShellUiMessages> = {
     rendered: '已渲染',
     readOnlySnapshot: '历史快照（只读）',
     loadingRuntime: '正在加载界面引擎…',
+    loadingRuntimeFailed: '界面引擎加载失败',
+    retryLoad: '重试',
     askDefaultTitle: 'A2UI 交互提问',
     askRowTitle: 'A2UI 提问',
     askGenerating: '正在生成提问…',
@@ -258,6 +189,8 @@ export const SHELL_MESSAGES: Record<UiLocale, ShellUiMessages> = {
     rendered: 'Rendered',
     readOnlySnapshot: 'Historical snapshot (read-only)',
     loadingRuntime: 'Loading UI runtime…',
+    loadingRuntimeFailed: 'Failed to load UI runtime',
+    retryLoad: 'Retry',
     askDefaultTitle: 'A2UI interactive prompt',
     askRowTitle: 'A2UI prompt',
     askGenerating: 'Generating prompt…',
@@ -321,18 +254,14 @@ export interface RuntimeUiMessages {
   readonly chartLoadFailed: string
   readonly chartLoading: string
   readonly chartExportPng: string
+  readonly chartExportedCheck: string
   readonly chartCopyCsv: string
   readonly chartFilterActive: (val: string) => string
   readonly chartClearFilter: string
   readonly tableFilterActive: (val: string) => string
   readonly tableClearFilter: string
   readonly streamingSyncing: string
-  readonly chartOtherGroup: string
-  readonly chartBoxplotDefault: string
-  readonly chartCandlestickDefault: string
-  readonly chartWaterfallTotal: string
-  readonly chartWaterfallIncrease: string
-  readonly chartWaterfallDecrease: string
+  readonly retryLoad: string
   readonly accordionFallbackTitle: (index: number) => string
   readonly jsonTreeDefaultTitle: string
   readonly jsonTreeAriaLabel: string
@@ -346,6 +275,7 @@ export interface RuntimeUiMessages {
   readonly fileTreeAriaLabel: string
   readonly mermaidDefaultTitle: string
   readonly mermaidParseIncomplete: string
+  readonly mermaidRenderFailed: string
   readonly mermaidZoomGroup: string
   readonly mermaidZoomOutAria: string
   readonly mermaidZoomOutTitle: string
@@ -396,8 +326,6 @@ export interface RuntimeUiMessages {
   readonly selectNoResults: string
   readonly segmentedAria: string
   readonly comparisonDimension: string
-  readonly comparisonScore: string
-  readonly comparisonAction: string
   readonly comparisonRecommended: string
   readonly comparisonChooseRecommended: string
   readonly comparisonChoosePlan: string
@@ -410,24 +338,15 @@ export interface RuntimeUiMessages {
   readonly logEntryCount: (count: number) => string
   readonly logCopyAll: string
   readonly logAllLevels: string
-  readonly timelineDefaultTitle: string
   readonly timelineExpandDetail: string
   readonly timelineCollapseDetail: string
-  readonly kanbanDefaultTitle: string
   readonly kanbanEmptyColumn: string
   readonly kanbanPriorityHigh: string
   readonly kanbanPriorityMedium: string
   readonly kanbanPriorityLow: string
   readonly sourceListDefaultTitle: string
-  readonly sourceCount: (count: number) => string
-  readonly sourceOpenFile: string
-  readonly sourceOpenUrl: string
-  readonly sourceEmpty: string
   readonly sourceRelevanceLabel: string
   readonly serviceGraphDefaultTitle: string
-  readonly serviceGraphSelected: (label: string) => string
-  readonly serviceGraphClickHint: string
-  readonly serviceGraphEmpty: string
   readonly serviceGraphHealthy: string
   readonly serviceGraphWarning: string
   readonly serviceGraphError: string
@@ -448,6 +367,7 @@ export interface RuntimeUiMessages {
   readonly tableSelectRowAria: (index: number) => string
   readonly tableBatchDefault: string
   readonly tableSummaryLabel: (count: number) => string
+  readonly tableAvgLabel: (value: string) => string
   readonly trackerHoverHint: string
   readonly trackerHealthy: string
   readonly trackerDegraded: string
@@ -461,7 +381,6 @@ export interface RuntimeUiMessages {
   readonly approvalSeverityHigh: string
   readonly approvalSeverityCritical: string
   readonly approvalImpactHeader: string
-  readonly approvalDefaultConfirm: string
   readonly approvalDefaultApprove: string
   readonly approvalDefaultReject: string
   readonly approvalApprovedDone: string
@@ -513,18 +432,14 @@ export const RUNTIME_MESSAGES: Record<UiLocale, RuntimeUiMessages> = {
     chartLoadFailed: '图表引擎加载失败',
     chartLoading: '正在加载图表引擎…',
     chartExportPng: 'PNG',
+    chartExportedCheck: '已导出 ✓',
     chartCopyCsv: 'CSV',
     chartFilterActive: (val) => `筛选: ${val}`,
     chartClearFilter: '清除联动筛选',
     tableFilterActive: (val) => `联动筛选: ${val}`,
     tableClearFilter: '清除筛选',
     streamingSyncing: '正在增量同步组件…',
-    chartOtherGroup: '其他',
-    chartBoxplotDefault: '分布',
-    chartCandlestickDefault: '行情',
-    chartWaterfallTotal: '基准/汇总',
-    chartWaterfallIncrease: '增长',
-    chartWaterfallDecrease: '缩减',
+    retryLoad: '重试',
     accordionFallbackTitle: (n) => `分组 ${n}`,
     jsonTreeDefaultTitle: 'JSON 结构',
     jsonTreeAriaLabel: 'JSON 数据树',
@@ -538,6 +453,7 @@ export const RUNTIME_MESSAGES: Record<UiLocale, RuntimeUiMessages> = {
     fileTreeAriaLabel: '文件目录树',
     mermaidDefaultTitle: '架构与流程图',
     mermaidParseIncomplete: '流程图解析未完成',
+    mermaidRenderFailed: '流程图渲染失败',
     mermaidZoomGroup: '流程图缩放控制',
     mermaidZoomOutAria: '缩小流程图',
     mermaidZoomOutTitle: '缩小',
@@ -588,8 +504,6 @@ export const RUNTIME_MESSAGES: Record<UiLocale, RuntimeUiMessages> = {
     selectNoResults: '无匹配选项',
     segmentedAria: '分段选择',
     comparisonDimension: '评估维度',
-    comparisonScore: '综合评分',
-    comparisonAction: '方案选型',
     comparisonRecommended: '★ 推荐',
     comparisonChooseRecommended: '采纳推荐方案',
     comparisonChoosePlan: '选用此方案',
@@ -602,24 +516,15 @@ export const RUNTIME_MESSAGES: Record<UiLocale, RuntimeUiMessages> = {
     logEntryCount: (count) => `${count} 条`,
     logCopyAll: '复制日志',
     logAllLevels: '全部',
-    timelineDefaultTitle: '事件时间轴',
     timelineExpandDetail: '展开详情',
     timelineCollapseDetail: '收起详情',
-    kanbanDefaultTitle: '任务看板',
     kanbanEmptyColumn: '暂无卡片',
     kanbanPriorityHigh: '高优',
     kanbanPriorityMedium: '中优',
     kanbanPriorityLow: '常规',
     sourceListDefaultTitle: '溯源引用列表',
-    sourceCount: (count) => `${count} 处引用`,
-    sourceOpenFile: '右侧边栏打开 ↗',
-    sourceOpenUrl: '打开链接 ↗',
-    sourceEmpty: '暂无引用条目',
     sourceRelevanceLabel: '相关度',
     serviceGraphDefaultTitle: '服务健康拓扑',
-    serviceGraphSelected: (label) => `当前选中: ${label}`,
-    serviceGraphClickHint: '点击任意节点可切换详情或触发下钻',
-    serviceGraphEmpty: '（暂无服务节点）',
     serviceGraphHealthy: '健康',
     serviceGraphWarning: '预警',
     serviceGraphError: '异常',
@@ -640,6 +545,7 @@ export const RUNTIME_MESSAGES: Record<UiLocale, RuntimeUiMessages> = {
     tableSelectRowAria: (index) => `选择第 ${index} 行`,
     tableBatchDefault: '批量处理选中项',
     tableSummaryLabel: (count) => `合计 (${count} 行)`,
+    tableAvgLabel: (value) => `均值 ${value}`,
     trackerHoverHint: '悬停或点击分片查看详情',
     trackerHealthy: '正常',
     trackerDegraded: '波动',
@@ -653,7 +559,6 @@ export const RUNTIME_MESSAGES: Record<UiLocale, RuntimeUiMessages> = {
     approvalSeverityHigh: '高风险生产变更',
     approvalSeverityCritical: 'P0 极高危操作',
     approvalImpactHeader: '变更影响面 (Blast Radius)',
-    approvalDefaultConfirm: '我已核实上述变更影响面与回滚预案，确认放行',
     approvalDefaultApprove: '确认放行',
     approvalDefaultReject: '驳回中止',
     approvalApprovedDone: '已放行 ✓',
@@ -703,18 +608,14 @@ export const RUNTIME_MESSAGES: Record<UiLocale, RuntimeUiMessages> = {
     chartLoadFailed: 'Failed to load chart runtime',
     chartLoading: 'Loading chart runtime…',
     chartExportPng: 'PNG',
+    chartExportedCheck: 'Saved ✓',
     chartCopyCsv: 'CSV',
     chartFilterActive: (val) => `Filter: ${val}`,
     chartClearFilter: 'Clear cross-filter',
     tableFilterActive: (val) => `Filtered: ${val}`,
     tableClearFilter: 'Clear filter',
     streamingSyncing: 'Syncing live updates…',
-    chartOtherGroup: 'Other',
-    chartBoxplotDefault: 'Distribution',
-    chartCandlestickDefault: 'OHLC',
-    chartWaterfallTotal: 'Total',
-    chartWaterfallIncrease: 'Increase',
-    chartWaterfallDecrease: 'Decrease',
+    retryLoad: 'Retry',
     accordionFallbackTitle: (n) => `Section ${n}`,
     jsonTreeDefaultTitle: 'JSON structure',
     jsonTreeAriaLabel: 'JSON tree',
@@ -728,6 +629,7 @@ export const RUNTIME_MESSAGES: Record<UiLocale, RuntimeUiMessages> = {
     fileTreeAriaLabel: 'Workspace file tree',
     mermaidDefaultTitle: 'Diagram',
     mermaidParseIncomplete: 'Diagram failed to parse',
+    mermaidRenderFailed: 'Failed to render diagram',
     mermaidZoomGroup: 'Diagram zoom controls',
     mermaidZoomOutAria: 'Zoom out diagram',
     mermaidZoomOutTitle: 'Zoom out',
@@ -778,8 +680,6 @@ export const RUNTIME_MESSAGES: Record<UiLocale, RuntimeUiMessages> = {
     selectNoResults: 'No matching options',
     segmentedAria: 'Segmented control',
     comparisonDimension: 'Dimension',
-    comparisonScore: 'Overall score',
-    comparisonAction: 'Action',
     comparisonRecommended: '★ Recommended',
     comparisonChooseRecommended: 'Adopt recommended',
     comparisonChoosePlan: 'Choose option',
@@ -792,24 +692,15 @@ export const RUNTIME_MESSAGES: Record<UiLocale, RuntimeUiMessages> = {
     logEntryCount: (count) => `${count} entries`,
     logCopyAll: 'Copy logs',
     logAllLevels: 'All',
-    timelineDefaultTitle: 'Event timeline',
     timelineExpandDetail: 'Show details',
     timelineCollapseDetail: 'Hide details',
-    kanbanDefaultTitle: 'Task board',
     kanbanEmptyColumn: 'No items',
     kanbanPriorityHigh: 'High',
     kanbanPriorityMedium: 'Medium',
     kanbanPriorityLow: 'Low',
     sourceListDefaultTitle: 'Sources & citations',
-    sourceCount: (count) => `${count} ${count === 1 ? 'source' : 'sources'}`,
-    sourceOpenFile: 'Open in sidebar ↗',
-    sourceOpenUrl: 'Open link ↗',
-    sourceEmpty: 'No citations',
     sourceRelevanceLabel: 'Relevance',
     serviceGraphDefaultTitle: 'Service topology',
-    serviceGraphSelected: (label) => `Selected: ${label}`,
-    serviceGraphClickHint: 'Click any node to inspect or drill down',
-    serviceGraphEmpty: '(No service nodes)',
     serviceGraphHealthy: 'Healthy',
     serviceGraphWarning: 'Degraded',
     serviceGraphError: 'Error',
@@ -830,6 +721,7 @@ export const RUNTIME_MESSAGES: Record<UiLocale, RuntimeUiMessages> = {
     tableSelectRowAria: (index) => `Select row ${index}`,
     tableBatchDefault: 'Apply to selected',
     tableSummaryLabel: (count) => `Summary (${count} rows)`,
+    tableAvgLabel: (value) => `Avg ${value}`,
     trackerHoverHint: 'Hover or click any slice for details',
     trackerHealthy: 'Healthy',
     trackerDegraded: 'Degraded',
@@ -843,7 +735,6 @@ export const RUNTIME_MESSAGES: Record<UiLocale, RuntimeUiMessages> = {
     approvalSeverityHigh: 'High-Risk Change',
     approvalSeverityCritical: 'P0 Critical Gate',
     approvalImpactHeader: 'Blast Radius & Impact',
-    approvalDefaultConfirm: 'I have verified the impact and rollback plan above',
     approvalDefaultApprove: 'Approve & Execute',
     approvalDefaultReject: 'Reject',
     approvalApprovedDone: 'Approved ✓',

@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo, useState, useSyncExternalStore } from 'react'
+import { memo, useCallback, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { useShellMessages } from './i18n.ts'
 import {
   dismissCommandNotice,
@@ -30,7 +30,12 @@ export const A2uiTierControl = memo(function A2uiTierControl({
   chatStore,
   syncHostEnabled,
 }: A2uiTierControlProps) {
-  const [busy, setBusy] = useState(false)
+  const [busyState, setBusyState] = useState<{
+    readonly sessionId: string | undefined
+    readonly reqId: number
+  } | null>(null)
+  const reqSeqRef = useRef(0)
+  const busy = busyState !== null && busyState.sessionId === sessionId
 
   const getPersistedEnabled = useCallback(() => getA2uiEnabled(sessionId), [sessionId])
   useSyncExternalStore<boolean>(subscribeA2uiEnabled, getPersistedEnabled, getPersistedEnabled)
@@ -69,14 +74,29 @@ export const A2uiTierControl = memo(function A2uiTierControl({
   }, [notice?.seq, sessionId])
 
   const handleToggle = useCallback(() => {
-    const next = !enabled
-    setA2uiEnabled(sessionId, next, latestCommand?.seq)
+    const prev = enabled
+    const next = !prev
+    const targetSessionId = sessionId
+    const cmdSeq = latestCommand?.seq
+    setA2uiEnabled(targetSessionId, next, cmdSeq)
     if (!syncHostEnabled) return
-    setBusy(true)
+    const reqId = ++reqSeqRef.current
+    setBusyState({ sessionId: targetSessionId, reqId })
     void syncHostEnabled(next)
-      .catch(() => false)
+      .then(
+        (ok) => {
+          if (!ok && reqSeqRef.current === reqId) {
+            setA2uiEnabled(targetSessionId, prev, cmdSeq)
+          }
+        },
+        () => {
+          if (reqSeqRef.current === reqId) {
+            setA2uiEnabled(targetSessionId, prev, cmdSeq)
+          }
+        },
+      )
       .finally(() => {
-        setBusy(false)
+        setBusyState((cur) => (cur !== null && cur.reqId === reqId ? null : cur))
       })
   }, [enabled, latestCommand?.seq, sessionId, syncHostEnabled])
 

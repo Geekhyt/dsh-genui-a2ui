@@ -14,9 +14,9 @@
 
 1. **纯数据声明（Data, Not Code）**：遵循 Google A2UI 1.0 规范，前后端之间仅传输结构化 JSON 消息，不渲染模型生成的原始 HTML，不挂载外部 `iframe`，也不执行 `eval` 或 `new Function`。
 2. **同构白名单校验（`dshSchemaCatalog`）**：仅允许实例化通过 Zod 严格校验的 57 种受控组件与 25 个客户端函数，未知组件名与非法参数会在编译期与渲染期双重拦截。
-3. **资源上限与公式静态审计（`A2UI_LIMITS`）**：单次调用限制字符数（`64,000`）、Surface 数量（`8`）、单 Surface 节点数（`250`）与数据模型体积（`256 KB`）；`calc()` 采用自定义递归下降解析器并限制最大表达式长度（`2,048` 字符）、最大词法 Token 数（`512`）与最大 AST 深度（`36`）。
-4. **URL 协议白名单与 Mermaid 严格沙箱**：`Image`、`AudioPlayer`、`Video` 与 `openUrl` 严格过滤 `javascript:`、`vbscript:`、`file:` 等危险协议；`DshMarkdown` 强制开启 `omitHtml` 拦截内联原始 HTML；`Mermaid` 强制运行于 `securityLevel: "strict"` 并通过 `DOMPurify` 与 `assertSafeSvg` 进行双重节点及属性净化。注：`Image`、`AudioPlayer` 与 `Video` 允许标准 `https://` 媒体资源（受宿主 Electron / Web CSP 策略约束），在处理不可信外部文本（间接提示词注入场景）时需注意模型引用外部 `https://` 媒体 URL 可能触发的出站图片/音视频请求边界。
-5. **敏感字段过滤、HITL 审批绑定与 CSV 防注入**：本地表单草稿缓存、数据模型快照与 `action.context` 均会对密码、密钥、Token、PIN/OTP/CVV/Authorization/Cookie 等敏感键以及所有 `variant="obscured"` 指针（含父路径，异常时 fail-closed）自动脱敏；`a2ui_ask` 严格校验显式 `callId` 防止过期回调误签批；CSV 导出仅豁免纯数字字面量并中和一切公式/DDE 注入前缀。
+3. **资源上限与公式静态审计（`A2UI_LIMITS`）**：单次调用限制字符数（`64,000`）、Surface 数量（`8`）、单 Surface 节点数（`250`）、数据模型体积（`256 KB`）与编译产物总大小（`maxCompiledBytes: 512 KB`）；`calc()` 采用自定义递归下降解析器并限制最大表达式长度（`2,048` 字符）、最大词法 Token 数（`512`）与最大 AST 深度（`36`）。
+4. **URL 协议白名单、工作区路径边界与 Mermaid 严格沙箱**：`Image` 仅允许安全位图或经严格静态校验的 `data:image/svg+xml`（禁止脚本、动画、外部引用与 `<foreignObject>`）；`AudioPlayer`、`Video` 与 `openUrl` 严格拒绝 `data:`、`javascript:`、`vbscript:`、`file:` 等危险协议；文件跳转拦截 UNC/百分号编码遍历并校验规范化工作区前缀边界；`DshMarkdown` 强制开启 `omitHtml` 拦截内联原始 HTML；`Mermaid` 强制运行于 `securityLevel: "strict"`，循环剥离嵌套 `%%{init}%%` 与 YAML Frontmatter，经 `DOMPurify`、逐条 CSS 作用域过滤（清除未限定选择器、`@import`、外部 `url()` 及 `position:fixed` 等危险内联样式）与 `assertSafeSvg` 多重净化。注：`Image`、`AudioPlayer` 与 `Video` 允许标准 `https://` 媒体资源（受宿主 Electron / Web CSP 策略约束），在处理不可信外部文本（间接提示词注入场景）时需注意模型引用外部 `https://` 媒体 URL 可能触发的出站图片/音视频请求边界。
+5. **敏感字段过滤、HITL 审批绑定与 CSV 防注入**：本地表单草稿缓存、数据模型快照、`action.context` 与服务端 `a2ui_ask` 结算载荷均会对密码、密钥、Token、PIN/OTP/CVV/Authorization/Cookie 等敏感键（含驼峰/下划线后缀与复数变体）以及所有 `variant="obscured"` 指针（含父路径，异常时 fail-closed）自动脱敏；`a2ui_ask` 严格校验显式 `callId` 防止过期回调误签批；CSV 导出仅豁免纯数字字面量并中和一切公式/DDE 注入前缀。
 
 ## 已知上游依赖说明 / Upstream Advisory Notes
 

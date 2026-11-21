@@ -6,9 +6,10 @@ import {
   CHART_LOAD_ERROR_SENTINEL,
   getEchartsChunkServerSnapshot,
   getEchartsChunkSnapshot,
+  retryEchartsChunk,
   subscribeEchartsChunk,
 } from '../chunk-loader.ts'
-import { type EChartsClickParams, useEChartsMount } from '../dom-hooks.ts'
+import { type EChartsClickParams, useEChartsMount, useTransientFlag } from '../dom-hooks.ts'
 import { useRuntimeMessages } from '../i18n.ts'
 import { useDarkTheme } from '../theme.ts'
 import css from './Catalog.module.css'
@@ -81,13 +82,17 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
   const loadError = rawLoadError === CHART_LOAD_ERROR_SENTINEL ? msg.chartLoadFailed : rawLoadError
 
   const [containerWidth, setContainerWidth] = useState<number | undefined>(undefined)
-  const [copiedCsv, setCopiedCsv] = useState(false)
-  const [exportedPng, setExportedPng] = useState(false)
+  const [copiedCsv, markCopiedCsv] = useTransientFlag(1300)
+  const [exportedPng, markExportedPng] = useTransientFlag(1300)
   const hostRef = useRef<HTMLDivElement | null>(null)
   const actionRef = useRef(action)
   actionRef.current = action
   const onSelectChangeRef = useRef(onSelectChange)
   onSelectChangeRef.current = onSelectChange
+  const xFieldRef = useRef(xField)
+  xFieldRef.current = xField
+  const seriesFieldRef = useRef(seriesField)
+  seriesFieldRef.current = seriesField
   const activeSelected = sanitizeInlineText(selected).trim()
   const activeSelectedRef = useRef(activeSelected)
   activeSelectedRef.current = activeSelected
@@ -151,7 +156,9 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
     containerWidth,
   ])
 
-  const height = Math.min(640, Math.max(140, rawHeight ?? 260))
+  const safeRawHeight =
+    typeof rawHeight === 'number' && Number.isFinite(rawHeight) ? rawHeight : 260
+  const height = Math.min(640, Math.max(140, safeRawHeight))
 
   const handleContainerWidth = useCallback((nextW: number) => {
     setContainerWidth((prev) => {
@@ -179,12 +186,14 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
       typeof params?.dataIndex === 'number' && Number.isInteger(params.dataIndex)
         ? params.dataIndex
         : undefined
+    const curXField = xFieldRef.current
+    const curSeriesField = seriesFieldRef.current
     const matchedRow = (() => {
-      if (xField && label) {
+      if (curXField && label) {
         const hit = rowsRef.current.find((r) => {
-          const xMatch = sanitizeInlineText(r[xField]) === label
+          const xMatch = sanitizeInlineText(r[curXField]) === label
           if (!xMatch) return false
-          if (seriesField && series) return sanitizeInlineText(r[seriesField]) === series
+          if (curSeriesField && series) return sanitizeInlineText(r[curSeriesField]) === series
           return true
         })
         if (hit !== undefined) return hit
@@ -219,16 +228,14 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
   const handleExportPng = () => {
     const ok = exportPng(title || `chart-${kind}`, dark ? '#16181d' : '#ffffff')
     if (ok) {
-      setExportedPng(true)
-      setTimeout(() => setExportedPng(false), 1300)
+      markExportedPng()
     }
   }
 
   const handleCopyCsv = () => {
     if (!csvPayload) return
     copyTextSafe(csvPayload)
-    setCopiedCsv(true)
-    setTimeout(() => setCopiedCsv(false), 1300)
+    markCopiedCsv()
   }
 
   const weightStyle =
@@ -247,76 +254,81 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
       data-a2ui-chart-selected={activeSelected || undefined}
       data-crossfilter={onSelectChange ? 'true' : undefined}
     >
-      {showHeader ? (
-        <div className={css.chartHeader}>
-          <div className={css.chartTitleGroup}>
-            {title ? <div className={css.chartTitle}>{sanitizeInlineText(title)}</div> : null}
-            {activeSelected ? (
-              <span className={css.crossFilterChip} data-a2ui-chart-filter="">
-                <span>{msg.chartFilterActive(activeSelected)}</span>
-                {onSelectChange ? (
-                  <button
-                    type="button"
-                    className={css.crossFilterClear}
-                    aria-label={msg.chartClearFilter}
-                    onClick={() => onSelectChange('')}
-                  >
-                    ×
-                  </button>
-                ) : null}
-              </span>
-            ) : null}
-          </div>
-          {showActions ? (
-            <div className={css.chartActions}>
-              <button
-                type="button"
-                className={css.chartActionBtn}
-                onClick={handleExportPng}
-                data-a2ui-chart-export="png"
-              >
-                {exportedPng ? msg.copiedCheck : msg.chartExportPng}
-              </button>
-              {csvPayload ? (
+      <div className={css.chartInner}>
+        {showHeader ? (
+          <div className={css.chartHeader}>
+            <div className={css.chartTitleGroup}>
+              {title ? <div className={css.chartTitle}>{sanitizeInlineText(title)}</div> : null}
+              {activeSelected ? (
+                <span className={css.crossFilterChip} data-a2ui-chart-filter="">
+                  <span>{msg.chartFilterActive(activeSelected)}</span>
+                  {onSelectChange ? (
+                    <button
+                      type="button"
+                      className={css.crossFilterClear}
+                      aria-label={msg.chartClearFilter}
+                      onClick={() => onSelectChange('')}
+                    >
+                      ×
+                    </button>
+                  ) : null}
+                </span>
+              ) : null}
+            </div>
+            {showActions ? (
+              <div className={css.chartActions}>
                 <button
                   type="button"
                   className={css.chartActionBtn}
-                  onClick={handleCopyCsv}
-                  data-a2ui-chart-export="csv"
+                  onClick={handleExportPng}
+                  data-a2ui-chart-export="png"
                 >
-                  {copiedCsv ? msg.copiedCheck : msg.chartCopyCsv}
+                  {exportedPng ? msg.chartExportedCheck : msg.chartExportPng}
                 </button>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-      {loadError ? (
-        <div className={css.emptyCell} role="status">
-          {loadError}
-        </div>
-      ) : (
-        <div style={{ position: 'relative', width: '100%', height }}>
-          {!chunk ? (
+                {csvPayload ? (
+                  <button
+                    type="button"
+                    className={css.chartActionBtn}
+                    onClick={handleCopyCsv}
+                    data-a2ui-chart-export="csv"
+                  >
+                    {copiedCsv ? msg.copiedCheck : msg.chartCopyCsv}
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+        {loadError ? (
+          <div className={css.emptyCell} role="alert">
+            <span>{loadError}</span>{' '}
+            <button type="button" className={css.chartActionBtn} onClick={retryEchartsChunk}>
+              {msg.retryLoad}
+            </button>
+          </div>
+        ) : (
+          <div style={{ position: 'relative', width: '100%', height }}>
+            {!chunk ? (
+              <div
+                className={css.lazySkeleton}
+                style={{ height }}
+                role="status"
+                aria-busy="true"
+                aria-label={msg.chartLoading}
+              />
+            ) : null}
             <div
-              className={css.lazySkeleton}
-              style={{ height }}
-              role="status"
-              aria-busy="true"
-              aria-label={msg.chartLoading}
+              ref={hostRef}
+              className={css.chartCanvas}
+              style={{
+                height,
+                visibility: chunk ? 'visible' : 'hidden',
+                cursor: isInteractive ? 'pointer' : undefined,
+              }}
             />
-          ) : null}
-          <div
-            ref={hostRef}
-            className={css.chartCanvas}
-            style={{
-              height,
-              visibility: chunk ? 'visible' : 'hidden',
-              cursor: isInteractive ? 'pointer' : undefined,
-            }}
-          />
-        </div>
-      )}
+          </div>
+        )}
+      </div>
     </div>
   )
 })

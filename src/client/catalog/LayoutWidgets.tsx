@@ -129,7 +129,7 @@ export function DshRowView({
   const childCount = Array.isArray(props.children) ? String(props.children.length) : undefined
   const resolvedAlign = props.align ?? 'stretch'
   const kpiGrid = isHomogeneousStatRow(context)
-  return (
+  const rowEl = (
     <div
       className={css.row}
       data-a2ui-row=""
@@ -137,7 +137,7 @@ export function DshRowView({
       data-child-count={childCount}
       data-kpi-grid={kpiGrid ? 'true' : undefined}
       style={{
-        ...weightStyle(props.weight),
+        ...(kpiGrid ? undefined : weightStyle(props.weight)),
         justifyContent: JUSTIFY_MAP[props.justify ?? 'start'] ?? 'flex-start',
         alignItems: ALIGN_MAP[resolvedAlign] ?? 'stretch',
       }}
@@ -145,6 +145,14 @@ export function DshRowView({
       {renderChildList(buildChild, props.children)}
     </div>
   )
+  if (kpiGrid) {
+    return (
+      <div className={css.containerHost} style={weightStyle(props.weight)}>
+        {rowEl}
+      </div>
+    )
+  }
+  return rowEl
 }
 
 export const DshRowImpl = defineComponent<{
@@ -214,19 +222,20 @@ export const DshGridImpl = defineComponent<{
       : 3
   const gapPx = GRID_GAP_MAP[props.gap ?? 'md'] ?? 12
   return (
-    <div
-      className={css.responsiveGrid}
-      data-a2ui-grid=""
-      data-columns={cols}
-      style={
-        {
-          ...weightStyle(props.weight),
-          '--a2ui-grid-cols': cols,
-          gap: gapPx,
-        } as CSSProperties
-      }
-    >
-      {renderChildList(buildChild, props.children)}
+    <div className={css.containerHost} style={weightStyle(props.weight)}>
+      <div
+        className={css.responsiveGrid}
+        data-a2ui-grid=""
+        data-columns={cols}
+        style={
+          {
+            '--a2ui-grid-cols': cols,
+            gap: gapPx,
+          } as CSSProperties
+        }
+      >
+        {renderChildList(buildChild, props.children)}
+      </div>
     </div>
   )
 })

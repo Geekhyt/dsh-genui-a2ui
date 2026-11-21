@@ -69,9 +69,10 @@ function parseArgs(argv) {
           .map((s) => s.trim())
           .filter(Boolean),
       )
-    } else if (arg.startsWith('--max-repairs='))
-      opts.maxRepairs = Math.max(0, Number(arg.slice(14)) || 2)
-    else if (arg.startsWith('--json=')) opts.jsonOut = arg.slice(7)
+    } else if (arg.startsWith('--max-repairs=')) {
+      const parsed = Number(arg.slice(14))
+      opts.maxRepairs = Number.isFinite(parsed) ? Math.max(0, Math.trunc(parsed)) : 2
+    } else if (arg.startsWith('--json=')) opts.jsonOut = arg.slice(7)
     else if (arg.startsWith('--html=')) opts.htmlOut = arg.slice(7)
   }
   return opts
@@ -578,7 +579,10 @@ export function renderEvalHtmlReport(summaries) {
       --primary: #58a6ff;
       --primary-foreground: #0d1117;
       --chart-1: #58a6ff;
+      --chart-2: #3fb950;
       --success: #3fb950;
+      --warning: #d29922;
+      --error: #f85149;
       --danger: #f85149;
     }
     * { box-sizing: border-box; }
@@ -633,7 +637,7 @@ export function renderEvalHtmlReport(summaries) {
         <div class="rounded-xl p-4 bg-[var(--background)] border border-[var(--card-border)]">
           <div class="text-xs text-[var(--muted-foreground)]">单任务均值 Prompt Token</div>
           <div class="text-2xl font-bold mt-1 tabular-nums text-[var(--success)]">${primary.avgPromptTokens.toLocaleString()}</div>
-          <div class="text-xs text-[var(--muted-foreground)] mt-1">${hasAb ? `旧单体 ${baseline.avgPromptTokens.toLocaleString()} (${tokenDiffPct}%)` : `策略：${primary.strategy}`}</div>
+          <div class="text-xs text-[var(--muted-foreground)] mt-1">${hasAb ? `旧单体 ${baseline.avgPromptTokens.toLocaleString()} (${tokenDiffPct}%)` : `策略：${escapeHtml(primary.strategy)}`}</div>
         </div>
         <div class="rounded-xl p-4 bg-[var(--background)] border border-[var(--card-border)]">
           <div class="text-xs text-[var(--muted-foreground)]">组件覆盖广度</div>

@@ -17,10 +17,11 @@ import { validateCalcExpression } from '../shared/calc-engine.ts'
 import { A2UI_LIMITS, ASK_TOOL, dshSchemaCatalog, RENDER_TOOL } from '../shared/catalog-schema.ts'
 import {
   desugarExpressConcat,
+  extractUpdateSurfaceIds,
   flattenChainedCalc,
   foldNestedCondToLookup,
   preprocessExpressProgram,
-} from './express-preprocess.ts'
+} from '../shared/express-preprocess.ts'
 import {
   compactPromptSnippet,
   type SkillDomain,
@@ -66,16 +67,6 @@ class ToolChannelFormatFactory implements InferenceFormatFactory {
   }
 }
 
-function extractUpdateSurfaceIds(cleanedUi: string): string[] {
-  const ids: string[] = []
-  const re = /\bsurface\(\s*"([^"]+)"[^)]*\bupdate\s*=\s*true/g
-  let match: RegExpExecArray | null
-  while ((match = re.exec(cleanedUi)) !== null) {
-    if (match[1]) ids.push(match[1])
-  }
-  return ids
-}
-
 const DEFAULT_CATALOGS: readonly SchemaCatalogInput[] = [dshSchemaCatalog]
 
 const CAPABILITIES = {
@@ -92,11 +83,19 @@ export function createGenerator(
   )
 }
 
-function findExpressionInDataModel(node: unknown, currentPath = ''): string | null {
+const MAX_DATA_MODEL_DEPTH = 32
+
+function findExpressionInDataModel(node: unknown, currentPath = '', depth = 0): string | null {
   if (typeof node !== 'object' || node === null) return null
+  if (depth > MAX_DATA_MODEL_DEPTH) {
+    throw new A2uiError(
+      `Data model nesting exceeds maximum depth (${MAX_DATA_MODEL_DEPTH}) at "$${currentPath || '/'}". Flatten nested data structures before rendering.`,
+      'VALIDATION_ERROR',
+    )
+  }
   if (Array.isArray(node)) {
     for (let i = 0; i < node.length; i++) {
-      const hit = findExpressionInDataModel(node[i], `${currentPath}/${i}`)
+      const hit = findExpressionInDataModel(node[i], `${currentPath}/${i}`, depth + 1)
       if (hit) return hit
     }
     return null
@@ -106,10 +105,22 @@ function findExpressionInDataModel(node: unknown, currentPath = ''): string | nu
     return currentPath || '/'
   }
   for (const [k, v] of Object.entries(rec)) {
-    const hit = findExpressionInDataModel(v, `${currentPath}/${k}`)
+    const hit = findExpressionInDataModel(v, `${currentPath}/${k}`, depth + 1)
     if (hit) return hit
   }
   return null
+}
+
+function isDynamicBindingObject(rec: Record<string, unknown>): boolean {
+  const keys = Object.keys(rec)
+  if (keys.length === 0) return false
+  if (keys.length === 1 && (typeof rec['@path'] === 'string' || typeof rec.path === 'string')) {
+    return true
+  }
+  if (typeof rec['@call'] === 'string' || typeof rec.call === 'string') {
+    return keys.every((k) => k === '@call' || k === 'call' || k === 'args' || k === 'returnType')
+  }
+  return false
 }
 
 function validateCalcCallsInNode(node: unknown): void {
@@ -129,12 +140,7 @@ function validateCalcCallsInNode(node: unknown): void {
         providedVars = new Set<string>()
       } else if (typeof rawVars === 'object' && !Array.isArray(rawVars)) {
         const varsRec = rawVars as Record<string, unknown>
-        if (
-          !('@path' in varsRec) &&
-          !('path' in varsRec) &&
-          !('@call' in varsRec) &&
-          !('call' in varsRec)
-        ) {
+        if (!isDynamicBindingObject(varsRec)) {
           providedVars = new Set<string>(Object.keys(varsRec))
         }
       }
@@ -286,6 +292,18 @@ function validateCompiledLimits(messages: readonly AgentToRendererMessage[]): vo
   }
 }
 
+const MAX_HOST_SESSIONS = 256
+
+function touchMapLru<K, V>(map: Map<K, V>, key: K, value: V, limit: number): void {
+  map.delete(key)
+  map.set(key, value)
+  while (map.size > limit) {
+    const oldest = map.keys().next()
+    if (oldest.done) break
+    map.delete(oldest.value)
+  }
+}
+
 export class SurfaceSessions {
   private readonly states = new Map<string, RendererState>()
   private readonly enabledBySession = new Map<string, boolean>()
@@ -304,7 +322,7 @@ export class SurfaceSessions {
   }
 
   setEnabled(sessionId: string, enabled: boolean): void {
-    this.enabledBySession.set(sessionId, enabled)
+    touchMapLru(this.enabledBySession, sessionId, enabled, MAX_HOST_SESSIONS)
   }
 
   setDefaultEnabled(enabled: boolean): void {
@@ -326,8 +344,8 @@ export class SurfaceSessions {
     let state = this.states.get(sessionId)
     if (state === undefined) {
       state = this.generator.createProcessor(CAPABILITIES).createState()
-      this.states.set(sessionId, state)
     }
+    touchMapLru(this.states, sessionId, state, MAX_HOST_SESSIONS)
     return this.generator.createProcessor(CAPABILITIES, undefined, { state })
   }
 
@@ -445,7 +463,7 @@ export function stripWrapping(ui: string): string {
         }
       }
     }
-    if (text.startsWith('<a2ui>') && text.endsWith('</a2ui>') && text.length >= 13) {
+    if (/^<a2ui>/i.test(text) && /<\/a2ui>$/i.test(text) && text.length >= 13) {
       text = text.slice(6, text.length - 7).trim()
       changed = true
     }

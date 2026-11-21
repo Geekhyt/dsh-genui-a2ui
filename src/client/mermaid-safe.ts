@@ -16,13 +16,16 @@ export const ALLOWED_MERMAID_KINDS = [
   'xychart-beta',
 ] as const
 
-const SVG_INJECTION_RE =
-  /<script\b|<iframe\b|<object\b|<embed\b|<applet\b|<meta\b|<base\b|<animate\b|<set\b|(?:javascript|vbscript)\s*:|data\s*:\s*(?:text\/html|image\/svg\+xml|application\/xhtml\+xml)/i
+const FORBIDDEN_SVG_TAG_RE =
+  /<(?:script|iframe|object|embed|applet|meta|base|animate|animateTransform|animateMotion|set|image|feImage)\b/i
 
 const TAG_EVENT_HANDLER_RE = /<(?:"[^"]*"|'[^']*'|[^'">])*\bon[a-z]+\s*=/i
 
 const OBFUSCATED_URI_RE =
   /(?:javascript|vbscript)\s*:|data\s*:\s*(?:text\/html|image\/svg\+xml|application\/xhtml\+xml)/i
+
+const TAG_OPEN_RE = /<(?:"[^"]*"|'[^']*'|[^'">])*>/g
+const STYLE_BLOCK_RE = /<style\b[^>]*>([\s\S]*?)<\/style>/gi
 
 const NAMED_ENTITY_MAP: Record<string, string> = {
   colon: ':',
@@ -51,22 +54,67 @@ function decodeHtmlEntities(input: string): string {
     .replace(/[\u0000-\u0020]+/g, '')
 }
 
+function hasUnsafeUriInTagsOrStyles(svg: string): boolean {
+  TAG_OPEN_RE.lastIndex = 0
+  let tagMatch: RegExpExecArray | null
+  while ((tagMatch = TAG_OPEN_RE.exec(svg)) !== null) {
+    const tag = tagMatch[0]
+    if (OBFUSCATED_URI_RE.test(tag) || OBFUSCATED_URI_RE.test(decodeHtmlEntities(tag))) {
+      return true
+    }
+  }
+  STYLE_BLOCK_RE.lastIndex = 0
+  let styleMatch: RegExpExecArray | null
+  while ((styleMatch = STYLE_BLOCK_RE.exec(svg)) !== null) {
+    const body = styleMatch[1] ?? ''
+    if (OBFUSCATED_URI_RE.test(body) || OBFUSCATED_URI_RE.test(decodeHtmlEntities(body))) {
+      return true
+    }
+  }
+  return false
+}
+
 export function assertSafeSvg(svg: string): void {
   if (
-    SVG_INJECTION_RE.test(svg) ||
+    FORBIDDEN_SVG_TAG_RE.test(svg) ||
     TAG_EVENT_HANDLER_RE.test(svg) ||
-    OBFUSCATED_URI_RE.test(decodeHtmlEntities(svg))
+    hasUnsafeUriInTagsOrStyles(svg)
   ) {
     throw new Error('Mermaid SVG failed sanitization check; refusing to render')
   }
 }
 
+const EXTERNAL_HREF_RE = /\b(?:xlink:)?href\s*=\s*(?:"([^"]*)"|'([^']*)')/gi
+
+export function isSafeStaticSvgImage(svg: string): boolean {
+  if (!/<svg\b/i.test(svg)) return false
+  if (/<foreignObject\b|<use\b|<a\b|<style\b/i.test(svg)) return false
+  try {
+    assertSafeSvg(svg)
+  } catch {
+    return false
+  }
+  EXTERNAL_HREF_RE.lastIndex = 0
+  let m: RegExpExecArray | null
+  while ((m = EXTERNAL_HREF_RE.exec(svg)) !== null) {
+    const val = (m[1] ?? m[2] ?? '').trim()
+    if (val !== '' && !val.startsWith('#')) return false
+  }
+  return true
+}
+
+const YAML_FRONTMATTER_RE = /^\s*---[ \t]*\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)/
+const INIT_DIRECTIVE_RE = /%%\{[\s\S]*?\}%%/g
+
 export function stripUnsafeDirectives(code: string): string {
   let out = code
-  while (/^\s*---\r?\n[\s\S]*?\r?\n---\r?\n/.test(out)) {
-    out = out.replace(/^\s*---\r?\n[\s\S]*?\r?\n---\r?\n/, '')
+  let prev = ''
+  while (out !== prev) {
+    prev = out
+    out = out.replace(YAML_FRONTMATTER_RE, '')
+    out = out.replace(INIT_DIRECTIVE_RE, '')
   }
-  return out.replace(/%%\{[\s\S]*?\}%%/g, '').trim()
+  return out.trim()
 }
 
 export function extractMermaidKind(code: string): string {
@@ -183,9 +231,10 @@ export function repairMermaidSource(code: string): string {
       return t && needsQuote(t) ? `("${t}")` : w
     })
 
-  return quoted
+  const restored = quoted
     .replace(/\uE002(\d+)\uE003/g, (whole, idx: string) => pipeSpans[Number(idx)] ?? whole)
     .replace(/\uE000(\d+)\uE001/g, (whole, idx: string) => spans[Number(idx)] ?? whole)
+  return stripUnsafeDirectives(restored)
 }
 
 export interface PreparedMermaidSvg {

@@ -223,7 +223,7 @@ describe('Full Repo Audit & Visual QA Regression Suite (v0.4.1)', () => {
     const wfTip = wfOpt.tooltip.formatter([{ name: '缓存降本', seriesName: '增长', value: 65 }])
     expect(wfTip).not.toContain('<br')
     expect(wfTip).toContain('\n')
-    expect(wfOpt.series[2]?.data[1]).toMatchObject({ value: 165, label: { position: 'inside' } })
+    expect(wfOpt.series[2]?.data[1]).toMatchObject({ value: 165, label: { position: 'bottom' } })
     expect(wfOpt.series[2]?.data[2]).toMatchObject({ value: 110, label: { position: 'bottom' } })
 
     const calOpt = buildChartOption(

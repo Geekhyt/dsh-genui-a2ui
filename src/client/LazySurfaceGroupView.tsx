@@ -1,8 +1,11 @@
 import { memo, useCallback, useMemo, useRef, useSyncExternalStore } from 'react'
 import {
-  getLoadedRuntimeChunk,
-  getRuntimeChunkServerSnapshot,
+  getRuntimeChunkSnapshot,
+  getRuntimeChunkStateServerSnapshot,
+  RUNTIME_LOAD_ERROR_SENTINEL,
   type RuntimeChunkModule,
+  type RuntimeChunkSnapshot,
+  retryRuntimeChunk,
   subscribeRuntimeChunk,
 } from './chunk-loader.ts'
 import { useShellMessages } from './i18n.ts'
@@ -12,12 +15,20 @@ import type { StreamingCompileSnapshot, StreamingExpressSession } from './stream
 
 const SKELETON_BLOCK = <div className={css.skeletonBlock} />
 
-export function useRuntimeChunk(enabled = true): RuntimeChunkModule | null {
+export function useRuntimeChunkState(enabled = true): RuntimeChunkSnapshot {
   const subscribe = useCallback(
     (listener: () => void) => subscribeRuntimeChunk(enabled, listener),
     [enabled],
   )
-  return useSyncExternalStore(subscribe, getLoadedRuntimeChunk, getRuntimeChunkServerSnapshot)
+  return useSyncExternalStore(
+    subscribe,
+    getRuntimeChunkSnapshot,
+    getRuntimeChunkStateServerSnapshot,
+  )
+}
+
+export function useRuntimeChunk(enabled = true): RuntimeChunkModule | null {
+  return useRuntimeChunkState(enabled).chunk
 }
 
 export function useLazyStreamingExpress(
@@ -45,8 +56,22 @@ export const LazySurfaceGroupView = memo(function LazySurfaceGroupView(
   props: SurfaceGroupViewProps,
 ) {
   const msg = useShellMessages()
-  const runtime = useRuntimeChunk(true)
-  if (runtime === null) {
+  const runtimeState = useRuntimeChunkState(true)
+  if (runtimeState.error !== null) {
+    const detail =
+      runtimeState.error === RUNTIME_LOAD_ERROR_SENTINEL
+        ? msg.loadingRuntimeFailed
+        : `${msg.loadingRuntimeFailed}: ${runtimeState.error}`
+    return (
+      <div className={css.reason} role="alert" data-a2ui-runtime-error="">
+        <span>{detail}</span>{' '}
+        <button type="button" className={css.inspectBtn} onClick={retryRuntimeChunk}>
+          {msg.retryLoad}
+        </button>
+      </div>
+    )
+  }
+  if (runtimeState.chunk === null) {
     return (
       <div
         className={css.skeletonWrap}
@@ -58,6 +83,6 @@ export const LazySurfaceGroupView = memo(function LazySurfaceGroupView(
       </div>
     )
   }
-  const Impl = runtime.SurfaceGroupView
+  const Impl = runtimeState.chunk.SurfaceGroupView
   return <Impl {...props} />
 })

@@ -14,9 +14,10 @@
    - 派生状态（例如卡片切换为 `readOnly` 时自动关闭 `Modal` 或 `Mermaid` 全屏、由 `localStorage` 与对话流 `/a2ui` 命令水位线推导 `A2uiTierControl` 开关状态）一律在 render 期间直接计算。
    - 外部状态订阅（`chunk-loader.ts`、`theme.ts`、`i18n.ts`、`persistence.ts`、`SurfaceSessionStore`）统一走 `useSyncExternalStore`，并对 `MutationObserver` 做全局多订阅者复用去重。
 2. **仅将真正的浏览器命令式 API 隔离到 `src/client/dom-hooks.ts`**：
-   - `useAutoDismissTimer`：降级 Toast 定时器，在 render 阶段同步最新回调 ref，防止回调引用变化重置倒计时。
-   - `useEChartsMount`：管理 ECharts `<canvas>` 生命周期、`ResizeObserver`、Option 同步与 2x PNG 导出。
-   - `useMermaidViewportDom`：负责绘制前光标锚点滚动补偿（`useLayoutEffect`）、`ResizeObserver`、非 passive 滚轮监听（`{ passive: false }`，用于拦截 `Ctrl+滚轮` 浏览器缩放）、全屏 `Escape` 监听以及卸载时清理拖拽事件。
+   - `useAutoDismissTimer` / `useTransientFlag` / `useTransientKey`：降级 Toast 与复制/导出瞬态反馈定时器，在 render 阶段同步最新回调 ref 并在卸载时自动 `clearTimeout`，防止卸载后 `setState` 或重置倒计时。
+   - `useEscapeKey` / `usePortalPopover`：管理降级 `Modal`/`Lightbox` 及 `Select`/`MultiSelect`/`TreeSelect` Portal 弹层的视口边界重算、`scroll`/`resize` 追踪、外部点击关闭、`Escape` 关闭与焦点恢复。
+   - `useEChartsMount`：管理 ECharts `<canvas>` 生命周期、`ResizeObserver`（跳过隐藏/零宽高容器防零尺寸崩塌）、Option 同步与 2x PNG 导出（`try/finally` 清理临时锚点）。
+   - `useMermaidViewportDom`：负责绘制前光标锚点滚动补偿（`useLayoutEffect`）、`ResizeObserver`、非 passive 滚轮监听（`{ passive: false }`，用于拦截 `Ctrl+滚轮` 浏览器缩放）、全屏 `Escape` 监听以及 `blur`/卸载/退出全屏时清理拖拽事件。
    - `useStreamingMinHeight`：在 `streaming === true` 期间锁定容器历史最高 `min-height`，防止渐进式 Express 编译帧引起的高度塌陷和聊天视口回跳；流结束后立即释放。
 3. **首帧同步的 `SurfaceSessionStore` 与上游 SSR 防护**：
    - `SurfaceSessionStore` 作为组件实例级外部 Store 封装 `MessageProcessor`，确保首帧同步编译表面并恢复本地草稿，且对 React StrictMode 双渲染保持幂等。

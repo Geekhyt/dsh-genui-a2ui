@@ -15,12 +15,13 @@
 2. **`a2ui_ask` 同轮阻塞 RPC 结算机制**：
    - 与渲染即结束当前工具调用的 `a2ui_render` 不同，`a2ui_ask` 会在当前轮次内挂起等待，直到浏览器端通过 `session.command('/a2ui-answer <json>', { recordInput: false })` 回传结构化 `{ action, userMessage, context, dataModels }`，在不新开对话轮次的前提下原位恢复模型推理。
 3. **编译与限额校验的同步事务回滚**：
-   - `RendererState` 内部持有实时函数引用，无法使用 `structuredClone` 快照。`SurfaceSessions.compile` 因此将每次解析与安全限额校验包裹在 `RendererState` 内置的同步事务帧内：一旦语法、Schema 或限额校验失败，状态自动干净回滚，避免残留半成品 Surface 导致模型自愈重试时触发 `"surface already exists"` 错误。
+   - `RendererState` 内部持有实时函数引用，无法使用 `structuredClone` 快照。`SurfaceSessions.compile` 因此将每次解析与安全限额校验（含 `maxCompiledBytes: 512 KB` 字节上限）包裹在 `RendererState` 内置的同步事务帧内：一旦语法、Schema 或限额校验失败，状态自动干净回滚，避免残留半成品 Surface 导致模型自愈重试时触发 `"surface already exists"` 错误。
+   - `express-preprocess.ts` 通过单遍预计算括号映射表（`Int32Array`）实现严格 $O(N)$ 预处理（含三引号/原始字符串与注释跳过、嵌套 `cond` 折叠以及链式 `calc` 展平）。
    - 仅当 `calc()` 的 `vars` 参数本身是动态 `$/path` 或 `@call` 表达式时，才跳过编译期静态变量键名检查。
 4. **跨重启表面水合（Cross-Restart Hydration）**：
    - 当用户重启 DSH 后在历史会话中继续触发 `surface("id", update=true)`（此时 Host 内存冷启动、尚无该 Surface 记录），`SurfaceSessions.compile` 会自动补种一次占位 Surface 并重试，而非直接报未知 Surface 错误。
 5. **保护 KV-Cache 前缀的系统提示词落位**：
-   - `tool:a2ui` 系统提示词区块固定挂在优先级 `9010`（紧跟内置 `DELIVERABLE_FILE_REFERENCES` 的 `9000` 之后），避免破坏内置系统提示词的 KV-Cache 前缀复用；且当 A2UI 开关关闭或处于子 Agent 上下文时输出 0 token。
+   - `tool:a2ui` 系统提示词区块固定挂在优先级 `9200`（位于内置系统提示词尾部之后），避免破坏内置系统提示词的 KV-Cache 前缀复用；且当 A2UI 开关关闭或处于子 Agent 上下文（`parentCallId` 非空）时输出 0 token。
 
 ## 影响与约束
 

@@ -1,7 +1,17 @@
+import { formatLocalDateValue, parseLocalDateAnchor } from '../../shared/temporal.ts'
 import { type NormalizedSelectOption, normalizeSelectOptions } from './v3-helpers.ts'
 
 export function decimalPlacesOf(step: number): number {
-  const s = String(step)
+  if (!Number.isFinite(step)) return 0
+  const s = String(step).toLowerCase()
+  const expIdx = s.indexOf('e')
+  if (expIdx >= 0) {
+    const mantissa = s.slice(0, expIdx)
+    const exp = Number.parseInt(s.slice(expIdx + 1), 10)
+    const dot = mantissa.indexOf('.')
+    const fracLen = dot >= 0 ? mantissa.length - dot - 1 : 0
+    return Math.min(8, Math.max(0, fracLen - exp))
+  }
   const dot = s.indexOf('.')
   return dot < 0 ? 0 : Math.min(8, s.length - dot - 1)
 }
@@ -58,34 +68,12 @@ export function computeDateRangeSpanDays(startStr: string, endStr: string): numb
   return Math.max(1, diffDays)
 }
 
-function parseLocalAnchorDate(anchorEndStr?: string): Date {
-  if (!anchorEndStr) return new Date()
-  const trimmed = anchorEndStr.trim()
-  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed)
-  if (dateOnly) {
-    return new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]))
-  }
-  const dateTimeLocal = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?$/.exec(trimmed)
-  if (dateTimeLocal) {
-    return new Date(
-      Number(dateTimeLocal[1]),
-      Number(dateTimeLocal[2]) - 1,
-      Number(dateTimeLocal[3]),
-      Number(dateTimeLocal[4]),
-      Number(dateTimeLocal[5]),
-      Number(dateTimeLocal[6] ?? 0),
-    )
-  }
-  const parsed = Date.parse(trimmed)
-  return Number.isNaN(parsed) ? new Date() : new Date(parsed)
-}
-
 export function buildDatePresetRange(
   days: number,
   enableTime: boolean,
   anchorEndStr?: string,
 ): { readonly start: string; readonly end: string } {
-  const endObj = parseLocalAnchorDate(anchorEndStr)
+  const endObj = parseLocalDateAnchor(anchorEndStr)
   const startObj = new Date(
     endObj.getFullYear(),
     endObj.getMonth(),
@@ -94,16 +82,10 @@ export function buildDatePresetRange(
     endObj.getMinutes(),
     endObj.getSeconds(),
   )
-  const fmt = (d: Date) => {
-    const yyyy = d.getFullYear()
-    const mm = String(d.getMonth() + 1).padStart(2, '0')
-    const dd = String(d.getDate()).padStart(2, '0')
-    if (!enableTime) return `${yyyy}-${mm}-${dd}`
-    const hh = String(d.getHours()).padStart(2, '0')
-    const mi = String(d.getMinutes()).padStart(2, '0')
-    return `${yyyy}-${mm}-${dd}T${hh}:${mi}`
+  return {
+    start: formatLocalDateValue(startObj, enableTime),
+    end: formatLocalDateValue(endObj, enableTime),
   }
-  return { start: fmt(startObj), end: fmt(endObj) }
 }
 
 export type HierarchyNodeStatus = 'healthy' | 'warning' | 'error' | 'neutral'
@@ -222,18 +204,29 @@ export function findBreadcrumbByValue(
   return null
 }
 
-export function collectAllBranchIds(nodes: readonly NormalizedHierarchyNode[]): string[] {
-  const ids: string[] = []
-  const walk = (list: readonly NormalizedHierarchyNode[]) => {
+export interface HierarchyBranchRef {
+  readonly id: string
+  readonly depth: number
+}
+
+export function collectBranchDepths(
+  nodes: readonly NormalizedHierarchyNode[],
+): readonly HierarchyBranchRef[] {
+  const out: HierarchyBranchRef[] = []
+  const walk = (list: readonly NormalizedHierarchyNode[], depth: number) => {
     for (const n of list) {
       if (n.children.length > 0) {
-        ids.push(n.id)
-        walk(n.children)
+        out.push({ id: n.id, depth })
+        walk(n.children, depth + 1)
       }
     }
   }
-  walk(nodes)
-  return ids
+  walk(nodes, 0)
+  return out
+}
+
+export function collectAllBranchIds(nodes: readonly NormalizedHierarchyNode[]): string[] {
+  return collectBranchDepths(nodes).map((b) => b.id)
 }
 
 export interface NormalizedCheckCardOption {

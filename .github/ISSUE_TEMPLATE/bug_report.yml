@@ -26,6 +26,6 @@ body:
     attributes:
       label: 运行环境 / Environment
       description: DeepSeek Harness 版本、插件版本与操作系统。
-      placeholder: "DeepSeek Harness v0.2.2, dsh-genui-a2ui v0.1.0, macOS 15"
+      placeholder: "DeepSeek Harness v0.2.x, dsh-genui-a2ui v0.4.x, macOS 15"
     validations:
       required: true

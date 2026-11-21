@@ -17,10 +17,12 @@ import {
 } from '@tanstack/react-table'
 import { Fragment, memo, useDeferredValue, useMemo, useState } from 'react'
 import type { RuntimeUiMessages } from '../../shared/i18n.ts'
+import { useTransientFlag } from '../dom-hooks.ts'
 import { useRuntimeMessages } from '../i18n.ts'
 import { DshButton, DshInput, DshSearchIcon, DshTag } from '../ui/primitives.tsx'
 import css from './Catalog.module.css'
 import {
+  compareFormattedNumericCells,
   computeNextCrossFilterSelection,
   computeTableNumericSummary,
   detectNumericColumnKeys,
@@ -40,7 +42,12 @@ const TABLE_FEATURES = tableFeatures({
   sortedRowModel: createSortedRowModel(),
   paginatedRowModel: createPaginatedRowModel(),
   filterFns: { includesString: filterFn_includesString },
-  sortFns: { alphanumeric: sortFn_alphanumeric, basic: sortFn_basic },
+  sortFns: {
+    alphanumeric: sortFn_alphanumeric,
+    basic: sortFn_basic,
+    formattedNumeric: (rowA, rowB, columnId) =>
+      compareFormattedNumericCells(rowA.getValue(columnId), rowB.getValue(columnId)),
+  },
   columnMeta: {} as {
     align: 'left' | 'center' | 'right'
     isNumeric: boolean
@@ -114,12 +121,14 @@ function copyToClipboardSafe(text: string): void {
 function triggerCsvDownload(csvText: string, baseTitle: string): void {
   if (
     typeof document === 'undefined' ||
+    !document.body ||
     typeof Blob === 'undefined' ||
     typeof URL === 'undefined'
   ) {
     copyToClipboardSafe(csvText)
     return
   }
+  let anchor: HTMLAnchorElement | null = null
   try {
     const blob = new Blob([csvText], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
@@ -127,16 +136,19 @@ function triggerCsvDownload(csvText: string, baseTitle: string): void {
       .trim()
       .replace(/[^\w\u4e00-\u9fa5-]+/g, '-')
       .replace(/^-+|-+$/g, '')
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${slug || 'a2ui-table'}.csv`
-    a.style.display = 'none'
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
+    anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `${slug || 'a2ui-table'}.csv`
+    anchor.style.display = 'none'
+    document.body.appendChild(anchor)
+    anchor.click()
     setTimeout(() => URL.revokeObjectURL(url), 1000)
   } catch {
     copyToClipboardSafe(csvText)
+  } finally {
+    if (anchor?.parentNode) {
+      anchor.parentNode.removeChild(anchor)
+    }
   }
 }
 
@@ -167,14 +179,22 @@ export const TableWidget = memo(function TableWidget({
   const [sorting, setSorting] = useState<SortingState>([])
   const [searchInput, setSearchInput] = useState('')
   const globalFilter = useDeferredValue(searchInput)
-  const clampedPageSize = Math.max(3, Math.min(100, pageSize))
+  const safePageSize =
+    typeof pageSize === 'number' && Number.isFinite(pageSize) ? Math.trunc(pageSize) : 10
+  const clampedPageSize = Math.max(3, Math.min(100, safePageSize))
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: clampedPageSize })
   const [selectedIndices, setSelectedIndices] = useState<ReadonlySet<number>>(() => new Set())
   const [expandedIndices, setExpandedIndices] = useState<ReadonlySet<number>>(() => new Set())
   const [compact, setCompact] = useState(false)
-  const [copiedMd, setCopiedMd] = useState(false)
+  const [copiedMd, markCopiedMd] = useTransientFlag(1300)
   const [prevCrossFilter, setPrevCrossFilter] = useState(activeCrossFilter)
   const [prevNormalizedData, setPrevNormalizedData] = useState(normalizedData)
+  const [prevPageSize, setPrevPageSize] = useState(clampedPageSize)
+
+  if (prevPageSize !== clampedPageSize) {
+    setPrevPageSize(clampedPageSize)
+    setPagination((prev) => ({ pageIndex: 0, pageSize: clampedPageSize || prev.pageSize }))
+  }
 
   if (prevCrossFilter !== activeCrossFilter || prevNormalizedData !== normalizedData) {
     setPrevCrossFilter(activeCrossFilter)
@@ -238,7 +258,8 @@ export const TableWidget = memo(function TableWidget({
             id: col.key,
             header: col.label,
             enableSorting: col.sortable !== false,
-            sortFn: rawNumber ? 'basic' : 'alphanumeric',
+            sortUndefined: 'last',
+            sortFn: rawNumber ? 'basic' : isNumeric ? 'formattedNumeric' : 'alphanumeric',
             meta: { align, isNumeric, wrapProse },
             cell: (info) => formatCellValue(info.getValue(), msg),
           })
@@ -267,6 +288,7 @@ export const TableWidget = memo(function TableWidget({
   })
 
   const filteredRows = table.getFilteredRowModel().rows
+  const sortedRows = table.getSortedRowModel().rows
   const pageRows = table.getRowModel().rows
   const totalFiltered = filteredRows.length
   const pageCount = table.getPageCount()
@@ -279,9 +301,10 @@ export const TableWidget = memo(function TableWidget({
             inferredCols,
             filteredRows.map((r) => r.original),
             numericKeySet,
+            msg.tableAvgLabel,
           )
         : null,
-    [showSummary, inferredCols, filteredRows, numericKeySet],
+    [showSummary, inferredCols, filteredRows, numericKeySet, msg.tableAvgLabel],
   )
 
   const allPageSelected =
@@ -324,18 +347,17 @@ export const TableWidget = memo(function TableWidget({
   const handleCopyMarkdown = () => {
     const md = formatTableToMarkdown(
       inferredCols,
-      filteredRows.map((r) => r.original),
+      sortedRows.map((r) => r.original),
       numericKeySet,
     )
     copyToClipboardSafe(md)
-    setCopiedMd(true)
-    setTimeout(() => setCopiedMd(false), 1300)
+    markCopiedMd()
   }
 
   const handleExportCsv = () => {
     const csv = formatTableToCsv(
       inferredCols,
-      filteredRows.map((r) => r.original),
+      sortedRows.map((r) => r.original),
     )
     triggerCsvDownload(csv, title || 'table-export')
   }

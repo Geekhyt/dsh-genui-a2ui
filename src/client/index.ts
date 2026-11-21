@@ -11,6 +11,7 @@ import { getLoadedRuntimeChunk } from './chunk-loader.ts'
 import { A2uiDockView } from './DockView.tsx'
 import {
   fileAddressFor,
+  isPathWithinWorkspace,
   parseFileTarget,
   resolveSessionPath,
   type WorkspaceFileOpener,
@@ -167,12 +168,25 @@ function createFileOpener(
         .binding?.(sessionId)
         ?.session?.projections?.faceOf?.('workingDirectory')
         ?.getSnapshot?.() ?? undefined
-    const address = fileAddressFor(sessionId, cwd, resolveSessionPath(workingDir, target.path))
+    const resolvedPath = resolveSessionPath(workingDir, target.path)
+    if (!isPathWithinWorkspace(resolvedPath, cwd)) return
+    const address = fileAddressFor(sessionId, cwd, resolvedPath)
     const opts = target.line !== undefined ? { params: { line: target.line } } : undefined
+    const tryFallback = () => {
+      try {
+        const res = sr.openResourceIn?.(sessionId, address, opts) as unknown
+        if (res && typeof (res as Promise<unknown>).catch === 'function') {
+          void (res as Promise<unknown>).catch(() => {})
+        }
+      } catch {}
+    }
     try {
-      sr.openResource(address, opts)
+      const res = sr.openResource(address, opts) as unknown
+      if (res && typeof (res as Promise<unknown>).catch === 'function') {
+        void (res as Promise<unknown>).catch(() => tryFallback())
+      }
     } catch {
-      sr.openResourceIn?.(sessionId, address, opts)
+      tryFallback()
     }
   }
 }
@@ -265,14 +279,6 @@ export function apply(ctx: Context, config: ClientConfig = {}): void {
             key: ASK_TOOL,
             inject: (sessionId: string) => ({
               sessionId,
-              chatStore: resolveChatStore(host, sessionId),
-              openWorkspaceFile: createFileOpener(host, getSidebarRight, sessionId),
-              submitAskAnswer: (payload: AskAnswerInput) =>
-                executeSessionCommand(
-                  host,
-                  sessionId,
-                  `/${ANSWER_COMMAND} ${JSON.stringify(payload)}`,
-                ),
             }),
           },
           A2uiAskToolView,

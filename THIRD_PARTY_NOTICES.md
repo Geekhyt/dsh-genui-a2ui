@@ -14,7 +14,7 @@
 | `d3`, `d3-*` (`d3-array`, `d3-scale`, `d3-shape`, `d3-selection`, etc.) | ISC / BSD-3-Clause | Graph geometry, scales, and Sankey layout utilities used by Mermaid |
 | `dompurify` | MPL-2.0 OR Apache-2.0 | HTML and SVG sanitization (used under Apache-2.0) |
 | `lit`, `lit-html`, `lit-element`, `@lit/*`, `antlr4ng` | BSD-3-Clause | Reactive internals and grammar parser runtime used by `@a2ui/*` |
-| `markdown-it`, `marked`, `dayjs`, `lodash-es`, `uuid`, `clsx`, `zod` | MIT | Markdown parsing, date utilities, UUID generation, and isomorphic schema validation |
+| `markdown-it`, `marked`, `dayjs`, `lodash-es`, `uuid`, `clsx`, `zod`, `@braintree/sanitize-url`, `stylis` | MIT | Markdown parsing, date utilities, UUID generation, URL sanitization, CSS preprocessing, and isomorphic schema validation |
 | `zod-to-json-schema` | ISC | Tool parameter JSON Schema generation on the Host |
 | `entities`, `regjsparser` | BSD-2-Clause | HTML entity decoding and regular expression AST checks |
 | `tslib` | 0BSD | TypeScript runtime helpers |

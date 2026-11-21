@@ -87,7 +87,7 @@ export function computeArraySum(items: readonly unknown[], field?: string): numb
   for (const n of extractNumericValues(items, field)) {
     total += n
   }
-  return Math.round(total * 1_000_000) / 1_000_000
+  return total === 0 ? 0 : Number(total.toPrecision(12))
 }
 
 export function computeArrayAvg(items: readonly unknown[], field?: string): number {
@@ -95,7 +95,8 @@ export function computeArrayAvg(items: readonly unknown[], field?: string): numb
   if (nums.length === 0) return 0
   let total = 0
   for (const n of nums) total += n
-  return Math.round((total / nums.length) * 100) / 100
+  const avg = total / nums.length
+  return avg === 0 ? 0 : Number(avg.toPrecision(12))
 }
 
 export function coerceFiniteNumber(input: unknown, fallback = 0): number {
@@ -145,11 +146,17 @@ export function computeEq(a: unknown, b: unknown): boolean {
 }
 
 export function computeGt(a: unknown, b: unknown): boolean {
-  return coerceFiniteNumber(a) > coerceFiniteNumber(b)
+  const numL = tryFiniteScalar(unwrapSingleChoice(a))
+  const numR = tryFiniteScalar(unwrapSingleChoice(b))
+  if (numL === null || numR === null) return false
+  return numL > numR
 }
 
 export function computeLt(a: unknown, b: unknown): boolean {
-  return coerceFiniteNumber(a) < coerceFiniteNumber(b)
+  const numL = tryFiniteScalar(unwrapSingleChoice(a))
+  const numR = tryFiniteScalar(unwrapSingleChoice(b))
+  if (numL === null || numR === null) return false
+  return numL < numR
 }
 
 export function computeIncludes(items: unknown, value: unknown): boolean {
@@ -157,7 +164,8 @@ export function computeIncludes(items: unknown, value: unknown): boolean {
     return items.some((el) => computeEq(el, value))
   }
   if (typeof items === 'string') {
-    return items.includes(String(value ?? ''))
+    if (value === undefined || value === null) return false
+    return items.includes(String(value))
   }
   return false
 }

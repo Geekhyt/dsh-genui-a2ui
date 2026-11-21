@@ -258,7 +258,7 @@ describe('Tier-1 ECharts Expansion (14 -> 19 Kinds + y2Field + referenceLine)', 
     expect(wfNarrow.series[1]?.markLine?.label?.position).toBe('insideStartTop')
     expect(wfNarrow.series[2]?.data[1]).toMatchObject({
       value: 165,
-      label: { position: 'inside' },
+      label: { position: 'bottom' },
     })
     expect(wfNarrow.series[3]?.data[5]).toMatchObject({
       value: 38,

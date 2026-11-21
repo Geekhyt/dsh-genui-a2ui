@@ -6,6 +6,7 @@ import {
   ensureFlowchartKind,
   extractMermaidKind,
   repairMermaidSource,
+  stripUnsafeDirectives,
 } from '../mermaid-safe.ts'
 
 let renderSeq = 0
@@ -138,27 +139,141 @@ const FORBID_SVG_TAGS = [
   'link',
   'base',
   'img',
+  'image',
+  'feImage',
+  'use',
+  'a',
   'audio',
   'video',
   'animate',
+  'animateTransform',
+  'animateMotion',
   'set',
 ]
 
-function scopeMermaidStyleRules(svg: string, rootId: string): string {
-  const expectedPrefix = `#${rootId}`
-  return svg.replace(/<style\b[^>]*>([\s\S]*?)<\/style>/gi, (full, body: string) => {
-    const trimmed = body.trim()
-    if (trimmed === '') return ''
-    if (
-      /@import\b|expression\s*\(|javascript\s*:|url\s*\(\s*['"]?\s*(?:https?:|data:|javascript:)/i.test(
-        trimmed,
-      )
-    ) {
-      return ''
+const UNSAFE_CSS_VALUE_RE =
+  /\\|@import\b|expression\s*\(|image-set\s*\(|javascript\s*:|vbscript\s*:/i
+const CSS_URL_RE = /url\s*\(\s*(['"]?)([^)'"]*)\1\s*\)/gi
+
+function hasUnsafeCssContent(cssText: string): boolean {
+  if (UNSAFE_CSS_VALUE_RE.test(cssText)) return true
+  CSS_URL_RE.lastIndex = 0
+  let m: RegExpExecArray | null
+  while ((m = CSS_URL_RE.exec(cssText)) !== null) {
+    const target = (m[2] ?? '').trim()
+    if (!target.startsWith('#')) return true
+  }
+  return false
+}
+
+function splitTopLevelCssRules(body: string): string[] {
+  const rules: string[] = []
+  let depth = 0
+  let quote: '"' | "'" | null = null
+  let start = 0
+  for (let i = 0; i < body.length; i++) {
+    const ch = body[i]!
+    if (quote !== null) {
+      if (ch === '\\') i += 1
+      else if (ch === quote) quote = null
+      continue
     }
-    if (!trimmed.includes(expectedPrefix)) return ''
-    return full
+    if (ch === '"' || ch === "'") {
+      quote = ch
+      continue
+    }
+    if (ch === '{') {
+      depth += 1
+    } else if (ch === '}') {
+      depth = Math.max(0, depth - 1)
+      if (depth === 0) {
+        const rule = body.slice(start, i + 1).trim()
+        if (rule !== '') rules.push(rule)
+        start = i + 1
+      }
+    } else if (ch === ';' && depth === 0) {
+      const rule = body.slice(start, i + 1).trim()
+      if (rule !== '') rules.push(rule)
+      start = i + 1
+    }
+  }
+  const tail = body.slice(start).trim()
+  if (tail !== '') rules.push(tail)
+  return rules
+}
+
+function isSelectorScopedToRoot(selector: string, rootId: string): boolean {
+  const trimmed = selector.trim()
+  const prefix = `#${rootId}`
+  if (!trimmed.startsWith(prefix)) return false
+  const next = trimmed[prefix.length]
+  return next === undefined || /[\s>+~.:[#,]/.test(next)
+}
+
+function filterScopedCssBlock(body: string, rootId: string): string {
+  const uncommented = body.replace(/\/\*[\s\S]*?\*\//g, '').trim()
+  if (uncommented === '') return ''
+  const rules = splitTopLevelCssRules(uncommented)
+  const safeRules: string[] = []
+  for (const rule of rules) {
+    const openIdx = rule.indexOf('{')
+    if (openIdx === -1 || !rule.endsWith('}')) continue
+    const header = rule.slice(0, openIdx).trim()
+    const inner = rule.slice(openIdx + 1, -1).trim()
+    if (hasUnsafeCssContent(header)) continue
+    if (header.startsWith('@')) {
+      if (/^@(?:keyframes|-webkit-keyframes)\b/i.test(header)) {
+        if (!hasUnsafeCssContent(inner)) safeRules.push(rule)
+      } else if (/^@(?:media|supports)\b/i.test(header)) {
+        const filteredInner = filterScopedCssBlock(inner, rootId)
+        if (filteredInner !== '') safeRules.push(`${header}{${filteredInner}}`)
+      }
+      continue
+    }
+    if (hasUnsafeCssContent(inner)) continue
+    const selectors = header
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+    if (selectors.length === 0) continue
+    if (selectors.every((s) => isSelectorScopedToRoot(s, rootId))) {
+      safeRules.push(rule)
+    }
+  }
+  return safeRules.join('\n')
+}
+
+const UNSAFE_INLINE_STYLE_PROP_RE =
+  /^(?:position|z-index|inset|top|right|bottom|left|behavior|-moz-binding)$/i
+
+function sanitizeInlineStyleAttributes(svg: string): string {
+  return svg.replace(
+    /(<(?!svg\b)[A-Za-z][A-Za-z0-9:-]*\b[^>]*?)\s+style\s*=\s*(["'])([\s\S]*?)\2/gi,
+    (_full, prefix: string, quote: string, cssText: string) => {
+      const kept = cssText
+        .split(';')
+        .map((decl) => decl.trim())
+        .filter((decl) => {
+          if (decl === '') return false
+          const colon = decl.indexOf(':')
+          if (colon === -1) return false
+          const prop = decl.slice(0, colon).trim()
+          const val = decl.slice(colon + 1).trim()
+          if (UNSAFE_INLINE_STYLE_PROP_RE.test(prop)) return false
+          if (hasUnsafeCssContent(val)) return false
+          return true
+        })
+      return kept.length > 0 ? `${prefix} style=${quote}${kept.join('; ')}${quote}` : prefix
+    },
+  )
+}
+
+export function scopeMermaidStyleRules(svg: string, rootId: string): string {
+  const scoped = svg.replace(/<style\b[^>]*>([\s\S]*?)<\/style>/gi, (_full, body: string) => {
+    const safeBody = filterScopedCssBlock(body, rootId)
+    return safeBody !== '' ? `<style>${safeBody}</style>` : ''
   })
+  return sanitizeInlineStyleAttributes(scoped)
 }
 
 async function renderIntoOffscreen(id: string, source: string): Promise<string> {
@@ -206,7 +321,7 @@ export function renderMermaidDiagram(
     try {
       return await renderIntoOffscreen(`dsh-a2ui-mermaid-${++renderSeq}`, normalized)
     } catch (firstErr) {
-      const repaired = repairMermaidSource(normalized)
+      const repaired = stripUnsafeDirectives(repairMermaidSource(normalized))
       if (repaired !== normalized) {
         return await renderIntoOffscreen(`dsh-a2ui-mermaid-${++renderSeq}`, repaired)
       }
