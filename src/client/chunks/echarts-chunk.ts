@@ -108,17 +108,90 @@ export function normalizeChartRows(data: unknown): Record<string, unknown>[] {
   )
 }
 
+function resolveCssColorForCanvas(raw: string, fallback: string): string {
+  if (raw === '') return fallback
+  if (/^rgba?\([\d.,\s]+\)$/i.test(raw) || /^#[0-9a-f]{3,8}$/i.test(raw)) return raw
+  if (typeof document === 'undefined' || !document.body) return fallback
+  const probe = document.createElement('span')
+  probe.style.setProperty('color', raw, 'important')
+  if (probe.style.color === '') return fallback
+  probe.style.setProperty('display', 'none', 'important')
+  document.body.appendChild(probe)
+  let computed = ''
+  try {
+    computed = getComputedStyle(probe).color
+  } finally {
+    probe.remove()
+  }
+  if (/^rgba?\([\d.,\s]+\)$/i.test(computed) || /^#[0-9a-f]{3,8}$/i.test(computed)) return computed
+  const canvas = document.createElement('canvas')
+  canvas.width = 1
+  canvas.height = 1
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return fallback
+  ctx.fillStyle = '#010203'
+  const sentinel = ctx.fillStyle
+  ctx.fillStyle = computed
+  if (ctx.fillStyle === sentinel) return fallback
+  try {
+    ctx.fillRect(0, 0, 1, 1)
+    const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data
+    return `rgba(${r}, ${g}, ${b}, ${(a ?? 255) / 255})`
+  } catch {
+    return fallback
+  }
+}
+
 function readToken(name: string, fallback: string): string {
   if (typeof document === 'undefined') return fallback
-  const val = getComputedStyle(document.documentElement).getPropertyValue(name).trim()
-  return val !== '' ? val : fallback
+  const source = document.body ?? document.documentElement
+  const val = getComputedStyle(source).getPropertyValue(name).trim()
+  if (val === '') return fallback
+  return resolveCssColorForCanvas(val, fallback)
+}
+
+function isChromaticCanvasColor(color: string): boolean {
+  const rgb = color.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i)
+  if (rgb) {
+    const r = Number(rgb[1])
+    const g = Number(rgb[2])
+    const b = Number(rgb[3])
+    return Math.max(r, g, b) - Math.min(r, g, b) >= 24
+  }
+  const hex = color.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i)
+  if (hex) {
+    const raw = hex[1] ?? ''
+    const full =
+      raw.length === 3
+        ? raw
+            .split('')
+            .map((ch) => ch + ch)
+            .join('')
+        : raw
+    const r = Number.parseInt(full.slice(0, 2), 16)
+    const g = Number.parseInt(full.slice(2, 4), 16)
+    const b = Number.parseInt(full.slice(4, 6), 16)
+    return Math.max(r, g, b) - Math.min(r, g, b) >= 24
+  }
+  return true
+}
+
+function readChromaticToken(name: string, fallback: string): string {
+  const resolved = readToken(name, fallback)
+  return isChromaticCanvasColor(resolved) ? resolved : fallback
 }
 
 function resolvePalette(dark: boolean) {
-  const brand = readToken('--dsw-alias-brand-primary', dark ? '#60a5fa' : '#2563eb')
-  const success = readToken('--dsw-alias-state-success-primary', dark ? '#34d399' : '#10b981')
-  const warn = readToken('--dsw-alias-state-warn-primary', dark ? '#fbbf24' : '#f59e0b')
-  const danger = readToken('--dsw-alias-state-error-primary', dark ? '#f87171' : '#ef4444')
+  const brand = readChromaticToken(
+    '--dsw-alias-state-business-primary',
+    dark ? '#60a5fa' : '#2563eb',
+  )
+  const success = readChromaticToken(
+    '--dsw-alias-state-success-primary',
+    dark ? '#34d399' : '#10b981',
+  )
+  const warn = readChromaticToken('--dsw-alias-state-warn-primary', dark ? '#fbbf24' : '#f59e0b')
+  const danger = readChromaticToken('--dsw-alias-state-error-primary', dark ? '#f87171' : '#ef4444')
   const colors = dark
     ? [brand, success, warn, '#a78bfa', '#38bdf8', '#f472b6', danger]
     : [brand, success, warn, '#7c3aed', '#0284c7', '#db2777', danger]
@@ -251,11 +324,11 @@ function buildZoomConfig(
   if (!enabled) return undefined
   return horizontal
     ? [
-        { type: 'inside', yAxisIndex: 0 },
+        { type: 'inside', yAxisIndex: 0, zoomOnMouseWheel: 'ctrl' },
         { type: 'slider', yAxisIndex: 0, width: 14, right: 6, borderColor: border },
       ]
     : [
-        { type: 'inside', xAxisIndex: 0 },
+        { type: 'inside', xAxisIndex: 0, zoomOnMouseWheel: 'ctrl' },
         { type: 'slider', xAxisIndex: 0, height: 16, bottom: 4, borderColor: border },
       ]
 }
@@ -701,11 +774,23 @@ function applyCrossFilterSelection(
       ) {
         return s
       }
-      const hasExactCat = categories.some((c) => c === q)
+      const norm = (str: string) =>
+        str
+          .replace(/\s*→\s*/g, ' -> ')
+          .replace(/\s*->\s*/g, ' -> ')
+          .trim()
+          .toLowerCase()
+      const qNorm = norm(q)
+      const hasExactCat = categories.some((c) => norm(c) === qNorm)
+      let anyPointMatched = false
       const nextData = (s.data as unknown[]).map((pt, idx) => {
         const cat = categories[idx] ?? ''
-        const catMatch = hasExactCat ? cat === q : cat === q || (cat !== '' && cat.includes(q))
+        const catNorm = norm(cat)
+        const catMatch = hasExactCat
+          ? catNorm === qNorm
+          : catNorm === qNorm || (catNorm !== '' && catNorm.includes(qNorm))
         const isMatch = seriesMatched || catMatch
+        if (isMatch) anyPointMatched = true
         if (typeof pt === 'object' && pt !== null && !Array.isArray(pt)) {
           const rec = pt as Record<string, unknown>
           const prevStyle =
@@ -714,25 +799,44 @@ function applyCrossFilterSelection(
               : {}
           return {
             ...rec,
+            ...(type === 'line' ? { symbolSize: isMatch ? 8 : 4 } : {}),
             itemStyle: {
               ...prevStyle,
               opacity: isMatch ? 1 : 0.28,
-              ...(isMatch && type === 'bar'
-                ? { borderColor: highlightBorder, borderWidth: 1.2 }
+              ...(isMatch && (type === 'bar' || type === 'line')
+                ? { borderColor: highlightBorder, borderWidth: 1.5 }
                 : {}),
             },
           }
         }
         return {
           value: pt,
+          ...(type === 'line' ? { symbolSize: isMatch ? 8 : 4 } : {}),
           itemStyle: {
             opacity: isMatch ? 1 : 0.28,
-            ...(isMatch && type === 'bar'
-              ? { borderColor: highlightBorder, borderWidth: 1.2 }
+            ...(isMatch && (type === 'bar' || type === 'line')
+              ? { borderColor: highlightBorder, borderWidth: 1.5 }
               : {}),
           },
         }
       })
+      if (type === 'line') {
+        const prevLine =
+          typeof s.lineStyle === 'object' && s.lineStyle !== null
+            ? (s.lineStyle as Record<string, unknown>)
+            : {}
+        const prevArea =
+          typeof s.areaStyle === 'object' && s.areaStyle !== null
+            ? (s.areaStyle as Record<string, unknown>)
+            : undefined
+        const lineOpacity = seriesMatched ? 1 : anyPointMatched ? 0.55 : 0.22
+        return {
+          ...s,
+          lineStyle: { ...prevLine, opacity: lineOpacity },
+          ...(prevArea ? { areaStyle: { ...prevArea, opacity: seriesMatched ? 0.24 : 0.08 } } : {}),
+          data: nextData,
+        }
+      }
       return { ...s, data: nextData }
     }
 
@@ -745,6 +849,7 @@ function applyCrossFilterSelection(
             .trim()
             .toLowerCase() === q,
       )
+      const matchedNodeNames = new Set<string>()
       const nextNodes = (s.data as unknown[]).map((node) => {
         if (typeof node !== 'object' || node === null) return node
         const rec = node as Record<string, unknown>
@@ -752,6 +857,7 @@ function applyCrossFilterSelection(
         const isMatch = hasExactNode
           ? nameNorm === q
           : nameNorm === q || (nameNorm !== '' && nameNorm.includes(q))
+        if (isMatch) matchedNodeNames.add(nameNorm)
         const prevStyle =
           typeof rec.itemStyle === 'object' && rec.itemStyle !== null
             ? (rec.itemStyle as Record<string, unknown>)
@@ -764,7 +870,59 @@ function applyCrossFilterSelection(
           },
         }
       })
-      return { ...s, data: nextNodes }
+      const nextLinks = Array.isArray(s.links)
+        ? (s.links as unknown[]).map((lk) => {
+            if (typeof lk !== 'object' || lk === null) return lk
+            const rec = lk as Record<string, unknown>
+            const src = sanitizeChartLabel(rec.source).trim().toLowerCase()
+            const tgt = sanitizeChartLabel(rec.target).trim().toLowerCase()
+            const linkMatch = matchedNodeNames.has(src) || matchedNodeNames.has(tgt)
+            const prevLine =
+              typeof rec.lineStyle === 'object' && rec.lineStyle !== null
+                ? (rec.lineStyle as Record<string, unknown>)
+                : {}
+            return {
+              ...rec,
+              lineStyle: { ...prevLine, opacity: linkMatch ? 0.65 : 0.14 },
+            }
+          })
+        : s.links
+      return { ...s, data: nextNodes, ...(nextLinks !== undefined ? { links: nextLinks } : {}) }
+    }
+
+    if (type === 'scatter' && Array.isArray(s.data)) {
+      const nextData = (s.data as unknown[]).map((pt) => {
+        if (typeof pt === 'object' && pt !== null && !Array.isArray(pt)) {
+          const rec = pt as Record<string, unknown>
+          const nameNorm = sanitizeChartLabel(rec.name).trim().toLowerCase()
+          const isMatch =
+            seriesMatched || nameNorm === q || (nameNorm !== '' && nameNorm.includes(q))
+          const prevStyle =
+            typeof rec.itemStyle === 'object' && rec.itemStyle !== null
+              ? (rec.itemStyle as Record<string, unknown>)
+              : {}
+          return { ...rec, itemStyle: { ...prevStyle, opacity: isMatch ? 1 : 0.25 } }
+        }
+        return { value: pt, itemStyle: { opacity: seriesMatched ? 1 : 0.25 } }
+      })
+      return { ...s, data: nextData }
+    }
+
+    if (type === 'heatmap' && Array.isArray(s.data)) {
+      const nextData = (s.data as unknown[]).map((pt) => {
+        if (typeof pt === 'object' && pt !== null && !Array.isArray(pt)) {
+          const rec = pt as Record<string, unknown>
+          const nameNorm = sanitizeChartLabel(rec.name).trim().toLowerCase()
+          const isMatch = nameNorm === q || (nameNorm !== '' && nameNorm.includes(q))
+          const prevStyle =
+            typeof rec.itemStyle === 'object' && rec.itemStyle !== null
+              ? (rec.itemStyle as Record<string, unknown>)
+              : {}
+          return { ...rec, itemStyle: { ...prevStyle, opacity: isMatch ? 1 : 0.28 } }
+        }
+        return pt
+      })
+      return { ...s, data: nextData }
     }
 
     return s
@@ -773,13 +931,65 @@ function applyCrossFilterSelection(
   return { ...opt, series: nextSeries }
 }
 
+function applyDarkSafeThemeDefaults(
+  option: echarts.EChartsCoreOption,
+  dark: boolean,
+  theme: ReturnType<typeof resolvePalette>,
+): echarts.EChartsCoreOption {
+  if (typeof option !== 'object' || option === null) return option
+  const opt = { ...(option as Record<string, unknown>) }
+
+  if (opt.legend && typeof opt.legend === 'object' && !Array.isArray(opt.legend)) {
+    const leg = opt.legend as Record<string, unknown>
+    opt.legend = {
+      ...leg,
+      inactiveColor: dark ? 'rgba(156, 163, 175, 0.35)' : 'rgba(100, 116, 139, 0.4)',
+      pageIconColor: theme.brand,
+      pageIconInactiveColor: dark ? 'rgba(156, 163, 175, 0.3)' : 'rgba(100, 116, 139, 0.35)',
+      pageTextStyle: { color: theme.textSecondary, fontSize: 10 },
+    }
+  }
+
+  if (Array.isArray(opt.dataZoom)) {
+    opt.dataZoom = (opt.dataZoom as Record<string, unknown>[]).map((dz) => {
+      if (dz?.type !== 'slider') return dz
+      return {
+        ...dz,
+        backgroundColor: dark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(15, 23, 42, 0.04)',
+        fillerColor: dark ? 'rgba(96, 165, 250, 0.22)' : 'rgba(37, 99, 235, 0.16)',
+        handleStyle: {
+          color: dark ? '#334155' : '#ffffff',
+          borderColor: theme.brand,
+          borderWidth: 1.2,
+        },
+        moveHandleStyle: {
+          color: dark ? 'rgba(148, 163, 184, 0.45)' : 'rgba(100, 116, 139, 0.45)',
+        },
+        dataBackground: {
+          lineStyle: { color: dark ? 'rgba(148, 163, 184, 0.28)' : 'rgba(100, 116, 139, 0.28)' },
+          areaStyle: { color: dark ? 'rgba(148, 163, 184, 0.12)' : 'rgba(100, 116, 139, 0.1)' },
+        },
+        selectedDataBackground: {
+          lineStyle: { color: theme.brand },
+          areaStyle: { color: dark ? 'rgba(96, 165, 250, 0.2)' : 'rgba(37, 99, 235, 0.15)' },
+        },
+        textStyle: { color: theme.textSecondary, fontSize: 10 },
+      }
+    })
+  }
+
+  return opt
+}
+
 export function buildChartOption(
   props: ChartOptionInput,
   dark: boolean,
   containerWidth?: number,
 ): echarts.EChartsCoreOption {
+  const theme = resolvePalette(dark)
   const raw = buildChartOptionInternal(props, dark, containerWidth)
-  return applyCrossFilterSelection(raw, props.selected, dark)
+  const themed = applyDarkSafeThemeDefaults(raw, dark, theme)
+  return applyCrossFilterSelection(themed, props.selected, dark)
 }
 
 function buildChartOptionInternal(
@@ -795,9 +1005,11 @@ function buildChartOptionInternal(
 
   const baseTooltip = {
     renderMode: 'richText' as const,
+    confine: true,
     backgroundColor: theme.tooltipBg,
     borderColor: theme.border,
-    textStyle: { color: theme.textPrimary, fontSize: 12 },
+    padding: isCompact ? [5, 8] : [6, 10],
+    textStyle: { color: theme.textPrimary, fontSize: isCompact ? 11 : 12 },
   }
 
   if (props.kind === 'pie' || props.kind === 'funnel') {
@@ -811,7 +1023,8 @@ function buildChartOptionInternal(
       tooltip: {
         ...baseTooltip,
         trigger: 'item',
-        formatter: props.kind === 'pie' ? '{b}: {c} ({d}%)' : undefined,
+        formatter:
+          props.kind === 'pie' ? (isCompact ? '{b}\n{c} ({d}%)' : '{b}: {c} ({d}%)') : undefined,
       },
       legend: buildLegendOption({
         isCompact,
@@ -899,9 +1112,12 @@ function buildChartOptionInternal(
         {
           type: 'gauge',
           max: gaugeMax,
+          splitNumber: isCompact ? 5 : 10,
           radius: isCompact ? '86%' : '82%',
           progress: { show: true, width: arcWidth },
           axisLine: { lineStyle: { width: arcWidth, color: [[1, theme.border]] } },
+          axisTick: { lineStyle: { color: theme.border } },
+          splitLine: { lineStyle: { color: theme.textSecondary, width: 1.2 } },
           axisLabel: {
             color: theme.textSecondary,
             fontSize: isCompact ? 9 : 10,
@@ -1046,12 +1262,11 @@ function buildChartOptionInternal(
     const cells = rows.map((r) => {
       const val = toNumber(r[valKey])
       const norm = (val - minVal) / valSpan
+      const xLabel = sanitizeChartLabel(r[hxKey])
+      const yLabel = sanitizeChartLabel(r[hyKey])
       return {
-        value: [
-          xCats.indexOf(sanitizeChartLabel(r[hxKey])),
-          yCats.indexOf(sanitizeChartLabel(r[hyKey])),
-          val,
-        ],
+        name: xLabel,
+        value: [xCats.indexOf(xLabel), yCats.indexOf(yLabel), val],
         label:
           norm >= 0.48
             ? { ...FILLED_SHAPE_LABEL, fontSize: isCompact ? 9.5 : 11 }
@@ -1059,9 +1274,12 @@ function buildChartOptionInternal(
       }
     })
     const estHeatW = containerWidth !== undefined && containerWidth > 0 ? containerWidth : 520
+    const splitAreaColors = dark
+      ? ['rgba(255, 255, 255, 0.02)', 'rgba(255, 255, 255, 0.05)']
+      : ['rgba(15, 23, 42, 0.02)', 'rgba(15, 23, 42, 0.045)']
 
     return {
-      tooltip: { ...baseTooltip, position: 'top' },
+      tooltip: { ...baseTooltip },
       grid: {
         top: 14,
         right: isCompact ? 10 : 18,
@@ -1072,7 +1290,7 @@ function buildChartOptionInternal(
       xAxis: {
         type: 'category',
         data: xCats,
-        splitArea: { show: true },
+        splitArea: { show: true, areaStyle: { color: splitAreaColors } },
         axisLabel: {
           color: theme.textSecondary,
           fontSize: isCompact ? 9.5 : 11,
@@ -1089,7 +1307,7 @@ function buildChartOptionInternal(
       yAxis: {
         type: 'category',
         data: yCats,
-        splitArea: { show: true },
+        splitArea: { show: true, areaStyle: { color: splitAreaColors } },
         axisLabel: {
           color: theme.textSecondary,
           fontSize: isCompact ? 9.5 : 11,
@@ -1259,6 +1477,7 @@ function buildChartOptionInternal(
         {
           type: 'treemap',
           roam: false,
+          nodeClick: false,
           breadcrumb: { show: false },
           itemStyle: {
             borderColor: borderCol,
@@ -1501,7 +1720,7 @@ function buildChartOptionInternal(
           type: 'graph',
           layout: useCircularCompact ? 'circular' : 'force',
           circular: useCircularCompact ? { rotateLabel: false } : undefined,
-          roam: true,
+          roam: 'move',
           draggable: !useCircularCompact,
           top: useCircularCompact ? 22 : isCompact ? 16 : 12,
           bottom: categories.length > 1 ? (useCircularCompact ? 50 : isCompact ? 42 : 34) : 24,
@@ -2459,10 +2678,13 @@ function buildChartOptionInternal(
       36,
       Math.floor((estWidth - padX * 2) / Math.max(1, effectiveDims.length - 1)),
     )
-    const staggerHeaders = axisGap < 96 && effectiveDims.length >= 4
-    const maxTitleWidth = staggerHeaders ? Math.max(76, axisGap * 1.75) : Math.max(42, axisGap - 8)
+    const staggerHeaders = axisGap < 96 && effectiveDims.length >= 3
+    const baseMaxTitleW = staggerHeaders
+      ? Math.max(48, Math.floor(axisGap * 1.55))
+      : Math.max(42, Math.floor(axisGap * 0.82))
 
     const parallelAxis = effectiveDims.map((dimKey, idx) => {
+      const isEdge = effectiveDims.length > 1 && (idx === 0 || idx === effectiveDims.length - 1)
       const align =
         effectiveDims.length > 1
           ? idx === 0
@@ -2471,19 +2693,22 @@ function buildChartOptionInternal(
               ? ('right' as const)
               : ('center' as const)
           : ('center' as const)
+      const axisTitleW =
+        isEdge && !staggerHeaders ? Math.max(42, Math.floor(axisGap * 0.6)) : baseMaxTitleW
       return {
         dim: idx,
         name: sanitizeChartLabel(dimKey),
         type: 'value' as const,
         scale: true,
+        splitNumber: isCompact ? 3 : 4,
         nameLocation: 'end' as const,
         nameGap: staggerHeaders && idx % 2 === 1 ? 23 : 8,
         nameTruncate: {
-          maxWidth: maxTitleWidth,
+          maxWidth: axisTitleW,
         },
         nameTextStyle: {
           align,
-          width: maxTitleWidth,
+          width: axisTitleW,
           overflow: 'truncate' as const,
         },
       }
@@ -2535,7 +2760,7 @@ function buildChartOptionInternal(
             color: theme.textPrimary,
             fontSize: isCompact ? 10 : 10.5,
             fontWeight: 600,
-            width: maxTitleWidth,
+            width: baseMaxTitleW,
             overflow: 'truncate',
           },
           axisLine: { lineStyle: { color: theme.border } },
@@ -2631,7 +2856,6 @@ function buildChartOptionInternal(
     return {
       tooltip: {
         ...baseTooltip,
-        position: 'top',
         formatter: (p: unknown) => {
           const val = (p as { value?: unknown })?.value
           if (Array.isArray(val) && val.length >= 2) {

@@ -213,23 +213,29 @@ export function repairMermaidSource(code: string): string {
     /[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]/.test(s) || /\s/.test(s) || /[()/:?]/.test(s)
 
   const quoted = maskedPipes
-    .replace(/\[\(([^()[\]"\n]+)\)\]/g, (w, inner: string) => {
-      const t = inner.trim()
-      return t && needsQuote(t) ? `[("${t}")]` : w
+    .split('\n')
+    .map((line) => {
+      if (/^\s*(?:style|classDef|linkStyle)\b/i.test(line)) return line
+      return line
+        .replace(/\[\(([^()[\]"\n]+)\)\]/g, (w, inner: string) => {
+          const t = inner.trim()
+          return t && needsQuote(t) ? `[("${t}")]` : w
+        })
+        .replace(/\[([^[\]"\n]+)\]/g, (w, inner: string) => {
+          const t = inner.trim()
+          if (!t || (t.startsWith('(') && t.endsWith(')'))) return w
+          return needsQuote(t) ? `["${t}"]` : w
+        })
+        .replace(/\{([^{}"\n]+)\}/g, (w, inner: string) => {
+          const t = inner.trim()
+          return t && needsQuote(t) ? `{"${t}"}` : w
+        })
+        .replace(/\(([^()[\]{}"\n]+)\)/g, (w, inner: string) => {
+          const t = inner.trim()
+          return t && needsQuote(t) ? `("${t}")` : w
+        })
     })
-    .replace(/\[([^[\]"\n]+)\]/g, (w, inner: string) => {
-      const t = inner.trim()
-      if (!t || (t.startsWith('(') && t.endsWith(')'))) return w
-      return needsQuote(t) ? `["${t}"]` : w
-    })
-    .replace(/\{([^{}"\n]+)\}/g, (w, inner: string) => {
-      const t = inner.trim()
-      return t && needsQuote(t) ? `{"${t}"}` : w
-    })
-    .replace(/\(([^()[\]{}"\n]+)\)/g, (w, inner: string) => {
-      const t = inner.trim()
-      return t && needsQuote(t) ? `("${t}")` : w
-    })
+    .join('\n')
 
   const restored = quoted
     .replace(/\uE002(\d+)\uE003/g, (whole, idx: string) => pipeSpans[Number(idx)] ?? whole)
@@ -256,9 +262,11 @@ export function prepareMermaidSvg(rawSvg: string): PreparedMermaidSvg {
     /\bviewBox\s*=\s*["']\s*[+-]?\d*\.?\d+(?:e[+-]?\d+)?[\s,]+\s*[+-]?\d*\.?\d+(?:e[+-]?\d+)?[\s,]+\s*([+-]?\d*\.?\d+(?:e[+-]?\d+)?)[\s,]+\s*([+-]?\d*\.?\d+(?:e[+-]?\d+)?)\s*["']/i.exec(
       openTag,
     )
+  let hasValidViewBox = false
   if (vbMatch) {
     width = Number.parseFloat(vbMatch[1]!)
     height = Number.parseFloat(vbMatch[2]!)
+    hasValidViewBox = Number.isFinite(width) && width > 0 && Number.isFinite(height) && height > 0
   }
 
   if (!(width > 0)) {
@@ -289,8 +297,12 @@ export function prepareMermaidSvg(rawSvg: string): PreparedMermaidSvg {
     })
     .replace(/\s+\b(?:width|height)\s*=\s*["'][^"']*["']/gi, '')
 
-  if (!vbMatch) {
+  if (!hasValidViewBox) {
+    nextOpenTag = nextOpenTag.replace(/\s+\bviewBox\s*=\s*["'][^"']*["']/gi, '')
     nextOpenTag = nextOpenTag.replace(/^<svg\b/i, `<svg viewBox="0 0 ${safeW} ${safeH}"`)
+  }
+  if (!/\bpreserveAspectRatio\s*=/i.test(nextOpenTag)) {
+    nextOpenTag = nextOpenTag.replace(/^<svg\b/i, '<svg preserveAspectRatio="xMidYMid meet"')
   }
   nextOpenTag = nextOpenTag.replace(/^<svg\b/i, `<svg width="${safeW}" height="${safeH}"`)
 

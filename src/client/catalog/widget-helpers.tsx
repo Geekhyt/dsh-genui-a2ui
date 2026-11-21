@@ -19,6 +19,8 @@ export const SurfaceReadOnlyContext = createContext(false)
 
 export const ModalCloseContext = createContext<(() => void) | null>(null)
 
+export const ModalTriggerContext = createContext(false)
+
 export interface SurfaceValidationContextValue {
   readonly submitAttempted: boolean
   readonly markSubmitAttempted: () => void
@@ -28,6 +30,22 @@ export const SurfaceValidationContext = createContext<SurfaceValidationContextVa
   submitAttempted: false,
   markSubmitAttempted: () => {},
 })
+
+export function isWritableProp(context: unknown, propName: string, setter: unknown): boolean {
+  if (typeof setter !== 'function') return false
+  if (typeof context !== 'object' || context === null) return true
+  const model = (context as { componentModel?: unknown }).componentModel
+  if (typeof model !== 'object' || model === null) return true
+  const rawProps = (model as { properties?: unknown }).properties
+  if (typeof rawProps !== 'object' || rawProps === null) return true
+  const rawVal = (rawProps as Record<string, unknown>)[propName]
+  if (typeof rawVal !== 'object' || rawVal === null || Array.isArray(rawVal)) return false
+  const rec = rawVal as Record<string, unknown>
+  return (
+    (typeof rec['@path'] === 'string' && rec['@path'].trim() !== '') ||
+    (typeof rec.path === 'string' && rec.path.trim() !== '')
+  )
+}
 
 export function defineComponent<Props>(
   api: ComponentApi,
@@ -40,7 +58,21 @@ export function defineComponent<Props>(
 
 export function weightStyle(weight: number | undefined, minWidth = 0): CSSProperties | undefined {
   if (weight === undefined) return undefined
-  return { flexGrow: weight, flexBasis: 'var(--a2ui-flex-basis, 0px)', minWidth }
+  return {
+    flexGrow: weight,
+    flexBasis: 'var(--a2ui-flex-basis, 0px)',
+    minWidth: minWidth > 0 ? `min(100%, ${minWidth}px)` : 0,
+  }
+}
+
+export function computeDropdownSide(
+  rect: { readonly top: number; readonly bottom: number },
+  estHeight: number,
+): 'top' | 'bottom' {
+  const viewportH = typeof window !== 'undefined' ? window.innerHeight : 800
+  const spaceBelow = Math.max(0, viewportH - rect.bottom - 12)
+  const spaceAbove = Math.max(0, rect.top - 12)
+  return spaceBelow < estHeight && spaceAbove > spaceBelow ? 'top' : 'bottom'
 }
 
 export interface ClampedPopoverBox {

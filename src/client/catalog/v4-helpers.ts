@@ -802,19 +802,27 @@ function matchesPrefixBoundary(haystack: string, needle: string): boolean {
   return /[\s([（·•:：/|,，]/.test(nextCh)
 }
 
+function normalizeFilterToken(input: string): string {
+  return input
+    .replace(/\s*→\s*/g, ' -> ')
+    .replace(/\s*->\s*/g, ' -> ')
+    .trim()
+    .toLowerCase()
+}
+
 export function filterTableRowsByField(
   rows: readonly Record<string, unknown>[],
   filterField: string | undefined,
   filterValue: string | undefined,
 ): readonly Record<string, unknown>[] {
-  const q = (filterValue ?? '').trim().toLowerCase()
+  const q = normalizeFilterToken(filterValue ?? '')
   if (q === '') return rows
   const field = filterField?.trim()
 
   const cellText = (v: unknown): string => {
     if (v === null || v === undefined) return ''
-    if (typeof v === 'object') return safeStringifyJson(v, 0).toLowerCase()
-    return String(v).trim().toLowerCase()
+    if (typeof v === 'object') return normalizeFilterToken(safeStringifyJson(v, 0))
+    return normalizeFilterToken(String(v))
   }
 
   const exact = rows.filter((row) => {
@@ -825,8 +833,9 @@ export function filterTableRowsByField(
 
   const fuzzyMatch = (t: string): boolean => {
     if (t === '') return false
-    if (q.length >= 2 && t.includes(q)) return true
-    return matchesPrefixBoundary(q, t)
+    if (matchesPrefixBoundary(t, q) || matchesPrefixBoundary(q, t)) return true
+    if (q.length >= 3 && (field || /[\u4e00-\u9fa5]/.test(q)) && t.includes(q)) return true
+    return false
   }
 
   return rows.filter((row) => {

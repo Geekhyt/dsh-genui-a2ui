@@ -107,6 +107,12 @@ export const DshDiffViewImpl = defineComponent<{
           </table>
         ) : (
           <table className={`${css.diffTable} ${css.diffSplitTable}`}>
+            <colgroup>
+              <col className={css.diffSplitGutterCol} />
+              <col />
+              <col className={css.diffSplitGutterCol} />
+              <col />
+            </colgroup>
             <tbody>
               {splitRows.map((row, i) => (
                 <tr key={i} className={css.diffSplitTr}>
@@ -262,8 +268,12 @@ export const DshCalloutImpl = defineComponent<{
             </button>
           ) : null}
         </div>
-        {hasBody && (!props.collapsible || expanded) ? (
-          <div className={css.calloutBody}>
+        {hasBody ? (
+          <div
+            className={css.calloutBody}
+            hidden={Boolean(props.collapsible && !expanded)}
+            style={props.collapsible && !expanded ? { display: 'none' } : undefined}
+          >
             {message.trim() !== '' ? <DshMarkdown text={message} variant="compact" /> : null}
             {props.child ? renderChildRef(buildChild, props.child) : null}
           </div>
@@ -300,23 +310,31 @@ export const DshKeyValueImpl = defineComponent<{
   }
 
   const entrySpans = useMemo(() => {
+    const spans = new Array<number>(entries.length).fill(1)
     let cursor = 0
-    return entries.map((entry, idx) => {
+    for (let idx = 0; idx < entries.length; idx++) {
+      const entry = entries[idx]!
       const explicitSpan = entry.span
         ? Math.min(cols, Math.max(1, Math.trunc(entry.span)))
         : undefined
       if (explicitSpan !== undefined) {
-        if (cursor + explicitSpan > cols) cursor = 0
+        if (cursor > 0 && cursor + explicitSpan > cols && idx > 0) {
+          spans[idx - 1] = (spans[idx - 1] ?? 1) + (cols - cursor)
+          cursor = 0
+        }
+        spans[idx] = explicitSpan
         cursor = (cursor + explicitSpan) % cols
-        return explicitSpan
+        continue
       }
       if (idx === entries.length - 1) {
         const remaining = cols - cursor
-        return remaining > 1 && cursor > 0 ? remaining : 1
+        spans[idx] = Math.max(remaining, 1)
+        continue
       }
+      spans[idx] = 1
       cursor = (cursor + 1) % cols
-      return 1
-    })
+    }
+    return spans
   }, [entries, cols])
 
   return (

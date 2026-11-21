@@ -74,20 +74,70 @@ export function useTransientKey<T>(durationMs = 1500): readonly [T | null, (key:
   return [activeKey, trigger] as const
 }
 
+const escapeHandlerStack: Array<() => void> = []
+
+function dispatchTopEscape(e: KeyboardEvent): void {
+  if (e.key !== 'Escape' || escapeHandlerStack.length === 0) return
+  const top = escapeHandlerStack[escapeHandlerStack.length - 1]
+  if (!top) return
+  e.preventDefault()
+  e.stopPropagation()
+  e.stopImmediatePropagation()
+  top()
+}
+
+function registerEscapeHandler(handler: () => void): () => void {
+  if (typeof window === 'undefined') return () => {}
+  if (escapeHandlerStack.length === 0) {
+    window.addEventListener('keydown', dispatchTopEscape, { capture: true })
+  }
+  escapeHandlerStack.push(handler)
+  return () => {
+    const idx = escapeHandlerStack.lastIndexOf(handler)
+    if (idx >= 0) escapeHandlerStack.splice(idx, 1)
+    if (escapeHandlerStack.length === 0) {
+      window.removeEventListener('keydown', dispatchTopEscape, { capture: true })
+    }
+  }
+}
+
+function isTriggerClippedOut(el: HTMLElement): boolean {
+  if (typeof window === 'undefined') return false
+  const rect = el.getBoundingClientRect()
+  if (rect.width === 0 && rect.height === 0) return true
+  if (
+    rect.bottom <= 0 ||
+    rect.top >= window.innerHeight ||
+    rect.right <= 0 ||
+    rect.left >= window.innerWidth
+  ) {
+    return true
+  }
+  let cur: HTMLElement | null = el.parentElement
+  while (cur && cur !== document.body && cur !== document.documentElement) {
+    const style = window.getComputedStyle(cur)
+    const ovY = style.overflowY
+    const ovX = style.overflowX
+    if (ovY === 'auto' || ovY === 'scroll' || ovY === 'hidden' || ovY === 'clip') {
+      const cRect = cur.getBoundingClientRect()
+      if (rect.bottom <= cRect.top + 1 || rect.top >= cRect.bottom - 1) return true
+    }
+    if (ovX === 'auto' || ovX === 'scroll' || ovX === 'hidden' || ovX === 'clip') {
+      const cRect = cur.getBoundingClientRect()
+      if (rect.right <= cRect.left + 1 || rect.left >= cRect.right - 1) return true
+    }
+    cur = cur.parentElement
+  }
+  return false
+}
+
 export function useEscapeKey(active: boolean, onEscape: () => void): void {
   const onEscapeRef = useRef(onEscape)
   onEscapeRef.current = onEscape
 
   useEffect(() => {
     if (!active || typeof window === 'undefined') return
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.stopPropagation()
-        onEscapeRef.current()
-      }
-    }
-    window.addEventListener('keydown', onKeyDown, { capture: true })
-    return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
+    return registerEscapeHandler(() => onEscapeRef.current())
   }, [active])
 }
 
@@ -122,34 +172,38 @@ export function usePortalPopover(params: {
 
   useEffect(() => {
     if (!open || typeof window === 'undefined') return
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault()
-        e.stopPropagation()
-        onCloseRef.current()
-      }
+    let rafId = 0
+    const scheduleSync = () => {
+      if (rafId !== 0) return
+      rafId = window.requestAnimationFrame(() => {
+        rafId = 0
+        const trigger = triggerRef.current
+        if (!trigger || isTriggerClippedOut(trigger)) {
+          onCloseRef.current()
+          return
+        }
+        if (onRepositionRef.current) onRepositionRef.current()
+        else onCloseRef.current()
+      })
     }
-    const handleResize = () => {
-      if (onRepositionRef.current) onRepositionRef.current()
-      else onCloseRef.current()
-    }
+    const handleResize = () => scheduleSync()
     const handleScroll = (e: Event) => {
       const target = e.target
       if (popoverRef.current && target instanceof Node && popoverRef.current.contains(target)) {
         return
       }
-      if (onRepositionRef.current) onRepositionRef.current()
-      else onCloseRef.current()
+      scheduleSync()
     }
-    window.addEventListener('keydown', handleKeyDown, { capture: true })
+    const removeEscape = registerEscapeHandler(() => onCloseRef.current())
     window.addEventListener('resize', handleResize, { passive: true })
     window.addEventListener('scroll', handleScroll, { capture: true, passive: true })
     return () => {
-      window.removeEventListener('keydown', handleKeyDown, { capture: true })
+      removeEscape()
+      if (rafId !== 0) window.cancelAnimationFrame(rafId)
       window.removeEventListener('resize', handleResize)
       window.removeEventListener('scroll', handleScroll, { capture: true })
     }
-  }, [open, popoverRef])
+  }, [open, popoverRef, triggerRef])
 }
 
 export interface EChartsClickParams {
@@ -157,6 +211,7 @@ export interface EChartsClickParams {
   readonly seriesName?: unknown
   readonly value?: unknown
   readonly dataIndex?: unknown
+  readonly dataType?: unknown
 }
 
 export interface EChartsMountHandle {
@@ -172,6 +227,8 @@ export function useEChartsMount(params: {
 }): EChartsMountHandle {
   const { hostRef, chunk, option, onPointClick, onContainerWidth } = params
   const chartRef = useRef<ReturnType<EchartsChunkModule['initChartInstance']> | null>(null)
+  const optionRef = useRef<Record<string, unknown> | null>(option)
+  optionRef.current = option
   const onPointClickRef = useRef(onPointClick)
   onPointClickRef.current = onPointClick
   const onContainerWidthRef = useRef(onContainerWidth)
@@ -188,14 +245,26 @@ export function useEChartsMount(params: {
     if (!chunk) return
     const el = hostRef.current
     if (!el) return
-    const initialW = Math.round(el.clientWidth)
-    if (initialW > 0) onContainerWidthRef.current(initialW)
-    const instance = chunk.initChartInstance(el)
-    chartRef.current = instance
+    let resizeRaf = 0
 
-    instance.on('click', (clickParams: EChartsClickParams) => {
-      onPointClickRef.current(clickParams)
-    })
+    const ensureInit = (): ReturnType<EchartsChunkModule['initChartInstance']> | null => {
+      if (chartRef.current) return chartRef.current
+      const w = Math.round(el.clientWidth)
+      const h = Math.round(el.clientHeight)
+      if (w === 0 || h === 0) return null
+      onContainerWidthRef.current(w)
+      const instance = chunk.initChartInstance(el)
+      chartRef.current = instance
+      instance.on('click', (clickParams: EChartsClickParams) => {
+        onPointClickRef.current(clickParams)
+      })
+      if (optionRef.current) {
+        instance.setOption(optionRef.current, { notMerge: true })
+      }
+      return instance
+    }
+
+    ensureInit()
 
     const ro =
       typeof ResizeObserver !== 'undefined'
@@ -204,14 +273,30 @@ export function useEChartsMount(params: {
             const nextH = Math.round(el.clientHeight)
             if (nextW === 0 || nextH === 0) return
             onContainerWidthRef.current(nextW)
-            instance.resize()
+            const inst = ensureInit()
+            if (!inst) return
+            if (
+              typeof window !== 'undefined' &&
+              typeof window.requestAnimationFrame === 'function'
+            ) {
+              if (resizeRaf !== 0) window.cancelAnimationFrame(resizeRaf)
+              resizeRaf = window.requestAnimationFrame(() => {
+                resizeRaf = 0
+                chartRef.current?.resize()
+              })
+            } else {
+              inst.resize()
+            }
           })
         : null
     ro?.observe(el)
 
     return () => {
       ro?.disconnect()
-      instance.dispose()
+      if (resizeRaf !== 0 && typeof window !== 'undefined') {
+        window.cancelAnimationFrame(resizeRaf)
+      }
+      chartRef.current?.dispose()
       chartRef.current = null
     }
   }, [chunk, hostRef])
@@ -341,14 +426,7 @@ export function useMermaidViewportDom(params: {
 
   useEffect(() => {
     if (!activeFullscreen || typeof window === 'undefined') return
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.stopPropagation()
-        onCloseFullscreenRef.current()
-      }
-    }
-    window.addEventListener('keydown', onKeyDown, { capture: true })
-    return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
+    return registerEscapeHandler(() => onCloseFullscreenRef.current())
   }, [activeFullscreen])
 
   useIsomorphicLayoutEffect(() => {

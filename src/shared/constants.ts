@@ -146,6 +146,10 @@ const TOKEN_BENIGN_WORDS = new Set([
   'total',
   'cache',
   'cached',
+  'per',
+  'sec',
+  'speed',
+  'budget',
 ])
 
 const PIN_BENIGN_WORDS = new Set([

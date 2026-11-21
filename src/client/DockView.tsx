@@ -102,19 +102,22 @@ export const A2uiDockView = memo(function A2uiDockView({
           </button>
         </div>
       </div>
-      {!collapsed ? (
-        <div className={css.body} data-a2ui-dock-body="">
-          <LazySurfaceGroupView
-            messages={batch.messages}
-            visibleSurfaceIds={batch.visibleSurfaceIds}
-            sessionId={sessionId}
-            variant="bare"
-            streaming={false}
-            onAction={sendAction}
-            openWorkspaceFile={openWorkspaceFile}
-          />
-        </div>
-      ) : null}
+      <div
+        className={css.body}
+        data-a2ui-dock-body=""
+        hidden={collapsed}
+        style={collapsed ? { display: 'none' } : undefined}
+      >
+        <LazySurfaceGroupView
+          messages={batch.messages}
+          visibleSurfaceIds={batch.visibleSurfaceIds}
+          sessionId={sessionId}
+          variant="bare"
+          streaming={false}
+          onAction={sendAction}
+          openWorkspaceFile={openWorkspaceFile}
+        />
+      </div>
     </section>
   )
 })

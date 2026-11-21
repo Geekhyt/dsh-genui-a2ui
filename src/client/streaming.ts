@@ -6,7 +6,13 @@ const LEADING_WRAP_RE = /^\s*(?:<a2ui>\s*|```[\w-]*[ \t]*\r?\n)/i
 const TRAILING_WRAP_RE = /(?:\s*<\/a2ui>|\r?\n?[ \t]*```)\s*$/i
 
 export function normalizeStreamingProgram(raw: string): string {
-  return raw.replace(LEADING_WRAP_RE, '').replace(TRAILING_WRAP_RE, '')
+  let out = raw
+  for (let pass = 0; pass < 3; pass++) {
+    const next = out.replace(LEADING_WRAP_RE, '').replace(TRAILING_WRAP_RE, '')
+    if (next === out) break
+    out = next
+  }
+  return out
 }
 
 export interface StreamingCompileSnapshot {
@@ -42,6 +48,7 @@ export class StreamingExpressSession {
   private lastSnapshotWarningsCount = 0
 
   private closed = false
+  private streamRejected = false
 
   getSeedWarnings(): readonly string[] {
     return this.seedWarnings
@@ -94,6 +101,7 @@ export class StreamingExpressSession {
     this.lastError = null
     this.lastSnapshot = null
     this.closed = false
+    this.streamRejected = false
   }
 
   advance(rawUi: string, final = false): StreamingCompileSnapshot {
@@ -115,7 +123,7 @@ export class StreamingExpressSession {
         clean = rawClean
       }
     }
-    if (!clean.startsWith(this.fed) || (this.closed && clean !== this.fed)) {
+    if (this.streamRejected || !clean.startsWith(this.fed) || (this.closed && clean !== this.fed)) {
       const sameUpdateTargets = extractUpdateSurfaceIds(clean).some((id) =>
         this.seededUpdateIds.has(id),
       )
@@ -152,9 +160,11 @@ export class StreamingExpressSession {
             }
             this.lastError = null
           } catch (retryErr) {
+            this.streamRejected = true
             this.lastError = retryErr instanceof Error ? retryErr.message : String(retryErr)
           }
         } else {
+          this.streamRejected = true
           this.lastError = msg
         }
       }

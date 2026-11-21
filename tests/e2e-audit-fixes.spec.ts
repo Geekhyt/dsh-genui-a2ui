@@ -104,7 +104,7 @@ describe('E2E audit fixes (Items 2–5): Callout/CheckBox layout, Modal & readOn
       }),
     )
     expect(html).toContain('checkboxField')
-    expect(html).toContain('min-width:140px')
+    expect(html).toContain('min-width:min(100%, 140px)')
   })
 
   it('Item 3: closes open Modals on action dispatch or readOnly transition, and disables controls on historical snapshots', () => {

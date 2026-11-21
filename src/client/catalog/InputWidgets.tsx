@@ -53,9 +53,11 @@ import {
   type ChildRef,
   type ClampedPopoverBox,
   computeClampedPopoverBox,
+  computeDropdownSide,
   defineComponent,
   InsideButtonContext,
   ModalCloseContext,
+  ModalTriggerContext,
   NativeDateField,
   renderChildRef,
   SurfaceReadOnlyContext,
@@ -79,13 +81,14 @@ export function DshButtonView({
 }) {
   const readOnly = useContext(SurfaceReadOnlyContext)
   const closeModal = useContext(ModalCloseContext)
+  const isModalTrigger = useContext(ModalTriggerContext)
   const { markSubmitAttempted } = useContext(SurfaceValidationContext)
 
   const variant: ButtonVariant =
     props.variant === 'primary' ? 'primary' : props.variant === 'borderless' ? 'ghost' : 'outline'
 
   const invalid = props.isValid === false
-  const hardDisabled = readOnly || typeof props.action !== 'function'
+  const hardDisabled = readOnly || (!isModalTrigger && typeof props.action !== 'function')
   const softInvalidDisabled = !hardDisabled && invalid
   const errLabel = !readOnly && invalid ? (props.validationErrors ?? []).join('；') : ''
 
@@ -182,7 +185,19 @@ export function DshTextFieldView({
           aria-invalid={showError || undefined}
           onBlur={() => setTouched(true)}
           onChange={(e) => {
-            if (!readOnly) props.setValue?.(e.target.value)
+            if (readOnly) return
+            const raw = e.target.value
+            if (props.variant === 'number') {
+              const trimmed = raw.trim()
+              if (trimmed === '') {
+                props.setValue?.('')
+                return
+              }
+              const parsed = Number(trimmed)
+              props.setValue?.((Number.isFinite(parsed) ? parsed : raw) as unknown as string)
+              return
+            }
+            props.setValue?.(raw)
           }}
         />
       ) : (
@@ -196,7 +211,19 @@ export function DshTextFieldView({
           aria-invalid={showError || undefined}
           onBlur={() => setTouched(true)}
           onChange={(e) => {
-            if (!readOnly) props.setValue?.(e.target.value)
+            if (readOnly) return
+            const raw = e.target.value
+            if (props.variant === 'number') {
+              const trimmed = raw.trim()
+              if (trimmed === '') {
+                props.setValue?.('')
+                return
+              }
+              const parsed = Number(trimmed)
+              props.setValue?.((Number.isFinite(parsed) ? parsed : raw) as unknown as string)
+              return
+            }
+            props.setValue?.(raw)
           }}
         />
       )}
@@ -421,7 +448,7 @@ export const DshSliderImpl = defineComponent<{
   const err = showError ? props.validationErrors?.[0] : undefined
 
   return (
-    <div style={weightStyle(props.weight, 160)}>
+    <div className={css.field} style={weightStyle(props.weight, 160)} data-a2ui-slider="">
       <AriaSlider
         className={css.slider}
         minValue={min}
@@ -532,6 +559,13 @@ function handleListboxArrowKey(
   container: HTMLElement | null,
 ): void {
   if (!container) return
+  if (
+    (e.key === 'Home' || e.key === 'End') &&
+    typeof HTMLInputElement !== 'undefined' &&
+    e.target instanceof HTMLInputElement
+  ) {
+    return
+  }
   if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp' && e.key !== 'Home' && e.key !== 'End') return
   const items = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="option"]'))
   if (items.length === 0) return
@@ -570,11 +604,16 @@ export function DshSelectView({
   const { submitAttempted } = useContext(SurfaceValidationContext)
   const [touched, setTouched] = useState(false)
   const [open, setOpen] = useState(false)
+  const [menuSide, setMenuSide] = useState<'top' | 'bottom'>('bottom')
   const [query, setQuery] = useState('')
   const deferredQuery = useDeferredValue(query)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
   const popoverRef = useRef<HTMLDivElement | null>(null)
   const [popoverBox, setPopoverBox] = useState<ClampedPopoverBox | null>(null)
+
+  if (readOnly && open) {
+    setOpen(false)
+  }
 
   const options = useMemo(() => normalizeSelectOptions(props.options), [props.options])
   const selectedVal = props.value === undefined || props.value === null ? '' : String(props.value)
@@ -644,6 +683,9 @@ export function DshSelectView({
     }
     if (useCustomPopover) {
       syncPopoverBox()
+    } else if (triggerRef.current) {
+      const estHeight = Math.min(280, options.length * 34 + 16)
+      setMenuSide(computeDropdownSide(triggerRef.current.getBoundingClientRect(), estHeight))
     }
     setOpen(true)
   }
@@ -761,7 +803,7 @@ export function DshSelectView({
             open={effectiveOpen}
             items={menuItems}
             selectedId={selectedVal}
-            side="bottom"
+            side={menuSide}
             onSelect={commitSelect}
             onClose={closePopover}
             anchor={triggerButton}

@@ -50,6 +50,8 @@ import {
   type ClampedPopoverBox,
   computeClampedPopoverBox,
   defineComponent,
+  isWritableProp,
+  ModalCloseContext,
   NativeDateField,
   SurfaceReadOnlyContext,
   SurfaceValidationContext,
@@ -65,6 +67,13 @@ function handleOptionListArrowKey(
   container: HTMLElement | null,
 ): void {
   if (!container) return
+  if (
+    (e.key === 'Home' || e.key === 'End') &&
+    typeof HTMLInputElement !== 'undefined' &&
+    e.target instanceof HTMLInputElement
+  ) {
+    return
+  }
   if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp' && e.key !== 'Home' && e.key !== 'End') return
   const items = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="option"]'))
   if (items.length === 0) return
@@ -102,6 +111,7 @@ export const DshNumberInputImpl = defineComponent<{
   const [touched, setTouched] = useState(false)
   const [focused, setFocused] = useState(false)
   const [draft, setDraft] = useState('')
+  const [prevSafeVal, setPrevSafeVal] = useState<number | null>(null)
 
   const hasRawVal =
     props.value !== undefined && props.value !== null && String(props.value).trim() !== ''
@@ -111,6 +121,15 @@ export const DshNumberInputImpl = defineComponent<{
   const safeMax =
     typeof props.max === 'number' && Number.isFinite(props.max) ? props.max : undefined
   const safeVal = Number.isFinite(numVal) ? numVal : (safeMin ?? 0)
+  if (prevSafeVal !== safeVal) {
+    setPrevSafeVal(safeVal)
+    if (focused) {
+      const parsedDraft = Number(draft.trim())
+      if (!Number.isFinite(parsedDraft) || parsedDraft !== safeVal) {
+        setDraft(String(safeVal))
+      }
+    }
+  }
   const step =
     typeof props.step === 'number' && Number.isFinite(props.step) && props.step > 0 ? props.step : 1
   const atMin = safeMin !== undefined && safeVal <= safeMin
@@ -212,10 +231,18 @@ export const DshNumberInputImpl = defineComponent<{
               if (readOnly) return
               setTouched(true)
               const rawText = e.target.value
-              if (!/^-?\d*\.?\d*$/.test(rawText.trim())) return
+              if (!/^-?\d*\.?\d*(?:[eE][+-]?\d*)?$/.test(rawText.trim())) return
               setDraft(rawText)
               const trimmed = rawText.trim()
-              if (trimmed === '' || trimmed === '-' || trimmed === '.' || trimmed === '-.') return
+              if (
+                trimmed === '' ||
+                trimmed === '-' ||
+                trimmed === '.' ||
+                trimmed === '-.' ||
+                /[eE][+-]?$/.test(trimmed)
+              ) {
+                return
+              }
               const parsed = Number(trimmed)
               if (Number.isFinite(parsed)) {
                 props.setValue?.(parsed)
@@ -374,7 +401,9 @@ export const DshMultiSelectImpl = defineComponent<{
       <div
         ref={triggerRef}
         role="combobox"
+        aria-label={label || placeholder}
         aria-expanded={effectiveOpen}
+        aria-invalid={showError || undefined}
         tabIndex={readOnly ? -1 : 0}
         className={css.multiSelectTrigger}
         data-disabled={readOnly ? 'true' : 'false'}
@@ -399,6 +428,11 @@ export const DshMultiSelectImpl = defineComponent<{
                       type="button"
                       className={css.multiTagRemove}
                       aria-label={msg.multiSelectRemoveTagAria(labelMap.get(val) ?? val)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.stopPropagation()
+                        }
+                      }}
                       onClick={(e) => {
                         e.stopPropagation()
                         toggleValue(val)
@@ -509,11 +543,15 @@ export const DshDateRangeImpl = defineComponent<{
   setEnd?: (next: string) => void
   presets?: boolean
   enableTime?: boolean
+  isValid?: boolean
+  validationErrors?: readonly string[]
   weight?: number
 }>(DateRangeApi, function DshDateRange({ props }) {
   const msg = useRuntimeMessages()
   const dark = useDarkTheme()
   const readOnly = useContext(SurfaceReadOnlyContext)
+  const { submitAttempted } = useContext(SurfaceValidationContext)
+  const [touched, setTouched] = useState(false)
   const enableTime = Boolean(props.enableTime)
   const showPresets = props.presets !== false
   const inputType = enableTime ? 'datetime-local' : 'date'
@@ -522,10 +560,16 @@ export const DshDateRangeImpl = defineComponent<{
   const normEnd = formatNativeTemporalValue(props.end, inputType)
 
   const spanDays = useMemo(() => computeDateRangeSpanDays(normStart, normEnd), [normStart, normEnd])
+  const todayIso = useMemo(() => buildDatePresetRange(1, false).start, [])
+  const isTodaySelected =
+    spanDays === 1 && normStart.slice(0, 10) === todayIso && normEnd.slice(0, 10) === todayIso
   const label = props.label !== undefined && props.label !== null ? String(props.label) : ''
+  const showError = !readOnly && (touched || submitAttempted) && props.isValid === false
+  const err = showError ? props.validationErrors?.[0] : undefined
 
   const applyPreset = (days: number) => {
     if (readOnly) return
+    setTouched(true)
     const next = buildDatePresetRange(
       days,
       enableTime,
@@ -541,10 +585,12 @@ export const DshDateRangeImpl = defineComponent<{
       style={weightStyle(props.weight, 220)}
       data-a2ui-daterange=""
     >
-      {label || spanDays !== null ? (
+      {label || spanDays !== null || err ? (
         <div className={css.fieldHeader}>
           {label ? <span className={css.label}>{label}</span> : <span />}
-          {spanDays !== null ? (
+          {err ? (
+            <span className={css.errorText}>{err}</span>
+          ) : spanDays !== null ? (
             <DshTag tone="info">{msg.dateRangeSpanDays(spanDays)}</DshTag>
           ) : null}
         </div>
@@ -558,14 +604,22 @@ export const DshDateRangeImpl = defineComponent<{
             { days: 30, text: msg.dateRangePreset30d },
             { days: 90, text: msg.dateRangePreset90d },
           ].map((p) => (
-            <DshPill key={p.days} active={spanDays === p.days} onClick={() => applyPreset(p.days)}>
+            <DshPill
+              key={p.days}
+              active={p.days === 1 ? isTodaySelected : spanDays === p.days}
+              onClick={() => applyPreset(p.days)}
+            >
               {p.text}
             </DshPill>
           ))}
         </div>
       ) : null}
 
-      <div className={css.dateRangeInputs}>
+      <div
+        className={css.dateRangeInputs}
+        data-disabled={readOnly ? 'true' : 'false'}
+        aria-invalid={showError || undefined}
+      >
         <NativeDateField
           type={inputType}
           dark={dark}
@@ -578,6 +632,7 @@ export const DshDateRangeImpl = defineComponent<{
           iconSize={13}
           onChange={(nextS) => {
             if (readOnly) return
+            setTouched(true)
             props.setStart?.(nextS)
             if (nextS !== '' && normEnd && nextS > normEnd) {
               props.setEnd?.(nextS)
@@ -599,6 +654,7 @@ export const DshDateRangeImpl = defineComponent<{
           iconSize={13}
           onChange={(nextE) => {
             if (readOnly) return
+            setTouched(true)
             props.setEnd?.(nextE)
             if (nextE !== '' && normStart && nextE < normStart) {
               props.setStart?.(nextE)
@@ -849,15 +905,17 @@ export const DshCheckCardImpl = defineComponent<{
   isValid?: boolean
   validationErrors?: readonly string[]
   weight?: number
-}>(CheckCardApi, function DshCheckCard({ props }) {
+}>(CheckCardApi, function DshCheckCard({ props, context }) {
   const msg = useRuntimeMessages()
   const readOnly = useContext(SurfaceReadOnlyContext)
+  const closeModal = useContext(ModalCloseContext)
   const { submitAttempted } = useContext(SurfaceValidationContext)
   const [touched, setTouched] = useState(false)
 
   const options = useMemo(() => normalizeCheckCardOptions(props.options), [props.options])
-  const isPromptMode = typeof props.action === 'function' && typeof props.setValue !== 'function'
-  const isFormBound = !isPromptMode && typeof props.setValue === 'function'
+  const hasWritableValue = isWritableProp(context, 'value', props.setValue)
+  const isPromptMode = typeof props.action === 'function' && !hasWritableValue
+  const isFormBound = !isPromptMode && hasWritableValue
   const multiple = Boolean(props.multiple)
   const cols =
     typeof props.columns === 'number' && props.columns >= 1 && props.columns <= 4
@@ -905,6 +963,7 @@ export const DshCheckCardImpl = defineComponent<{
           },
         },
       })
+      closeModal?.()
     }
   }
 
@@ -1000,7 +1059,7 @@ function GeneralTreeBranch(props: {
       <div
         className={css.generalTreeRow}
         data-status={node.status}
-        style={{ paddingLeft: 10 + Math.min(depth, 6) * 16 }}
+        style={{ '--tree-depth': Math.min(depth, 6) } as CSSProperties}
       >
         {isBranch ? (
           <button

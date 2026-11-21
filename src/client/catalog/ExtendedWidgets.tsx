@@ -84,7 +84,12 @@ interface AccordionItemInput {
   readonly subtitle?: unknown
   readonly badge?: unknown
   readonly open?: unknown
+  readonly defaultOpen?: unknown
   readonly child?: ChildRef
+}
+
+function resolveItemDefaultOpen(item: AccordionItemInput): boolean {
+  return Boolean(item.open ?? item.defaultOpen)
 }
 
 export const DshAccordionImpl = defineComponent<{
@@ -101,10 +106,12 @@ export const DshAccordionImpl = defineComponent<{
   const multiple = Boolean(props.multiple)
   const baseId = useId()
 
+  const defaultOpenSig = items.map((item) => (resolveItemDefaultOpen(item) ? '1' : '0')).join('')
+  const [prevDefaultSig, setPrevDefaultSig] = useState(defaultOpenSig)
   const [openSet, setOpenSet] = useState<ReadonlySet<number>>(() => {
     const initial = new Set<number>()
     items.forEach((item, idx) => {
-      if (item.open) initial.add(idx)
+      if (resolveItemDefaultOpen(item)) initial.add(idx)
     })
     if (!multiple && initial.size > 1) {
       const first = [...initial][0]!
@@ -112,6 +119,34 @@ export const DshAccordionImpl = defineComponent<{
     }
     return initial
   })
+  const [visitedSet, setVisitedSet] = useState<ReadonlySet<number>>(() => new Set(openSet))
+
+  if (prevDefaultSig !== defaultOpenSig) {
+    setPrevDefaultSig(defaultOpenSig)
+    const nextOpen = new Set(openSet)
+    items.forEach((item, idx) => {
+      const wasOpen = prevDefaultSig[idx] === '1'
+      const nowOpen = resolveItemDefaultOpen(item)
+      if (!wasOpen && nowOpen) {
+        if (!multiple) nextOpen.clear()
+        nextOpen.add(idx)
+      }
+    })
+    setOpenSet(nextOpen)
+  }
+
+  let hasUnvisitedOpen = false
+  for (const idx of openSet) {
+    if (!visitedSet.has(idx)) {
+      hasUnvisitedOpen = true
+      break
+    }
+  }
+  if (hasUnvisitedOpen) {
+    const merged = new Set(visitedSet)
+    for (const idx of openSet) merged.add(idx)
+    setVisitedSet(merged)
+  }
 
   if (items.length === 0) return null
 
@@ -131,6 +166,7 @@ export const DshAccordionImpl = defineComponent<{
     <div className={css.accordion} style={weightStyle(props.weight, 220)} data-a2ui-accordion="">
       {items.map((item, idx) => {
         const isOpen = openSet.has(idx)
+        const isVisited = isOpen || visitedSet.has(idx)
         const headerId = `${baseId}-acc-hdr-${idx}`
         const panelId = `${baseId}-acc-pnl-${idx}`
         const title =
@@ -167,12 +203,14 @@ export const DshAccordionImpl = defineComponent<{
                 </span>
               </span>
             </button>
-            {isOpen ? (
+            {isVisited ? (
               <div
                 id={panelId}
                 role="region"
                 aria-labelledby={headerId}
                 className={css.accordionPanel}
+                hidden={!isOpen}
+                style={isOpen ? undefined : { display: 'none' }}
               >
                 {renderChildRef(buildChild, item.child)}
               </div>

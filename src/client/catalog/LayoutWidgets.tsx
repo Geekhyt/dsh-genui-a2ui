@@ -19,6 +19,7 @@ import {
   InsideButtonContext,
   JUSTIFY_MAP,
   ModalCloseContext,
+  ModalTriggerContext,
   renderChildList,
   renderChildRef,
   SurfaceReadOnlyContext,
@@ -269,7 +270,14 @@ export const DshTabsImpl = defineComponent<{
     : []
   const baseId = useId()
   const [activeIdx, setActiveIdx] = useState(0)
+  const [visitedIndices, setVisitedIndices] = useState<ReadonlySet<number>>(() => new Set([0]))
   const safeIdx = tabs.length === 0 ? 0 : Math.min(activeIdx, tabs.length - 1)
+
+  if (tabs.length > 0 && !visitedIndices.has(safeIdx)) {
+    const next = new Set(visitedIndices)
+    next.add(safeIdx)
+    setVisitedIndices(next)
+  }
 
   if (tabs.length === 0) return null
 
@@ -280,24 +288,34 @@ export const DshTabsImpl = defineComponent<{
     panelId: `${baseId}-panel-${idx}`,
   })) as unknown as readonly [SegmentedTab<string>, ...SegmentedTab<string>[]]
 
-  const activeTab = tabs[safeIdx]
   return (
     <div className={css.tabsWrap} style={weightStyle(props.weight)} data-a2ui-tabs="">
-      <DshSegmentedTabs
-        items={items}
-        value={String(safeIdx)}
-        onChange={(v) => setActiveIdx(Number(v) || 0)}
-        label={msg.tabsAriaLabel}
-        size="sm"
-      />
-      <div
-        id={`${baseId}-panel-${safeIdx}`}
-        role="tabpanel"
-        aria-labelledby={`${baseId}-tab-${safeIdx}`}
-        className={css.tabPanel}
-      >
-        {renderChildRef(buildChild, activeTab?.child)}
+      <div className={css.tabsHeaderScroll}>
+        <DshSegmentedTabs
+          items={items}
+          value={String(safeIdx)}
+          onChange={(v) => setActiveIdx(Number(v) || 0)}
+          label={msg.tabsAriaLabel}
+          size="sm"
+        />
       </div>
+      {tabs.map((tab, idx) => {
+        if (!visitedIndices.has(idx) && idx !== safeIdx) return null
+        const isActive = idx === safeIdx
+        return (
+          <div
+            key={`${baseId}-panel-${idx}`}
+            id={`${baseId}-panel-${idx}`}
+            role="tabpanel"
+            aria-labelledby={`${baseId}-tab-${idx}`}
+            className={css.tabPanel}
+            hidden={!isActive}
+            style={isActive ? undefined : { display: 'none' }}
+          >
+            {renderChildRef(buildChild, tab.child)}
+          </div>
+        )
+      })}
     </div>
   )
 })
@@ -325,6 +343,8 @@ export function DshModalView({
     setOpen(false)
   }, [])
 
+  const isOpen = open && !readOnly
+
   return (
     <div
       style={weightStyle(props.weight)}
@@ -343,17 +363,23 @@ export function DshModalView({
           setOpen(true)
         }}
       >
-        {renderChildRef(buildChild, props.trigger)}
+        <ModalTriggerContext.Provider value={true}>
+          {renderChildRef(buildChild, props.trigger)}
+        </ModalTriggerContext.Provider>
       </div>
       <DshModal
-        open={open && !readOnly}
+        open={isOpen}
         onClose={closeModal}
         title={msg.modalTitle}
         closeLabel={msg.modalClose}
       >
-        <ModalCloseContext.Provider value={closeModal}>
-          {renderChildRef(buildChild, props.content)}
-        </ModalCloseContext.Provider>
+        {isOpen ? (
+          <div className={css.containerHost}>
+            <ModalCloseContext.Provider value={closeModal}>
+              {renderChildRef(buildChild, props.content)}
+            </ModalCloseContext.Provider>
+          </div>
+        ) : null}
       </DshModal>
     </div>
   )

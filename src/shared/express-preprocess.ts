@@ -11,15 +11,19 @@ function isIdentChar(ch: string | undefined): boolean {
 
 function scanStringOrComment(src: string, idx: number): number {
   const ch = src[idx]
-  if (ch === '/' && src[idx + 1] === '/') {
-    const nl = src.indexOf('\n', idx + 2)
+  if (ch === '#' || (ch === '-' && src[idx + 1] === '-') || (ch === '/' && src[idx + 1] === '/')) {
+    const nl = src.indexOf('\n', idx + (ch === '#' ? 1 : 2))
     return nl === -1 ? src.length : nl
   }
   if (ch === '/' && src[idx + 1] === '*') {
     const end = src.indexOf('*/', idx + 2)
     return end === -1 ? src.length : end + 2
   }
-  if (ch === 'r' && src[idx + 1] === '"' && (idx === 0 || !isIdentChar(src[idx - 1]))) {
+  if (
+    (ch === 'r' || ch === 'R') &&
+    src[idx + 1] === '"' &&
+    (idx === 0 || !isIdentChar(src[idx - 1]))
+  ) {
     if (src[idx + 2] === '"' && src[idx + 3] === '"') {
       const end = src.indexOf('"""', idx + 4)
       return end === -1 ? src.length : end + 3
@@ -41,14 +45,14 @@ function scanStringOrComment(src: string, idx: number): number {
     }
     return src.length
   }
-  if (ch === '"' || ch === "'") {
+  if (ch === '"') {
     let i = idx + 1
     while (i < src.length) {
       if (src[i] === '\\') {
         i += 2
         continue
       }
-      if (src[i] === ch) return i + 1
+      if (src[i] === '"') return i + 1
       i += 1
     }
     return src.length
@@ -262,10 +266,10 @@ function parseEqLiteralCall(expr: string): { keyExpr: string; matchKey: string }
   const b = args[1]!.trim()
   const aStr = parseJsonStringLiteral(a)
   const bStr = parseJsonStringLiteral(b)
-  if (bStr !== null && aStr === null && !isDangerousObjectKey(bStr)) {
+  if (bStr !== null && aStr === null && !isDangerousObjectKey(bStr) && !bStr.startsWith('@')) {
     return { keyExpr: a, matchKey: b }
   }
-  if (aStr !== null && bStr === null && !isDangerousObjectKey(aStr)) {
+  if (aStr !== null && bStr === null && !isDangerousObjectKey(aStr) && !aStr.startsWith('@')) {
     return { keyExpr: b, matchKey: a }
   }
   return null
@@ -367,7 +371,7 @@ function parseSimpleObjectLiteral(src: string): Record<string, string> | null {
   const body = t.slice(1, -1).trim()
   const out = Object.create(null) as Record<string, string>
   if (body === '') return out
-  const entries = splitTopLevel(body, ',')
+  const entries = splitTopLevel(body, ',').filter((e) => e.trim() !== '')
   for (const entry of entries) {
     const colonIdx = findTopLevelChar(entry, ':')
     if (colonIdx === -1) return null
@@ -389,8 +393,8 @@ function parseCalcCall(
   if (!t.startsWith('calc(') || !t.endsWith(')')) return null
   const brackets = buildBracketMap(t)
   if (brackets[4] !== t.length - 1) return null
-  const args = splitTopLevel(t.slice(5, -1), ',')
-  if (args.length < 2 || args.length > 3) return null
+  const args = splitTopLevel(t.slice(5, -1), ',').filter((a) => a.trim() !== '')
+  if (args.length < 1 || args.length > 3) return null
 
   let exprArg = args[0]!.trim()
   const exprNamedEq = findTopLevelChar(exprArg, '=')
@@ -399,6 +403,10 @@ function parseCalcCall(
   }
   const expr = parseJsonStringLiteral(exprArg)
   if (expr === null) return null
+
+  if (args.length === 1) {
+    return { expr, vars: Object.create(null) as Record<string, string>, decimalsArg: null }
+  }
 
   let varsArg = args[1]!.trim()
   const varsNamedEq = findTopLevelChar(varsArg, '=')
@@ -561,13 +569,22 @@ function rewriteInlineCalcsInStatement(
     if (stmt.startsWith('calc(', i) && (i === 0 || !isIdentChar(stmt[i - 1]))) {
       const closeIdx = brackets[i + 4] ?? -1
       if (closeIdx !== -1) {
-        const callSrc = stmt.slice(i, closeIdx + 1)
+        const innerArgs = rewriteInlineCalcsInStatement(
+          stmt.slice(i + 5, closeIdx),
+          localMaps,
+          calcDefs,
+          nextAlias,
+        )
+        const callSrc = `calc(${innerArgs})`
         const inlined = inlineSingleCalcCall(callSrc, localMaps, calcDefs, nextAlias)
         if (inlined?.didInline) {
           out += inlined.rewritten
           i = closeIdx + 1
           continue
         }
+        out += callSrc
+        i = closeIdx + 1
+        continue
       }
     }
     out += stmt[i]!

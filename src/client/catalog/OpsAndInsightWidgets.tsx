@@ -839,64 +839,68 @@ export const DshMetricRingImpl = defineComponent<{
       data-a2ui-metricring=""
       data-tone={geom.resolvedTone}
     >
-      <div
-        className={css.metricRingFigure}
-        style={{ width: geom.size, height: geom.size }}
-        role="meter"
-        aria-label={label}
-        aria-valuenow={safeAriaNow}
-        aria-valuemin={0}
-        aria-valuemax={maxVal}
-      >
-        <svg
-          width={geom.size}
-          height={geom.size}
-          viewBox={`0 0 ${geom.size} ${geom.size}`}
-          aria-hidden="true"
+      <div className={css.metricRingInner}>
+        <div
+          className={css.metricRingFigure}
+          style={{ width: geom.size, height: geom.size }}
+          role="meter"
+          aria-label={label}
+          aria-valuenow={safeAriaNow}
+          aria-valuemin={0}
+          aria-valuemax={maxVal}
         >
-          <circle
-            cx={center}
-            cy={center}
-            r={geom.radius}
-            fill="none"
-            className={css.metricRingTrack}
-            strokeWidth={geom.strokeWidth}
-          />
-          <circle
-            cx={center}
-            cy={center}
-            r={geom.radius}
-            fill="none"
-            className={css.metricRingArc}
-            data-tone={geom.resolvedTone}
-            strokeWidth={geom.strokeWidth}
-            strokeLinecap="round"
-            strokeDasharray={geom.circumference}
-            strokeDashoffset={geom.dashOffset}
-            transform={`rotate(-90 ${center} ${center})`}
-          />
-        </svg>
-        <div className={css.metricRingCenterText}>
-          <span
-            className={css.metricRingValueGroup}
-            style={
-              geom.stackUnit ? { flexDirection: 'column', alignItems: 'center', gap: 1 } : undefined
-            }
+          <svg
+            width={geom.size}
+            height={geom.size}
+            viewBox={`0 0 ${geom.size} ${geom.size}`}
+            aria-hidden="true"
           >
-            <span className={css.metricRingNumber} style={{ fontSize: geom.numberFontSize }}>
-              {geom.displayNumber}
-            </span>
-            {unit ? (
-              <span className={css.metricRingUnit} style={{ fontSize: geom.unitFontSize }}>
-                {unit}
+            <circle
+              cx={center}
+              cy={center}
+              r={geom.radius}
+              fill="none"
+              className={css.metricRingTrack}
+              strokeWidth={geom.strokeWidth}
+            />
+            <circle
+              cx={center}
+              cy={center}
+              r={geom.radius}
+              fill="none"
+              className={css.metricRingArc}
+              data-tone={geom.resolvedTone}
+              strokeWidth={geom.strokeWidth}
+              strokeLinecap="round"
+              strokeDasharray={geom.circumference}
+              strokeDashoffset={geom.dashOffset}
+              transform={`rotate(-90 ${center} ${center})`}
+            />
+          </svg>
+          <div className={css.metricRingCenterText}>
+            <span
+              className={css.metricRingValueGroup}
+              style={
+                geom.stackUnit
+                  ? { flexDirection: 'column', alignItems: 'center', gap: 1 }
+                  : undefined
+              }
+            >
+              <span className={css.metricRingNumber} style={{ fontSize: geom.numberFontSize }}>
+                {geom.displayNumber}
               </span>
-            ) : null}
-          </span>
+              {unit ? (
+                <span className={css.metricRingUnit} style={{ fontSize: geom.unitFontSize }}>
+                  {unit}
+                </span>
+              ) : null}
+            </span>
+          </div>
         </div>
-      </div>
-      <div className={css.metricRingMeta}>
-        <span className={css.metricRingLabel}>{label}</span>
-        {sublabel ? <span className={css.metricRingSublabel}>{sublabel}</span> : null}
+        <div className={css.metricRingMeta}>
+          <span className={css.metricRingLabel}>{label}</span>
+          {sublabel ? <span className={css.metricRingSublabel}>{sublabel}</span> : null}
+        </div>
       </div>
     </div>
   )
@@ -910,7 +914,7 @@ export const DshServiceGraphImpl = defineComponent<{
   action?: ((options?: ActionDispatchOptions) => Promise<void>) | undefined
   weight?: number
 }>(ServiceGraphApi, function DshServiceGraph({ props }) {
-  const markerPrefix = useId().replace(/:/g, '')
+  const markerPrefix = useId().replace(/[^a-zA-Z0-9_-]/g, '')
   const msg = useRuntimeMessages()
   const readOnly = useContext(SurfaceReadOnlyContext)
   const direction = props.direction === 'TB' ? 'TB' : 'LR'

@@ -46,12 +46,17 @@
   gap: 12px;
 }
 
+.card [hidden] {
+  display: none;
+}
+
 .bare {
   border: none;
   border-radius: 0;
   background: transparent;
   margin: 0;
-  padding: 4px 0 2px;
+  padding: 4px 2px 2px;
+  overflow: visible;
 }
 
 .cardReadOnly {
@@ -102,6 +107,7 @@
 }
 
 .surfaceStack {
+  --a2ui-flex-basis: auto;
   display: flex;
   flex-direction: column;
   gap: 12px;

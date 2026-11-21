@@ -358,6 +358,12 @@ export function resolveTurnTailBatch(
         visibleSurfaceIds.add(id)
       }
     }
+    for (const msg of call.messages) {
+      const del = (msg as { deleteSurface?: { surfaceId?: unknown } }).deleteSurface
+      if (del && typeof del.surfaceId === 'string') {
+        visibleSurfaceIds.delete(del.surfaceId)
+      }
+    }
   }
 
   if (visibleSurfaceIds.size === 0) {
@@ -365,10 +371,10 @@ export function resolveTurnTailBatch(
     return null
   }
 
-  let superseded = true
+  let superseded = false
   for (const id of visibleSurfaceIds) {
-    if (!laterUpdatedIds.has(id)) {
-      superseded = false
+    if (laterUpdatedIds.has(id)) {
+      superseded = true
       break
     }
   }
@@ -438,6 +444,12 @@ export function resolveDockBatch(snapshot: ChatTargetSnapshot | undefined): Dock
 
     if (call.placement === 'dock') {
       for (const id of call.surfaceIds) dockedIds.add(id)
+    }
+    for (const msg of call.messages) {
+      const del = (msg as { deleteSurface?: { surfaceId?: unknown } }).deleteSurface
+      if (del && typeof del.surfaceId === 'string') {
+        dockedIds.delete(del.surfaceId)
+      }
     }
     if (call.title !== null) lastTitle = call.title
     if (call.seq > latestSeq) latestSeq = call.seq

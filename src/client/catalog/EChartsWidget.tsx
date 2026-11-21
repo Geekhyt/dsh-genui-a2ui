@@ -10,7 +10,7 @@ import {
   subscribeEchartsChunk,
 } from '../chunk-loader.ts'
 import { type EChartsClickParams, useEChartsMount, useTransientFlag } from '../dom-hooks.ts'
-import { useRuntimeMessages } from '../i18n.ts'
+import { useRuntimeMessages, useUiLocale } from '../i18n.ts'
 import { useDarkTheme } from '../theme.ts'
 import css from './Catalog.module.css'
 import { computeNextCrossFilterSelection, formatChartDataToCsv } from './v4-helpers.ts'
@@ -43,9 +43,20 @@ function sanitizeInlineText(input: unknown): string {
   return sanitizeInlineUrlText(input).replace(/(\s)->(\s)/g, '$1→$2')
 }
 
-function copyTextSafe(text: string): void {
+function sanitizeChartValue(input: unknown): string {
+  const s = sanitizeInlineUrlText(input).trim()
+  if (s === '' || s.startsWith('series\0') || s.startsWith('\0')) return ''
+  return s
+}
+
+function copyTextSafe(text: string, onSuccess: () => void): void {
   if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-    void navigator.clipboard.writeText(text).catch(() => {})
+    void navigator.clipboard
+      .writeText(text)
+      .then(() => {
+        onSuccess()
+      })
+      .catch(() => {})
   }
 }
 
@@ -73,6 +84,7 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
   } = props
 
   const dark = useDarkTheme()
+  const locale = useUiLocale()
   const msg = useRuntimeMessages()
   const { chunk, error: rawLoadError } = useSyncExternalStore(
     subscribeEchartsChunk,
@@ -93,7 +105,7 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
   xFieldRef.current = xField
   const seriesFieldRef = useRef(seriesField)
   seriesFieldRef.current = seriesField
-  const activeSelected = sanitizeInlineText(selected).trim()
+  const activeSelected = sanitizeChartValue(selected)
   const activeSelectedRef = useRef(activeSelected)
   activeSelectedRef.current = activeSelected
 
@@ -153,6 +165,7 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
     rawHeight,
     activeSelected,
     dark,
+    locale,
     containerWidth,
   ])
 
@@ -164,15 +177,19 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
     setContainerWidth((prev) => {
       if (prev === undefined) return nextW
       const crossedBreakpoint =
-        prev < 300 !== nextW < 300 || prev < 400 !== nextW < 400 || prev < 460 !== nextW < 460
+        prev < 300 !== nextW < 300 ||
+        prev < 360 !== nextW < 360 ||
+        prev < 400 !== nextW < 400 ||
+        prev < 460 !== nextW < 460
       if (crossedBreakpoint || Math.abs(nextW - prev) >= 16) return nextW
       return prev
     })
   }, [])
 
   const handlePointClick = useCallback((params: EChartsClickParams) => {
-    const label = sanitizeInlineText(params?.name)
-    const series = sanitizeInlineText(params?.seriesName)
+    if (params?.dataType === 'edge') return
+    const label = sanitizeChartValue(params?.name)
+    const series = sanitizeChartValue(params?.seriesName)
     if (onSelectChangeRef.current) {
       const candidate = label || series
       if (candidate) {
@@ -191,9 +208,9 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
     const matchedRow = (() => {
       if (curXField && label) {
         const hit = rowsRef.current.find((r) => {
-          const xMatch = sanitizeInlineText(r[curXField]) === label
+          const xMatch = sanitizeChartValue(r[curXField]) === label
           if (!xMatch) return false
-          if (curSeriesField && series) return sanitizeInlineText(r[curSeriesField]) === series
+          if (curSeriesField && series) return sanitizeChartValue(r[curSeriesField]) === series
           return true
         })
         if (hit !== undefined) return hit
@@ -234,13 +251,12 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
 
   const handleCopyCsv = () => {
     if (!csvPayload) return
-    copyTextSafe(csvPayload)
-    markCopiedCsv()
+    copyTextSafe(csvPayload, markCopiedCsv)
   }
 
   const weightStyle =
     weight !== undefined
-      ? { flexGrow: weight, flexBasis: 'var(--a2ui-flex-basis, 0px)', minWidth: 220 }
+      ? { flexGrow: weight, flexBasis: 'var(--a2ui-flex-basis, 0px)', minWidth: 'min(100%, 220px)' }
       : undefined
   const showActions = Boolean(exportable && chunk && !loadError)
   const showHeader = Boolean(title || activeSelected || showActions)

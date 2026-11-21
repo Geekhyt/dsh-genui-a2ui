@@ -188,6 +188,7 @@ export const TableWidget = memo(function TableWidget({
   const [compact, setCompact] = useState(false)
   const [copiedMd, markCopiedMd] = useTransientFlag(1300)
   const [prevCrossFilter, setPrevCrossFilter] = useState(activeCrossFilter)
+  const [prevFilterField, setPrevFilterField] = useState(filterField)
   const [prevNormalizedData, setPrevNormalizedData] = useState(normalizedData)
   const [prevPageSize, setPrevPageSize] = useState(clampedPageSize)
 
@@ -196,8 +197,13 @@ export const TableWidget = memo(function TableWidget({
     setPagination((prev) => ({ pageIndex: 0, pageSize: clampedPageSize || prev.pageSize }))
   }
 
-  if (prevCrossFilter !== activeCrossFilter || prevNormalizedData !== normalizedData) {
+  if (
+    prevCrossFilter !== activeCrossFilter ||
+    prevFilterField !== filterField ||
+    prevNormalizedData !== normalizedData
+  ) {
     setPrevCrossFilter(activeCrossFilter)
+    setPrevFilterField(filterField)
     setPrevNormalizedData(normalizedData)
     if (pagination.pageIndex !== 0) {
       setPagination((prev) => ({ ...prev, pageIndex: 0 }))
@@ -222,17 +228,17 @@ export const TableWidget = memo(function TableWidget({
     () =>
       Boolean(
         expandKey &&
-          data.some((r) => {
+          normalizedData.some((r) => {
             const v = r[expandKey]
             return v !== undefined && v !== null && v !== ''
           }),
       ),
-    [expandKey, data],
+    [expandKey, normalizedData],
   )
 
   const numericKeySet = useMemo(
-    () => detectNumericColumnKeys(inferredCols, data),
-    [inferredCols, data],
+    () => detectNumericColumnKeys(inferredCols, normalizedData),
+    [inferredCols, normalizedData],
   )
 
   const columns = useMemo(
@@ -241,15 +247,15 @@ export const TableWidget = memo(function TableWidget({
         inferredCols.map((col) => {
           const isNumeric = numericKeySet.has(col.key)
           const rawNumber =
-            data.length > 0 &&
-            data.some((r) => typeof r[col.key] === 'number') &&
-            data.every(
+            normalizedData.length > 0 &&
+            normalizedData.some((r) => typeof r[col.key] === 'number') &&
+            normalizedData.every(
               (r) =>
                 r[col.key] === null || r[col.key] === undefined || typeof r[col.key] === 'number',
             )
           const wrapProse =
             !isNumeric &&
-            data.slice(0, 40).some((r) => {
+            normalizedData.slice(0, 40).some((r) => {
               const formatted = formatCellValue(r[col.key], msg)
               return formatted.includes('\n') || estimateVisualUnits(formatted) > 14
             })
@@ -265,7 +271,7 @@ export const TableWidget = memo(function TableWidget({
           })
         }),
       ),
-    [inferredCols, numericKeySet, data, msg],
+    [inferredCols, numericKeySet, normalizedData, msg],
   )
 
   const table = useTable({
@@ -293,6 +299,9 @@ export const TableWidget = memo(function TableWidget({
   const totalFiltered = filteredRows.length
   const pageCount = table.getPageCount()
   const pageIndex = table.state.pagination.pageIndex
+  if (pageCount > 0 && pageIndex >= pageCount) {
+    setPagination((prev) => ({ ...prev, pageIndex: Math.max(0, pageCount - 1) }))
+  }
 
   const summaryMap = useMemo(
     () =>
@@ -310,8 +319,8 @@ export const TableWidget = memo(function TableWidget({
   const allPageSelected =
     selectable && pageRows.length > 0 && pageRows.every((r) => selectedIndices.has(r.index))
   const selectedRowsList = useMemo(
-    () => data.filter((_, idx) => selectedIndices.has(idx)),
-    [data, selectedIndices],
+    () => filteredRows.filter((r) => selectedIndices.has(r.index)).map((r) => r.original),
+    [filteredRows, selectedIndices],
   )
 
   const toggleRowIndex = (idx: number) => {
@@ -388,7 +397,7 @@ export const TableWidget = memo(function TableWidget({
 
   const weightStyle =
     weight !== undefined
-      ? { flexGrow: weight, flexBasis: 'var(--a2ui-flex-basis, 0px)', minWidth: 240 }
+      ? { flexGrow: weight, flexBasis: 'var(--a2ui-flex-basis, 0px)', minWidth: 'min(100%, 240px)' }
       : undefined
 
   return (
@@ -496,7 +505,27 @@ export const TableWidget = memo(function TableWidget({
                       key={header.id}
                       className={`${css.th} ${canSort ? css.thSortable : ''}`}
                       style={{ textAlign: meta?.align ?? 'left' }}
+                      tabIndex={canSort ? 0 : undefined}
+                      aria-sort={
+                        sorted === 'asc'
+                          ? 'ascending'
+                          : sorted === 'desc'
+                            ? 'descending'
+                            : canSort
+                              ? 'none'
+                              : undefined
+                      }
                       onClick={canSort ? header.column.getToggleSortingHandler() : undefined}
+                      onKeyDown={
+                        canSort
+                          ? (e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault()
+                                header.column.toggleSorting()
+                              }
+                            }
+                          : undefined
+                      }
                     >
                       {header.isPlaceholder ? null : <table.FlexRender header={header} />}
                       {sorted === 'asc' ? ' ↑' : sorted === 'desc' ? ' ↓' : ''}
@@ -583,6 +612,7 @@ export const TableWidget = memo(function TableWidget({
                         <td
                           className={`${css.td} ${css.proExpandCell}`}
                           onClick={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => e.stopPropagation()}
                         >
                           {detailText !== '' ? (
                             <button

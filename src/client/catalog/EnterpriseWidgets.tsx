@@ -39,8 +39,10 @@ import {
 import {
   type ChildRef,
   defineComponent,
+  ModalCloseContext,
   renderChildRef,
   SurfaceReadOnlyContext,
+  SurfaceValidationContext,
   weightStyle,
 } from './widget-helpers.tsx'
 
@@ -153,8 +155,8 @@ export const DshTrackerImpl = defineComponent<{
         <div
           className={css.trackerStrip}
           style={{
-            gap: slices.length > 60 ? 1 : slices.length > 36 ? 2 : 3,
-            gridTemplateColumns: `repeat(${slices.length}, minmax(1.5px, 1fr))`,
+            gap: slices.length > 48 ? 1 : slices.length > 28 ? 2 : 3,
+            gridTemplateColumns: `repeat(${slices.length}, minmax(0, 1fr))`,
           }}
           onMouseLeave={() => setActiveSliceId(null)}
         >
@@ -310,11 +312,17 @@ export const DshApprovalCardImpl = defineComponent<{
 }>(ApprovalCardApi, function DshApprovalCard({ props }) {
   const msg = useRuntimeMessages()
   const readOnly = useContext(SurfaceReadOnlyContext)
+  const closeModal = useContext(ModalCloseContext)
+  const { markSubmitAttempted } = useContext(SurfaceValidationContext)
   const severity = props.severity ?? 'high'
   const title = props.title !== undefined && props.title !== null ? String(props.title) : ''
   const summary = props.summary !== undefined && props.summary !== null ? String(props.summary) : ''
   const scope = props.scope !== undefined && props.scope !== null ? String(props.scope) : ''
-  const targetKey = `${title}\u0000${scope}\u0000${summary}`
+  const impacts = useMemo(() => {
+    if (!Array.isArray(props.impacts)) return []
+    return props.impacts.map(String).filter((s) => s.trim() !== '')
+  }, [props.impacts])
+  const targetKey = `${title}\u0000${scope}\u0000${summary}\u0000${severity}\u0000${impacts.join('|')}`
   const [prevTargetKey, setPrevTargetKey] = useState(targetKey)
   const [acknowledged, setAcknowledged] = useState(false)
   const [decision, setDecision] = useState<'approved' | 'rejected' | null>(null)
@@ -328,11 +336,6 @@ export const DshApprovalCardImpl = defineComponent<{
       ? String(props.confirmLabel)
       : ''
   const needsAck = confirmText.trim() !== ''
-
-  const impacts = useMemo(() => {
-    if (!Array.isArray(props.impacts)) return []
-    return props.impacts.map(String).filter((s) => s.trim() !== '')
-  }, [props.impacts])
 
   const severityMeta: { label: string; tone: TagTone } =
     severity === 'critical'
@@ -420,6 +423,7 @@ export const DshApprovalCardImpl = defineComponent<{
               variant="outline"
               disabled={!canReject}
               onClick={() => {
+                markSubmitAttempted()
                 setDecision('rejected')
                 void Promise.resolve(
                   props.rejectAction?.({
@@ -436,9 +440,13 @@ export const DshApprovalCardImpl = defineComponent<{
                       },
                     },
                   }),
-                ).catch(() => {
-                  setDecision(null)
-                })
+                )
+                  .then(() => {
+                    closeModal?.()
+                  })
+                  .catch(() => {
+                    setDecision(null)
+                  })
               }}
             >
               {rejectText}
@@ -450,6 +458,7 @@ export const DshApprovalCardImpl = defineComponent<{
               variant="primary"
               disabled={!canApprove}
               onClick={() => {
+                markSubmitAttempted()
                 setDecision('approved')
                 void Promise.resolve(
                   props.approveAction?.({
@@ -467,9 +476,13 @@ export const DshApprovalCardImpl = defineComponent<{
                       },
                     },
                   }),
-                ).catch(() => {
-                  setDecision(null)
-                })
+                )
+                  .then(() => {
+                    closeModal?.()
+                  })
+                  .catch(() => {
+                    setDecision(null)
+                  })
               }}
             >
               {approveText}

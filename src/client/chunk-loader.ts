@@ -251,7 +251,12 @@ function startMermaidRender(key: string, code: string, dark: boolean): void {
     .then(
       (renderedSvg) => {
         mermaidInflightKeys.delete(key)
-        if (renderedSvg === null) return
+        if (renderedSvg === null) {
+          if ((mermaidListenersByKey.get(key)?.size ?? 0) > 0) {
+            startMermaidRender(key, code, dark)
+          }
+          return
+        }
         storeMermaidSnapshot(key, {
           svg: renderedSvg,
           error: null,

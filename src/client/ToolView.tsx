@@ -109,12 +109,22 @@ export const A2uiToolView = memo(function A2uiToolView({
   }, [streamingSnapshot])
 
   const liveMessages = useMemo(() => {
+    if (settledMeta !== null) {
+      const hasCreate = settledMeta.messages.some(
+        (m) => typeof m === 'object' && m !== null && 'createSurface' in m,
+      )
+      if (!hasCreate && settledMeta.surfaceIds.length > 0) {
+        const targetIds = new Set(settledMeta.surfaceIds)
+        const prior = filterMessagesBySurfaceIds(resolveSessionMessages(chatSnapshot), targetIds)
+        if (prior.length > 0) return prior
+      }
+      return settledMeta.messages
+    }
     const priorForStream =
       phase !== 'result' && visibleIds !== undefined
         ? filterMessagesBySurfaceIds(resolveSessionMessages(chatSnapshot), visibleIds)
         : []
-    const currentMsgs =
-      settledMeta !== null ? settledMeta.messages : (streamingSnapshot?.messages ?? [])
+    const currentMsgs = streamingSnapshot?.messages ?? []
     return priorForStream.length > 0 ? [...priorForStream, ...currentMsgs] : currentMsgs
   }, [chatSnapshot, phase, settledMeta, streamingSnapshot, visibleIds])
 
@@ -207,7 +217,10 @@ export const A2uiToolView = memo(function A2uiToolView({
           }
         >
           <LazySurfaceGroupView
-            messages={settledMeta.messages}
+            messages={liveMessages}
+            visibleSurfaceIds={
+              settledMeta.surfaceIds.length > 0 ? new Set(settledMeta.surfaceIds) : undefined
+            }
             sessionId={sessionId}
             variant="bare"
             streaming={false}
@@ -232,6 +245,7 @@ export const A2uiToolView = memo(function A2uiToolView({
           title={title}
           sessionId={sessionId}
           streaming={phase !== 'result'}
+          readOnly={phase !== 'result'}
           onAction={sendAction}
           openWorkspaceFile={effectiveOpenFile}
         />

@@ -539,8 +539,9 @@ export const AccordionItemSchema = spec(
     badge: DynamicStringSchema.describe(
       'REF:#/$defs/DynamicString|Optional compact status or count tag shown on the header right.',
     ).optional(),
-    open: DynamicBooleanSchema.describe(
-      'REF:#/$defs/DynamicBoolean|Whether this section starts expanded.',
+    open: DynamicBooleanSchema.describe('REF:#/$defs/DynamicBoolean|Start expanded.').optional(),
+    defaultOpen: DynamicBooleanSchema.describe(
+      'REF:#/$defs/DynamicBoolean|Alias of open.',
     ).optional(),
     child: ChildSchema.describe(
       'REF:#/$defs/Child|The ID of the child component rendered inside the panel.',
@@ -1399,6 +1400,7 @@ export const DateRangeApi = {
   schema: spec(
     z
       .object({
+        checks: z.array(CheckRuleSchema.describe('REF:#/$defs/CheckRule')).optional(),
         label: DynamicStringSchema.describe(
           'REF:#/$defs/DynamicString|Optional field label above the range picker.',
         ).optional(),
@@ -1426,7 +1428,7 @@ export const DateRangeApi = {
         'AntD `RangePicker`-style dual start/end date range selector with quick B2B range presets, span day counter, and automatic `start <= end` ordering.',
       )
       .strict(),
-    { mixins: [], required: ['start', 'end'] },
+    { mixins: ['Checkable'], required: ['start', 'end'] },
   ),
 } satisfies ComponentApi
 
@@ -1770,8 +1772,8 @@ export const CondApi = {
   description: 'Returns `truthy` when `condition` is truthy, otherwise `falsy`.',
   schema: spec(
     z.object({
-      condition: DynamicBooleanSchema.describe(
-        'Boolean condition or comparator expression (e.g. `gt($/val, 100)`).',
+      condition: DynamicValueSchema.describe(
+        'Condition expression (e.g. `gt($/val, 100)`, boolean, string, array).',
       ),
       truthy: DynamicValueSchema.describe('Value returned when `condition` is true.'),
       falsy: DynamicValueSchema.describe('Value returned when `condition` is false.'),

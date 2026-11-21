@@ -35,16 +35,96 @@
 .row > .chartCard,
 .row > * > .chartCard,
 .row > .tableCard,
-.row > * > .tableCard {
-  flex: 1 1 220px;
+.row > * > .tableCard,
+.row > .diffCard,
+.row > * > .diffCard,
+.row > .kvCard,
+.row > * > .kvCard,
+.row > .fileTreeCard,
+.row > * > .fileTreeCard,
+.row > .jsonTreeCard,
+.row > * > .jsonTreeCard,
+.row > .mermaidCard,
+.row > * > .mermaidCard,
+.row > .comparisonCard,
+.row > * > .comparisonCard,
+.row > .logCard,
+.row > * > .logCard,
+.row > .terminalCard,
+.row > * > .terminalCard,
+.row > .scheduleCard,
+.row > * > .scheduleCard,
+.row > .matrixCard,
+.row > * > .matrixCard,
+.row > .metricRingCard,
+.row > * > .metricRingCard,
+.row > .checkCardField,
+.row > * > .checkCardField,
+.row > .segmentedWrapOuter,
+.row > * > .segmentedWrapOuter,
+.row > .tabsWrap,
+.row > * > .tabsWrap,
+.row > .accordion,
+.row > * > .accordion,
+.row > .approvalCard,
+.row > * > .approvalCard,
+.row > .apiCard,
+.row > * > .apiCard,
+.row > .trackerCard,
+.row > * > .trackerCard,
+.row > .serviceGraphCard,
+.row > * > .serviceGraphCard,
+.row > .timelineCard,
+.row > * > .timelineCard,
+.row > .sourceListCard,
+.row > * > .sourceListCard,
+.row > .dateRangeCard,
+.row > * > .dateRangeCard,
+.row > .entityHeaderCard,
+.row > * > .entityHeaderCard,
+.row > .callout,
+.row > * > .callout,
+.row > .card,
+.row > * > .card,
+.listHorizontal > .chartCard,
+.listHorizontal > * > .chartCard,
+.listHorizontal > .tableCard,
+.listHorizontal > * > .tableCard,
+.listHorizontal > .diffCard,
+.listHorizontal > * > .diffCard,
+.listHorizontal > .kvCard,
+.listHorizontal > * > .kvCard,
+.listHorizontal > .fileTreeCard,
+.listHorizontal > * > .fileTreeCard,
+.listHorizontal > .metricRingCard,
+.listHorizontal > * > .metricRingCard,
+.listHorizontal > .checkCardField,
+.listHorizontal > * > .checkCardField {
+  flex: 1 1 min(100%, 220px);
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.row > .field,
+.row > * > .field {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.row > .audioPlayerField,
+.row > * > .audioPlayerField {
+  flex: 1 1 min(100%, 220px);
+  min-width: min(100%, 200px);
+  max-width: 100%;
 }
 
 .row[data-align="stretch"] > .badgeWrap,
 .row[data-align="stretch"] > * > .badgeWrap,
 .row[data-align="stretch"] > .icon,
 .row[data-align="stretch"] > * > .icon,
-.row[data-align="stretch"] > button,
-.row[data-align="stretch"] > * > button {
+.row[data-align="stretch"] > button:not(.imageWrap),
+.row[data-align="stretch"] > * > button:not(.imageWrap) {
   align-self: center;
 }
 
@@ -71,7 +151,9 @@
 }
 
 .row[data-kpi-grid="true"] > .statCard,
-.row[data-kpi-grid="true"] > * > .statCard {
+.row[data-kpi-grid="true"] > * > .statCard,
+.row[data-kpi-grid="true"] > .metricRingCard,
+.row[data-kpi-grid="true"] > * > .metricRingCard {
   min-width: 0;
   width: 100%;
   height: 100%;
@@ -111,12 +193,45 @@
 
 .column > .card,
 .column > * > .card,
+.responsiveGrid > .card,
+.responsiveGrid > * > .card,
 .card[data-a2ui-weighted="true"],
 .column[data-a2ui-weighted="true"] {
   container-type: inline-size;
 }
 
+.column > .diffCard,
+.column > * > .diffCard,
+.column > .kvCard,
+.column > * > .kvCard,
+.column > .fileTreeCard,
+.column > * > .fileTreeCard,
+.column > .comparisonCard,
+.column > * > .comparisonCard,
+.column > .logCard,
+.column > * > .logCard,
+.column > .terminalCard,
+.column > * > .terminalCard,
+.column > .scheduleCard,
+.column > * > .scheduleCard,
+.column > .matrixCard,
+.column > * > .matrixCard,
+.column > .metricRingCard,
+.column > * > .metricRingCard,
+.column > .checkCardField,
+.column > * > .checkCardField,
+.column > .mermaidCard,
+.column > * > .mermaidCard,
+.column > .dateRangeCard,
+.column > * > .dateRangeCard,
+.column > .card,
+.column > * > .card {
+  width: 100%;
+  box-sizing: border-box;
+}
+
 .listVertical {
+  --a2ui-flex-basis: auto;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -124,6 +239,7 @@
 }
 
 .listHorizontal {
+  --a2ui-flex-basis: 0px;
   display: flex;
   flex-direction: row;
   flex-wrap: wrap;
@@ -132,11 +248,19 @@
 }
 
 .card {
+  --a2ui-flex-basis: auto;
   border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.22));
   border-radius: var(--dsw-radius-lg, 12px);
   background: var(--dsw-alias-bg-layer-2, rgba(128, 128, 128, 0.05));
   padding: 14px 16px;
   min-width: 0;
+  box-sizing: border-box;
+}
+
+.card .card {
+  padding: 10px 12px;
+  background: var(--dsw-alias-bg-layer-1, rgba(128, 128, 128, 0.03));
+  container-type: inline-size;
 }
 
 .dividerH {
@@ -184,6 +308,10 @@
 
 .imageWrap {
   overflow: hidden;
+  border: none;
+  padding: 0;
+  max-width: 100%;
+  box-sizing: border-box;
   border-radius: var(--dsw-radius-md, 10px);
   background: var(--dsw-alias-bg-layer-3, rgba(128, 128, 128, 0.08));
 }
@@ -194,12 +322,27 @@
   height: 100%;
 }
 
+.audioPlayerField {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.audioControl {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  height: 36px;
+}
+
 .field {
   display: flex;
   flex-direction: column;
   gap: 6px;
   min-width: 0;
-  flex-shrink: 0;
+  max-width: 100%;
+  flex-shrink: 1;
   box-sizing: border-box;
 }
 
@@ -215,9 +358,11 @@
 
 .fieldHeader {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
-  gap: 8px;
+  gap: 6px 8px;
+  min-width: 0;
 }
 
 .label {
@@ -251,6 +396,15 @@
   border-color: var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary, #3b82f6));
 }
 
+.textarea[aria-invalid="true"],
+.dateInput[aria-invalid="true"],
+.selectTrigger[aria-invalid="true"],
+.multiSelectTrigger[aria-invalid="true"],
+.dateRangeInputs[aria-invalid="true"],
+.numberStepperBox:has([aria-invalid="true"]) {
+  border-color: var(--dsw-alias-state-error-primary, #ef4444);
+}
+
 .dateRow {
   display: flex;
   flex-wrap: wrap;
@@ -261,11 +415,13 @@
   position: relative;
   display: inline-flex;
   align-items: center;
+  width: 100%;
   max-width: 100%;
   min-width: 0;
 }
 
 .dateInput {
+  width: 100%;
   height: 34px;
   max-width: 100%;
   min-width: 0;
@@ -397,7 +553,8 @@
 .sliderTrack {
   position: relative;
   height: 20px;
-  width: 100%;
+  width: calc(100% - 16px);
+  margin-inline: 8px;
   cursor: pointer;
 }
 
@@ -495,9 +652,33 @@
   min-width: 0;
 }
 
+.tabsHeaderScroll {
+  overflow-x: auto;
+  max-width: 100%;
+  min-width: 0;
+  scrollbar-width: thin;
+}
+
+.tabsHeaderScroll [role="tablist"] {
+  width: max-content;
+  min-width: 100%;
+}
+
+.tabsHeaderScroll [role="tab"] {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 .tabPanel {
+  --a2ui-flex-basis: auto;
   min-width: 0;
   container-type: inline-size;
+}
+
+.tabPanel[hidden],
+.accordionPanel[hidden],
+.calloutBody[hidden] {
+  display: none;
 }
 
 .modalTrigger {
@@ -584,6 +765,16 @@
 .tableSearch {
   width: 210px;
   max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.tableSearch > *,
+.tableSearch input {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .tableScroll {
@@ -776,6 +967,12 @@
   flex-shrink: 0;
   max-width: 100%;
   overflow: hidden;
+  box-sizing: border-box;
+}
+
+.crossFilterChip > span {
+  min-width: 0;
+  overflow: hidden;
   text-overflow: ellipsis;
 }
 
@@ -818,7 +1015,7 @@
 
 .chartCanvas {
   width: 100%;
-  min-height: 160px;
+  min-height: 140px;
 }
 
 .diffCard {
@@ -845,9 +1042,11 @@
 
 .diffTitleGroup {
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 4px 8px;
   min-width: 0;
+  max-width: 100%;
 }
 
 .diffTitle {
@@ -864,6 +1063,8 @@
   font-size: 11px;
   padding: 1px 6px;
   border-radius: 4px;
+  white-space: nowrap;
+  flex-shrink: 0;
   background: var(--dsw-alias-interactive-bg-hover, rgba(128, 128, 128, 0.12));
   color: var(--dsw-alias-label-secondary, inherit);
 }
@@ -872,6 +1073,8 @@
   font-size: 12px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  flex-shrink: 0;
   color: var(--dsw-alias-state-success-primary, #10b981);
 }
 
@@ -879,6 +1082,8 @@
   font-size: 12px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  flex-shrink: 0;
   color: var(--dsw-alias-state-error-primary, #ef4444);
 }
 
@@ -958,10 +1163,15 @@
   min-width: 38px;
   padding: 1px 8px;
   text-align: right;
+  white-space: nowrap;
   user-select: none;
   color: var(--dsw-alias-label-tertiary, rgba(128, 128, 128, 0.72));
   border-right: 1px solid var(--dsw-alias-border-l1, rgba(128, 128, 128, 0.12));
   font-variant-numeric: tabular-nums;
+}
+
+.diffSplitGutterCol {
+  width: 38px;
 }
 
 .diffGutter[data-kind="add"],
@@ -1002,7 +1212,6 @@
 }
 
 .diffSplitCell {
-  width: 50%;
   padding: 1px 10px;
   white-space: pre;
   color: var(--dsw-alias-label-primary, inherit);
@@ -1018,6 +1227,10 @@
 }
 
 @container (max-width: 440px) {
+  .diffSplitGutterCol {
+    width: 24px;
+  }
+
   .diffGutter {
     width: 24px;
     min-width: 24px;
@@ -1279,6 +1492,8 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+  min-width: 0;
+  container-type: inline-size;
   font-size: 12.5px;
   color: var(--dsw-alias-label-secondary, inherit);
 }
@@ -1320,7 +1535,13 @@
   min-width: 0;
 }
 
-@container (max-width: 220px) {
+@container (max-width: 520px) {
+  .kvGrid {
+    grid-template-columns: repeat(min(var(--kv-cols, 2), 2), minmax(0, 1fr));
+  }
+}
+
+@container (max-width: 340px) {
   .kvGrid {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -1341,9 +1562,17 @@
   font-weight: 500;
   color: var(--dsw-alias-label-primary, inherit);
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 6px 8px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.kvValue > span {
+  min-width: 0;
+  max-width: 100%;
   overflow-wrap: anywhere;
 }
 
@@ -1571,6 +1800,7 @@
 }
 
 .accordionPanel {
+  --a2ui-flex-basis: auto;
   padding: 12px 14px;
   border-top: 1px solid var(--dsw-alias-border-l1, rgba(128, 128, 128, 0.14));
   background: var(--dsw-alias-bg-layer-1, transparent);
@@ -1590,9 +1820,10 @@
 
 .jsonTreeHeader {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 6px 8px;
   padding: 8px 12px;
   background: var(--dsw-alias-bg-layer-2, rgba(128, 128, 128, 0.05));
   border-bottom: 1px solid var(--dsw-alias-border-l1, rgba(128, 128, 128, 0.16));
@@ -1602,6 +1833,8 @@
   font-size: 12.5px;
   font-weight: 600;
   color: var(--dsw-alias-label-primary, inherit);
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .jsonTreeBody {
@@ -1624,9 +1857,10 @@
 
 .fileTreeHeader {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 6px 8px;
   padding: 8px 12px;
   background: var(--dsw-alias-bg-layer-2, rgba(128, 128, 128, 0.05));
   border-bottom: 1px solid var(--dsw-alias-border-l1, rgba(128, 128, 128, 0.16));
@@ -1636,6 +1870,8 @@
   font-size: 12.5px;
   font-weight: 600;
   color: var(--dsw-alias-label-primary, inherit);
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .fileTreeRoot,
@@ -1741,8 +1977,30 @@
   border-radius: var(--dsw-radius-md, 10px);
   background: var(--dsw-alias-bg-layer-1, rgba(128, 128, 128, 0.02));
   overflow: hidden;
-  contain: layout paint;
+  container-type: inline-size;
   min-width: 0;
+}
+
+@container (max-width: 360px) {
+  .mermaidToolbar {
+    padding: 6px 8px;
+    gap: 6px;
+  }
+
+  .mermaidZoomBtn,
+  .mermaidZoomReadout,
+  .mermaidZoomFitBtn {
+    padding: 2px 5px;
+    font-size: 10.5px;
+  }
+
+  .mermaidZoomReadout {
+    min-width: 38px;
+  }
+
+  .mermaidBody g[class~="grid"] > g[class~="tick"]:nth-of-type(even) text {
+    display: none;
+  }
 }
 
 .mermaidToolbar {
@@ -1810,10 +2068,10 @@
 }
 
 .mermaidFullscreenBody > .mermaidSvgStage svg {
+  width: 100%;
+  height: 100%;
   max-width: 100%;
   max-height: 100%;
-  width: auto;
-  height: auto;
 }
 
 .mermaidSvgStage[data-zoomed="true"],
@@ -1999,8 +2257,11 @@
   border-bottom: 1px solid var(--dsw-alias-border-l1, rgba(128, 128, 128, 0.16));
 }
 
-.selectSearchRow > * {
+.selectSearchRow > *,
+.selectSearchRow input {
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   box-sizing: border-box;
 }
 
@@ -2741,7 +3002,7 @@
 
 .kanbanLanes {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
   gap: 10px;
   align-items: start;
 }
@@ -3031,13 +3292,22 @@
 .metricRingCard {
   display: flex;
   align-items: center;
-  gap: 12px;
   padding: 11px 14px;
   border-radius: var(--dsw-radius-md, 10px);
   border: 1px solid var(--dsw-alias-border-l1, rgba(128, 128, 128, 0.18));
   background: var(--dsw-alias-bg-layer-2, rgba(128, 128, 128, 0.04));
   min-width: 0;
+  overflow: hidden;
+  box-sizing: border-box;
   container-type: inline-size;
+}
+
+.metricRingInner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
 }
 
 .metricRingFigure {
@@ -3046,6 +3316,7 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  max-width: 100%;
 }
 
 .metricRingTrack {
@@ -3053,7 +3324,7 @@
 }
 
 .metricRingArc {
-  stroke: var(--dsw-alias-brand-primary, #4d6bfe);
+  stroke: var(--dsw-alias-state-business-primary, #3b82f6);
   transition: stroke-dashoffset 220ms ease;
 }
 
@@ -3109,11 +3380,26 @@
   font-size: 13px;
   font-weight: 600;
   color: var(--dsw-alias-label-primary, inherit);
+  overflow-wrap: anywhere;
 }
 
 .metricRingSublabel {
   font-size: 11.5px;
   color: var(--dsw-alias-label-secondary, rgba(128, 128, 128, 0.84));
+  overflow-wrap: anywhere;
+}
+
+@container (max-width: 260px) {
+  .metricRingInner {
+    flex-direction: column;
+    justify-content: center;
+    text-align: center;
+    gap: 8px;
+  }
+
+  .metricRingMeta {
+    align-items: center;
+  }
 }
 
 .serviceGraphCard {
@@ -3899,7 +4185,7 @@
 }
 
 .apiPathParam {
-  color: var(--dsw-alias-state-warn-primary, #f59e0b);
+  color: var(--dsw-alias-state-warn-label, var(--dsw-alias-state-warn-primary, #b45309));
 }
 
 .apiStatusPill {
@@ -3915,7 +4201,7 @@
 }
 
 .apiStatusPill[data-ok="warn"] {
-  color: var(--dsw-alias-state-warn-primary, #f59e0b);
+  color: var(--dsw-alias-state-warn-label, var(--dsw-alias-state-warn-primary, #b45309));
 }
 
 .apiSummary {
@@ -4281,6 +4567,8 @@
 
 .resultChildWrap {
   width: 100%;
+  min-width: 0;
+  container-type: inline-size;
   text-align: left;
   margin-top: 4px;
 }
@@ -4400,7 +4688,7 @@
 }
 
 .entityMetricValue[data-tone="warning"] {
-  color: var(--dsw-alias-state-warn-primary, #f59e0b);
+  color: var(--dsw-alias-state-warn-label, var(--dsw-alias-state-warn-primary, #b45309));
 }
 
 .entityMetricValue[data-tone="danger"] {
@@ -4475,7 +4763,7 @@
 }
 
 .matrixValTd[data-kind="warn"] {
-  color: var(--dsw-alias-state-warn-primary, #f59e0b);
+  color: var(--dsw-alias-state-warn-label, var(--dsw-alias-state-warn-primary, #b45309));
   font-weight: 600;
 }
 
@@ -4561,6 +4849,12 @@
   align-items: center;
 }
 
+@container (max-width: 560px) {
+  .kvGridBordered {
+    grid-template-columns: repeat(min(var(--kv-cols, 2), 2), minmax(0, 1fr));
+  }
+}
+
 @container (max-width: 480px) {
   .kvGridBordered {
     grid-template-columns: minmax(0, 1fr);
@@ -4568,6 +4862,18 @@
 
   .kvCellBordered {
     grid-column: span 1;
+  }
+}
+
+@container (max-width: 280px) {
+  .kvCellBordered {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .kvLabelBordered {
+    border-right: none;
+    border-bottom: 1px solid var(--dsw-alias-border-l1, rgba(128, 128, 128, 0.14));
+    padding: 6px 10px;
   }
 }
 
@@ -4663,6 +4969,25 @@
   align-items: stretch;
   min-width: 0;
   width: 100%;
+}
+
+.responsiveGrid > *,
+.responsiveGrid > * > * {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.responsiveGrid .statCard {
+  min-width: 0;
+}
+
+@container (max-width: 720px) {
+  .responsiveGrid[data-columns="4"],
+  .responsiveGrid[data-columns="5"],
+  .responsiveGrid[data-columns="6"] {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 @container (max-width: 560px) {
@@ -4882,6 +5207,9 @@
   flex-direction: column;
   gap: 7px;
   min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  container-type: inline-size;
 }
 
 .datePresetBar {
@@ -4901,7 +5229,13 @@
   border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.26));
   background: var(--dsw-alias-bg-layer-1, rgba(128, 128, 128, 0.03));
   min-height: 36px;
+  min-width: 0;
+  max-width: 100%;
   box-sizing: border-box;
+}
+
+.dateRangeInputs[data-disabled="true"] {
+  opacity: 0.55;
 }
 
 .dateRangeInputs:focus-within {
@@ -4919,8 +5253,10 @@
 
 .dateRangeInput {
   flex: 1;
+  width: 100%;
   min-width: 0;
   max-width: 100%;
+  box-sizing: border-box;
   padding-right: 24px;
   border: none;
   outline: none;
@@ -4967,14 +5303,32 @@
   cursor: default;
 }
 
-.dateRangeInput[type="datetime-local"] {
-  min-width: 168px;
-}
-
 .dateRangeArrow {
   color: var(--dsw-alias-label-tertiary, rgba(128, 128, 128, 0.78));
   font-size: 13px;
   flex-shrink: 0;
+}
+
+@container (max-width: 340px) {
+  .dateRangeInputs {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+    padding: 6px 8px;
+  }
+
+  .dateRangeInputWrap {
+    flex: 0 0 auto;
+    width: 100%;
+  }
+
+  .dateRangeInput {
+    font-size: 11.5px;
+  }
+
+  .dateRangeArrow {
+    display: none;
+  }
 }
 
 .treeSelectRow {
@@ -5186,13 +5540,23 @@
 .treeSearchHeader {
   padding: 8px 12px;
   border-bottom: 1px solid var(--dsw-alias-border-l1, rgba(128, 128, 128, 0.14));
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.treeSearchHeader > *,
+.treeSearchHeader input {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .generalTreeRow {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 12px 5px 10px;
+  padding: 5px 12px 5px calc(10px + var(--tree-depth, 0) * 16px);
   min-height: 30px;
   box-sizing: border-box;
 }
@@ -5309,11 +5673,12 @@
   .generalTreeRow {
     flex-wrap: wrap;
     row-gap: 4px;
-    padding: 6px 10px;
+    padding: 6px 10px 6px calc(8px + var(--tree-depth, 0) * 10px);
   }
 
   .generalTreeMainBtn {
-    flex: 1 1 180px;
+    flex: 1 1 0;
+    min-width: 0;
   }
 
   .generalTreeSub {

@@ -171,6 +171,9 @@ export function computeIncludes(items: unknown, value: unknown): boolean {
 }
 
 export function computeCond(condition: unknown, truthy: unknown, falsy: unknown): unknown {
+  if (Array.isArray(condition)) return condition.length > 0 ? truthy : falsy
+  if (typeof condition === 'number')
+    return Number.isFinite(condition) && condition !== 0 ? truthy : falsy
   return condition ? truthy : falsy
 }
 

@@ -34,5 +34,8 @@ export declare const SHOWCASE_EXTREME_EDGE_TORTURE_A_UI: string
 export declare const SHOWCASE_EXTREME_EDGE_TORTURE_B_UI: string
 export declare const SHOWCASE_P2_CROSSFILTER_UI: string
 export declare const SHOWCASE_V042_QA_UI: string
+export declare const SHOWCASE_COMBO_LAYOUT_AUDIT_UI: string
+export declare const SHOWCASE_COMBO_CHARTS_MERMAID_AUDIT_UI: string
+export declare const SHOWCASE_COMBO_DOCK_FORMS_AUDIT_UI: string
 
 export declare function startMockLlmServer(port?: number): Promise<Server>

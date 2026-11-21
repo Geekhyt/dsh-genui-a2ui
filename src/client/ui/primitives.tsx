@@ -320,7 +320,7 @@ export function DshSegmentedTabs<Value extends string = string>(props: {
       role="tablist"
       aria-label={props.label}
       className={props.className}
-      style={{ display: 'flex', gap: 4 }}
+      style={{ display: 'flex', gap: 4, overflowX: 'auto', maxWidth: '100%' }}
     >
       {props.items.map((item) => (
         <button
@@ -331,6 +331,7 @@ export function DshSegmentedTabs<Value extends string = string>(props: {
           aria-selected={item.value === props.value}
           aria-controls={item.panelId}
           onClick={() => props.onChange(item.value)}
+          style={{ whiteSpace: 'nowrap', flexShrink: 0 }}
         >
           {item.label}
         </button>
@@ -443,12 +444,15 @@ export function DshModal(props: {
       }}
     >
       <div
+        className="a2ui-surface"
         onClick={(e) => e.stopPropagation()}
         style={{
-          minWidth: 320,
+          minWidth: 'min(320px, 92vw)',
           maxWidth: 'min(560px, 92vw)',
           maxHeight: '85vh',
           overflow: 'auto',
+          boxSizing: 'border-box',
+          containerType: 'inline-size',
           padding: 20,
           borderRadius: 'var(--dsw-radius-xl, 16px)',
           background: 'var(--dsw-alias-bg-layer-2, light-dark(#ffffff, #1f1f24))',
@@ -917,18 +921,33 @@ export function DshMenu(props: {
     )
   }
 
-  let menuStyle: { left: number; top?: number; bottom?: number } = { left: 16, top: 64 }
+  let menuStyle: { left: number; top?: number; bottom?: number; maxHeight: number } = {
+    left: 16,
+    top: 64,
+    maxHeight: 280,
+  }
   if (props.open && typeof window !== 'undefined' && anchorWrapRef.current) {
     const rect = anchorWrapRef.current.getBoundingClientRect()
     const vw = window.innerWidth || 1024
     const vh = window.innerHeight || 768
     const menuW = Math.max(180, Math.round(rect.width))
     const left = Math.max(8, Math.min(Math.round(rect.left), vw - menuW - 8))
-    const preferTop = (props.side ?? 'top') === 'top'
-    if (preferTop && rect.top >= 120) {
-      menuStyle = { left, bottom: Math.max(8, Math.round(vh - rect.top + 6)) }
+    const spaceBelow = Math.max(0, vh - rect.bottom - 12)
+    const spaceAbove = Math.max(0, rect.top - 12)
+    const preferTop =
+      (props.side ?? 'top') === 'top' || (spaceBelow < 180 && spaceAbove > spaceBelow)
+    if (preferTop && spaceAbove >= 80) {
+      menuStyle = {
+        left,
+        bottom: Math.max(8, Math.round(vh - rect.top + 6)),
+        maxHeight: Math.min(280, Math.floor(spaceAbove)),
+      }
     } else {
-      menuStyle = { left, top: Math.min(vh - 80, Math.round(rect.bottom + 6)) }
+      menuStyle = {
+        left,
+        top: Math.min(vh - 80, Math.round(rect.bottom + 6)),
+        maxHeight: Math.max(80, Math.min(280, Math.floor(spaceBelow))),
+      }
     }
   }
 
@@ -955,6 +974,7 @@ export function DshMenu(props: {
                   zIndex: 'var(--a2ui-z-popover, 1100)',
                   minWidth: 180,
                   maxWidth: 'calc(100vw - 16px)',
+                  overflowY: 'auto',
                   padding: 4,
                   borderRadius: 'var(--dsw-radius-md, 10px)',
                   background:
@@ -1208,6 +1228,32 @@ export function DshImageLightbox(props: {
         background: 'var(--dsw-alias-bg-mask-1, rgba(0, 0, 0, 0.72))',
       }}
     >
+      <button
+        type="button"
+        aria-label={props.closeLabel}
+        onClick={(e) => {
+          e.stopPropagation()
+          props.onClose()
+        }}
+        style={{
+          position: 'fixed',
+          top: 16,
+          right: 16,
+          width: 34,
+          height: 34,
+          borderRadius: 999,
+          border: '1px solid rgba(255,255,255,0.28)',
+          background: 'rgba(15, 23, 42, 0.72)',
+          color: '#ffffff',
+          fontSize: 16,
+          cursor: 'pointer',
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        ✕
+      </button>
       <img
         src={props.src}
         alt={props.alt}

@@ -18,7 +18,7 @@ function readMermaidThemeColor(
   target?: HTMLElement | null,
 ): string {
   if (typeof document === 'undefined' || document.body === null) return fallback
-  const source = target ?? document.documentElement
+  const source = target ?? document.body ?? document.documentElement
   const value = getComputedStyle(source).getPropertyValue(name).trim()
   if (value === '') return fallback
 
@@ -72,8 +72,19 @@ function configureMermaidForHost(dark: boolean, target?: HTMLElement | null): vo
   const textPrimary = token('--dsw-alias-label-primary', dark ? '#f4f4f5' : '#18181b')
   const textSecondary = token('--dsw-alias-label-secondary', dark ? '#a1a1aa' : '#52525b')
   const border = token('--dsw-alias-border-l2', dark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.16)')
-  const brand = token('--dsw-alias-brand-primary', dark ? '#60a5fa' : '#2563eb')
+  const brand = token('--dsw-alias-state-business-primary', dark ? '#60a5fa' : '#2563eb')
+  const success = token('--dsw-alias-state-success-primary', dark ? '#34d399' : '#10b981')
+  const warn = token('--dsw-alias-state-warn-primary', dark ? '#fbbf24' : '#f59e0b')
+  const danger = token('--dsw-alias-state-error-primary', dark ? '#f87171' : '#ef4444')
   const line = token('--dsw-alias-label-tertiary', dark ? '#9ca3af' : '#6b7280')
+
+  const pieColors = dark
+    ? ['#3b82f6', '#10b981', '#f59e0b', '#a855f7', '#06b6d4', '#ec4899', '#ef4444', '#84cc16']
+    : ['#2563eb', '#059669', '#d97706', '#7c3aed', '#0284c7', '#db2777', '#dc2626', '#65a30d']
+  const scaleFills = dark
+    ? ['#1d4ed8', '#0f766e', '#6d28d9', '#b45309', '#be185d', '#0369a1', '#047857', '#4338ca']
+    : ['#dbeafe', '#ccfbf1', '#ede9fe', '#fef3c7', '#fce7f3', '#e0f2fe', '#d1fae5', '#e0e7ff']
+  const scaleLabel = dark ? '#f8fafc' : '#0f172a'
 
   mermaid.initialize({
     startOnLoad: false,
@@ -83,6 +94,14 @@ function configureMermaidForHost(dark: boolean, target?: HTMLElement | null): vo
     flowchart: {
       htmlLabels: true,
       curve: 'basis',
+    },
+    gantt: {
+      axisFormat: '%m-%d',
+      barHeight: 22,
+      fontSize: 11,
+      sectionFontSize: 11,
+      leftPadding: 68,
+      rightPadding: 28,
     },
     themeVariables: {
       darkMode: dark,
@@ -115,12 +134,92 @@ function configureMermaidForHost(dark: boolean, target?: HTMLElement | null): vo
       noteBkgColor: surfaceBg,
       noteBorderColor: border,
       noteTextColor: textSecondary,
+      sectionBkgColor: dark ? 'rgba(255,255,255,0.04)' : 'rgba(15,23,42,0.035)',
+      sectionBkgColor2: dark ? 'rgba(255,255,255,0.02)' : 'rgba(15,23,42,0.015)',
+      altSectionBkgColor: dark ? 'rgba(255,255,255,0.015)' : 'rgba(15,23,42,0.01)',
+      gridColor: dark ? 'rgba(255,255,255,0.14)' : 'rgba(15,23,42,0.14)',
+      excludeBkgColor: dark ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.06)',
+      taskBkgColor: dark ? '#1d4ed8' : '#3b82f6',
+      taskBorderColor: brand,
+      activeTaskBkgColor: dark ? '#d97706' : '#f59e0b',
+      activeTaskBorderColor: warn,
+      doneTaskBkgColor: dark ? '#047857' : '#10b981',
+      doneTaskBorderColor: success,
+      critBkgColor: danger,
+      critBorderColor: danger,
+      taskTextColor: '#ffffff',
+      taskTextLightColor: '#ffffff',
+      taskTextDarkColor: textPrimary,
+      taskTextOutsideColor: textPrimary,
+      taskTextClickableColor: brand,
+      todayLineColor: danger,
+      pie1: pieColors[0],
+      pie2: pieColors[1],
+      pie3: pieColors[2],
+      pie4: pieColors[3],
+      pie5: pieColors[4],
+      pie6: pieColors[5],
+      pie7: pieColors[6],
+      pie8: pieColors[7],
+      pie9: pieColors[0],
+      pie10: pieColors[1],
+      pie11: pieColors[2],
+      pie12: pieColors[3],
+      pieTitleTextColor: textPrimary,
+      pieSectionTextColor: '#ffffff',
+      pieLegendTextColor: textPrimary,
+      pieStrokeColor: dark ? '#18181b' : '#ffffff',
+      pieOuterStrokeColor: border,
+      pieOpacity: '0.94',
+      cScale0: scaleFills[0],
+      cScale1: scaleFills[1],
+      cScale2: scaleFills[2],
+      cScale3: scaleFills[3],
+      cScale4: scaleFills[4],
+      cScale5: scaleFills[5],
+      cScale6: scaleFills[6],
+      cScale7: scaleFills[7],
+      cScaleLabel0: scaleLabel,
+      cScaleLabel1: scaleLabel,
+      cScaleLabel2: scaleLabel,
+      cScaleLabel3: scaleLabel,
+      cScaleLabel4: scaleLabel,
+      cScaleLabel5: scaleLabel,
+      cScaleLabel6: scaleLabel,
+      cScaleLabel7: scaleLabel,
+      git0: pieColors[0],
+      git1: pieColors[1],
+      git2: pieColors[2],
+      git3: pieColors[3],
+      git4: pieColors[4],
+      git5: pieColors[5],
+      git6: pieColors[6],
+      git7: pieColors[7],
+      gitBranchLabel0: '#ffffff',
+      gitBranchLabel1: '#ffffff',
+      gitBranchLabel2: '#ffffff',
+      gitBranchLabel3: '#ffffff',
+      xyChart: {
+        backgroundColor: 'transparent',
+        titleColor: textPrimary,
+        xAxisLabelColor: textSecondary,
+        yAxisLabelColor: textSecondary,
+        xAxisTitleColor: textPrimary,
+        yAxisTitleColor: textPrimary,
+        xAxisLineColor: border,
+        yAxisLineColor: border,
+        plotColorPalette: pieColors.join(','),
+      },
     },
     themeCSS: [
       '.node rect, .node polygon, .node circle, .node ellipse { rx: 8px; ry: 8px; stroke-width: 1.2px; }',
       '.cluster rect { rx: 10px; ry: 10px; }',
       '.edgePath .path { stroke-width: 1.4px; }',
       '.label { color: inherit; }',
+      `.tick text, .sectionTitle { fill: ${textSecondary} !important; }`,
+      `.titleText, .pieTitleText, .legend text { fill: ${textPrimary} !important; }`,
+      '.taskTextOutsideRight, .taskTextOutsideLeft { font-weight: 500; }',
+      `.mindmap-node text, .mindmap-node tspan, .mindmap-node .nodeLabel { fill: ${scaleLabel} !important; color: ${scaleLabel} !important; }`,
     ].join(' '),
   })
 }

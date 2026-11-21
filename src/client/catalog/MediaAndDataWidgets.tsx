@@ -33,6 +33,7 @@ import {
   InsideButtonContext,
   isSafeAvMediaUrl,
   isSafeImageUrl,
+  isWritableProp,
   SurfaceReadOnlyContext,
   weightStyle,
 } from './widget-helpers.tsx'
@@ -65,7 +66,17 @@ export const DshImageImpl = defineComponent<{
   weight?: number
 }>(ImageApi, function DshImage({ props }) {
   const msg = useRuntimeMessages()
+  const readOnly = useContext(SurfaceReadOnlyContext)
   const [lightboxOpen, setLightboxOpen] = useState(false)
+  const [broken, setBroken] = useState(false)
+  const [prevUrl, setPrevUrl] = useState<unknown>(props.url)
+  if (prevUrl !== props.url) {
+    setPrevUrl(props.url)
+    if (broken) setBroken(false)
+  }
+  if (readOnly && lightboxOpen) {
+    setLightboxOpen(false)
+  }
   if (!isSafeImageUrl(props.url)) return null
   const src = String(props.url)
   const alt =
@@ -73,14 +84,16 @@ export const DshImageImpl = defineComponent<{
   const fit = props.fit === 'scaleDown' ? 'scale-down' : (props.fit ?? 'cover')
   const height = IMAGE_HEIGHTS[props.variant ?? 'mediumFeature'] ?? 168
   const isAvatar = props.variant === 'avatar' || props.variant === 'icon'
-  const canZoom = props.variant !== 'icon'
+  const canZoom = props.variant !== 'icon' && !broken && !readOnly
 
   const wrapStyle = {
-    ...weightStyle(props.weight, isAvatar ? height : 140),
+    ...(isAvatar ? { flexShrink: 0 } : weightStyle(props.weight, 140)),
     width: isAvatar ? height : props.weight !== undefined ? undefined : '100%',
     height,
     borderRadius: props.variant === 'avatar' ? '999px' : undefined,
-    ...(canZoom ? { cursor: 'zoom-in', padding: 0, textAlign: 'left' as const } : {}),
+    ...(canZoom
+      ? { cursor: 'zoom-in', padding: 0, border: 'none', textAlign: 'left' as const }
+      : {}),
   }
 
   return (
@@ -100,22 +113,26 @@ export const DshImageImpl = defineComponent<{
             className={css.image}
             style={{ objectFit: fit }}
             loading="lazy"
+            onError={() => setBroken(true)}
           />
         </button>
       ) : (
         <div className={css.imageWrap} style={wrapStyle}>
-          <img
-            src={src}
-            alt={alt}
-            className={css.image}
-            style={{ objectFit: fit }}
-            loading="lazy"
-          />
+          {broken ? null : (
+            <img
+              src={src}
+              alt={alt}
+              className={css.image}
+              style={{ objectFit: fit }}
+              loading="lazy"
+              onError={() => setBroken(true)}
+            />
+          )}
         </div>
       )}
       {canZoom ? (
         <DshImageLightbox
-          open={lightboxOpen}
+          open={lightboxOpen && !readOnly}
           src={src}
           alt={alt || msg.imageLightboxDialog}
           dialogLabel={msg.imageLightboxDialog}
@@ -134,7 +151,13 @@ export const DshVideoImpl = defineComponent<{
   if (!isSafeAvMediaUrl(props.url)) return null
   return (
     <div className={css.imageWrap} style={weightStyle(props.weight)}>
-      <video src={props.url} controls style={{ display: 'block', width: '100%', maxHeight: 320 }} />
+      <video
+        src={props.url}
+        controls
+        playsInline
+        preload="metadata"
+        style={{ display: 'block', width: '100%', maxHeight: 320 }}
+      />
     </div>
   )
 })
@@ -146,13 +169,17 @@ export const DshAudioPlayerImpl = defineComponent<{
 }>(AudioPlayerApi, function DshAudioPlayer({ props }) {
   if (!isSafeAvMediaUrl(props.url)) return null
   return (
-    <div className={css.field} style={weightStyle(props.weight)}>
+    <div
+      className={`${css.field} ${css.audioPlayerField}`}
+      style={weightStyle(props.weight, 200)}
+      data-a2ui-audio=""
+    >
       {props.description !== undefined &&
       props.description !== null &&
       String(props.description) !== '' ? (
         <span className={css.label}>{String(props.description)}</span>
       ) : null}
-      <audio src={props.url} controls style={{ width: '100%' }} />
+      <audio src={props.url} controls preload="metadata" className={css.audioControl} />
     </div>
   )
 })
@@ -170,7 +197,7 @@ export function DshStatView({
     weight?: number
   }
 }) {
-  const gradId = useId().replace(/:/g, '')
+  const gradId = useId().replace(/[^a-zA-Z0-9_-]/g, '')
   const tone: TagTone =
     props.trend === 'up' ? 'success' : props.trend === 'down' ? 'danger' : 'neutral'
   const deltaText =
@@ -263,7 +290,7 @@ export const DshProgressImpl = defineComponent<{
   const label = props.label ? String(props.label) : ''
 
   return (
-    <div style={weightStyle(props.weight, 140)} data-a2ui-progress="">
+    <div className={css.field} style={weightStyle(props.weight, 140)} data-a2ui-progress="">
       <AriaProgressBar
         className={css.progress}
         minValue={0}
@@ -331,7 +358,7 @@ export const DshCodeImpl = defineComponent<{
   }
 
   return (
-    <div style={weightStyle(props.weight)} data-a2ui-code="">
+    <div className={css.codeWrap} style={weightStyle(props.weight)} data-a2ui-code="">
       <DshCodeBlock
         code={String(props.code ?? '')}
         lang={props.language}
@@ -361,8 +388,9 @@ export const DshChartImpl = defineComponent<{
   exportable?: boolean
   action?: ((options?: ActionDispatchOptions) => Promise<void>) | undefined
   weight?: number
-}>(ChartApi, function DshChart({ props }) {
+}>(ChartApi, function DshChart({ props, context }) {
   const readOnly = useContext(SurfaceReadOnlyContext)
+  const canCrossFilter = !readOnly && isWritableProp(context, 'selected', props.setSelected)
   const parsedRefLine =
     typeof props.referenceLine === 'number' && Number.isFinite(props.referenceLine)
       ? props.referenceLine
@@ -394,7 +422,7 @@ export const DshChartImpl = defineComponent<{
       selected={
         props.selected !== undefined && props.selected !== null ? String(props.selected) : undefined
       }
-      onSelectChange={readOnly ? undefined : props.setSelected}
+      onSelectChange={canCrossFilter ? props.setSelected : undefined}
       exportable={props.exportable}
       action={readOnly ? undefined : props.action}
       weight={props.weight}
@@ -418,8 +446,9 @@ export const DshTableImpl = defineComponent<{
   setFilterValue?: (next: string) => void
   action?: ((options?: ActionDispatchOptions) => Promise<void>) | undefined
   weight?: number
-}>(TableApi, function DshTable({ props }) {
+}>(TableApi, function DshTable({ props, context }) {
   const readOnly = useContext(SurfaceReadOnlyContext)
+  const canFilterWrite = !readOnly && isWritableProp(context, 'filterValue', props.setFilterValue)
   return (
     <TableWidget
       rows={props.rows}
@@ -438,7 +467,7 @@ export const DshTableImpl = defineComponent<{
           ? String(props.filterValue)
           : undefined
       }
-      onFilterValueChange={readOnly ? undefined : props.setFilterValue}
+      onFilterValueChange={canFilterWrite ? props.setFilterValue : undefined}
       action={readOnly ? undefined : props.action}
       weight={props.weight}
     />
