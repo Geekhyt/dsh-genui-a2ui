@@ -415,19 +415,23 @@ export const DshApprovalCardImpl = defineComponent<{
               disabled={!canReject}
               onClick={() => {
                 setDecision('rejected')
-                void props.rejectAction?.({
-                  metadata: {
-                    extensions: {
-                      dshSelection: {
-                        source: 'approvalCard',
-                        label: title,
-                        series: 'rejected',
-                        scope,
-                        severity,
-                        decision: 'rejected',
+                void Promise.resolve(
+                  props.rejectAction?.({
+                    metadata: {
+                      extensions: {
+                        dshSelection: {
+                          source: 'approvalCard',
+                          label: title,
+                          series: 'rejected',
+                          scope,
+                          severity,
+                          decision: 'rejected',
+                        },
                       },
                     },
-                  },
+                  }),
+                ).catch(() => {
+                  setDecision(null)
                 })
               }}
             >
@@ -441,20 +445,24 @@ export const DshApprovalCardImpl = defineComponent<{
               disabled={!canApprove}
               onClick={() => {
                 setDecision('approved')
-                void props.approveAction?.({
-                  metadata: {
-                    extensions: {
-                      dshSelection: {
-                        source: 'approvalCard',
-                        label: title,
-                        series: 'approved',
-                        scope,
-                        severity,
-                        acknowledged,
-                        decision: 'approved',
+                void Promise.resolve(
+                  props.approveAction?.({
+                    metadata: {
+                      extensions: {
+                        dshSelection: {
+                          source: 'approvalCard',
+                          label: title,
+                          series: 'approved',
+                          scope,
+                          severity,
+                          acknowledged,
+                          decision: 'approved',
+                        },
                       },
                     },
-                  },
+                  }),
+                ).catch(() => {
+                  setDecision(null)
                 })
               }}
             >
@@ -1026,7 +1034,7 @@ export const DshMatrixImpl = defineComponent<{
     }
     if (scale === 'success') return 'var(--dsw-alias-state-success-primary, #10b981)'
     if (scale === 'warning') return 'var(--dsw-alias-state-warn-primary, #f59e0b)'
-    return 'var(--dsw-alias-state-info-primary, #3b82f6)'
+    return 'var(--dsw-alias-state-business-primary, #3b82f6)'
   }
 
   return (

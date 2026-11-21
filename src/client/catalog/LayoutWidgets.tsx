@@ -253,7 +253,11 @@ export const DshTabsImpl = defineComponent<{
   weight?: number
 }>(TabsApi, function DshTabs({ props, buildChild }) {
   const msg = useRuntimeMessages()
-  const tabs = props.tabs ?? []
+  const tabs = Array.isArray(props.tabs)
+    ? props.tabs.filter((t): t is { readonly title?: unknown; readonly child?: ChildRef } =>
+        Boolean(t && typeof t === 'object'),
+      )
+    : []
   const baseId = useId()
   const [activeIdx, setActiveIdx] = useState(0)
   const safeIdx = tabs.length === 0 ? 0 : Math.min(activeIdx, tabs.length - 1)

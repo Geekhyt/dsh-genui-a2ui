@@ -74,11 +74,10 @@ export function resetRenderArgsWarningForTests(): void {
   warnedLegacyBridgeArgs = false
 }
 
-export function readArgs(args: unknown): {
-  ui: string | undefined
-  title: string | undefined
-  placement: SurfacePlacement
-} {
+export function unwrapLegacyToolArgs(
+  args: unknown,
+  onLegacy?: (reason: string) => void,
+): { readonly value: unknown; readonly rawUiFallback?: string } {
   let candidate: unknown = args
   for (let step = 0; step < 3; step++) {
     if (
@@ -87,7 +86,7 @@ export function readArgs(args: unknown): {
       'arguments' in candidate &&
       !('ui' in candidate)
     ) {
-      warnLegacyBridgeEncoding('wrapped in { arguments }')
+      onLegacy?.('wrapped in { arguments }')
       candidate = (candidate as { arguments: unknown }).arguments
       continue
     }
@@ -97,18 +96,30 @@ export function readArgs(args: unknown): {
       if (trimmed.startsWith('{')) {
         try {
           const parsed = JSON.parse(trimmed) as unknown
-          warnLegacyBridgeEncoding('string-encoded JSON object')
+          onLegacy?.('string-encoded JSON object')
           candidate = parsed
           continue
         } catch {
-          return { ui: rawStr, title: undefined, placement: 'answer' }
+          return { value: undefined, rawUiFallback: rawStr }
         }
       }
-      return { ui: rawStr, title: undefined, placement: 'answer' }
+      return { value: undefined, rawUiFallback: rawStr }
     }
     break
   }
-  const parsed = RenderArgsSchema.safeParse(candidate)
+  return { value: candidate }
+}
+
+export function readArgs(args: unknown): {
+  ui: string | undefined
+  title: string | undefined
+  placement: SurfacePlacement
+} {
+  const { value, rawUiFallback } = unwrapLegacyToolArgs(args, warnLegacyBridgeEncoding)
+  if (rawUiFallback !== undefined) {
+    return { ui: rawUiFallback, title: undefined, placement: 'answer' }
+  }
+  const parsed = RenderArgsSchema.safeParse(value)
   if (!parsed.success) {
     return { ui: undefined, title: undefined, placement: 'answer' }
   }

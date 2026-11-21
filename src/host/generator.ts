@@ -273,6 +273,17 @@ function validateCompiledLimits(messages: readonly AgentToRendererMessage[]): vo
       'VALIDATION_ERROR',
     )
   }
+
+  let compiledBytes = 0
+  for (const msg of messages) {
+    compiledBytes += Buffer.byteLength(JSON.stringify(msg), 'utf8')
+    if (compiledBytes > A2UI_LIMITS.maxCompiledBytes) {
+      throw new A2uiError(
+        `Compiled A2UI message payload exceeds limit (${compiledBytes} bytes > ${A2UI_LIMITS.maxCompiledBytes} bytes). Avoid deeply repeated variable expansions or oversized inline payloads.`,
+        'VALIDATION_ERROR',
+      )
+    }
+  }
 }
 
 export class SurfaceSessions {
@@ -419,9 +430,26 @@ export class SurfaceSessions {
 
 export function stripWrapping(ui: string): string {
   let text = ui.trim()
-  const tag = /^<a2ui>\s*([\s\S]*?)\s*<\/a2ui>$/.exec(text)
-  if (tag !== null) text = tag[1] ?? ''
-  const fence = /^```[\w-]*\s*\n([\s\S]*?)\n?```$/.exec(text)
-  if (fence !== null) text = fence[1] ?? ''
+  for (let pass = 0; pass < 2; pass += 1) {
+    let changed = false
+    if (text.startsWith('```') && text.endsWith('```') && text.length >= 6) {
+      const nl = text.indexOf('\n')
+      if (nl !== -1) {
+        const info = text.slice(3, nl).trim()
+        if (/^[\w-]*$/.test(info)) {
+          let inner = text.slice(nl + 1, text.length - 3)
+          if (inner.endsWith('\n')) inner = inner.slice(0, -1)
+          if (inner.endsWith('\r')) inner = inner.slice(0, -1)
+          text = inner.trim()
+          changed = true
+        }
+      }
+    }
+    if (text.startsWith('<a2ui>') && text.endsWith('</a2ui>') && text.length >= 13) {
+      text = text.slice(6, text.length - 7).trim()
+      changed = true
+    }
+    if (!changed) break
+  }
   return text
 }

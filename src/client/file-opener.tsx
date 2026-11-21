@@ -11,7 +11,7 @@ function encodePath(path: string): string {
 }
 
 export function isWindowsStylePath(value: string): boolean {
-  return /^[A-Za-z]:[/\\]/.test(value) || value.startsWith('\\\\')
+  return /^[A-Za-z]:[/\\]/.test(value)
 }
 
 export function isAbsoluteWorkspacePath(path: string): boolean {
@@ -20,6 +20,10 @@ export function isAbsoluteWorkspacePath(path: string): boolean {
 
 function isAbsoluteWindows(path: string): boolean {
   return isWindowsStylePath(path)
+}
+
+function hasPathTraversalSegment(rawPath: string): boolean {
+  return rawPath.replace(/\\/g, '/').split('/').includes('..')
 }
 
 export function sessionFileAddress(sessionId: string, path: string): string {
@@ -54,13 +58,15 @@ export interface ParsedFileTarget {
   readonly line?: number | undefined
 }
 
-const DISALLOWED_SCHEME_RE = /^(?:https?|file|javascript|data|mailto|blob|vbscript):/i
+const URI_SCHEME_RE = /^[A-Za-z][A-Za-z0-9+.-]*:/
+const CONTROL_CHAR_RE = /[\u0000-\u001f\u007f]/
 
 export function parseFileTarget(rawPath: unknown, explicitLine?: unknown): ParsedFileTarget | null {
   if (typeof rawPath !== 'string') return null
   const trimmed = rawPath.trim()
-  if (trimmed === '' || trimmed.includes('\0')) return null
-  if (!isWindowsStylePath(trimmed) && DISALLOWED_SCHEME_RE.test(trimmed)) return null
+  if (trimmed === '' || CONTROL_CHAR_RE.test(trimmed)) return null
+  if (trimmed.startsWith('\\\\') || trimmed.startsWith('//')) return null
+  if (!isWindowsStylePath(trimmed) && URI_SCHEME_RE.test(trimmed)) return null
 
   let cleanPath = trimmed
   let inferredLine: number | undefined
@@ -87,8 +93,9 @@ export function parseFileTarget(rawPath: unknown, explicitLine?: unknown): Parse
     line = inferredLine
   }
 
-  if (cleanPath.trim() === '') return null
-  return { path: cleanPath.trim(), ...(line !== undefined ? { line } : {}) }
+  const finalPath = cleanPath.trim()
+  if (finalPath === '' || hasPathTraversalSegment(finalPath)) return null
+  return { path: finalPath, ...(line !== undefined ? { line } : {}) }
 }
 
 export type WorkspaceFileOpener = (filePath: string, line?: number) => void

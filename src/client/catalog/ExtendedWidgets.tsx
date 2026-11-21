@@ -12,6 +12,7 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import { AccordionApi, FileTreeApi, JsonTreeApi, MermaidApi } from '../../shared/catalog-schema.ts'
+import { safeStringifyJson } from '../../shared/constants.ts'
 import {
   getMermaidDiagramServerSnapshot,
   getMermaidDiagramSnapshot,
@@ -87,7 +88,11 @@ export const DshAccordionImpl = defineComponent<{
   weight?: number
 }>(AccordionApi, function DshAccordion({ props, buildChild }) {
   const msg = useRuntimeMessages()
-  const items = props.items ?? []
+  const items = Array.isArray(props.items)
+    ? props.items.filter((item): item is AccordionItemInput =>
+        Boolean(item && typeof item === 'object'),
+      )
+    : []
   const multiple = Boolean(props.multiple)
   const baseId = useId()
 
@@ -174,22 +179,7 @@ export const DshAccordionImpl = defineComponent<{
   )
 })
 
-export function safeStringifyJson(value: unknown, space = 2): string {
-  const seen = new WeakSet<object>()
-  const serialized = JSON.stringify(
-    value,
-    (_key, current: unknown) => {
-      if (typeof current === 'bigint') return current.toString()
-      if (typeof current === 'object' && current !== null) {
-        if (seen.has(current)) return '[Circular]'
-        seen.add(current)
-      }
-      return current
-    },
-    space,
-  )
-  return serialized ?? 'null'
-}
+export { safeStringifyJson }
 
 export const DshJsonTreeImpl = defineComponent<{
   data?: unknown

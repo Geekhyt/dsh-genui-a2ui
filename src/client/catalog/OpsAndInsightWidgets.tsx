@@ -467,7 +467,11 @@ export const DshTimelineImpl = defineComponent<{
   weight?: number
 }>(TimelineApi, function DshTimeline({ props, buildChild }) {
   const msg = useRuntimeMessages()
-  const items = props.items ?? []
+  const items = Array.isArray(props.items)
+    ? props.items.filter((item): item is TimelineItemInput =>
+        Boolean(item && typeof item === 'object'),
+      )
+    : []
   const [openDetails, setOpenDetails] = useState<ReadonlySet<number>>(() => new Set())
 
   if (items.length === 0) return null

@@ -1,6 +1,7 @@
 import type { ActionDispatchOptions } from '@a2ui/web_core/v1_0'
 import { memo, useCallback, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { ChartKind } from '../../shared/catalog-schema.ts'
+import { sanitizeInlineUrlText } from '../../shared/constants.ts'
 import {
   CHART_LOAD_ERROR_SENTINEL,
   getEchartsChunkServerSnapshot,
@@ -38,8 +39,7 @@ export interface ChartWidgetProps {
 }
 
 function sanitizeInlineText(input: unknown): string {
-  if (input === null || input === undefined) return ''
-  return String(input).replace(/(?:image|http|https|javascript|data):\/\/\S+/gi, '')
+  return sanitizeInlineUrlText(input).replace(/(\s)->(\s)/g, '$1→$2')
 }
 
 function copyTextSafe(text: string): void {
@@ -179,7 +179,19 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
       typeof params?.dataIndex === 'number' && Number.isInteger(params.dataIndex)
         ? params.dataIndex
         : undefined
-    const row = idx !== undefined ? rowsRef.current[idx] : undefined
+    const matchedRow = (() => {
+      if (xField && label) {
+        const hit = rowsRef.current.find((r) => {
+          const xMatch = sanitizeInlineText(r[xField]) === label
+          if (!xMatch) return false
+          if (seriesField && series) return sanitizeInlineText(r[seriesField]) === series
+          return true
+        })
+        if (hit !== undefined) return hit
+      }
+      return idx !== undefined ? rowsRef.current[idx] : undefined
+    })()
+    const row = matchedRow
     void actionRef.current({
       metadata: {
         extensions: {

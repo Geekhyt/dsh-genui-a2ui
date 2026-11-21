@@ -17,13 +17,24 @@ export const ALLOWED_MERMAID_KINDS = [
 ] as const
 
 const SVG_INJECTION_RE =
-  /<script|<iframe|<object|<embed|<applet|<meta|<base|(?:javascript|vbscript)\s*:|data\s*:\s*text\/html/i
+  /<script\b|<iframe\b|<object\b|<embed\b|<applet\b|<meta\b|<base\b|<animate\b|<set\b|(?:javascript|vbscript)\s*:|data\s*:\s*(?:text\/html|image\/svg\+xml|application\/xhtml\+xml)/i
 
 const TAG_EVENT_HANDLER_RE = /<(?:"[^"]*"|'[^']*'|[^'">])*\bon[a-z]+\s*=/i
 
-const OBFUSCATED_URI_RE = /(?:javascript|vbscript)\s*:|data\s*:\s*text\/html/i
+const OBFUSCATED_URI_RE =
+  /(?:javascript|vbscript)\s*:|data\s*:\s*(?:text\/html|image\/svg\+xml|application\/xhtml\+xml)/i
 
-function decodeHtmlNumericEntities(input: string): string {
+const NAMED_ENTITY_MAP: Record<string, string> = {
+  colon: ':',
+  tab: '',
+  newline: '',
+  lpar: '(',
+  rpar: ')',
+  semi: ';',
+  sol: '/',
+}
+
+function decodeHtmlEntities(input: string): string {
   return input
     .replace(/&#x([0-9a-f]+);?/gi, (_, hex: string) => {
       const cp = Number.parseInt(hex, 16)
@@ -33,6 +44,10 @@ function decodeHtmlNumericEntities(input: string): string {
       const cp = Number.parseInt(dec, 10)
       return Number.isFinite(cp) && cp > 0 && cp <= 0x10ffff ? String.fromCodePoint(cp) : ''
     })
+    .replace(/&([a-z]+);/gi, (m, name: string) => {
+      const lower = name.toLowerCase()
+      return Object.hasOwn(NAMED_ENTITY_MAP, lower) ? (NAMED_ENTITY_MAP[lower] ?? '') : m
+    })
     .replace(/[\u0000-\u0020]+/g, '')
 }
 
@@ -40,17 +55,18 @@ export function assertSafeSvg(svg: string): void {
   if (
     SVG_INJECTION_RE.test(svg) ||
     TAG_EVENT_HANDLER_RE.test(svg) ||
-    OBFUSCATED_URI_RE.test(decodeHtmlNumericEntities(svg))
+    OBFUSCATED_URI_RE.test(decodeHtmlEntities(svg))
   ) {
     throw new Error('Mermaid SVG failed sanitization check; refusing to render')
   }
 }
 
 export function stripUnsafeDirectives(code: string): string {
-  return code
-    .replace(/^\s*---\r?\n[\s\S]*?\r?\n---\r?\n/, '')
-    .replace(/%%\{[\s\S]*?\}%%/g, '')
-    .trim()
+  let out = code
+  while (/^\s*---\r?\n[\s\S]*?\r?\n---\r?\n/.test(out)) {
+    out = out.replace(/^\s*---\r?\n[\s\S]*?\r?\n---\r?\n/, '')
+  }
+  return out.replace(/%%\{[\s\S]*?\}%%/g, '').trim()
 }
 
 export function extractMermaidKind(code: string): string {

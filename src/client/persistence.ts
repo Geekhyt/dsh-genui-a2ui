@@ -1,10 +1,12 @@
 import { isDangerousObjectKey, isSecretKey } from '../shared/constants.ts'
+import { notifySubscribers } from './notify.ts'
 
 export const DRAFTS_STORAGE_KEY = 'dsh-a2ui:drafts:v1'
 export const DOCK_STORAGE_KEY = 'dsh-a2ui:dock:v1'
 export const ENABLED_STORAGE_KEY = 'dsh-a2ui:tier:v1'
 export const MAX_DRAFT_ENTRIES = 200
 const MAX_SINGLE_DRAFT_CHARS = 32_768
+const MAX_TOTAL_DRAFT_CHARS = 512_000
 
 function pruneRecordLru<T>(map: Record<string, T>, maxEntries: number): Record<string, T> {
   const keys = Object.keys(map)
@@ -33,6 +35,7 @@ interface EnabledStoreShape {
 }
 
 const memoryFallback = new Map<string, string>()
+const memoryPreferredKeys = new Set<string>()
 const warnedStorageKeys = new Set<string>()
 
 function getBrowserStorage(): Storage | null {
@@ -55,6 +58,9 @@ function warnOnceForKey(warnKey: string, message: string, err?: unknown): void {
 }
 
 function readStorage(storageKey: string): string | null {
+  if (memoryPreferredKeys.has(storageKey)) {
+    return memoryFallback.get(storageKey) ?? null
+  }
   const storage = getBrowserStorage()
   if (storage !== null) {
     try {
@@ -66,20 +72,26 @@ function readStorage(storageKey: string): string | null {
   return memoryFallback.get(storageKey) ?? null
 }
 
-function writeStorage(storageKey: string, value: string): void {
+function writeStorage(storageKey: string, value: string): boolean {
   memoryFallback.set(storageKey, value)
   const storage = getBrowserStorage()
   if (storage !== null) {
     try {
       storage.setItem(storageKey, value)
+      memoryPreferredKeys.delete(storageKey)
+      return true
     } catch (err) {
+      memoryPreferredKeys.add(storageKey)
       warnOnceForKey(`write:${storageKey}`, `localStorage write failed for "${storageKey}":`, err)
+      return false
     }
   }
+  return true
 }
 
 function removeStorage(storageKey: string): void {
   memoryFallback.delete(storageKey)
+  memoryPreferredKeys.delete(storageKey)
   const storage = getBrowserStorage()
   if (storage !== null) {
     try {
@@ -124,9 +136,9 @@ export function resetPersistenceForTests(): void {
   removeStorage(DRAFTS_STORAGE_KEY)
   removeStorage(DOCK_STORAGE_KEY)
   removeStorage(ENABLED_STORAGE_KEY)
-  notifyListeners(dockListeners)
-  notifyListeners(enabledListeners)
-  notifyListeners(commandNoticeListeners)
+  notifySubscribers(dockListeners, 'Persistence')
+  notifySubscribers(enabledListeners, 'Persistence')
+  notifySubscribers(commandNoticeListeners, 'Persistence')
 }
 
 export function computeMessagesFingerprint(messages: readonly unknown[]): string {
@@ -144,10 +156,37 @@ export function computeMessagesFingerprint(messages: readonly unknown[]): string
   return (hash >>> 0).toString(16).padStart(8, '0')
 }
 
-function normalizePointerPath(pointer: string): string {
+export function normalizePointerPath(pointer: string): string {
   const trimmed = pointer.trim()
   if (trimmed === '' || trimmed === '/') return '/'
-  return trimmed.startsWith('/') ? trimmed : `/${trimmed}`
+  const withSlash = trimmed.startsWith('/') ? trimmed : `/${trimmed}`
+  return withSlash.length > 1 ? withSlash.replace(/\/+$/, '') : withSlash
+}
+
+export function isPointerObscured(pointer: string, obscuredPointers: ReadonlySet<string>): boolean {
+  const norm = normalizePointerPath(pointer)
+  for (const rawObs of obscuredPointers) {
+    const obs = normalizePointerPath(rawObs)
+    if (obs === '/') return true
+    if (norm === obs || norm.startsWith(`${obs}/`)) return true
+  }
+  return false
+}
+
+export function isPointerObscuredOrParent(
+  pointer: string,
+  obscuredPointers: ReadonlySet<string>,
+): boolean {
+  const norm = normalizePointerPath(pointer)
+  if (norm === '/') return obscuredPointers.size > 0
+  for (const rawObs of obscuredPointers) {
+    const obs = normalizePointerPath(rawObs)
+    if (obs === '/') return true
+    if (norm === obs || obs.startsWith(`${norm}/`) || norm.startsWith(`${obs}/`)) {
+      return true
+    }
+  }
+  return false
 }
 
 export function sanitizeDataModel(
@@ -157,21 +196,25 @@ export function sanitizeDataModel(
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return {}
   const blocked = new Set<string>()
   if (obscuredPointers !== undefined) {
-    for (const p of obscuredPointers) blocked.add(normalizePointerPath(p))
+    for (const p of obscuredPointers) {
+      if (p.trim() !== '') blocked.add(normalizePointerPath(p))
+    }
   }
 
   const walk = (node: unknown, currentPath: string, depth: number): unknown => {
     if (depth > 8) return undefined
-    if (blocked.has(currentPath)) return undefined
+    if (blocked.size > 0 && isPointerObscured(currentPath, blocked)) return undefined
     if (Array.isArray(node)) {
-      return node.map((item, idx) => walk(item, `${currentPath}/${idx}`, depth + 1))
+      return node.map((item, idx) =>
+        walk(item, currentPath === '/' ? `/${idx}` : `${currentPath}/${idx}`, depth + 1),
+      )
     }
     if (typeof node === 'object' && node !== null) {
       const out: Record<string, unknown> = {}
       for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
         if (isDangerousObjectKey(k) || isSecretKey(k)) continue
         const childPath = currentPath === '/' ? `/${k}` : `${currentPath}/${k}`
-        if (blocked.has(childPath)) continue
+        if (blocked.size > 0 && isPointerObscured(childPath, blocked)) continue
         const cleaned = walk(v, childPath, depth + 1)
         if (cleaned !== undefined) {
           Object.defineProperty(out, k, {
@@ -233,7 +276,16 @@ export function removeSurfaceDraft(
 }
 
 function writeDraftList(entries: DraftEntry[]): void {
-  writeStorage(DRAFTS_STORAGE_KEY, JSON.stringify(entries))
+  const working = [...entries]
+  let payload = JSON.stringify(working)
+  while (working.length > 1 && payload.length > MAX_TOTAL_DRAFT_CHARS) {
+    working.shift()
+    payload = JSON.stringify(working)
+  }
+  while (!writeStorage(DRAFTS_STORAGE_KEY, payload) && working.length > 1) {
+    working.shift()
+    payload = JSON.stringify(working)
+  }
 }
 
 export function loadSurfaceDraft(
@@ -295,16 +347,6 @@ const DEFAULT_DOCK_STATE: DockUiEntry = Object.freeze({ collapsed: false, dismis
 let cachedDockRaw: string | null | undefined
 let cachedDockMap: Record<string, DockUiEntry> = {}
 
-function notifyListeners(listeners: ReadonlySet<() => void>): void {
-  for (const fn of listeners) {
-    try {
-      fn()
-    } catch (err) {
-      console.error('[dsh-genui-a2ui] Persistence subscriber error:', err)
-    }
-  }
-}
-
 function readDockMap(): Record<string, DockUiEntry> {
   const raw = readStorage(DOCK_STORAGE_KEY)
   if (raw === cachedDockRaw) return cachedDockMap
@@ -335,7 +377,7 @@ function writeDockMap(next: Record<string, DockUiEntry>): void {
   cachedDockRaw = serialized
   cachedDockMap = next
   writeStorage(DOCK_STORAGE_KEY, serialized)
-  notifyListeners(dockListeners)
+  notifySubscribers(dockListeners, 'Persistence')
 }
 
 export function subscribeDockUi(listener: () => void): () => void {
@@ -347,9 +389,9 @@ export function subscribeDockUi(listener: () => void): () => void {
 
 export function getDockUiState(sessionId: string | undefined): DockUiEntry {
   if (!sessionId) return DEFAULT_DOCK_STATE
-  const entry = readDockMap()[sessionId]
-  if (!entry) return DEFAULT_DOCK_STATE
-  return entry
+  const map = readDockMap()
+  if (!Object.hasOwn(map, sessionId)) return DEFAULT_DOCK_STATE
+  return map[sessionId] ?? DEFAULT_DOCK_STATE
 }
 
 export function setDockCollapsed(sessionId: string, collapsed: boolean): void {
@@ -382,7 +424,7 @@ export function setFallbackDefaultEnabled(enabled: boolean): void {
   if (fallbackDefaultEnabled === enabled) return
   fallbackDefaultEnabled = enabled
   cachedEnabledRaw = undefined
-  notifyListeners(enabledListeners)
+  notifySubscribers(enabledListeners, 'Persistence')
 }
 
 function parsePersistedEnabled(val: unknown): boolean | undefined {
@@ -441,7 +483,7 @@ export function subscribeA2uiEnabled(listener: () => void): () => void {
 
 export function getA2uiEnabled(sessionId: string | undefined): boolean {
   const store = readEnabledStore()
-  if (sessionId && sessionId in store.bySession) {
+  if (sessionId && Object.hasOwn(store.bySession, sessionId)) {
     return store.bySession[sessionId]!
   }
   return store.defaultEnabled
@@ -474,7 +516,7 @@ export function setA2uiEnabled(
   cachedEnabledRaw = serialized
   cachedEnabledStore = next
   writeStorage(ENABLED_STORAGE_KEY, serialized)
-  notifyListeners(enabledListeners)
+  notifySubscribers(enabledListeners, 'Persistence')
 }
 
 export function resolveEffectiveA2uiEnabled(
@@ -561,7 +603,7 @@ export function publishCommandNotice(
   }, COMMAND_NOTICE_TTL_MS)
   ;(timer as unknown as { unref?: () => void }).unref?.()
   commandNoticeTimersBySession.set(sessionId, timer)
-  notifyListeners(commandNoticeListeners)
+  notifySubscribers(commandNoticeListeners, 'Persistence')
   return notice
 }
 
@@ -572,5 +614,5 @@ export function dismissCommandNotice(sessionId: string | undefined, seq?: number
   if (seq !== undefined && current.seq !== seq) return
   clearNoticeTimer(sessionId)
   commandNoticesBySession.delete(sessionId)
-  notifyListeners(commandNoticeListeners)
+  notifySubscribers(commandNoticeListeners, 'Persistence')
 }

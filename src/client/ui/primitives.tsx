@@ -194,7 +194,7 @@ export function DshSwitch(props: {
         borderRadius: 999,
         border: '1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.28))',
         background: props.checked
-          ? 'var(--dsw-alias-state-info-primary, #3b82f6)'
+          ? 'var(--dsw-alias-state-business-primary, #3b82f6)'
           : 'var(--dsw-alias-bg-layer-3, rgba(128,128,128,0.2))',
         cursor: props.disabled ? 'not-allowed' : 'pointer',
         opacity: props.disabled ? 0.5 : 1,
@@ -265,7 +265,7 @@ export function DshPill(
         borderRadius: 999,
         fontSize: 12,
         border: '1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.28))',
-        background: active ? 'var(--dsw-alias-brand-primary, #3b82f6)' : 'transparent',
+        background: active ? 'var(--dsw-alias-state-business-primary, #3b82f6)' : 'transparent',
         color: active ? 'var(--dsw-alias-label-primary-inverted, #fff)' : 'inherit',
         cursor: 'pointer',
         ...style,
@@ -394,7 +394,9 @@ export function DshSegmentedControl<Value extends string = string>(props: {
               border: 'none',
               fontSize: 12,
               fontWeight: active ? 600 : 400,
-              background: active ? 'var(--dsw-alias-state-info-primary, #3b82f6)' : 'transparent',
+              background: active
+                ? 'var(--dsw-alias-state-business-primary, #3b82f6)'
+                : 'transparent',
               color: active ? '#ffffff' : 'var(--dsw-alias-label-secondary, inherit)',
               cursor: isDisabled ? 'not-allowed' : 'pointer',
               opacity: isDisabled ? 0.5 : 1,
@@ -556,7 +558,7 @@ function FallbackJsonNode(props: {
       typeof value === 'string'
         ? 'var(--dsw-alias-state-success-primary, #10b981)'
         : typeof value === 'number'
-          ? 'var(--dsw-alias-brand-primary, #3b82f6)'
+          ? 'var(--dsw-alias-state-business-primary, #3b82f6)'
           : typeof value === 'boolean'
             ? 'var(--dsw-alias-state-warn-primary, #f59e0b)'
             : 'var(--dsw-alias-label-tertiary, #9ca3af)'

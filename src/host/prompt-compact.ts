@@ -120,7 +120,7 @@ const COMPACT_FUNCTIONS_SECTION = [
     '{` escapes literal).',
   '• concat(items) — Joins strings/numbers/formatted values (`concat([formatNumber(v), " GB"])`).',
   '• lookup(key, table, fallback?) — Maps scalar/ChoicePicker `key` via `{ k: v }` table at depth 1.',
-  '• pluralize(value, other, one?, zero?) — Selects string by count, falling back to `other`.',
+  '• pluralize(value, zero?, one?, two?, few?, many?, other) — Selects string by count (`other` required; use named args e.g. `pluralize($/n, one="item", other="items")`).',
   '• required(value) / email(value) / regex(value, pattern) / length(value, min?, max?) / numeric(value, min?, max?) — `?check` validators.',
   '• copyText(text) / openUrl(url) — Client clipboard copy & browser link actions.',
 ].join('\n')
@@ -135,8 +135,8 @@ function compactFunctionsSection(rawFnSec: string): string {
 const PLURALIZE_VERBOSE_BLOCK = /• pluralize\([^\n]*\n(?: {2}- [^\n]*\n)+/
 
 const COMPACT_PLURALIZE = [
-  '• pluralize(value, other, one?, zero?)',
-  '  - Description: Selects a string by count (`value`), falling back to `other`.',
+  '• pluralize(value, zero?, one?, two?, few?, many?, other)',
+  '  - Description: Selects a string by count (`value`); `other` is required (prefer named args like `pluralize($/n, one="item", other="items")`).',
   '',
 ].join('\n')
 

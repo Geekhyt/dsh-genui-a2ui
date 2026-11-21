@@ -46,6 +46,7 @@ import {
   type ClampedPopoverBox,
   computeClampedPopoverBox,
   defineComponent,
+  NativeDateField,
   SurfaceReadOnlyContext,
   SurfaceValidationContext,
   weightStyle,
@@ -501,16 +502,17 @@ export const DshDateRangeImpl = defineComponent<{
       ) : null}
 
       <div className={css.dateRangeInputs}>
-        <input
+        <NativeDateField
           type={inputType}
-          className={css.dateRangeInput}
-          style={{ colorScheme: dark ? 'dark' : 'light' }}
+          dark={dark}
           value={normStart}
           disabled={readOnly}
-          aria-label={msg.dateRangeStartAria}
-          onChange={(e) => {
-            if (readOnly) return
-            const nextS = e.target.value
+          ariaLabel={msg.dateRangeStartAria}
+          wrapClassName={css.dateRangeInputWrap}
+          inputClassName={css.dateRangeInput}
+          buttonClassName={css.dateRangePickerBtn}
+          iconSize={13}
+          onChange={(nextS) => {
             props.setStart?.(nextS)
             if (normEnd && nextS > normEnd) {
               props.setEnd?.(nextS)
@@ -520,16 +522,17 @@ export const DshDateRangeImpl = defineComponent<{
         <span className={css.dateRangeArrow} aria-hidden="true">
           →
         </span>
-        <input
+        <NativeDateField
           type={inputType}
-          className={css.dateRangeInput}
-          style={{ colorScheme: dark ? 'dark' : 'light' }}
+          dark={dark}
           value={normEnd}
           disabled={readOnly}
-          aria-label={msg.dateRangeEndAria}
-          onChange={(e) => {
-            if (readOnly) return
-            const nextE = e.target.value
+          ariaLabel={msg.dateRangeEndAria}
+          wrapClassName={css.dateRangeInputWrap}
+          inputClassName={css.dateRangeInput}
+          buttonClassName={css.dateRangePickerBtn}
+          iconSize={13}
+          onChange={(nextE) => {
             props.setEnd?.(nextE)
             if (normStart && nextE < normStart) {
               props.setStart?.(nextE)
@@ -776,7 +779,7 @@ export const DshCheckCardImpl = defineComponent<{
   const [touched, setTouched] = useState(false)
 
   const options = useMemo(() => normalizeCheckCardOptions(props.options), [props.options])
-  const isPromptMode = typeof props.action === 'function' && props.value === undefined
+  const isPromptMode = typeof props.action === 'function' && typeof props.setValue !== 'function'
   const isFormBound = !isPromptMode && typeof props.setValue === 'function'
   const multiple = Boolean(props.multiple)
   const cols =
@@ -841,7 +844,11 @@ export const DshCheckCardImpl = defineComponent<{
         </div>
       ) : null}
 
-      <div className={css.checkCardGrid} style={{ '--a2ui-grid-cols': cols } as CSSProperties}>
+      <div
+        className={css.checkCardGrid}
+        data-columns={String(cols)}
+        style={{ '--a2ui-grid-cols': cols } as CSSProperties}
+      >
         {options.map((opt) => {
           const checked = isFormBound && selectedSet.has(opt.value)
           return (

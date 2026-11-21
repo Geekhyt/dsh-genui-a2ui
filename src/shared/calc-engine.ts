@@ -351,8 +351,6 @@ function parseTokens(tokens: readonly Token[]): {
         consume()
         return { kind: 'call', fn: t.name, args }
       }
-      if (t.name === 'PI') return { kind: 'num', value: Math.PI }
-      if (t.name === 'E') return { kind: 'num', value: Math.E }
       if (t.name === 'true') return { kind: 'num', value: 1 }
       if (t.name === 'false') return { kind: 'num', value: 0 }
       return { kind: 'var', name: t.name }
@@ -394,7 +392,12 @@ function validateAstSemantics(node: ExprNode, providedVars?: ReadonlySet<string>
     case 'num':
       return null
     case 'var':
-      if (providedVars !== undefined && !providedVars.has(node.name)) {
+      if (
+        providedVars !== undefined &&
+        !providedVars.has(node.name) &&
+        node.name !== 'PI' &&
+        node.name !== 'E'
+      ) {
         return `Unbound variable "${node.name}" — pass it in vars={ ${node.name}: $/... }.`
       }
       return null
@@ -504,7 +507,10 @@ function evalBuiltinCall(fn: string, args: readonly number[]): number {
     case 'round': {
       const d = args.length >= 2 && Number.isInteger(a1) ? Math.min(8, Math.max(0, a1)) : 0
       const f = 10 ** d
-      return Math.round((a0 + Number.EPSILON) * f) / f
+      const scaled = (a0 + Math.sign(a0) * Number.EPSILON) * f
+      if (!Number.isFinite(scaled)) return a0
+      const rounded = Math.round(scaled) / f
+      return rounded === 0 ? 0 : rounded
     }
     case 'min':
       return args.length === 0 ? 0 : Math.min(...args)
@@ -521,6 +527,10 @@ function evalBuiltinCall(fn: string, args: readonly number[]): number {
       const pv = args[2] ?? 0
       if (nper <= 0) return 0
       if (Math.abs(rate) < 1e-12) return pv / nper
+      if (rate > 0) {
+        const denom = 1 - (1 + rate) ** -nper
+        return denom === 0 ? 0 : (pv * rate) / denom
+      }
       const factor = (1 + rate) ** nper
       const denom = factor - 1
       return denom === 0 ? 0 : (pv * rate * factor) / denom
@@ -541,7 +551,12 @@ function evalAst(node: ExprNode, vars: Record<string, unknown>): number {
     case 'num':
       return node.value
     case 'var':
-      return coerceVarValue(Object.hasOwn(vars, node.name) ? vars[node.name] : undefined)
+      if (Object.hasOwn(vars, node.name)) {
+        return coerceVarValue(vars[node.name])
+      }
+      if (node.name === 'PI') return Math.PI
+      if (node.name === 'E') return Math.E
+      return 0
     case 'unary': {
       const v = evalAst(node.arg, vars)
       if (node.op === '-') return -v
@@ -625,7 +640,11 @@ export function evaluateCalcExpression(expr: unknown, vars?: unknown, decimals?:
     decimals <= 8
   ) {
     const factor = 10 ** decimals
-    return Math.round((raw + Number.EPSILON) * factor) / factor
+    const scaled = (raw + Math.sign(raw) * Number.EPSILON) * factor
+    if (!Number.isFinite(scaled)) return raw
+    const rounded = Math.round(scaled) / factor
+    return rounded === 0 ? 0 : rounded
   }
-  return Number(raw.toPrecision(14))
+  const normalized = Number(raw.toPrecision(14))
+  return normalized === 0 ? 0 : normalized
 }

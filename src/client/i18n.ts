@@ -8,15 +8,14 @@ import {
   subscribeUiLocaleOverride,
   type UiLocale,
 } from '../shared/i18n.ts'
+import { notifySubscribers } from './notify.ts'
 
 const localeListeners = new Set<() => void>()
 let sharedLocaleObserver: MutationObserver | null = null
 let sharedOverrideUnsub: (() => void) | null = null
 
 function notifyLocaleListeners(): void {
-  for (const listener of localeListeners) {
-    listener()
-  }
+  notifySubscribers(localeListeners, 'Locale')
 }
 
 export function subscribeClientLocale(listener: () => void): () => void {

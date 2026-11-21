@@ -189,14 +189,14 @@ export const TableWidget = memo(function TableWidget({
   const inferredCols = useMemo<readonly TableColumnInput[]>(() => {
     if (explicitCols && explicitCols.length > 0) return explicitCols
     const keys = new Set<string>()
-    for (const row of data.slice(0, 25)) {
+    for (const row of normalizedData.slice(0, 25)) {
       for (const k of Object.keys(row)) {
         if (expandKey && k === expandKey) continue
         keys.add(k)
       }
     }
     return [...keys].map((key) => ({ key, label: key, sortable: true }))
-  }, [explicitCols, data, expandKey])
+  }, [explicitCols, normalizedData, expandKey])
 
   const hasExpandColumn = useMemo(
     () =>
@@ -503,10 +503,18 @@ export const TableWidget = memo(function TableWidget({
                 const isExpanded = detailText !== '' && expandedIndices.has(row.index)
                 const triggerRow = () => {
                   if (canCrossFilterRow && filterField && onFilterValueChange) {
-                    const cellVal = formatCellValue(row.original[filterField], msg)
-                    if (cellVal && cellVal !== '—') {
+                    const rawCell = row.original[filterField]
+                    const scalarVal =
+                      rawCell === null || rawCell === undefined
+                        ? ''
+                        : typeof rawCell === 'string' ||
+                            typeof rawCell === 'number' ||
+                            typeof rawCell === 'boolean'
+                          ? String(rawCell).trim()
+                          : formatCellValue(rawCell, msg)
+                    if (scalarVal && scalarVal !== '—') {
                       onFilterValueChange(
-                        computeNextCrossFilterSelection(activeCrossFilter, cellVal),
+                        computeNextCrossFilterSelection(activeCrossFilter, scalarVal),
                       )
                     }
                     return

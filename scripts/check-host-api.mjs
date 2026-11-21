@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import { existsSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { join, resolve } from 'node:path'
 
 function resolveAsarPath() {
   if (process.env.DSH_ASAR_PATH) return process.env.DSH_ASAR_PATH
@@ -105,11 +105,34 @@ for (const slot of REQUIRED_SLOTS) {
   }
 }
 
+const srcRoot = resolve(import.meta.dirname, '../src')
+const usedAliasTokens = new Set()
+const scanSourceForTokens = (dir) => {
+  for (const ent of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, ent.name)
+    if (ent.isDirectory()) {
+      scanSourceForTokens(full)
+    } else if (/\.(?:css|ts|tsx)$/.test(ent.name)) {
+      const text = readFileSync(full, 'utf8')
+      for (const m of text.matchAll(/--dsw-alias-[a-z0-9-]+/g)) {
+        usedAliasTokens.add(m[0])
+      }
+    }
+  }
+}
+scanSourceForTokens(srcRoot)
+
+for (const token of [...usedAliasTokens].sort()) {
+  if (!raw.includes(token)) {
+    errors.push(`unknown host CSS token "${token}" not found in app.asar`)
+  }
+}
+
 if (errors.length > 0) {
   console.error(`[check-host-api] FAILED against ${ASAR_PATH}:\n  - ${errors.join('\n  - ')}`)
   process.exit(1)
 }
 
 console.log(
-  `[check-host-api] OK: verified ${REQUIRED_PLATFORM_MODULES.length} platform modules, ${REQUIRED_PRIMITIVE_EXPORTS.length} primitives, and ${REQUIRED_SLOTS.length} slots against ${ASAR_PATH}.`,
+  `[check-host-api] OK: verified ${REQUIRED_PLATFORM_MODULES.length} platform modules, ${REQUIRED_PRIMITIVE_EXPORTS.length} primitives, ${REQUIRED_SLOTS.length} slots, and ${usedAliasTokens.size} CSS alias tokens against ${ASAR_PATH}.`,
 )

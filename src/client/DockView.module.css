@@ -105,5 +105,6 @@
   padding: 4px 14px 16px;
   max-height: 300px;
   overflow-y: auto;
+  scroll-padding-bottom: 16px;
   border-top: 0.5px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.14));
 }

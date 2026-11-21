@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import { notifySubscribers } from './notify.ts'
 
 export const DARK_ATTR = 'data-ds-dark-theme'
 
@@ -10,9 +11,7 @@ const themeListeners = new Set<() => void>()
 let sharedThemeObserver: MutationObserver | null = null
 
 function notifyThemeListeners(): void {
-  for (const listener of themeListeners) {
-    listener()
-  }
+  notifySubscribers(themeListeners, 'Theme')
 }
 
 export function subscribeDarkTheme(listener: () => void): () => void {

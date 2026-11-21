@@ -107,7 +107,10 @@ function isStringLikeConcatTerm(term: string): boolean {
   )
 }
 
-function rewriteInnerBracketsForConcat(src: string): string {
+const MAX_PREPROCESS_DEPTH = 64
+
+function rewriteInnerBracketsForConcat(src: string, depth: number): string {
+  if (depth >= MAX_PREPROCESS_DEPTH) return src
   let out = ''
   let quote: '"' | "'" | null = null
   let i = 0
@@ -136,7 +139,7 @@ function rewriteInnerBracketsForConcat(src: string): string {
       if (closeIdx !== -1) {
         const inner = src.slice(i + 1, closeIdx)
         const transformed = splitTopLevel(inner, ',')
-          .map((item) => transformConcatChunk(item, ch === '{' ? ':' : '='))
+          .map((item) => transformConcatChunk(item, ch === '{' ? ':' : '=', depth + 1))
           .join(',')
         out += `${ch}${transformed}${close}`
         i = closeIdx + 1
@@ -149,26 +152,28 @@ function rewriteInnerBracketsForConcat(src: string): string {
   return out
 }
 
-function transformConcatChunk(chunk: string, kvSep: '=' | ':'): string {
+function transformConcatChunk(chunk: string, kvSep: '=' | ':', depth: number): string {
+  if (depth >= MAX_PREPROCESS_DEPTH) return chunk
   const sepIdx = findTopLevelChar(chunk, kvSep)
   if (sepIdx !== -1) {
     const lhs = chunk.slice(0, sepIdx + 1)
     const rhs = chunk.slice(sepIdx + 1)
     if (kvSep === '=' && (chunk[sepIdx + 1] === '=' || /[!<>]/.test(chunk[sepIdx - 1] ?? ''))) {
-      return transformConcatRhs(chunk)
+      return transformConcatRhs(chunk, depth)
     }
-    return `${lhs}${transformConcatRhs(rhs)}`
+    return `${lhs}${transformConcatRhs(rhs, depth)}`
   }
-  return transformConcatRhs(chunk)
+  return transformConcatRhs(chunk, depth)
 }
 
-function transformConcatRhs(rhs: string): string {
+function transformConcatRhs(rhs: string, depth: number): string {
+  if (depth >= MAX_PREPROCESS_DEPTH) return rhs
   const lead = /^\s*/.exec(rhs)?.[0] ?? ''
   const trail = /\s*$/.exec(rhs)?.[0] ?? ''
   const core = rhs.trim()
   if (core === '') return rhs
 
-  const withInner = rewriteInnerBracketsForConcat(core)
+  const withInner = rewriteInnerBracketsForConcat(core, depth)
   const terms = splitTopLevel(withInner, '+')
   if (
     terms.length >= 2 &&
@@ -183,7 +188,7 @@ function transformConcatRhs(rhs: string): string {
 export function desugarExpressConcat(ui: string): string {
   if (!ui.includes('+')) return ui
   return splitTopLevel(ui, '\n')
-    .map((stmt) => transformConcatChunk(stmt, '='))
+    .map((stmt) => transformConcatChunk(stmt, '=', 0))
     .join('\n')
 }
 
@@ -280,14 +285,18 @@ export function foldNestedCondToLookup(ui: string): string {
       continue
     }
     if (ui.startsWith('cond(', i) && (i === 0 || !/[A-Za-z0-9_$]/.test(ui[i - 1]!))) {
-      const closeIdx = findMatchingClose(ui, i + 4, '(', ')')
-      if (closeIdx !== -1) {
-        const call = ui.slice(i, closeIdx + 1)
-        const folded = tryFoldCondChain(call)
-        if (folded !== null) {
-          out += folded
-          i = closeIdx + 1
-          continue
+      let argStart = i + 5
+      while (argStart < ui.length && /\s/.test(ui[argStart]!)) argStart += 1
+      if (ui.startsWith('eq(', argStart)) {
+        const closeIdx = findMatchingClose(ui, i + 4, '(', ')')
+        if (closeIdx !== -1) {
+          const call = ui.slice(i, closeIdx + 1)
+          const folded = tryFoldCondChain(call)
+          if (folded !== null) {
+            out += folded
+            i = closeIdx + 1
+            continue
+          }
         }
       }
     }

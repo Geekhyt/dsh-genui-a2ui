@@ -232,6 +232,50 @@ describe('v0.4.2 Review Remediation (H-01..H-08 & Visual Polish)', () => {
         context: { custom: '998877' },
       }),
     ).toEqual({})
+
+    const approvalSurface = {
+      id: 'approval_form',
+      componentsModel: {
+        entries: new Map([
+          [
+            'tf_pin',
+            { type: 'TextField', properties: { variant: 'obscured', value: { path: '/pin/' } } },
+          ],
+          [
+            'card_approve',
+            {
+              type: 'ApprovalCard',
+              properties: {
+                approveAction: {
+                  event: {
+                    name: 'approve_deploy',
+                    context: { confirmCode: { path: '/pin' }, env: 'prod' },
+                  },
+                },
+                rejectAction: {
+                  event: {
+                    name: 'reject_deploy',
+                    context: { reason: 'manual' },
+                  },
+                },
+              },
+            },
+          ],
+        ]),
+      },
+      dataModel: {
+        get: (p: string) => (p === '/pin' ? '12' : 'prod'),
+      },
+    }
+    expect(
+      sanitizeActionContextForSurface(approvalSurface as never, {
+        name: 'approve_deploy',
+        surfaceId: 'approval_form',
+        sourceComponentId: 'card_approve',
+        timestamp: '2026-11-21T00:00:00Z',
+        context: { confirmCode: '12', env: 'prod' },
+      }),
+    ).toEqual({ env: 'prod' })
   })
 
   it('H-04: formatTableToCsv neutralizes signed/whitespace formula injection while preserving pure signed numbers', () => {

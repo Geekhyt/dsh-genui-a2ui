@@ -28,13 +28,16 @@ import {
   SurfaceValidationContext,
   type SurfaceValidationContextValue,
 } from './catalog/widget-helpers.tsx'
-import { useStreamingHeightStabilizer } from './dom-hooks.ts'
+import { useStreamingHeightStabilizer, useSurfaceStoreSync } from './dom-hooks.ts'
 import { ErrorBoundary } from './ErrorBoundary.tsx'
 import { FileOpenContext, type WorkspaceFileOpener } from './file-opener.tsx'
 import { useRuntimeMessages } from './i18n.ts'
+import { notifySubscribers } from './notify.ts'
 import {
   computeMessagesFingerprint,
+  isPointerObscuredOrParent,
   loadSurfaceDraft,
+  normalizePointerPath,
   removeSurfaceDraft,
   sanitizeDataModel,
   saveSurfaceDraft,
@@ -114,27 +117,6 @@ export function readSanitizedDataModels(
   return result
 }
 
-function normalizePointer(raw: string): string {
-  const trimmed = raw.trim()
-  if (trimmed === '') return ''
-  const withSlash = trimmed.startsWith('/') ? trimmed : `/${trimmed}`
-  return withSlash.length > 1 ? withSlash.replace(/\/+$/, '') : withSlash
-}
-
-function isPointerObscuredOrParent(
-  pointer: string,
-  obscuredPointers: ReadonlySet<string>,
-): boolean {
-  const norm = normalizePointer(pointer)
-  if (norm === '') return false
-  for (const obs of obscuredPointers) {
-    if (norm === obs || obs.startsWith(`${norm}/`) || norm.startsWith(`${obs}/`)) {
-      return true
-    }
-  }
-  return false
-}
-
 function stripObscuredFromContext(
   value: unknown,
   rawBinding: unknown,
@@ -210,19 +192,35 @@ export function sanitizeActionContextForSurface(
           const rawPath =
             (val as { path?: unknown; '@path'?: unknown }).path ??
             (val as { '@path'?: unknown })['@path']
-          if (typeof rawPath === 'string') {
-            const norm = normalizePointer(rawPath)
-            if (norm !== '') obscuredPointers.add(norm)
+          if (typeof rawPath === 'string' && rawPath.trim() !== '') {
+            obscuredPointers.add(normalizePointerPath(rawPath))
           }
         }
       }
       if (id === action.sourceComponentId && action.sourceComponentId !== '') {
-        const actionProp = comp.properties?.action as
-          | { event?: { context?: Record<string, unknown> }; context?: Record<string, unknown> }
-          | undefined
-        const candidate = actionProp?.event?.context ?? actionProp?.context
-        if (candidate && typeof candidate === 'object' && !Array.isArray(candidate)) {
-          rawActionCtx = candidate
+        const props = comp.properties as Record<string, unknown> | undefined
+        if (props) {
+          let exactMatch: Record<string, unknown> | undefined
+          let merged: Record<string, unknown> | undefined
+          for (const key of ['action', 'approveAction', 'rejectAction']) {
+            const actionProp = props[key] as
+              | {
+                  event?: { name?: unknown; context?: Record<string, unknown> }
+                  name?: unknown
+                  context?: Record<string, unknown>
+                }
+              | undefined
+            if (!actionProp || typeof actionProp !== 'object') continue
+            const candidate = actionProp.event?.context ?? actionProp.context
+            if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) continue
+            const eventName = actionProp.event?.name ?? actionProp.name
+            if (typeof eventName === 'string' && eventName === action.name) {
+              exactMatch = candidate
+              break
+            }
+            merged = merged === undefined ? { ...candidate } : { ...merged, ...candidate }
+          }
+          rawActionCtx = exactMatch ?? merged
         }
       }
     }
@@ -291,6 +289,7 @@ export class SurfaceSessionStore {
   private lastActionAt = 0
   private _generation = 0
   private mountedListeners = 0
+  private readonly externalListeners = new Set<() => void>()
   private readonly restoredDraftKeys = new Set<string>()
   private readonly draftSubs = new Map<
     SurfaceModel<ReactCatalogComponent>,
@@ -386,6 +385,8 @@ export class SurfaceSessionStore {
       readonly fingerprint: string
       readonly visibleSurfaceIds: ReadonlySet<string> | undefined
       readonly onAction: SurfaceActionCallback | undefined
+      readonly skipDraftIo?: boolean | undefined
+      readonly notify?: boolean | undefined
     },
   ): void {
     this.streaming = options.streaming
@@ -401,6 +402,7 @@ export class SurfaceSessionStore {
       messages.length >= prevCount &&
       prev.every((msg, idx) => idx >= prevCount || messages[idx] === msg)
 
+    let snapshotChanged = false
     if (!isExtension || messages.length > prevCount) {
       this.mutatingModel = true
       try {
@@ -424,14 +426,20 @@ export class SurfaceSessionStore {
         } else {
           this.appliedPrefix = messages
         }
-        this.refreshSurfacesSnapshot()
+        snapshotChanged = this.refreshSurfacesSnapshot()
       } finally {
         this.mutatingModel = false
       }
       this.syncDraftSubscriptions()
     }
 
-    if (!options.streaming && !options.readOnly && options.sessionId && options.fingerprint) {
+    if (
+      !options.skipDraftIo &&
+      !options.streaming &&
+      !options.readOnly &&
+      options.sessionId &&
+      options.fingerprint
+    ) {
       this.mutatingModel = true
       try {
         for (const surface of this.surfacesSnapshot) {
@@ -463,10 +471,15 @@ export class SurfaceSessionStore {
         this.mutatingModel = false
       }
     }
+
+    if (options.notify && snapshotChanged) {
+      notifySubscribers(this.externalListeners, 'Surface')
+    }
   }
 
   readonly subscribe = (listener: () => void): (() => void) => {
     this.mountedListeners += 1
+    this.externalListeners.add(listener)
     this.syncDraftSubscriptions()
     const notifyIfChanged = () => {
       this.syncDraftSubscriptions()
@@ -479,6 +492,7 @@ export class SurfaceSessionStore {
     return () => {
       subCreate.unsubscribe()
       subDelete.unsubscribe()
+      this.externalListeners.delete(listener)
       this.mountedListeners = Math.max(0, this.mountedListeners - 1)
       if (this.mountedListeners === 0) {
         this.clearDraftSubscriptions()
@@ -512,14 +526,30 @@ export const SurfaceGroupView = memo(function SurfaceGroupView({
     [messages, streaming, sessionId],
   )
 
-  store.reconcile(messages, {
-    streaming,
-    readOnly,
-    sessionId,
-    fingerprint,
-    visibleSurfaceIds,
-    onAction,
-  })
+  if (typeof window === 'undefined') {
+    store.reconcile(messages, {
+      streaming,
+      readOnly,
+      sessionId,
+      fingerprint,
+      visibleSurfaceIds,
+      onAction,
+      skipDraftIo: true,
+      notify: false,
+    })
+  }
+
+  useSurfaceStoreSync(() => {
+    store.reconcile(messages, {
+      streaming,
+      readOnly,
+      sessionId,
+      fingerprint,
+      visibleSurfaceIds,
+      onAction,
+      notify: true,
+    })
+  }, [store, messages, streaming, readOnly, sessionId, fingerprint, visibleSurfaceIds, onAction])
 
   const surfaces = useSyncExternalStore(store.subscribe, store.getSurfaces, store.getServerSurfaces)
 

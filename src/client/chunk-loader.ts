@@ -1,6 +1,7 @@
 import type * as EchartsChunk from './chunks/echarts-chunk.ts'
 import type * as MermaidChunk from './chunks/mermaid-chunk.ts'
 import type * as RuntimeChunk from './chunks/runtime-chunk.ts'
+import { notifySubscribers } from './notify.ts'
 import { isPluginStylesMounted } from './style-lifecycle.ts'
 
 declare const __DSH_BUNDLED_CLIENT__: boolean | undefined
@@ -14,16 +15,6 @@ export type MermaidChunkModule = typeof MermaidChunk
 
 export const CHART_LOAD_ERROR_SENTINEL = '__CHART_LOAD_FAILED__'
 export const MERMAID_RENDER_ERROR_SENTINEL = '__MERMAID_RENDER_FAILED__'
-
-function notifySet(listeners: ReadonlySet<() => void>): void {
-  for (const fn of listeners) {
-    try {
-      fn()
-    } catch (err) {
-      console.error('[dsh-genui-a2ui] Chunk store subscriber error:', err)
-    }
-  }
-}
 
 let runtimeModuleSync: RuntimeChunkModule | null = null
 let runtimePromise: Promise<RuntimeChunkModule> | null = null
@@ -51,7 +42,7 @@ export function loadRuntimeChunk(): Promise<RuntimeChunkModule> {
       (mod) => {
         runtimeModuleSync = mod
         if (isPluginStylesMounted()) mod.ensureA2uiRuntimeStyles()
-        notifySet(runtimeListeners)
+        notifySubscribers(runtimeListeners, 'Chunk store')
         return mod
       },
       (err) => {
@@ -114,14 +105,14 @@ export function loadEchartsChunk(): Promise<EchartsChunkModule> {
       (mod) => {
         echartsModuleSync = mod
         echartsSnapshot = Object.freeze({ chunk: mod, error: null })
-        notifySet(echartsListeners)
+        notifySubscribers(echartsListeners, 'Chunk store')
         return mod
       },
       (err: unknown) => {
         echartsPromise = null
         const errMsg = err instanceof Error && err.message ? err.message : CHART_LOAD_ERROR_SENTINEL
         echartsSnapshot = Object.freeze({ chunk: null, error: errMsg })
-        notifySet(echartsListeners)
+        notifySubscribers(echartsListeners, 'Chunk store')
         throw err
       },
     )
@@ -193,7 +184,7 @@ function storeMermaidSnapshot(key: string, snapshot: MermaidDiagramSnapshot): vo
     mermaidDiagramCache.delete(oldest.value)
   }
   const listeners = mermaidListenersByKey.get(key)
-  if (listeners) notifySet(listeners)
+  if (listeners) notifySubscribers(listeners, 'Chunk store')
 }
 
 export function loadMermaidChunk(): Promise<MermaidChunkModule> {

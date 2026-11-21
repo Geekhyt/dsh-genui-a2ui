@@ -124,6 +124,43 @@ function configureMermaidForHost(dark: boolean, target?: HTMLElement | null): vo
   })
 }
 
+const FORBID_SVG_TAGS = [
+  'script',
+  'iframe',
+  'object',
+  'embed',
+  'applet',
+  'form',
+  'input',
+  'textarea',
+  'button',
+  'meta',
+  'link',
+  'base',
+  'img',
+  'audio',
+  'video',
+  'animate',
+  'set',
+]
+
+function scopeMermaidStyleRules(svg: string, rootId: string): string {
+  const expectedPrefix = `#${rootId}`
+  return svg.replace(/<style\b[^>]*>([\s\S]*?)<\/style>/gi, (full, body: string) => {
+    const trimmed = body.trim()
+    if (trimmed === '') return ''
+    if (
+      /@import\b|expression\s*\(|javascript\s*:|url\s*\(\s*['"]?\s*(?:https?:|data:|javascript:)/i.test(
+        trimmed,
+      )
+    ) {
+      return ''
+    }
+    if (!trimmed.includes(expectedPrefix)) return ''
+    return full
+  })
+}
+
 async function renderIntoOffscreen(id: string, source: string): Promise<string> {
   const container = document.createElement('div')
   container.style.position = 'fixed'
@@ -134,14 +171,19 @@ async function renderIntoOffscreen(id: string, source: string): Promise<string> 
   document.body?.appendChild(container)
   try {
     const { svg } = await mermaid.render(id, source, container)
-    const cleanSvg =
-      typeof DOMPurify?.sanitize === 'function'
-        ? DOMPurify.sanitize(svg, {
-            ADD_TAGS: ['foreignObject', 'foreignobject'],
-            ADD_ATTR: ['dominant-baseline'],
-            HTML_INTEGRATION_POINTS: { foreignobject: true },
-          })
-        : svg
+    if (typeof DOMPurify?.sanitize !== 'function') {
+      throw new Error('DOMPurify sanitizer unavailable; refusing to render unsanitized Mermaid SVG')
+    }
+    const cleanSvg = scopeMermaidStyleRules(
+      DOMPurify.sanitize(svg, {
+        ADD_TAGS: ['foreignObject', 'foreignobject'],
+        ADD_ATTR: ['dominant-baseline'],
+        FORBID_TAGS: FORBID_SVG_TAGS,
+        ALLOW_UNKNOWN_PROTOCOLS: false,
+        HTML_INTEGRATION_POINTS: { foreignobject: true },
+      }),
+      id,
+    )
     assertSafeSvg(cleanSvg)
     return cleanSvg
   } finally {

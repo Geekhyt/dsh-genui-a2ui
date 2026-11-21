@@ -1,10 +1,17 @@
 import { A2uiError, type AgentToRendererMessage } from '@a2ui/agent'
+import { z } from 'zod'
 import { A2UI_LIMITS } from '../shared/catalog-schema.ts'
 import { isDangerousObjectKey, isSecretKey } from '../shared/constants.ts'
 import { HOST_MESSAGES, resolveHostLocale } from '../shared/i18n.ts'
 import type { AskAnswerInput, AskMeta } from '../shared/wire-types.ts'
 import { ASK_TOOL, type SurfaceSessions } from './generator.ts'
-import { isSubagentCall, sessionIdOf, surfaceIdsOf, type ToolExec } from './render-tool.ts'
+import {
+  isSubagentCall,
+  sessionIdOf,
+  surfaceIdsOf,
+  type ToolExec,
+  unwrapLegacyToolArgs,
+} from './render-tool.ts'
 
 export type { AskAnswerInput, AskMeta }
 
@@ -234,42 +241,55 @@ const ASK_PARAMETERS = {
   additionalProperties: false,
 } as const
 
+const AskArgsSchema = z
+  .object({
+    ui: z.string(),
+    title: z.union([z.string(), z.null()]).optional(),
+    timeout: z.unknown().optional(),
+  })
+  .passthrough()
+
+let warnedLegacyAskBridgeArgs = false
+
+function warnLegacyAskBridgeEncoding(reason: string): void {
+  if (warnedLegacyAskBridgeArgs) return
+  warnedLegacyAskBridgeArgs = true
+  console.warn(
+    `[dsh-genui-a2ui] Unwrapped non-standard a2ui_ask arguments (${reason}); upstream tool bridge should pass a JSON object.`,
+  )
+}
+
+export function resetAskArgsWarningForTests(): void {
+  warnedLegacyAskBridgeArgs = false
+}
+
 export function readAskArgs(args: unknown): {
   ui: string | undefined
   title: string | undefined
   timeout: number
 } {
-  let value: unknown = args
-  for (let i = 0; i < 3; i++) {
-    if (typeof value === 'string') {
-      try {
-        value = JSON.parse(value)
-      } catch {
-        return { ui: value as string, title: undefined, timeout: DEFAULT_ASK_TIMEOUT_SECONDS }
-      }
-      continue
-    }
-    if (typeof value === 'object' && value !== null && 'arguments' in value && !('ui' in value)) {
-      value = (value as { arguments: unknown }).arguments
-      continue
-    }
-    break
+  const { value, rawUiFallback } = unwrapLegacyToolArgs(args, warnLegacyAskBridgeEncoding)
+  if (rawUiFallback !== undefined) {
+    return { ui: rawUiFallback, title: undefined, timeout: DEFAULT_ASK_TIMEOUT_SECONDS }
   }
-  if (typeof value !== 'object' || value === null) {
+  const parsed = AskArgsSchema.safeParse(value)
+  if (!parsed.success) {
     return { ui: undefined, title: undefined, timeout: DEFAULT_ASK_TIMEOUT_SECONDS }
   }
-  const record = value as Record<string, unknown>
   let timeout = DEFAULT_ASK_TIMEOUT_SECONDS
-  if (typeof record.timeout === 'number' && Number.isInteger(record.timeout)) {
-    if (record.timeout === -1 || (record.timeout >= 1 && record.timeout <= MAX_TIMEOUT_SECONDS)) {
-      timeout = record.timeout
+  if (typeof parsed.data.timeout === 'number' && Number.isInteger(parsed.data.timeout)) {
+    if (
+      parsed.data.timeout === -1 ||
+      (parsed.data.timeout >= 1 && parsed.data.timeout <= MAX_TIMEOUT_SECONDS)
+    ) {
+      timeout = parsed.data.timeout
     }
   }
   return {
-    ui: typeof record.ui === 'string' ? record.ui : undefined,
+    ui: parsed.data.ui,
     title:
-      typeof record.title === 'string' && record.title.trim() !== ''
-        ? record.title.trim()
+      typeof parsed.data.title === 'string' && parsed.data.title.trim() !== ''
+        ? parsed.data.title.trim()
         : undefined,
     timeout,
   }

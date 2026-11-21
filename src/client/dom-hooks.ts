@@ -182,8 +182,8 @@ export function useMermaidViewportDom(params: {
         onCloseFullscreenRef.current()
       }
     }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
+    window.addEventListener('keydown', onKeyDown, { capture: true })
+    return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
   }, [activeFullscreen])
 
   useIsomorphicLayoutEffect(() => {
@@ -303,4 +303,12 @@ export function useStreamingHeightStabilizer(
       }
     }
   }, [hostRef, streaming])
+}
+
+export function useSurfaceStoreSync(sync: () => void, deps: readonly unknown[]): void {
+  const syncRef = useRef(sync)
+  syncRef.current = sync
+  useIsomorphicLayoutEffect(() => {
+    syncRef.current()
+  }, deps)
 }

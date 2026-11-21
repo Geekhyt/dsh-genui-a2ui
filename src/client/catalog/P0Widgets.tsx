@@ -106,7 +106,7 @@ export const DshDiffViewImpl = defineComponent<{
             </tbody>
           </table>
         ) : (
-          <table className={css.diffTable}>
+          <table className={`${css.diffTable} ${css.diffSplitTable}`}>
             <tbody>
               {splitRows.map((row, i) => (
                 <tr key={i} className={css.diffSplitTr}>

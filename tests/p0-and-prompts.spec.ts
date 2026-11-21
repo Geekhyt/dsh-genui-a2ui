@@ -92,7 +92,7 @@ describe('Prompt optimizations & cross-restart update=true hydration', () => {
     const sessions = new SurfaceSessions(createGenerator())
     const snippet = sessions.promptSnippet()
     expect(snippet).not.toContain('Slavic languages')
-    expect(snippet).toContain('pluralize(value, other, one?, zero?)')
+    expect(snippet).toContain('pluralize(value, zero?, one?, two?, few?, many?, other)')
     expect(SKILL_DESCRIPTION.length).toBeLessThan(400)
     expect(SKILL_DESCRIPTION).toContain('only load when a2ui_render or a2ui_ask is available')
     expect(SKILL_PREAMBLE).toContain('ask_user_question')

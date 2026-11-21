@@ -1,3 +1,5 @@
+import { safeStringifyJson } from '../../shared/constants.ts'
+
 export type TrackerSliceStatus = 'ok' | 'warning' | 'error' | 'unknown'
 export type TrackerSegmentTone = 'brand' | 'success' | 'warning' | 'danger' | 'neutral'
 
@@ -255,9 +257,9 @@ export function buildEndpointCurl(params: {
 }): string {
   const origin = (params.baseUrl?.trim() || 'https://api.example.com').replace(/\/+$/, '')
   const cleanPath = params.path.startsWith('/') ? params.path : `/${params.path}`
-  const parts: string[] = [
-    `curl -X ${params.method.toUpperCase()} ${shellEscapeSingle(`${origin}${cleanPath}`)}`,
-  ]
+  const rawMethod = typeof params.method === 'string' ? params.method.trim().toUpperCase() : 'GET'
+  const safeMethod = /^[A-Z]+$/.test(rawMethod) ? rawMethod : 'GET'
+  const parts: string[] = [`curl -X ${safeMethod} ${shellEscapeSingle(`${origin}${cleanPath}`)}`]
 
   if (Array.isArray(params.headers)) {
     for (const item of params.headers) {
@@ -602,8 +604,14 @@ export interface ProTableColumnDescriptor {
 const PURE_SIGNED_NUMBER_RE = /^[+-]?\d+(?:\.\d+)?$/
 const CSV_FORMULA_PREFIX_RE = /^[\s\r\n]*[=+\-@\t\r]/
 
+function formatScalarOrJsonCell(raw: unknown): string {
+  if (raw === undefined || raw === null) return ''
+  if (typeof raw === 'object') return safeStringifyJson(raw, 0)
+  return String(raw)
+}
+
 function escapeCsvCell(raw: unknown): string {
-  const rawStr = raw === undefined || raw === null ? '' : String(raw)
+  const rawStr = formatScalarOrJsonCell(raw)
   const s =
     CSV_FORMULA_PREFIX_RE.test(rawStr) && !PURE_SIGNED_NUMBER_RE.test(rawStr)
       ? `'${rawStr}`
@@ -629,7 +637,7 @@ export function formatTableToMarkdown(
   numericKeys?: ReadonlySet<string>,
 ): string {
   const escMd = (v: unknown) =>
-    (v === undefined || v === null ? '' : String(v)).replace(/\|/g, '\\|').replace(/\r?\n/g, ' ')
+    formatScalarOrJsonCell(v).replace(/\|/g, '\\|').replace(/\r?\n/g, ' ')
   const head = `| ${columns.map((c) => escMd(c.label)).join(' | ')} |`
   const sep = `| ${columns.map((c) => (numericKeys?.has(c.key) ? '---:' : ':---')).join(' | ')} |`
   const body = rows.map((row) => `| ${columns.map((c) => escMd(row[c.key])).join(' | ')} |`)

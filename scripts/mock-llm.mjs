@@ -191,7 +191,7 @@ export const SHOWCASE_EXECUTIVE_UI = [
   '  Stat("单次会话推理成本", "¥ 0.14", delta="-31.0%", trend="up", spark=[0.24, 0.22, 0.20, 0.18, 0.16, 0.15, 0.14], caption="Prompt 缓存命中 76%", weight=1)',
   '], align="stretch")',
   'overviewPane = Row([',
-  '  Chart("sankey", $/flow, xField="source", seriesField="target", yField="value", title="四阶全链路转化流向（获客 -> 激活 -> 协同 -> 变现）", height=275, weight=16),',
+  '  Chart("sankey", $/flow, xField="source", seriesField="target", yField="value", title="四阶全链路转化流向（获客 → 激活 → 协同 → 变现）", height=275, weight=16),',
   '  Chart("radar", $/health, xField="metric", yField=["Q3 实绩", "Q2 基准"], title="增长质量五维健康度对比", height=275, weight=10)',
   '], align="stretch")',
   'mainTabs = Tabs([',
@@ -1766,7 +1766,9 @@ export function startMockLlmServer(port = PORT) {
                                                                 ? '已在工具步骤流内嵌渲染诊断摘要。'
                                                                 : isDashboard
                                                                   ? '已为您生成 2026 区域经营交互看板（示例数据），可切换图表、搜索排序明细表或一键调整预测情景。'
-                                                                  : '已为您准备好餐厅预订交互卡片，您可直接在下方调整人数、口味或包间选项后点击确认。'
+                                                                  : userText.includes('test-error')
+                                                                    ? '初稿校验触发编译器诊断自愈，已自动将非法组件修正为标准组件并完成渲染。'
+                                                                    : '已为您准备好餐厅预订交互卡片，您可直接在下方调整人数、口味或包间选项后点击确认。'
       await streamTextReply(res, model, reply)
       return
     }

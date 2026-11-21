@@ -2,6 +2,33 @@
 
 All notable changes to `dsh-genui-a2ui` are documented in this file.
 
+## [0.4.3] - 2026-11-21
+
+### Fixed
+- **Security & DoS Hardening (`mermaid-safe.ts`, `mermaid-chunk.ts`, `file-opener.tsx`, `v4-helpers.ts`, `constants.ts`, `generator.ts`, `express-preprocess.ts`)**:
+  - **Mermaid Fail-Closed SVG Sanitization & Light DOM Isolation**: Hardened `assertSafeSvg` against HTML named entity URI bypasses (`javascript&colon;`), `data:image/svg+xml`, SMIL `<animate>`/`<set>` href/event mutations, and unscoped `<style>` blocks; updated `stripUnsafeDirectives` to strip repeated leading YAML frontmatter blocks, and failed closed if DOMPurify cannot load.
+  - **Workspace File Opener & cURL Sanitization**: Blocked path traversal (`..`), UNC/network shares (`\\...`, `//...`), control characters, and arbitrary URI schemes in `parseFileTarget`; whitelisted HTTP methods in `buildEndpointCurl` to prevent command injection.
+  - **Acronym Secret Redaction & Linear ReDoS/Amplification Guards**: Upgraded `isSecretKey` to split uppercase acronyms (`SSHKey`, `MFAToken`, `HTTPAuthorization`, `APISECRET`) without false-positiving benign metrics (`tokenBudget`, `pinToDock`); rewrote `stripWrapping` to run in linear time while unwrapping fences around `<a2ui>`; bounded recursion depth in `express-preprocess.ts` and added total compiled byte-budget enforcement in `validateCompiledLimits` against variable-expansion payload amplification.
+- **Runtime Correctness, React 18 Purity & Prompt Parity (`SurfaceView.tsx`, `dom-hooks.ts`, `AskToolView.tsx`, `EnterpriseWidgets.tsx`, `persistence.ts`, `calc-engine.ts`, `prompt-compact.ts`, `src/index.ts`)**:
+  - Moved `SurfaceSessionStore.reconcile` out of render into `useSurfaceStoreSync` (`src/client/dom-hooks.ts`) to keep React 18 concurrent rendering pure while honoring the zero-`useEffect`-in-`.tsx` contract.
+  - Fixed `a2ui_ask` and `ApprovalCard` submission deadlock recovery on dispatch failure, `localStorage` quota fallback consistency + `Object.hasOwn` guards against `Object.prototype` keys, `calc-engine` user `E`/`PI` bindings + `-0`/high-`nper` `pmt()` stability, and 5 prompt/skill positional signature mismatches (`pluralize`, `Stat`, `KeyValue`, `DiffView`).
+  - Added non-array defensive guards across `LayoutWidgets`, `InputWidgets`, `ExtendedWidgets`, `OpsAndInsightWidgets`, and `TableWidget`.
+- **ECharts Data Integrity & 306px/276px Dual-Theme Visual QA (`echarts-chunk.ts`, `EChartsWidget.tsx`, `NativeDateField.tsx`, `Catalog.module.css`, `primitives.tsx`, `scripts/check-host-api.mjs`)**:
+  - Fixed `waterfall` zero-crossing bar stacking, `radar` small-value indicator scaling, `graph` node ID deduplication, `seriesField` duplicate-key summation, and exact cross-filter matching (including nested `sunburst`/`treemap` branch highlighting).
+  - Unified `buildLegendOption` + CJK/ASCII visual-width truncation (`truncateByVisualWidth`) across all 7 ECharts legend builders and `buildReferenceMarkLine(..., isCompact)` across all 6 call sites, eliminating `276px` funnel legend clipping; normalized `' -> '` to `' → '` in `EChartsWidget.sanitizeInlineText`.
+  - Extracted shared pure-React `NativeDateField` (`src/client/catalog/NativeDateField.tsx`) with theme-aware SVG calendar/clock trigger buttons (`showPicker?.()`) for both `DateTimeInput` and `DateRange`.
+  - Fixed `DiffView` split-mode right-column truncation via `.diffSplitTable { table-layout: fixed }` + `@container (max-width: 720px)` wrapping and expanded `AskToolView` scroll clearance (`min(480px, 56vh)` + `scroll-padding-bottom: 16px`).
+  - Replaced all 18 non-existent `--dsw-alias-status-*` and 23 non-existent `--dsw-alias-state-info-primary` CSS tokens with verified DeepSeek Harness alias tokens (`--dsw-alias-state-{success,warn,error,business}-primary`, fixing Dark Mode white-on-white `POST` badge / `CheckCard` contrast regression); extended `scripts/check-host-api.mjs` to validate all 26 `--dsw-alias-*` tokens against the installed `app.asar` and added an automated CSS Dark Mode contrast guard.
+- **Cross-Module Generalization Consolidation (G1–G5)**:
+  - **G1**: Extracted shared `unwrapLegacyToolArgs` from `src/host/render-tool.ts` and upgraded `readAskArgs` in `src/host/ask-tool.ts` to share Zod validation, `{ arguments }` / stringified JSON unwrapping, and once-per-process legacy warnings.
+  - **G2**: Unified `normalizePointerPath` (stripping trailing `/`), `isPointerObscured`, and `isPointerObscuredOrParent` in `src/client/persistence.ts` and reused them in `src/client/SurfaceView.tsx`, extending `sanitizeActionContextForSurface` to inspect `approveAction` and `rejectAction` on `ApprovalCard`.
+  - **G3**: Added shared `notifySubscribers` (`src/client/notify.ts`) replacing duplicate subscriber notification loops across `theme.ts`, `i18n.ts`, `persistence.ts`, `chunk-loader.ts`, and `SurfaceView.tsx`.
+  - **G4**: Promoted circular/BigInt-safe `safeStringifyJson` into `src/shared/constants.ts`, fixing `[object Object]` output in `ProTable` CSV and Markdown exports.
+  - **G5**: Unified `sanitizeInlineUrlText` (stripping `javascript:`/`data:` as well as `http(s)/image://`) across `EChartsWidget.tsx` and `echarts-chunk.ts`, and hardened `session/disposed` cleanup in `src/index.ts` against null/header-only session payloads.
+
+### Changed
+- Added `tests/review-v043-hardening.spec.ts` and expanded `tests/review-v042-fixes.spec.ts`, bringing Vitest coverage to **27 suites / 140 tests** (`lib/client.js = 61.05 kB / 17.26 kB gzip`, `0` Biome/Lint/Comments/TS diagnostics, `check:host-api` verifying 12 modules, 27 primitives, 5 slots, and 26 CSS alias tokens).
+
 ## [0.4.2] - 2026-11-21
 
 ### Fixed

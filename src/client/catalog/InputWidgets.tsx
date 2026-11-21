@@ -52,6 +52,7 @@ import {
   defineComponent,
   InsideButtonContext,
   ModalCloseContext,
+  NativeDateField,
   renderChildRef,
   SurfaceReadOnlyContext,
   SurfaceValidationContext,
@@ -287,7 +288,17 @@ export const DshChoicePickerImpl = defineComponent<{
     [props.value],
   )
   const selectedSet = useMemo(() => new Set(selected), [selected])
-  const options = props.options ?? []
+  const options = useMemo(
+    () =>
+      Array.isArray(props.options)
+        ? props.options
+            .filter((o): o is { readonly label?: unknown; readonly value?: unknown } =>
+              Boolean(o && typeof o === 'object'),
+            )
+            .map((o) => ({ label: o.label, value: String(o.value ?? '') }))
+        : [],
+    [props.options],
+  )
   const filtered = useMemo(() => {
     const q = deferredQuery.trim().toLowerCase()
     if (!props.filterable || q === '') return options
@@ -466,12 +477,15 @@ export const DshDateTimeInputImpl = defineComponent<{
   const enableTime = Boolean(props.enableTime)
   const type = enableDate && enableTime ? 'datetime-local' : enableTime ? 'time' : 'date'
   const rawVal = typeof props.value === 'string' ? props.value : ''
+  const timeMatch = type === 'time' ? /T(\d{2}:\d{2})/.exec(rawVal) : null
   const normalizedVal =
     type === 'datetime-local'
       ? rawVal.replace(/Z$/, '').slice(0, 16)
       : type === 'date'
         ? rawVal.slice(0, 10)
-        : rawVal.slice(0, 5)
+        : timeMatch
+          ? timeMatch[1]
+          : rawVal.slice(0, 5)
   const label = props.label ? String(props.label) : ''
   const showError = !readOnly && (touched || submitAttempted) && props.isValid === false
   const err = showError ? props.validationErrors?.[0] : undefined
@@ -491,21 +505,23 @@ export const DshDateTimeInputImpl = defineComponent<{
         </div>
       ) : null}
       <div className={css.dateRow}>
-        <input
+        <NativeDateField
           id={inputId}
           type={type}
-          className={css.dateInput}
-          style={{ colorScheme: dark ? 'dark' : 'light' }}
+          dark={dark}
           value={normalizedVal}
           disabled={readOnly}
-          aria-invalid={showError || undefined}
+          ariaLabel={label || type}
+          ariaInvalid={showError || undefined}
           min={typeof props.min === 'string' ? props.min : undefined}
           max={typeof props.max === 'string' ? props.max : undefined}
+          wrapClassName={css.dateInputWrap}
+          inputClassName={css.dateInput}
+          buttonClassName={css.datePickerBtn}
           onBlur={() => setTouched(true)}
-          onChange={(e) => {
-            if (readOnly) return
+          onChange={(nextVal) => {
             setTouched(true)
-            props.setValue?.(e.target.value)
+            props.setValue?.(nextVal)
           }}
         />
       </div>

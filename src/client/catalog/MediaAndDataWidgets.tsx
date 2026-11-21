@@ -156,9 +156,9 @@ export function DshStatView({
   )
   const sparkColor =
     props.trend === 'up'
-      ? 'var(--dsw-alias-status-success, #10b981)'
+      ? 'var(--dsw-alias-state-success-primary, #10b981)'
       : props.trend === 'down'
-        ? 'var(--dsw-alias-status-danger, #ef4444)'
+        ? 'var(--dsw-alias-state-error-primary, #ef4444)'
         : 'var(--dsw-alias-brand-primary, #4d6bfe)'
 
   return (
