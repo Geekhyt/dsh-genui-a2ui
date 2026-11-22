@@ -64,10 +64,10 @@ import { createGenerator, SurfaceSessions } from '../src/host/generator.ts'
 import { CHART_KINDS, DSH_COMPONENT_APIS, dshSchemaCatalog } from '../src/shared/catalog-schema.ts'
 
 describe('Evolution v2–v5: 57-Component Catalog Parity & Scope Governance', () => {
-  it('registers exact 57 components across Host schema catalog and Client React catalog with zero banned features', () => {
-    expect(DSH_COMPONENT_APIS).toHaveLength(57)
-    expect(DSH_REACT_COMPONENTS).toHaveLength(57)
-    expect(CHART_KINDS).toHaveLength(19)
+  it('registers exact 64 components across Host schema catalog and Client React catalog with zero banned features', () => {
+    expect(DSH_COMPONENT_APIS).toHaveLength(64)
+    expect(DSH_REACT_COMPONENTS).toHaveLength(64)
+    expect(CHART_KINDS).toHaveLength(26)
 
     const schemaJson = dshSchemaCatalog.toJson()
     const schemaNames = Object.keys(schemaJson.components as Record<string, unknown>).sort()

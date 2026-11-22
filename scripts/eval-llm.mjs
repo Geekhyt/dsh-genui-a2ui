@@ -34,6 +34,9 @@ import {
   SHOWCASE_SRE_APM_UI,
   SHOWCASE_SRE_COMBO_CALENDAR_UI,
   SHOWCASE_STORE_OPS_UI,
+  SHOWCASE_V050_CHARTS_UI,
+  SHOWCASE_V050_UPGRADES_UI,
+  SHOWCASE_V050_WIDGETS_UI,
 } from './mock-llm.mjs'
 
 function parseArgs(argv) {
@@ -215,6 +218,15 @@ const MOCK_FIXTURES = {
     skills: ['a2ui-analytics'],
   },
   'cov-03-media-preview-form': { ui: SHOWCASE_ALL_FORMS_MEDIA_UI, skills: ['a2ui-forms'] },
+  'cov-04-v050-nextgen-charts': { ui: SHOWCASE_V050_CHARTS_UI, skills: ['a2ui-analytics'] },
+  'cov-05-v050-nextgen-widgets': {
+    ui: SHOWCASE_V050_WIDGETS_UI,
+    skills: ['a2ui-forms', 'a2ui-devops', 'a2ui-analytics'],
+  },
+  'cov-06-v050-inplace-upgrades': {
+    ui: SHOWCASE_V050_UPGRADES_UI,
+    skills: ['a2ui-devops', 'a2ui-analytics'],
+  },
 }
 
 async function runMockCase(testCase, strategy) {

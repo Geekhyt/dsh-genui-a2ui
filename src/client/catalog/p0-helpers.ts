@@ -20,6 +20,79 @@ export interface SplitDiffRow {
   readonly right?: DiffLineOp
 }
 
+export type DiffAnnotationTone = 'info' | 'warning' | 'danger' | 'success'
+
+export interface NormalizedDiffAnnotation {
+  readonly line: number
+  readonly side: 'before' | 'after'
+  readonly author?: string | undefined
+  readonly tone: DiffAnnotationTone
+  readonly message: string
+}
+
+export interface NormalizedDiffFile {
+  readonly path: string
+  readonly title: string
+  readonly before: string
+  readonly after: string
+  readonly language?: string | undefined
+  readonly line?: number | undefined
+  readonly annotations: readonly NormalizedDiffAnnotation[]
+}
+
+const VALID_ANNOTATION_TONES = new Set<string>(['info', 'warning', 'danger', 'success'])
+
+export function normalizeDiffAnnotations(raw: unknown): readonly NormalizedDiffAnnotation[] {
+  if (!Array.isArray(raw)) return []
+  const out: NormalizedDiffAnnotation[] = []
+  for (const item of raw) {
+    if (typeof item !== 'object' || item === null) continue
+    const rec = item as Record<string, unknown>
+    const lineNum = Number(rec.line)
+    if (!Number.isFinite(lineNum) || lineNum < 1) continue
+    const msg = String(rec.message ?? rec.text ?? rec.comment ?? '').trim()
+    if (msg === '') continue
+    const rawTone = typeof rec.tone === 'string' ? rec.tone.trim().toLowerCase() : 'info'
+    const tone: DiffAnnotationTone = VALID_ANNOTATION_TONES.has(rawTone)
+      ? (rawTone as DiffAnnotationTone)
+      : 'info'
+    out.push({
+      line: Math.trunc(lineNum),
+      side: rec.side === 'before' ? 'before' : 'after',
+      author:
+        rec.author !== undefined && rec.author !== null && String(rec.author).trim() !== ''
+          ? String(rec.author).trim()
+          : undefined,
+      tone,
+      message: msg,
+    })
+  }
+  return out
+}
+
+export function normalizeDiffFiles(raw: unknown): readonly NormalizedDiffFile[] {
+  if (!Array.isArray(raw)) return []
+  const out: NormalizedDiffFile[] = []
+  raw.forEach((item, idx) => {
+    if (typeof item !== 'object' || item === null) return
+    const rec = item as Record<string, unknown>
+    const path = String(rec.path ?? rec.filePath ?? rec.title ?? `file-${idx + 1}`).trim()
+    const title = String(rec.title ?? path).trim() || `file-${idx + 1}`
+    const lineRaw = Number(rec.line)
+    out.push({
+      path,
+      title,
+      before: rec.before === undefined || rec.before === null ? '' : String(rec.before),
+      after: rec.after === undefined || rec.after === null ? '' : String(rec.after),
+      language:
+        typeof rec.language === 'string' && rec.language.trim() !== '' ? rec.language : undefined,
+      line: Number.isFinite(lineRaw) && lineRaw >= 1 ? Math.trunc(lineRaw) : undefined,
+      annotations: normalizeDiffAnnotations(rec.annotations),
+    })
+  })
+  return out
+}
+
 function splitLines(raw: string): string[] {
   if (raw === '') return []
   return raw.split(/\r?\n/)

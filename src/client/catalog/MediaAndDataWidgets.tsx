@@ -417,19 +417,26 @@ export const DshChartImpl = defineComponent<{
   selected?: unknown
   setSelected?: (next: string | string[]) => void
   exportable?: boolean
+  step?: boolean
+  yScale?: 'linear' | 'log'
+  stackMode?: 'value' | 'percent'
+  markArea?: unknown
+  referenceX?: unknown
+  referenceXLabel?: unknown
+  bins?: number
   action?: ((options?: ActionDispatchOptions) => Promise<void>) | undefined
   weight?: number
 }>(ChartApi, function DshChart({ props, context }) {
   const readOnly = useContext(SurfaceReadOnlyContext)
   const canCrossFilter = !readOnly && isWritableProp(context, 'selected', props.setSelected)
-  const parsedRefLine =
-    typeof props.referenceLine === 'number' && Number.isFinite(props.referenceLine)
-      ? props.referenceLine
-      : typeof props.referenceLine === 'string' &&
-          props.referenceLine.trim() !== '' &&
-          Number.isFinite(Number(props.referenceLine))
-        ? Number(props.referenceLine)
+  const parseOptionalNum = (raw: unknown): number | undefined =>
+    typeof raw === 'number' && Number.isFinite(raw)
+      ? raw
+      : typeof raw === 'string' && raw.trim() !== '' && Number.isFinite(Number(raw))
+        ? Number(raw)
         : undefined
+  const parsedRefLine = parseOptionalNum(props.referenceLine)
+  const parsedRefX = parseOptionalNum(props.referenceX)
   return (
     <EChartsWidget
       kind={props.kind}
@@ -453,6 +460,17 @@ export const DshChartImpl = defineComponent<{
       selected={normalizeBoundSelectionProp(props.selected)}
       onSelectChange={canCrossFilter ? props.setSelected : undefined}
       exportable={props.exportable}
+      step={props.step}
+      yScale={props.yScale}
+      stackMode={props.stackMode}
+      markArea={props.markArea}
+      referenceX={parsedRefX}
+      referenceXLabel={
+        props.referenceXLabel !== undefined && props.referenceXLabel !== null
+          ? String(props.referenceXLabel)
+          : undefined
+      }
+      bins={props.bins}
       action={readOnly ? undefined : props.action}
       weight={props.weight}
     />
@@ -473,6 +491,7 @@ export const DshTableImpl = defineComponent<{
   filterField?: string
   filterValue?: unknown
   setFilterValue?: (next: string | string[]) => void
+  stickyFirstColumn?: boolean
   action?: ((options?: ActionDispatchOptions) => Promise<void>) | undefined
   weight?: number
 }>(TableApi, function DshTable({ props, context }) {
@@ -493,6 +512,7 @@ export const DshTableImpl = defineComponent<{
       filterField={props.filterField}
       filterValue={normalizeBoundSelectionProp(props.filterValue)}
       onFilterValueChange={canFilterWrite ? props.setFilterValue : undefined}
+      stickyFirstColumn={props.stickyFirstColumn}
       action={readOnly ? undefined : props.action}
       weight={props.weight}
     />

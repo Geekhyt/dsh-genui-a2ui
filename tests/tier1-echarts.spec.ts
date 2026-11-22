@@ -29,7 +29,7 @@ describe('Tier-1 ECharts Expansion (14 -> 19 Kinds + y2Field + referenceLine)', 
     expect(CHART_KINDS).toEqual(
       expect.arrayContaining(['waterfall', 'combo', 'sunburst', 'parallel', 'calendar']),
     )
-    expect(CHART_KINDS).toHaveLength(19)
+    expect(CHART_KINDS).toHaveLength(26)
 
     const clientEntry = readFileSync(resolve(import.meta.dirname, '../lib/client.js'), 'utf8')
     const runtimeChunk = readFileSync(

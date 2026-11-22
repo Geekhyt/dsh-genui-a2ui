@@ -42,6 +42,9 @@ export const ALL_SHOWCASES = [
   'showcase-32',
   'showcase-33',
   'showcase-34',
+  'showcase-35',
+  'showcase-36',
+  'showcase-37',
 ]
 
 export const DEFAULT_AUDIT_SHOWCASES = [
@@ -56,6 +59,9 @@ export const DEFAULT_AUDIT_SHOWCASES = [
   'showcase-32',
   'showcase-33',
   'showcase-34',
+  'showcase-35',
+  'showcase-36',
+  'showcase-37',
 ]
 
 export const SCREENSHOT_SHOWCASE_MAP = {
@@ -71,6 +77,9 @@ export const SCREENSHOT_SHOWCASE_MAP = {
   'assets/screenshots/human-in-the-loop-ask.png': 'showcase-4',
   'assets/screenshots/codebase-explorer-sidebar.png': 'showcase-2',
   'assets/screenshots/persistent-dock-pipeline.png': 'showcase-5',
+  'assets/screenshots/nextgen-charts-gallery.png': 'showcase-35',
+  'assets/screenshots/nextgen-interactive-primitives.png': 'showcase-36',
+  'assets/screenshots/protable-trace-pr-diff.png': 'showcase-37',
 }
 
 export function resolveChromeBinary() {

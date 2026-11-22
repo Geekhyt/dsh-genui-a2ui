@@ -17,15 +17,15 @@ import { SKILL_DOMAINS } from '../src/host/prompt-compact.ts'
 import { validateCalcExpression } from '../src/shared/calc-engine.ts'
 
 describe('P1 Real LLM Generation & Self-Repair Eval Suite', () => {
-  it('defines 28 unique, well-formed benchmark cases covering all 4 skill domains + negative controls', () => {
-    expect(EVAL_BENCHMARK_CASES).toHaveLength(28)
+  it('defines 31 unique, well-formed benchmark cases covering all 4 skill domains + negative controls', () => {
+    expect(EVAL_BENCHMARK_CASES).toHaveLength(31)
 
     const ids = new Set(EVAL_BENCHMARK_CASES.map((c) => c.id))
-    expect(ids.size).toBe(28)
+    expect(ids.size).toBe(31)
 
     const positives = EVAL_BENCHMARK_CASES.filter((c) => c.expectedTool !== 'none')
     const negatives = EVAL_BENCHMARK_CASES.filter((c) => c.expectedTool === 'none')
-    expect(positives.length).toBe(23)
+    expect(positives.length).toBe(26)
     expect(negatives.length).toBe(5)
 
     expect(EVAL_BENCHMARK_CASES.some((c) => c.expectedTool === 'a2ui_ask')).toBe(true)

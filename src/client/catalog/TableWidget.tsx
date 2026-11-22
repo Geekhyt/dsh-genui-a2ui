@@ -20,8 +20,9 @@ import { safeStringifyJson } from '../../shared/constants.ts'
 import type { RuntimeUiMessages } from '../../shared/i18n.ts'
 import { useTransientFlag } from '../dom-hooks.ts'
 import { useRuntimeMessages } from '../i18n.ts'
-import { DshButton, DshInput, DshSearchIcon } from '../ui/primitives.tsx'
+import { DshButton, DshInput, DshSearchIcon, DshTag, type TagTone } from '../ui/primitives.tsx'
 import css from './Catalog.module.css'
+import { buildSparklineGeometry, normalizeSparklinePoints } from './stat-file-helpers.ts'
 import {
   compareFormattedNumericCells,
   computeNextCrossFilterValue,
@@ -61,11 +62,15 @@ const TABLE_FEATURES = tableFeatures({
 const columnHelper = createColumnHelper<typeof TABLE_FEATURES, RowRecord>()
 const SEARCH_ICON_14 = <DshSearchIcon size={14} />
 
+export type TableColumnFormat = 'text' | 'badge' | 'bar' | 'delta' | 'sparkline' | 'code'
+
 export interface TableColumnInput {
   readonly key: string
   readonly label: string
   readonly align?: 'left' | 'center' | 'right' | undefined
   readonly sortable?: boolean | undefined
+  readonly format?: TableColumnFormat | undefined
+  readonly max?: number | undefined
 }
 
 export interface TableWidgetProps {
@@ -82,6 +87,7 @@ export interface TableWidgetProps {
   readonly filterField?: string | undefined
   readonly filterValue?: string | readonly string[] | undefined
   readonly onFilterValueChange?: ((next: string | string[]) => void) | undefined
+  readonly stickyFirstColumn?: boolean | undefined
   readonly action?: ((options?: ActionDispatchOptions) => Promise<void>) | undefined
   readonly weight?: number | undefined
 }
@@ -113,6 +119,141 @@ function formatExpandDetail(value: unknown): string {
   if (typeof value === 'string') return value
   if (typeof value === 'object') return safeStringifyJson(value, 2)
   return String(value)
+}
+
+function parseNumericScalarForBar(value: unknown): number | null {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null
+  if (typeof value === 'string') {
+    const cleaned = value.replace(/[¥$€£,%\s]/g, '').trim()
+    if (cleaned === '' || cleaned === '-' || cleaned === '—') return null
+    const num = Number(cleaned)
+    return Number.isFinite(num) ? num : null
+  }
+  return null
+}
+
+function resolveBadgeCellTone(rawText: string): { readonly label: string; readonly tone: TagTone } {
+  const trimmed = rawText.trim()
+  const lower = trimmed.toLowerCase()
+  if (lower.startsWith('ok:')) return { label: trimmed.slice(3).trim(), tone: 'success' }
+  if (lower.startsWith('warn:')) return { label: trimmed.slice(5).trim(), tone: 'warning' }
+  if (lower.startsWith('no:') || lower.startsWith('err:')) {
+    const idx = trimmed.indexOf(':')
+    return { label: trimmed.slice(idx + 1).trim(), tone: 'danger' }
+  }
+  if (lower.startsWith('info:')) return { label: trimmed.slice(5).trim(), tone: 'info' }
+  if (
+    /(?:正常|健康|成功|通过|已回款|达标|上线|healthy|ok|pass|passed|done|active|success|online)/i.test(
+      trimmed,
+    )
+  ) {
+    return { label: trimmed, tone: 'success' }
+  }
+  if (
+    /(?:预警|降级|审批中|待|警告|缓慢|warn|warning|degraded|pending|review|slow)/i.test(trimmed)
+  ) {
+    return { label: trimmed, tone: 'warning' }
+  }
+  if (
+    /(?:异常|失败|高危|故障|错误|超限|熔断|拒绝|error|fail|failed|critical|down|danger|rejected)/i.test(
+      trimmed,
+    )
+  ) {
+    return { label: trimmed, tone: 'danger' }
+  }
+  return { label: trimmed, tone: 'neutral' }
+}
+
+function parseSparklineCellPoints(value: unknown): readonly number[] {
+  if (Array.isArray(value)) return normalizeSparklinePoints(value)
+  if (typeof value === 'string' && value.includes(',')) {
+    const parts = value
+      .split(',')
+      .map((s) => Number(s.trim()))
+      .filter(Number.isFinite)
+    return normalizeSparklinePoints(parts)
+  }
+  return []
+}
+
+function renderFormattedTableCell(
+  value: unknown,
+  format: TableColumnFormat | undefined,
+  colMax: number,
+  msg: RuntimeUiMessages,
+) {
+  if (!format || format === 'text') return formatCellValue(value, msg)
+  if (format === 'badge') {
+    const text = formatCellValue(value, msg)
+    if (text === '—' || text === '') return '—'
+    const { label, tone } = resolveBadgeCellTone(text)
+    return <DshTag tone={tone}>{label}</DshTag>
+  }
+  if (format === 'code') {
+    const text = formatCellValue(value, msg)
+    return text === '—' ? '—' : <code className={css.tableCodeChip}>{text}</code>
+  }
+  if (format === 'delta') {
+    const text = formatCellValue(value, msg)
+    const num = parseNumericScalarForBar(value)
+    const dir =
+      text.startsWith('+') || (num !== null && num > 0 && !text.startsWith('-'))
+        ? 'up'
+        : text.startsWith('-') || (num !== null && num < 0)
+          ? 'down'
+          : 'neutral'
+    return (
+      <span className={css.tableDeltaCell} data-dir={dir}>
+        {text}
+      </span>
+    )
+  }
+  if (format === 'bar') {
+    const text = formatCellValue(value, msg)
+    const num = parseNumericScalarForBar(value)
+    if (num === null) return text
+    const pct = Math.max(0, Math.min(100, colMax > 0 ? (Math.max(0, num) / colMax) * 100 : 0))
+    return (
+      <span className={css.tableBarCell}>
+        <span className={css.tableBarTrack} aria-hidden="true">
+          <span className={css.tableBarFill} style={{ width: `${pct.toFixed(1)}%` }} />
+        </span>
+        <span className={css.tableBarVal}>{text}</span>
+      </span>
+    )
+  }
+  if (format === 'sparkline') {
+    const pts = parseSparklineCellPoints(value)
+    const geom = buildSparklineGeometry(pts, 56, 18, 2)
+    if (!geom) return formatCellValue(value, msg)
+    const first = pts[0] ?? 0
+    const last = pts[pts.length - 1] ?? 0
+    const strokeColor =
+      last > first
+        ? 'var(--dsw-alias-state-success-primary, #10b981)'
+        : last < first
+          ? 'var(--dsw-alias-state-error-primary, #ef4444)'
+          : 'var(--dsw-alias-state-business-primary, #4d6bfe)'
+    return (
+      <svg
+        viewBox="0 0 56 18"
+        width="56"
+        height="18"
+        className={css.tableSparkSvg}
+        aria-label={pts.join(', ')}
+      >
+        <path
+          d={geom.linePath}
+          fill="none"
+          stroke={strokeColor}
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    )
+  }
+  return formatCellValue(value, msg)
 }
 
 function copyToClipboardSafe(text: string): void {
@@ -169,6 +310,7 @@ export const TableWidget = memo(function TableWidget({
   filterField,
   filterValue,
   onFilterValueChange,
+  stickyFirstColumn = false,
   action,
   weight,
 }: TableWidgetProps) {
@@ -255,11 +397,33 @@ export const TableWidget = memo(function TableWidget({
     [inferredCols, normalizedData],
   )
 
+  const barMaxByCol = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const col of inferredCols) {
+      if (col.format !== 'bar') continue
+      if (typeof col.max === 'number' && Number.isFinite(col.max) && col.max > 0) {
+        map.set(col.key, col.max)
+        continue
+      }
+      let maxFound = 0
+      for (const r of normalizedData) {
+        const n = parseNumericScalarForBar(r[col.key])
+        if (n !== null && n > maxFound) maxFound = n
+      }
+      map.set(col.key, maxFound > 0 ? maxFound : 100)
+    }
+    return map
+  }, [inferredCols, normalizedData])
+
   const columns = useMemo(
     () =>
       columnHelper.columns(
         inferredCols.map((col) => {
-          const isNumeric = numericKeySet.has(col.key)
+          const isNumeric =
+            col.format !== 'sparkline' &&
+            col.format !== 'badge' &&
+            col.format !== 'code' &&
+            numericKeySet.has(col.key)
           const rawNumber =
             normalizedData.length > 0 &&
             normalizedData.some((r) => typeof r[col.key] === 'number') &&
@@ -269,23 +433,25 @@ export const TableWidget = memo(function TableWidget({
             )
           const wrapProse =
             !isNumeric &&
+            !col.format &&
             normalizedData.slice(0, 40).some((r) => {
               const formatted = formatCellValue(r[col.key], msg)
               return formatted.includes('\n') || estimateVisualUnits(formatted) > 14
             })
           const align = col.align ?? (isNumeric ? 'right' : 'left')
+          const colMax = barMaxByCol.get(col.key) ?? 100
           return columnHelper.accessor((row) => row[col.key], {
             id: col.key,
             header: col.label,
-            enableSorting: col.sortable !== false,
+            enableSorting: col.format === 'sparkline' ? false : col.sortable !== false,
             sortUndefined: 'last',
             sortFn: rawNumber ? 'basic' : isNumeric ? 'formattedNumeric' : 'alphanumeric',
             meta: { align, isNumeric, wrapProse },
-            cell: (info) => formatCellValue(info.getValue(), msg),
+            cell: (info) => renderFormattedTableCell(info.getValue(), col.format, colMax, msg),
           })
         }),
       ),
-    [inferredCols, numericKeySet, normalizedData, msg],
+    [inferredCols, numericKeySet, normalizedData, msg, barMaxByCol],
   )
 
   const table = useTable({
@@ -515,14 +681,15 @@ export const TableWidget = memo(function TableWidget({
                     />
                   </th>
                 ) : null}
-                {hg.headers.map((header) => {
+                {hg.headers.map((header, hIdx) => {
                   const meta = header.column.columnDef.meta
                   const canSort = header.column.getCanSort()
                   const sorted = header.column.getIsSorted()
+                  const isSticky = stickyFirstColumn && hIdx === 0
                   return (
                     <th
                       key={header.id}
-                      className={`${css.th} ${canSort ? css.thSortable : ''}`}
+                      className={`${css.th} ${canSort ? css.thSortable : ''} ${isSticky ? css.tableStickyCol : ''}`}
                       style={{ textAlign: meta?.align ?? 'left' }}
                       tabIndex={canSort ? 0 : undefined}
                       aria-sort={
@@ -658,13 +825,14 @@ export const TableWidget = memo(function TableWidget({
                           />
                         </td>
                       ) : null}
-                      {row.getAllCells().map((cell) => {
+                      {row.getAllCells().map((cell, cIdx) => {
                         const meta = cell.column.columnDef.meta
+                        const isSticky = stickyFirstColumn && cIdx === 0
                         const cellCls = meta?.isNumeric
-                          ? `${css.td} ${css.tdNum}`
+                          ? `${css.td} ${css.tdNum}${isSticky ? ` ${css.tableStickyCol}` : ''}`
                           : meta?.wrapProse
-                            ? `${css.td} ${css.tdProse}`
-                            : `${css.td} ${css.tdNowrap}`
+                            ? `${css.td} ${css.tdProse}${isSticky ? ` ${css.tableStickyCol}` : ''}`
+                            : `${css.td} ${css.tdNowrap}${isSticky ? ` ${css.tableStickyCol}` : ''}`
                         return (
                           <td
                             key={cell.id}
@@ -693,19 +861,25 @@ export const TableWidget = memo(function TableWidget({
               <tr className={css.proSummaryRow}>
                 {hasExpandColumn ? <td className={css.td} /> : null}
                 {selectable ? <td className={css.td} /> : null}
-                {inferredCols.map((col, idx) => (
-                  <td
-                    key={col.key}
-                    className={numericKeySet.has(col.key) ? `${css.td} ${css.tdNum}` : css.td}
-                    style={{
-                      textAlign: col.align ?? (numericKeySet.has(col.key) ? 'right' : 'left'),
-                    }}
-                  >
-                    {idx === 0 && !summaryMap[col.key]
-                      ? msg.tableSummaryLabel(filteredRows.length)
-                      : (summaryMap[col.key] ?? '')}
-                  </td>
-                ))}
+                {inferredCols.map((col, idx) => {
+                  const isSticky = stickyFirstColumn && idx === 0
+                  const footCls = numericKeySet.has(col.key)
+                    ? `${css.td} ${css.tdNum}${isSticky ? ` ${css.tableStickyCol}` : ''}`
+                    : `${css.td}${isSticky ? ` ${css.tableStickyCol}` : ''}`
+                  return (
+                    <td
+                      key={col.key}
+                      className={footCls}
+                      style={{
+                        textAlign: col.align ?? (numericKeySet.has(col.key) ? 'right' : 'left'),
+                      }}
+                    >
+                      {idx === 0 && !summaryMap[col.key]
+                        ? msg.tableSummaryLabel(filteredRows.length)
+                        : (summaryMap[col.key] ?? '')}
+                    </td>
+                  )
+                })}
               </tr>
             </tfoot>
           ) : null}

@@ -225,9 +225,14 @@ export function sanitizeDataModel(
       )
     }
     if (typeof node === 'object' && node !== null) {
+      const rec = node as Record<string, unknown>
+      const isKvSecretEntry =
+        (typeof rec.key === 'string' && isSecretKey(rec.key)) ||
+        (typeof rec.name === 'string' && isSecretKey(rec.name))
       const out: Record<string, unknown> = {}
-      for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
+      for (const [k, v] of Object.entries(rec)) {
         if (isDangerousObjectKey(k) || isSecretKey(k)) continue
+        if (isKvSecretEntry && k === 'value') continue
         const escK = escapeJsonPointerSegment(k)
         const childPath = currentPath === '/' ? `/${escK}` : `${currentPath}/${escK}`
         if (blocked.size > 0 && isPointerObscured(childPath, blocked)) continue

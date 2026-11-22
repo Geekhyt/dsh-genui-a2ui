@@ -111,6 +111,7 @@ export interface NormalizedHierarchyNode {
   readonly badge?: string | undefined
   readonly metric?: string | undefined
   readonly sharePct?: number | undefined
+  readonly offsetPct?: number | undefined
   readonly status: HierarchyNodeStatus
   readonly breadcrumb: string
   readonly children: readonly NormalizedHierarchyNode[]
@@ -163,6 +164,11 @@ export function normalizeHierarchyTree(
           : typeof rec.pct === 'number' && Number.isFinite(rec.pct)
             ? Math.max(0, Math.min(100, rec.pct))
             : undefined
+      const rawOffset = rec.offsetPct ?? rec.startPct
+      const offsetPct =
+        typeof rawOffset === 'number' && Number.isFinite(rawOffset)
+          ? Math.max(0, Math.min(97, rawOffset))
+          : undefined
       const children = normalizeHierarchyTree(rec.children, breadcrumb, `${id}_c`)
       const badgeStr =
         rec.badge !== undefined && rec.badge !== null && String(rec.badge) !== ''
@@ -181,6 +187,7 @@ export function normalizeHierarchyTree(
         badge: badgeStr,
         metric: metricStr,
         sharePct,
+        offsetPct,
         status: normalizeNodeStatus(rec.status ?? rec.tone),
         breadcrumb,
         children,

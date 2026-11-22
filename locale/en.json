@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "A2UI generative UI",
-    "description": "Powered by Google A2UI 1.0, stream 57 native interactive components, 19 chart types, service topologies, ProTables, Mermaid diagrams, 0ms simulators, and approval gates directly inside DeepSeek Harness chats. Enabled automatically after install; toggle anytime via the A2UI button or /a2ui off.",
+    "description": "Powered by Google A2UI 1.0, stream 64 native interactive components, 26 chart types, service topologies, ProTables, Mermaid diagrams, 0ms simulators, and approval gates directly inside DeepSeek Harness chats. Enabled automatically after install; toggle anytime via the A2UI button or /a2ui off.",
     "detail": "docs/DETAIL.md"
   }
 }

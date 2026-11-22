@@ -145,7 +145,7 @@ describe('v0.4.3 Comprehensive Review & Visual QA Hardening', () => {
       'KeyValue(items, title?, columns?=2, bordered?=false, copyable?=false)',
     )
     expect(A2UI_SYSTEM_GUIDANCE).toContain(
-      'DiffView(before, after, title?, filePath?, line?, language?, mode?="unified"|"split")',
+      'DiffView(before?, after?, title?, filePath?, line?, language?, mode?="unified"|"split", files?, annotations?)',
     )
   })
 

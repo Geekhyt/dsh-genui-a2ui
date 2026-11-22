@@ -56,17 +56,31 @@ export interface ChartWidgetProps {
   readonly selected?: string | readonly string[] | undefined
   readonly onSelectChange?: ((next: string | string[]) => void) | undefined
   readonly exportable?: boolean | undefined
+  readonly step?: boolean | undefined
+  readonly yScale?: 'linear' | 'log' | undefined
+  readonly stackMode?: 'value' | 'percent' | undefined
+  readonly markArea?: unknown
+  readonly referenceX?: number | undefined
+  readonly referenceXLabel?: string | undefined
+  readonly bins?: number | undefined
   readonly action?: ((options?: ActionDispatchOptions) => Promise<void>) | undefined
   readonly weight?: number | undefined
 }
 
 function hasChartData(kind: ChartKind, data: unknown): boolean {
   if (Array.isArray(data)) {
+    if (kind === 'histogram') {
+      return data.some(
+        (item) =>
+          (typeof item === 'number' && Number.isFinite(item)) ||
+          (typeof item === 'object' && item !== null && !Array.isArray(item)),
+      )
+    }
     return data.some((item) => typeof item === 'object' && item !== null && !Array.isArray(item))
   }
   if (typeof data === 'object' && data !== null) {
     const rec = data as Record<string, unknown>
-    if (kind === 'graph') {
+    if (kind === 'graph' || kind === 'chord') {
       const nodes = Array.isArray(rec.nodes) ? rec.nodes : []
       const links = Array.isArray(rec.links) ? rec.links : Array.isArray(rec.edges) ? rec.edges : []
       return nodes.length > 0 || links.length > 0
@@ -147,6 +161,13 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
     selected,
     onSelectChange,
     exportable = true,
+    step,
+    yScale,
+    stackMode,
+    markArea,
+    referenceX,
+    referenceXLabel,
+    bins,
     action,
     weight,
   } = props
@@ -224,6 +245,13 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
         horizontal,
         zoom,
         height,
+        step,
+        yScale,
+        stackMode,
+        markArea,
+        referenceX,
+        referenceXLabel,
+        bins,
         interactiveSelect: Boolean(onSelectChange),
         selected:
           activeTokens.length === 0
@@ -252,6 +280,13 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
     horizontal,
     zoom,
     height,
+    step,
+    yScale,
+    stackMode,
+    markArea,
+    referenceX,
+    referenceXLabel,
+    bins,
     onSelectChange,
     activeTokens,
     dark,

@@ -25,7 +25,7 @@ dsh plugin --profile desktop add dsh-genui-a2ui
 安装启用后，像平时一样用自然语言提问；点击输入框左下方的 **A2UI** 按钮或输入 `/a2ui off` 可随时切回纯文字模式。
 
 <details>
-<summary><strong>点击展开 19 个可直接复制试跑的提示词示例</strong></summary>
+<summary><strong>点击展开 22 个可直接复制试跑的提示词示例</strong></summary>
 
 1. **转化漏斗与健康度大盘**：`帮我做一份季度业务增长与全链路转化诊断看板，包含四个带趋势微图的核心指标卡，下方同屏放一张四阶桑基流向图和一张五维健康度雷达对比图，再用标签页放区域增长柱状图和可搜索的渠道明细表。`
 2. **图表与表格 0 ms 双向交叉筛选（Cross-Filtering）**：`做一个区域经营交叉分析台，顶部展示随选中区域实时重算的 KPI 卡片，中部并排放区域 GMV 柱状图与营收占比环图（支持点击任意柱或扇区在本地 0 ms 高亮联动并一键导出 PNG/CSV），下方放订单明细 ProTable 自动按选中区域过滤并支持行点击反向联动与一键清除筛选。`
@@ -46,6 +46,9 @@ dsh plugin --profile desktop add dsh-genui-a2ui
 17. **底部常驻多阶段进度栏**：`把一个包含类型检查、分包构建、契约核验、回归测试和打包审计五步的发布流水线进度条固定在输入框上方，展示各阶段状态与整体完成百分比。`
 18. **量化行情 K 线与波动分布**：`模拟一份科技指数近 10 个交易日的量化复盘看板，同屏组合情绪水位仪表盘、日 K 线图以及各细分板块涨跌幅箱线分布图。`
 19. **故障排查折叠手风琴与详情弹窗**：`生成一份线上网关延迟突增的分级排查卡片，用折叠手风琴分层收纳根因摘要、关键指标键值表与回滚预案，并附带一个点击弹出慢查询详情的弹窗按钮。`
+20. **置信区间带、子弹图、自动分箱直方图、弦图与四象限分析**：`做一份全链路性能与架构洞察大盘，包含带大促高亮窗口的 95% 置信预测区间带（range）、OKR 目标子弹图（bullet）、延迟自动分箱直方图（histogram）、优化前后哑铃图（dumbbell）、玉玦环形柱图（radialBar）、微服务双向调用弦图（chord）、成本-得分四象限散点图，以及 100% 堆叠占比与对数轴阶梯折线图。`
+21. **零依赖发布核查、拖拽排序、环境变量脱敏与合同条款溯源**：`搭建一个变更发布与法务风控协同台，支持双滑块预算区间、半星/量表评分、必选门禁 Pre-flight 核查清单、优先级拖拽排序、自动脱敏键值编辑器、视觉 QA 滑动对比器，以及带句级溯源浮卡的合同条款高亮卡片。`
+22. **语义格式化 ProTable、分布式 Trace 偏移瀑布与多文件 PR 批注**：`做一个线上发布治理工作台，顶部通过多选条件实时 0 ms 重算匹配单量/总额/均单/峰值负载，中部展示带微柱、环比增幅、微折线与冻结首列的 ProTable，底部并排放带 offsetPct 偏移时间轴的分布式 Trace 瀑布树与支持多文件标签切换和行内审阅批注的 DiffView。`
 
 </details>
 
@@ -60,6 +63,30 @@ dsh plugin --profile desktop add dsh-genui-a2ui
 | 深色模式（Dark） | 浅色模式（Light） |
 | :---: | :---: |
 | ![全链路转化流向与五维健康度诊断大盘（深色模式）](assets/screenshots/hero-executive-dashboard.png) | ![全链路转化流向与五维健康度诊断大盘（浅色模式）](assets/screenshots/hero-executive-dashboard-light.png) |
+
+### 26 类 ECharts 6 图表全景与横向增强（`v0.5.0` 新增）
+
+同屏呈现 `range` 置信区间带 + `markArea` 故障高亮窗口、`bullet` OKR 目标子弹图、`histogram` 自动分箱直方图、`dumbbell` 性能优化前后哑铃图、`rose` 南丁格尔玫瑰图、`radialBar` 270° 防遮挡玉玦环图、ECharts 6 `chord` 双向调用弦图、`scatter` 四象限双参考线、100% 归一化堆叠柱图与 `step` + 对数轴阶梯折线图，全部在 `276px` 窄双栏内零重叠渲染。
+
+| 深色模式（Dark） | 浅色模式（Light） |
+| :---: | :---: |
+| ![v0.5.0 新增 7 类图表与 5 项图表增强（深色模式）](assets/screenshots/nextgen-charts-gallery.png) | ![v0.5.0 新增 7 类图表与 5 项图表增强（浅色模式）](assets/screenshots/nextgen-charts-gallery-light.png) |
+
+### 7 大零依赖原生交互原语（`v0.5.0` 新增）
+
+涵盖 `RangeSlider` 双滑块区间联动、`Rating` 半星与量表评分、`Checklist` 必选发布门禁、`SortableList` 拖拽/键盘优先级排序、`KvEditor` 自动脱敏环境变量编辑器、`ImageCompare` 视觉回归滑动对比器与 `AnnotationText` 合同实体句级溯源高亮。
+
+| 深色模式（Dark） | 浅色模式（Light） |
+| :---: | :---: |
+| ![v0.5.0 新增 7 大零依赖交互原语（深色模式）](assets/screenshots/nextgen-interactive-primitives.png) | ![v0.5.0 新增 7 大零依赖交互原语（浅色模式）](assets/screenshots/nextgen-interactive-primitives-light.png) |
+
+### 语义化 ProTable、0 ms 条件聚合、Trace 偏移瀑布与多文件 PR 批注（`v0.5.0` 升级）
+
+顶栏结合 `count`/`sum`/`avg`/`max` 条件过滤函数实现多选 0 ms 重算；中部 `ProTable` 原生声明 `code`/`bar`/`delta`/`sparkline`/`badge` 语义列与首列冻结；底部组合带 `offsetPct` 时间轴偏移的分布式 Trace 瀑布树，以及支持多文件标签切换与行内审阅批注的 `DiffView`。
+
+| 深色模式（Dark） | 浅色模式（Light） |
+| :---: | :---: |
+| ![语义格式化 ProTable、分布式 Trace 偏移瀑布与多文件 PR 批注（深色模式）](assets/screenshots/protable-trace-pr-diff.png) | ![语义格式化 ProTable、分布式 Trace 偏移瀑布与多文件 PR 批注（浅色模式）](assets/screenshots/protable-trace-pr-diff-light.png) |
 
 ### 图表与表格 0 ms 双向交叉筛选与一键导出
 
@@ -152,25 +179,25 @@ dsh plugin --profile desktop add dsh-genui-a2ui
 ## 为什么选择 A2UI
 
 - **纯数据声明，安全流式渲染**：遵循 Google A2UI 1.0 规范，模型只输出结构化 JSON 描述，不注入外部 HTML 或执行未知脚本，支持流式防跳动骨架屏与边生成边上屏。
-- **按域按需加载 Skill，省 Token 更高准**：将 57 个组件无损拆分为 `a2ui` / `a2ui-analytics` / `a2ui-devops` / `a2ui-forms` 四个轻量域 Skill，配合编译期深度降维优化，实测 Prompt Token 节省 **44.2%**、`deepseek-chat` 28 用例 **100%** 编译通关。
+- **按域按需加载 Skill，省 Token 更高准**：将 64 个组件无损拆分为 `a2ui` / `a2ui-analytics` / `a2ui-devops` / `a2ui-forms` 四个轻量域 Skill，配合编译期深度降维优化，实测 Prompt Token 节省 **66%+**、基准用例 **100%** 编译通关。
 - **原生组件绘制，自动跟随主题**：界面由 DeepSeek Harness 原生设计体系渲染，自动适配浅色模式、深色模式与社区皮肤。
-- **官方接口实现，按需加载更轻快**：基于官方插件接口构建，无任何宿主魔改；首屏核心包仅 16.7 KB（gzip），图表与流程图引擎仅在实际展示时按需加载。
+- **官方接口实现，按需加载更轻快**：基于官方插件接口构建，无任何宿主魔改；首屏核心包仅 19.2 KB（gzip），图表与流程图引擎仅在实际展示时按需加载。
 
 ## 组件与图表目录
 
-内置 57 种原生交互组件、19 类动态图表与 Mermaid 流程图：
+内置 64 种原生交互组件、26 类动态图表与 Mermaid 流程图：
 
 | 分类 | 组件 | 用途 |
 | :--- | :--- | :--- |
 | **布局与对象头** | `Card`、`Row`、`Column`、`Grid`、`Tabs`、`Accordion`、`List`、`Modal`、`Divider`、`EntityHeader` | 响应式多行等宽网格、多栏看板、标签页、折叠面板、弹窗详情与 B 端业务对象概览头 |
 | **指标、监控与结果** | `Stat`、`MetricRing`、`Tracker`、`KeyValue`（含表格边框模式）、`Steps`、`Timeline`、`Schedule`、`Progress`、`Result` | 指标卡、圆环水位、Tremor 可用性条、带边框描述列表、步骤条、时间线、甘特排期条与操作回执单 |
-| **图表、拓扑与矩阵** | `Chart`、`ServiceGraph`、`Mermaid`、`Comparison`、`Matrix`、`Table`（ProTable，支持行内展开详情）、`Tree`、`Kanban` | 19 类图表、实时健康拓扑、方案对比、热力矩阵、支持展开抽屉/导出/多选的 ProTable、通用层级/调用链树与看板 |
-| **研发、接口与风控** | `Code`、`Terminal`、`ApiEndpoint`、`ApprovalCard`、`DiffView`、`LogViewer`、`FileTree`、`JsonTree`、`SourceList` | 代码高亮、运维命令卡、API 调试台、高危变更审批门禁、差异对比、日志台、文件树与溯源引用 |
-| **表单与对话建议** | `Button`、`NumberInput`、`MultiSelect`、`DateRange`、`TreeSelect`、`CheckCard`、`Segmented`、`Select`、`Switch`、`Slider`、`ChoicePicker`、`TextField`、`CheckBox`、`DateTimeInput` | 步进数字框、多选标签下拉、日期区间快捷选择、级联树选择、选项卡片组/对话追问建议卡、分段、下拉、开关、滑块与校验输入框 |
+| **图表、拓扑与矩阵** | `Chart`、`ServiceGraph`、`Mermaid`、`Comparison`、`Matrix`、`Table`（语义列/冻结列 ProTable）、`Tree`（Trace 偏移瀑布树）、`Kanban`、`AnnotationText` | 26 类图表、实时健康拓扑、方案对比、热力矩阵、带微柱/徽章/趋势线/增幅列与冻结首列的 ProTable、分布式 Trace 瀑布树、看板与文本实体溯源高亮 |
+| **研发、接口与风控** | `Code`、`Terminal`、`ApiEndpoint`、`ApprovalCard`、`Checklist`、`DiffView`（多文件 + 审阅批注）、`LogViewer`、`FileTree`、`JsonTree`、`SourceList` | 代码高亮、运维命令卡、API 调试台、高危变更审批、发布核查清单、多文件审阅 Diff、日志台、文件树与溯源引用 |
+| **表单与交互原语** | `Button`、`NumberInput`、`RangeSlider`、`Rating`、`SortableList`、`KvEditor`、`MultiSelect`、`DateRange`、`TreeSelect`、`CheckCard`、`Segmented`、`Select`、`Switch`、`Slider`、`ChoicePicker`、`TextField`、`CheckBox`、`DateTimeInput` | 双滑块区间、星级/量表评分、拖拽排序、自动脱敏键值编辑器、步进数字框、多选标签下拉、日期区间、级联树选择、选项/追问建议卡与校验输入框 |
 | **排版与提示** | `Text`、`Callout`、`Badge`、`Icon` | 文本排版、四色提示框、状态标签与语义图标 |
-| **多媒体** | `Image`（原生灯箱放大）、`AudioPlayer`、`Video` | 支持点击大图灯箱预览的图片与对话内音视频播放 |
+| **多媒体与视觉对比** | `Image`（原生灯箱放大）、`ImageCompare`、`AudioPlayer`、`Video` | 灯箱放大预览、前后滑动对比器与对话内音视频播放 |
 
-- **19 类动态图表（`Chart`）**：柱状与横向排行图（`bar`）、折线图（`line`）、面积图（`area`）、双轴柱线混合图（`combo`）、增减归因瀑布图（`waterfall`）、饼图与环图（`pie`）、散点与气泡图（`scatter`）、雷达图（`radar`）、平行坐标图（`parallel`）、漏斗图（`funnel`）、仪表盘（`gauge`）、热力图（`heatmap`）、日历热力图（`calendar`）、矩形树图（`treemap`）、可下钻旭日图（`sunburst`）、桑基图（`sankey`）、箱线图（`boxplot`）、关系网络图（`graph`）、K 线图（`candlestick`），支持 `referenceLine` 阈值参考标线、`selected` 与 `Table` 0 ms 本地双向交叉筛选，以及一键导出 2× 高清 PNG 与复制 CSV。
+- **26 类动态图表（`Chart`）**：柱状与横向排行图（`bar`）、折线图（`line`）、面积图（`area`）、双轴柱线混合图（`combo`）、增减归因瀑布图（`waterfall`）、置信/预测区间带图（`range`）、OKR/SLO 子弹图（`bullet`）、自动分箱直方图（`histogram`）、优化前后哑铃图（`dumbbell`）、南丁格尔玫瑰图（`rose`）、玉玦环形柱图（`radialBar`）、双向调用弦图（`chord`）、饼图与环图（`pie`）、散点与四象限气泡图（`scatter`）、雷达图（`radar`）、平行坐标图（`parallel`）、漏斗图（`funnel`）、仪表盘（`gauge`）、热力图（`heatmap`）、日历热力图（`calendar`）、矩形树图（`treemap`）、可下钻旭日图（`sunburst`）、桑基图（`sankey`）、箱线图（`boxplot`）、关系网络图（`graph`）、K 线图（`candlestick`），支持阶梯折线（`step`）、对数轴（`yScale="log"`）、100% 归一化堆叠（`stackMode="percent"`）、高亮区间带（`markArea`）、四象限双参考线（`referenceLine` + `referenceX`）、与 `Table` 0 ms 本地双向交叉筛选及一键 PNG/CSV 导出。
 - **结构与流程图（`Mermaid`）**：流程图、时序图、状态机图、类图、ER 图、甘特图、Git 分支图与思维导图，支持 `10%–2000%` 矢量无损缩放、指针中心滚轮缩放、按住拖拽漫游、自适应复位、全屏查看与源码切换。
 
 ## 文档与许可

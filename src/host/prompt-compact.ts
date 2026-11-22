@@ -39,6 +39,7 @@ export const SKILL_DOMAINS: Readonly<Record<SkillDomain, readonly string[]>> = {
     'Kanban',
     'SourceList',
     'Mermaid',
+    'AnnotationText',
   ],
   devops: [
     'ServiceGraph',
@@ -47,6 +48,7 @@ export const SKILL_DOMAINS: Readonly<Record<SkillDomain, readonly string[]>> = {
     'Terminal',
     'ApiEndpoint',
     'ApprovalCard',
+    'Checklist',
     'LogViewer',
     'FileTree',
     'JsonTree',
@@ -57,12 +59,17 @@ export const SKILL_DOMAINS: Readonly<Record<SkillDomain, readonly string[]>> = {
   ],
   forms: [
     'NumberInput',
+    'RangeSlider',
     'MultiSelect',
     'DateRange',
     'TreeSelect',
     'CheckCard',
+    'Rating',
+    'SortableList',
+    'KvEditor',
     'Segmented',
     'Image',
+    'ImageCompare',
     'AudioPlayer',
     'Video',
   ],
@@ -82,21 +89,21 @@ export const DOMAIN_SKILL_META: Readonly<
   },
   analytics: {
     name: 'a2ui-analytics',
-    title: 'A2UI Analytics, 19-Kind ECharts, ProTable, Matrices & Diagrams',
+    title: 'A2UI Analytics, 26-Kind ECharts, ProTable, Matrices & Diagrams',
     description:
-      'A2UI analytics reference: 19-kind Chart (bar/line/area/combo/waterfall/calendar/sunburst/parallel/sankey/etc.), ProTable, EntityHeader, MetricRing, Tracker, Comparison, Matrix, Tree, Kanban, SourceList, Mermaid (only load when a2ui_render is available).',
+      'A2UI analytics: 26-kind Chart (bar/line/area/combo/waterfall/calendar/sunburst/parallel/sankey/range/bullet/histogram/dumbbell/rose/radialBar/chord/etc.), ProTable, AnnotationText, EntityHeader, MetricRing, Tracker, Comparison, Matrix, Tree, Kanban, SourceList, Mermaid (only load when a2ui_render is available).',
   },
   devops: {
     name: 'a2ui-devops',
-    title: 'A2UI DevOps, Topology, Code Diff, Terminal, API & Approvals',
+    title: 'A2UI DevOps, Topology, Code Diff, Checklists, Terminal & Approvals',
     description:
-      'A2UI DevOps & workflow reference: ServiceGraph, DiffView, Code, Terminal, ApiEndpoint, ApprovalCard, LogViewer, FileTree, JsonTree, Timeline, Schedule, Steps, Result (only load when a2ui_render or a2ui_ask is available).',
+      'A2UI DevOps & workflow reference: ServiceGraph, DiffView (single/multi-file + annotations), Code, Terminal, ApiEndpoint, ApprovalCard, Checklist, LogViewer, FileTree, JsonTree, Timeline, Schedule, Steps, Result (only load when a2ui_render or a2ui_ask is available).',
   },
   forms: {
     name: 'a2ui-forms',
-    title: 'A2UI Advanced Inputs, Selectors & Media',
+    title: 'A2UI Advanced Inputs, Ordering, Editors & Media',
     description:
-      'A2UI advanced form & media reference: NumberInput, MultiSelect, DateRange, TreeSelect, CheckCard (option cards / follow-up prompts), Segmented, Image, AudioPlayer, Video (only load when a2ui_render or a2ui_ask is available).',
+      'A2UI advanced form & media reference: NumberInput, RangeSlider, MultiSelect, DateRange, TreeSelect, CheckCard, Rating, SortableList, KvEditor, Segmented, Image, ImageCompare, AudioPlayer, Video (only load when a2ui_render or a2ui_ask is available).',
   },
 }
 
@@ -106,7 +113,7 @@ const COMPACT_FUNCTIONS_SECTION = [
   'Use these exact positional signatures for check rules, formulas, or formatting:',
   '• calc(expr, vars?, decimals?) — Safe 0ms infix formula (`+ - * / ^ % ( ) ? : == != < <= > >= && ||`, `pow, sqrt, exp, log, ln, log10, abs, min, max, clamp, round, floor, ceil, sin, cos, tan, pmt(ratePerPeriod, nper, pv)`) over `vars` (`{ w: $/wan }`), `decimals` 0..8.',
   '• cond(condition, truthy, falsy) — Ternary branch.',
-  '• sum(items, field?) / avg(items, field?) — Aggregate numeric array or row object `field`.',
+  '• sum(items, field?, filterField?, filterValue?) / avg(...) / min(...) / max(...) / count(items, filterField?, filterValue?) — Aggregate numeric/row array with optional 0ms cross-filter.',
   '• eq(a, b) — Equality (auto-unwraps single-select ChoicePicker `["x"]` vs `"x"`).',
   '• gt(a, b) / lt(a, b) — Numeric comparison (`a > b`, `a < b`).',
   '• includes(items, value) — Array/string containment (ideal for multi-select ChoicePicker).',
@@ -160,20 +167,19 @@ const TRIVIAL_PROP_PATTERNS: readonly RegExp[] = [
 const COMPACT_CATALOG_INSTRUCTIONS = [
   '',
   'Key catalog rules:',
-  '- Store ONLY literal JSON state/datasets/rows in `$/paths` (`$/v = 100`) so `surface("id", update=true)` patches incrementally. NEVER assign `calc()`, `cond()`, or `lookup()` to `$/paths` — assign derived formulas to plain local variables (`total = calc(...)`) instead.',
-  '- Keep `Table` cells plain scalars only (never nest `Badge`/`Button`); pass `Table.columns`, `Timeline.items`, and static enum props (like `Callout.tone`) as static literals/local vars (never `$/path` or `cond()`).',
-  '- For 0ms Chart ↔ Table local cross-filtering, bind both to the same string path: `$/sel = ""`, `Chart(..., selected=$/sel)` + `Table(..., filterField="region", filterValue=$/sel)`.',
-  '- Mark illustrative/sample numbers visibly in titles or captions; never fabricate live state or unperformed actions.',
+  '- Store ONLY literal JSON state/datasets in `$/paths`; assign derived formulas (`calc`/`cond`/`lookup`) to local vars without `$/`.',
+  '- Keep `Table` cells plain scalars (use `columns[].format` for badges/bars/deltas/sparklines); keep `Table.columns`, `Timeline.items`, and static enum props literal.',
+  '- For 0ms Chart ↔ Table cross-filtering, bind both to the same `$/path`: `Chart(..., selected=$/sel)` + `Table(..., filterField="region", filterValue=$/sel)`.',
+  '- Mark sample numbers visibly; never fabricate live state or unperformed actions.',
   '',
 ].join('\n')
 
 const DOMAIN_DIRECTORY_NOTE = [
   '',
-  '## Domain Sub-Skills (Load Only When Needed)',
-  'This core skill covers the 24 foundational components + full grammar & functions. For specialized components, load the matching lightweight sub-skill:',
-  '- `a2ui-analytics` (11): `Chart` (19 ECharts kinds, `y2Field`, `referenceLine`), `Table` (ProTable), `EntityHeader`, `MetricRing`, `Tracker`, `Comparison`, `Matrix`, `Tree`, `Kanban`, `SourceList`, `Mermaid`',
-  '- `a2ui-devops` (13): `ServiceGraph`, `DiffView`, `Code`, `Terminal`, `ApiEndpoint`, `ApprovalCard`, `LogViewer`, `FileTree`, `JsonTree`, `Timeline`, `Schedule`, `Steps`, `Result`',
-  '- `a2ui-forms` (9): `NumberInput`, `MultiSelect`, `DateRange`, `TreeSelect`, `CheckCard`, `Segmented`, `Image`, `AudioPlayer`, `Video`',
+  '## Domain Sub-Skills (Load On Demand)',
+  '- `a2ui-analytics` (12): `Chart` (26 kinds), `Table`, `AnnotationText`, `EntityHeader`, `MetricRing`, `Tracker`, `Comparison`, `Matrix`, `Tree`, `Kanban`, `SourceList`, `Mermaid`',
+  '- `a2ui-devops` (14): `ServiceGraph`, `DiffView`, `Code`, `Terminal`, `ApiEndpoint`, `ApprovalCard`, `Checklist`, `LogViewer`, `FileTree`, `JsonTree`, `Timeline`, `Schedule`, `Steps`, `Result`',
+  '- `a2ui-forms` (14): `NumberInput`, `RangeSlider`, `MultiSelect`, `DateRange`, `TreeSelect`, `CheckCard`, `Rating`, `SortableList`, `KvEditor`, `Segmented`, `Image`, `ImageCompare`, `AudioPlayer`, `Video`',
   '',
 ].join('\n')
 
@@ -189,8 +195,8 @@ function compactComponentBlock(block: string): string {
       '',
     )
     .replace(
-      /Supports 19 chart kinds: bar, line, area, pie, scatter, radar, funnel, gauge, heatmap, treemap, sankey, boxplot, graph, candlestick, waterfall, combo, sunburst, parallel, and calendar\./g,
-      'Supports 19 ECharts kinds (see `kind` enum below).',
+      /Supports 26 chart kinds:[^.]+\./g,
+      'Supports 26 ECharts kinds (see `kind` enum below).',
     )
     .replace(
       /, or a \$\/path binding to an array in the surface data model \(recommended so update=true can refresh data incrementally\)/g,

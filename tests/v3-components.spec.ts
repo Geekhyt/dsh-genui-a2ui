@@ -78,12 +78,12 @@ describe('Evolution v3: 10 New A2UI 1.0 Components (42 Total)', () => {
     'ServiceGraph',
   ] as const
 
-  it('registers all 10 v3 components in both Host schema catalog and Client React catalog (57 total)', () => {
-    expect(DSH_COMPONENT_APIS).toHaveLength(57)
+  it('registers all 10 v3 components in both Host schema catalog and Client React catalog (64 total)', () => {
+    expect(DSH_COMPONENT_APIS).toHaveLength(64)
     const schemaNames = Object.keys(dshSchemaCatalog.toJson().components as Record<string, unknown>)
     const reactNames = [...dshReactCatalog.components.keys()]
-    expect(schemaNames).toHaveLength(57)
-    expect(reactNames).toHaveLength(57)
+    expect(schemaNames).toHaveLength(64)
+    expect(reactNames).toHaveLength(64)
     expect(schemaNames).toEqual(expect.arrayContaining([...V3_NAMES]))
     expect(reactNames).toEqual(expect.arrayContaining([...V3_NAMES]))
   })

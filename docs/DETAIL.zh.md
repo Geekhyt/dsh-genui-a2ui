@@ -23,24 +23,27 @@
 17. **底部常驻多阶段进度栏**：`把一个包含类型检查、分包构建、契约核验、回归测试和打包审计五步的发布流水线进度条固定在输入框上方，展示各阶段状态与整体完成百分比。`
 18. **量化行情 K 线与波动分布**：`模拟一份科技指数近 10 个交易日的量化复盘看板，同屏组合情绪水位仪表盘、日 K 线图以及各细分板块涨跌幅箱线分布图。`
 19. **故障排查折叠手风琴与详情弹窗**：`生成一份线上网关延迟突增的分级排查卡片，用折叠手风琴分层收纳根因摘要、关键指标键值表与回滚预案，并附带一个点击弹出慢查询详情的弹窗按钮。`
+20. **置信区间带、子弹图、自动分箱直方图、弦图与四象限分析**：`做一份全链路性能与架构洞察大盘，包含带大促高亮窗口的 95% 置信预测区间带（range）、OKR 目标子弹图（bullet）、延迟自动分箱直方图（histogram）、优化前后哑铃图（dumbbell）、玉玦环形柱图（radialBar）、微服务双向调用弦图（chord）、成本-得分四象限散点图，以及 100% 堆叠占比与对数轴阶梯折线图。`
+21. **零依赖发布核查、拖拽排序、环境变量脱敏与合同条款溯源**：`搭建一个变更发布与法务风控协同台，支持双滑块预算区间、半星/量表评分、必选门禁 Pre-flight 核查清单、优先级拖拽排序、自动脱敏键值编辑器、视觉 QA 滑动对比器，以及带句级溯源浮卡的合同条款高亮卡片。`
+22. **语义格式化 ProTable、分布式 Trace 偏移瀑布与多文件 PR 批注**：`做一个线上发布治理工作台，顶部通过多选条件实时 0 ms 重算匹配单量/总额/均单/峰值负载，中部展示带微柱、环比增幅、微折线与冻结首列的 ProTable，底部并排放带 offsetPct 偏移时间轴的分布式 Trace 瀑布树与支持多文件标签切换和行内审阅批注的 DiffView。`
 
 ## 模式切换与指令
 
 - 点击对话输入框左下方的 **A2UI** 按钮，可随时在生成式界面模式与纯文字模式之间切换。
 - 支持斜杠指令：输入 `/a2ui off` 关闭界面生成（同步移除工具、提示词与技能目录，零额外系统提示词消耗），输入 `/a2ui on` 重新开启，输入 `/a2ui status` 查看当前状态。
 
-## 内置 57 种原生组件与图表体系
+## 内置 64 种原生组件与图表体系
 
 | 分类 | 组件 | 用途 |
 | :--- | :--- | :--- |
 | **布局与对象头** | `Card`、`Row`、`Column`、`Grid`、`Tabs`、`Accordion`、`List`、`Modal`、`Divider`、`EntityHeader` | 响应式多行等宽网格、多栏看板、标签页、折叠面板、弹窗详情与 B 端业务对象概览头 |
 | **指标、监控与结果** | `Stat`、`MetricRing`、`Tracker`、`KeyValue`（含表格边框模式）、`Steps`、`Timeline`、`Schedule`、`Progress`、`Result` | 指标卡、圆环水位、Tremor 可用性条、带边框描述列表、步骤条、时间线、甘特排期条与操作回执单 |
-| **图表、拓扑与矩阵** | `Chart`、`ServiceGraph`、`Mermaid`、`Comparison`、`Matrix`、`Table`（ProTable，支持行内展开详情）、`Tree`、`Kanban` | 19 类图表、实时健康拓扑、方案对比、热力矩阵、支持展开抽屉/导出/多选的 ProTable、通用层级/调用链树与看板 |
-| **研发、接口与风控** | `Code`、`Terminal`、`ApiEndpoint`、`ApprovalCard`、`DiffView`、`LogViewer`、`FileTree`、`JsonTree`、`SourceList` | 代码高亮、运维命令卡、API 调试台、高危变更审批门禁、差异对比、日志台、文件树与溯源引用 |
-| **表单与对话建议** | `Button`、`NumberInput`、`MultiSelect`、`DateRange`、`TreeSelect`、`CheckCard`、`Segmented`、`Select`、`Switch`、`Slider`、`ChoicePicker`、`TextField`、`CheckBox`、`DateTimeInput` | 步进数字框、多选标签下拉、日期区间快捷选择、级联树选择、选项卡片组/对话追问建议卡、分段、下拉、开关、滑块与校验输入框 |
+| **图表、拓扑与矩阵** | `Chart`、`ServiceGraph`、`Mermaid`、`Comparison`、`Matrix`、`Table`（语义列/冻结列 ProTable）、`Tree`（Trace 偏移瀑布树）、`Kanban`、`AnnotationText` | 26 类图表、实时健康拓扑、方案对比、热力矩阵、支持微柱/徽章/增幅/微折线列与冻结首列的 ProTable、分布式 Trace 瀑布树、看板与文本实体溯源高亮 |
+| **研发、接口与风控** | `Code`、`Terminal`、`ApiEndpoint`、`ApprovalCard`、`Checklist`、`DiffView`（多文件 + 审阅批注）、`LogViewer`、`FileTree`、`JsonTree`、`SourceList` | 代码高亮、运维命令卡、API 调试台、高危变更审批、发布核查清单、多文件审阅 Diff、日志台、文件树与溯源引用 |
+| **表单与交互原语** | `Button`、`NumberInput`、`RangeSlider`、`Rating`、`SortableList`、`KvEditor`、`MultiSelect`、`DateRange`、`TreeSelect`、`CheckCard`、`Segmented`、`Select`、`Switch`、`Slider`、`ChoicePicker`、`TextField`、`CheckBox`、`DateTimeInput` | 双滑块区间、星级/量表评分、拖拽排序、自动脱敏键值编辑器、步进数字框、多选标签下拉、日期区间、级联树选择、选项/追问建议卡与校验输入框 |
 | **排版与提示** | `Text`、`Callout`、`Badge`、`Icon` | 文本排版、四色提示框、状态标签与语义图标 |
-| **多媒体** | `Image`（原生灯箱放大）、`AudioPlayer`、`Video` | 支持点击大图灯箱预览的图片与对话内音视频播放 |
+| **多媒体与视觉对比** | `Image`（原生灯箱放大）、`ImageCompare`、`AudioPlayer`、`Video` | 灯箱放大预览、前后滑动对比器与对话内音视频播放 |
 
-- **19 类动态图表（`Chart`）**：柱状与横向排行图（`bar`）、折线图（`line`）、面积图（`area`）、双轴柱线混合图（`combo`）、增减归因瀑布图（`waterfall`）、饼图与环图（`pie`）、散点与气泡图（`scatter`）、雷达图（`radar`）、平行坐标图（`parallel`）、漏斗图（`funnel`）、仪表盘（`gauge`）、热力图（`heatmap`）、日历热力图（`calendar`）、矩形树图（`treemap`）、可下钻旭日图（`sunburst`）、桑基图（`sankey`）、箱线图（`boxplot`）、关系网络图（`graph`）、K 线图（`candlestick`），支持 `referenceLine` 阈值标线、与 `Table` 0 ms 本地双向交叉筛选及一键 PNG/CSV 导出。
+- **26 类动态图表（`Chart`）**：柱状与横向排行图（`bar`）、折线图（`line`）、面积图（`area`）、双轴柱线混合图（`combo`）、增减归因瀑布图（`waterfall`）、置信区间带图（`range`）、目标子弹图（`bullet`）、自动分箱直方图（`histogram`）、优化前后哑铃图（`dumbbell`）、南丁格尔玫瑰图（`rose`）、玉玦环形柱图（`radialBar`）、双向调用弦图（`chord`）、饼图与环图（`pie`）、散点与四象限气泡图（`scatter`）、雷达图（`radar`）、平行坐标图（`parallel`）、漏斗图（`funnel`）、仪表盘（`gauge`）、热力图（`heatmap`）、日历热力图（`calendar`）、矩形树图（`treemap`）、可下钻旭日图（`sunburst`）、桑基图（`sankey`）、箱线图（`boxplot`）、关系网络图（`graph`）、K 线图（`candlestick`），支持阶梯线、对数轴、100% 堆叠、区间高亮带、四象限双标线、与 `Table` 0 ms 本地双向交叉筛选及一键 PNG/CSV 导出。
 - **结构与流程图（`Mermaid`）**：流程图、时序图、状态机图、类图、ER 图、甘特图、Git 分支图与思维导图，支持 `10%–2000%` 矢量无损缩放、按住拖拽漫游、全屏查看与源码切换。
 - **项目主页与完整文档**：[github.com/Geekhyt/dsh-genui-a2ui](https://github.com/Geekhyt/dsh-genui-a2ui)

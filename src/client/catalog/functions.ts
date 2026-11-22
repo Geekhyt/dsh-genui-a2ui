@@ -20,14 +20,18 @@ import {
   ConcatApi,
   CondApi,
   CopyTextApi,
+  CountApi,
   EqApi,
   GtApi,
   IncludesApi,
   LookupApi,
   LtApi,
+  MaxApi,
+  MinApi,
   SumApi,
 } from '../../shared/catalog-schema.ts'
 import { resolveClientLocale } from '../../shared/i18n.ts'
+import { filterTableRowsByField, normalizeCrossFilterTokens } from './v4-helpers.ts'
 
 type FunctionImplList = readonly FunctionImplementation[]
 
@@ -64,9 +68,44 @@ export function executeSafeOpenUrl(rawInput: unknown): void {
   window.open(href, '_blank', 'noopener,noreferrer')
 }
 
-export function extractNumericValues(items: readonly unknown[], field?: string): number[] {
-  const nums: number[] = []
+function filterAggregateItems(
+  items: readonly unknown[],
+  filterField?: string,
+  filterValue?: unknown,
+): readonly unknown[] {
+  const tokens = normalizeCrossFilterTokens(filterValue)
+  if (tokens.length === 0) return items
+  const recordRows: Record<string, unknown>[] = []
+  const scalarItems: unknown[] = []
   for (const item of items) {
+    if (typeof item === 'object' && item !== null && !Array.isArray(item)) {
+      recordRows.push(item as Record<string, unknown>)
+    } else {
+      scalarItems.push(item)
+    }
+  }
+  if (recordRows.length > 0) {
+    return filterTableRowsByField(recordRows, filterField, tokens)
+  }
+  const lowerSet = new Set(tokens.map((t) => t.toLowerCase()))
+  return scalarItems.filter((v) =>
+    lowerSet.has(
+      String(v ?? '')
+        .trim()
+        .toLowerCase(),
+    ),
+  )
+}
+
+export function extractNumericValues(
+  items: readonly unknown[],
+  field?: string,
+  filterField?: string,
+  filterValue?: unknown,
+): number[] {
+  const scoped = filterAggregateItems(items, filterField, filterValue)
+  const nums: number[] = []
+  for (const item of scoped) {
     const candidate =
       field !== undefined && field !== '' && typeof item === 'object' && item !== null
         ? (item as Record<string, unknown>)[field]
@@ -84,21 +123,69 @@ export function extractNumericValues(items: readonly unknown[], field?: string):
   return nums
 }
 
-export function computeArraySum(items: readonly unknown[], field?: string): number {
+export function computeArraySum(
+  items: readonly unknown[],
+  field?: string,
+  filterField?: string,
+  filterValue?: unknown,
+): number {
   let total = 0
-  for (const n of extractNumericValues(items, field)) {
+  for (const n of extractNumericValues(items, field, filterField, filterValue)) {
     total += n
   }
   return total === 0 ? 0 : Number(total.toPrecision(12))
 }
 
-export function computeArrayAvg(items: readonly unknown[], field?: string): number {
-  const nums = extractNumericValues(items, field)
+export function computeArrayAvg(
+  items: readonly unknown[],
+  field?: string,
+  filterField?: string,
+  filterValue?: unknown,
+): number {
+  const nums = extractNumericValues(items, field, filterField, filterValue)
   if (nums.length === 0) return 0
   let total = 0
   for (const n of nums) total += n
   const avg = total / nums.length
   return avg === 0 ? 0 : Number(avg.toPrecision(12))
+}
+
+export function computeArrayCount(
+  items: readonly unknown[],
+  filterField?: string,
+  filterValue?: unknown,
+): number {
+  return filterAggregateItems(items, filterField, filterValue).length
+}
+
+export function computeArrayMin(
+  items: readonly unknown[],
+  field?: string,
+  filterField?: string,
+  filterValue?: unknown,
+): number {
+  const nums = extractNumericValues(items, field, filterField, filterValue)
+  if (nums.length === 0) return 0
+  let best = nums[0]!
+  for (let i = 1; i < nums.length; i++) {
+    if (nums[i]! < best) best = nums[i]!
+  }
+  return best === 0 ? 0 : Number(best.toPrecision(12))
+}
+
+export function computeArrayMax(
+  items: readonly unknown[],
+  field?: string,
+  filterField?: string,
+  filterValue?: unknown,
+): number {
+  const nums = extractNumericValues(items, field, filterField, filterValue)
+  if (nums.length === 0) return 0
+  let best = nums[0]!
+  for (let i = 1; i < nums.length; i++) {
+    if (nums[i]! > best) best = nums[i]!
+  }
+  return best === 0 ? 0 : Number(best.toPrecision(12))
 }
 
 export function coerceFiniteNumber(input: unknown, fallback = 0): number {
@@ -242,11 +329,47 @@ export const CopyTextImplementation = createFunctionImplementation(CopyTextApi, 
 })
 
 export const SumImplementation = createFunctionImplementation(SumApi, (args) =>
-  computeArraySum(Array.isArray(args.items) ? args.items : [], args.field),
+  computeArraySum(
+    Array.isArray(args.items) ? args.items : [],
+    args.field,
+    args.filterField,
+    args.filterValue,
+  ),
 )
 
 export const AvgImplementation = createFunctionImplementation(AvgApi, (args) =>
-  computeArrayAvg(Array.isArray(args.items) ? args.items : [], args.field),
+  computeArrayAvg(
+    Array.isArray(args.items) ? args.items : [],
+    args.field,
+    args.filterField,
+    args.filterValue,
+  ),
+)
+
+export const CountImplementation = createFunctionImplementation(CountApi, (args) =>
+  computeArrayCount(
+    Array.isArray(args.items) ? args.items : [],
+    args.filterField,
+    args.filterValue,
+  ),
+)
+
+export const MinImplementation = createFunctionImplementation(MinApi, (args) =>
+  computeArrayMin(
+    Array.isArray(args.items) ? args.items : [],
+    args.field,
+    args.filterField,
+    args.filterValue,
+  ),
+)
+
+export const MaxImplementation = createFunctionImplementation(MaxApi, (args) =>
+  computeArrayMax(
+    Array.isArray(args.items) ? args.items : [],
+    args.field,
+    args.filterField,
+    args.filterValue,
+  ),
 )
 
 export const CalcImplementation = createFunctionImplementation(CalcApi, (args) =>
@@ -389,6 +512,9 @@ export const DSH_FUNCTIONS: FunctionImplList = [
   CopyTextImplementation,
   SumImplementation,
   AvgImplementation,
+  CountImplementation,
+  MinImplementation,
+  MaxImplementation,
   CalcImplementation,
   EqImplementation,
   GtImplementation,

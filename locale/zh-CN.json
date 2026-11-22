@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "A2UI 生成式交互界面",
-    "description": "基于 Google A2UI 1.0 标准，让 DeepSeek Harness 在对话中直接生成 57 种原生交互组件、19 类动态图表、服务拓扑、ProTable、Mermaid 架构图、0ms 实时测算台与高危变更确认单。安装后自动启用，可通过输入框左下方 A2UI 按钮或 /a2ui off 随时切换。",
+    "description": "基于 Google A2UI 1.0 标准，让 DeepSeek Harness 在对话中直接生成 64 种原生交互组件、26 类动态图表、服务拓扑、ProTable、Mermaid 架构图、0ms 实时测算台与高危变更确认单。安装后自动启用，可通过输入框左下方 A2UI 按钮或 /a2ui off 随时切换。",
     "detail": "docs/DETAIL.zh.md"
   }
 }

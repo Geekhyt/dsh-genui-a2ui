@@ -1791,6 +1791,200 @@ export const SHOWCASE_COMBO_AUDIT_V048_CHARTS_INTERACTIVE_UI = [
   ']))',
 ].join('\n')
 
+export const SHOWCASE_V050_CHARTS_UI = [
+  'surface("v050_nextgen_charts")',
+  '$/rangeData = [',
+  '  { day: "周一", low: 140, forecast: 185, high: 230 },',
+  '  { day: "周二", low: 155, forecast: 205, high: 260 },',
+  '  { day: "周三", low: 180, forecast: 248, high: 320 },',
+  '  { day: "周四", low: 165, forecast: 222, high: 285 },',
+  '  { day: "周五", low: 150, forecast: 198, high: 255 }',
+  ']',
+  '$/bulletData = [',
+  '  { label: "季度 ARR 达成", value: 92, target: 90, max: 110, ranges: [65, 85, 110] },',
+  '  { label: "Prompt 缓存命中", value: 78, target: 85, max: 100, ranges: [55, 80, 100] },',
+  '  { label: "首编一次通过率", value: 84, target: 80, max: 100, ranges: [60, 80, 100] }',
+  ']',
+  '$/histLatency = [14, 18, 19, 22, 24, 25, 28, 30, 31, 33, 35, 39, 44, 48, 55, 68, 79, 94, 112, 136]',
+  '$/dumbbellData = [',
+  '  { name: "支付结算 P99", before: 420, after: 118 },',
+  '  { name: "订单检索 P99", before: 295, after: 86 },',
+  '  { name: "账单聚合 P99", before: 510, after: 164 },',
+  '  { name: "风控打分 P99", before: 190, after: 62 }',
+  ']',
+  '$/roseData = [',
+  '  { name: "深度推理", value: 44 },',
+  '  { name: "代码生成", value: 36 },',
+  '  { name: "文档检索", value: 25 },',
+  '  { name: "数据可视化", value: 29 },',
+  '  { name: "运维排障", value: 19 }',
+  ']',
+  '$/radialData = [',
+  '  { name: "GPU 算力", value: 86, max: 100 },',
+  '  { name: "显存带宽", value: 74, max: 100 },',
+  '  { name: "KV Cache", value: 91, max: 100 },',
+  '  { name: "网络吞吐", value: 63, max: 100 }',
+  ']',
+  '$/chordData = {',
+  '  nodes: [{ name: "Gateway" }, { name: "Order" }, { name: "Payment" }, { name: "Risk" }, { name: "Ledger" }],',
+  '  links: [',
+  '    { source: "Gateway", target: "Order", value: 64 },',
+  '    { source: "Order", target: "Payment", value: 52 },',
+  '    { source: "Payment", target: "Risk", value: 38 },',
+  '    { source: "Risk", target: "Payment", value: 24 },',
+  '    { source: "Payment", target: "Ledger", value: 48 },',
+  '    { source: "Ledger", target: "Gateway", value: 18 }',
+  '  ]',
+  '}',
+  '$/pctStack = [',
+  '  { q: "Q1", ok: 910, warn: 65, err: 25 },',
+  '  { q: "Q2", ok: 942, warn: 44, err: 14 },',
+  '  { q: "Q3", ok: 968, warn: 24, err: 8 },',
+  '  { q: "Q4", ok: 981, warn: 15, err: 4 }',
+  ']',
+  '$/stepReplicas = [',
+  '  { t: "08:00", pods: 6 },',
+  '  { t: "10:00", pods: 18 },',
+  '  { t: "12:00", pods: 24 },',
+  '  { t: "16:00", pods: 16 },',
+  '  { t: "22:00", pods: 8 }',
+  ']',
+  '$/quadrantData = [',
+  '  { name: "pgvector", cost: 28, score: 84 },',
+  '  { name: "Milvus", cost: 62, score: 91 },',
+  '  { name: "Qdrant", cost: 34, score: 88 },',
+  '  { name: "ES-Dense", cost: 74, score: 79 }',
+  ']',
+  'root = Card(Column([',
+  '  Text("### v0.5.0 新增 7 类图表与 5 项图表增强（276px 双栏实测）"),',
+  '  Row([',
+  '    Chart("range", $/rangeData, title="95% 置信预测区间带 + 故障窗口", xField="day", yField="forecast", referenceLine=260, referenceLabel="警戒 260", markArea=[{ start: "周二", end: "周四", label: "大促窗口", tone: "warning" }], height=230, weight=1),',
+  '    Chart("bullet", $/bulletData, title="OKR 与 SLO 目标子弹图", xField="label", yField="value", height=230, weight=1)',
+  '  ], align="stretch"),',
+  '  Row([',
+  '    Chart("histogram", $/histLatency, title="请求延迟自动分箱直方图", referenceLine=80, referenceLabel="P95 80ms", height=230, weight=1),',
+  '    Chart("dumbbell", $/dumbbellData, title="性能优化前后哑铃图 (ms)", xField="name", height=230, weight=1)',
+  '  ], align="stretch"),',
+  '  Row([',
+  '    Chart("rose", $/roseData, title="场景调用南丁格尔玫瑰图", xField="name", yField="value", height=230, weight=1),',
+  '    Chart("radialBar", $/radialData, title="集群资源玉玦环形柱图", xField="name", yField="value", height=230, weight=1)',
+  '  ], align="stretch"),',
+  '  Row([',
+  '    Chart("chord", $/chordData, title="微服务双向调用弦图 (ECharts 6)", height=240, weight=1),',
+  '    Chart("scatter", $/quadrantData, title="检索方案成本-得分四象限", xField="cost", yField="score", referenceLine=85, referenceLabel="达标 85", referenceX=50, referenceXLabel="成本中位", height=240, weight=1)',
+  '  ], align="stretch"),',
+  '  Row([',
+  '    Chart("bar", $/pctStack, title="100% 归一化堆叠占比", xField="q", yField=["ok", "warn", "err"], stackMode="percent", height=220, weight=1),',
+  '    Chart("line", $/stepReplicas, title="HPA 副本阶梯折线 (对数轴)", xField="t", yField="pods", step=true, yScale="log", height=220, weight=1)',
+  '  ], align="stretch")',
+  ']))',
+].join('\n')
+
+const COMPARE_BEFORE_SVG =
+  'data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20400%20220%22%3E%3Crect%20width%3D%22400%22%20height%3D%22220%22%20fill%3D%22%231e293b%22%2F%3E%3Crect%20x%3D%2224%22%20y%3D%2228%22%20width%3D%22160%22%20height%3D%22164%22%20rx%3D%2210%22%20fill%3D%22%23334155%22%2F%3E%3Crect%20x%3D%22204%22%20y%3D%2228%22%20width%3D%22172%22%20height%3D%22164%22%20rx%3D%2210%22%20fill%3D%22%23ef4444%22%20fill-opacity%3D%220.45%22%2F%3E%3Ctext%20x%3D%2240%22%20y%3D%22118%22%20fill%3D%22%23f8fafc%22%20font-size%3D%2218%22%20font-family%3D%22sans-serif%22%3EBefore%20Layout%3C%2Ftext%3E%3C%2Fsvg%3E'
+
+const COMPARE_AFTER_SVG =
+  'data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20400%20220%22%3E%3Crect%20width%3D%22400%22%20height%3D%22220%22%20fill%3D%22%230f172a%22%2F%3E%3Crect%20x%3D%2224%22%20y%3D%2228%22%20width%3D%22160%22%20height%3D%22164%22%20rx%3D%2210%22%20fill%3D%22%232563eb%22%20fill-opacity%3D%220.55%22%2F%3E%3Crect%20x%3D%22204%22%20y%3D%2228%22%20width%3D%22172%22%20height%3D%22164%22%20rx%3D%2210%22%20fill%3D%22%2310b981%22%20fill-opacity%3D%220.55%22%2F%3E%3Ctext%20x%3D%22220%22%20y%3D%22118%22%20fill%3D%22%23f8fafc%22%20font-size%3D%2218%22%20font-family%3D%22sans-serif%22%3EAfter%20Fixed%3C%2Ftext%3E%3C%2Fsvg%3E'
+
+export const SHOWCASE_V050_WIDGETS_UI = [
+  'surface("v050_nextgen_widgets")',
+  '$/budgetMin = 120',
+  '$/budgetMax = 480',
+  '$/checkedItems = ["snap"]',
+  '$/rankItems = [',
+  '  { id: "p1", title: "补齐 0ms 区间过滤", subtitle: "RangeSlider + 条件聚合", badge: "P0", tone: "danger" },',
+  '  { id: "p2", title: "分布式 Trace 偏移瀑布", subtitle: "Tree offsetPct 升级", badge: "P1", tone: "warning" },',
+  '  { id: "p3", title: "多文件 PR 审阅批注", subtitle: "DiffView files + annotations", badge: "P1", tone: "info" }',
+  ']',
+  '$/envVars = [',
+  '  { key: "NODE_ENV", value: "production" },',
+  '  { key: "MAX_CONCURRENCY", value: "64" },',
+  '  { key: "OPENAI_API_KEY", value: "sk-demo-masked" }',
+  ']',
+  '$/starScore = 4.5',
+  '$/likertScore = 4',
+  '$/checkList = [',
+  '  { id: "snap", label: "已完成生产库逻辑快照", description: "Snapshot #20261122 校验通过", required: true, tag: "DBA", tone: "success" },',
+  '  { id: "canary", label: "已配置 5% 灰度流量观察窗口", required: true, tag: "SRE", tone: "warning" },',
+  '  { id: "notify", label: "同步变更公告至值班频道", required: false, tag: "Ops", tone: "info" }',
+  ']',
+  '$/clauseText = "乙方应在收到书面通知后 72 小时内完成漏洞修复；若因重大过失导致客户核心交易数据泄露，违约金上限为合同年费的 300%，且甲方保留单方即时解约权。"',
+  '$/clauseAnns = [',
+  '  { match: "72 小时内完成漏洞修复", label: "SLA 时限", tone: "info", note: "建议高危 P0 缩短至 24 小时响应", sourceId: "SEC-4.2" },',
+  '  { match: "违约金上限为合同年费的 300%", label: "高赔付风险", tone: "danger", note: "高于行业常规 100% 封顶条款，需法务复核", sourceId: "LEGAL-9.1" },',
+  '  { match: "单方即时解约权", label: "解约条款", tone: "warning", note: "建议补充 15 日整改宽限期", sourceId: "LEGAL-12.3" }',
+  ']',
+  'budgetSpan = calc("hi - lo", { lo: $/budgetMin, hi: $/budgetMax })',
+  'root = Card(Column([',
+  '  Text("### v0.5.0 新增 7 大零依赖交互原语（306px 双栏实测）"),',
+  '  Row([',
+  '    Card(Column([',
+  '      RangeSlider("月度算力预算区间", 50, 800, $/budgetMin, $/budgetMax, step=10, prefix="¥", unit="k"),',
+  '      Stat("当前预算跨度", concat(["¥", formatNumber(budgetSpan), "k"]), caption="0ms 联动计算")',
+  '    ]), weight=1),',
+  '    Card(Column([',
+  '      Rating("方案综合评分 (半星)", $/starScore, max=5, allowHalf=true, labels=["差", "较差", "一般", "良好", "极佳"]),',
+  '      Rating("上线信心度 (量表)", $/likertScore, max=5, variant="scale")',
+  '    ]), weight=1)',
+  '  ], align="stretch"),',
+  '  Row([',
+  '    Checklist($/checkList, value=$/checkedItems, title="生产发布 Pre-flight 核查清单", actionLabel="确认放行发布", action=Event("approve_checklist"), weight=1),',
+  '    SortableList($/rankItems, title="迭代优先级拖拽排序", weight=1)',
+  '  ], align="stretch"),',
+  '  Row([',
+  '    KvEditor($/envVars, title="动态环境变量编辑器 (自动脱敏)", keyLabel="变量名", valueLabel="配置值", weight=1),',
+  '    ImageCompare(' +
+    JSON.stringify(COMPARE_BEFORE_SVG) +
+    ', ' +
+    JSON.stringify(COMPARE_AFTER_SVG) +
+    ', beforeLabel="修复前", afterLabel="修复后", title="视觉 QA 滑动对比器", height=200, weight=1)',
+  '  ], align="stretch"),',
+  '  AnnotationText($/clauseText, $/clauseAnns, title="合同风控条款实体高亮与句级溯源", action=Event("inspect_clause"))',
+  ']))',
+].join('\n')
+
+export const SHOWCASE_V050_UPGRADES_UI = [
+  'surface("v050_inplace_upgrades")',
+  '$/selectedRegions = []',
+  '$/orders = [',
+  '  { id: "ORD-201", region: "华东", service: "gateway-hz", load: 86, delta: "+14.2%", trend: [18, 22, 25, 29, 34], status: "ok:正常", amount: 5200 },',
+  '  { id: "ORD-202", region: "华东", service: "checkout-hz", load: 74, delta: "+8.5%", trend: [24, 23, 26, 28, 31], status: "ok:正常", amount: 4660 },',
+  '  { id: "ORD-203", region: "华南", service: "fraud-sz", load: 93, delta: "-4.1%", trend: [40, 38, 35, 33, 30], status: "warn:预警", amount: 4120 },',
+  '  { id: "ORD-204", region: "华北", service: "ledger-bj", load: 97, delta: "-9.8%", trend: [52, 48, 42, 39, 31], status: "no:熔断", amount: 2700 }',
+  ']',
+  '$/traceTree = [',
+  '  { id: "root", label: "POST /v1/checkout", metric: "420ms", sharePct: 100, offsetPct: 0, status: "warning", children: [',
+  '    { id: "auth", label: "jwt.verify", metric: "32ms", sharePct: 8, offsetPct: 0, status: "healthy" },',
+  '    { id: "risk", label: "risk.score", metric: "198ms", sharePct: 47, offsetPct: 8, status: "error" },',
+  '    { id: "ledger", label: "ledger.commit", metric: "152ms", sharePct: 36, offsetPct: 55, status: "warning" },',
+  '    { id: "emit", label: "kafka.publish", metric: "38ms", sharePct: 9, offsetPct: 91, status: "healthy" }',
+  '  ] }',
+  ']',
+  '$/prFiles = [',
+  '  { path: "src/gateway/limiter.ts", title: "limiter.ts", language: "typescript", before: "export const LIMIT = 1000\\nexport const BURST = 200", after: "export const LIMIT = 2500\\nexport const BURST = 500\\nexport const FALLBACK = true", annotations: [{ line: 3, side: "after", author: "@reviewer", tone: "warning", message: "确认降级开关开启时已记录熔断指标" }] },',
+  '  { path: "config/canary.yaml", title: "canary.yaml", language: "yaml", before: "weight: 5\\ntimeoutMs: 3000", after: "weight: 20\\ntimeoutMs: 1500" }',
+  ']',
+  'totalAmt = sum($/orders, "amount", "region", $/selectedRegions)',
+  'avgAmt = avg($/orders, "amount", "region", $/selectedRegions)',
+  'matchedCount = count($/orders, "region", $/selectedRegions)',
+  'maxLoad = max($/orders, "load", "region", $/selectedRegions)',
+  'root = Card(Column([',
+  '  Text("### v0.5.0 原地升级：语义列 ProTable + 0ms 条件聚合 + 偏移 Trace 树 + 多文件批注 Diff"),',
+  '  MultiSelect("按区域 0ms 动态重算聚合指标", [{ value: "华东", label: "华东" }, { value: "华南", label: "华南" }, { value: "华北", label: "华北" }], $/selectedRegions),',
+  '  Row([',
+  '    Stat("匹配订单数", matchedCount, weight=1),',
+  '    Stat("动态总额", formatCurrency(totalAmt, "CNY", 0), trend="up", weight=1),',
+  '    Stat("均单金额", formatCurrency(avgAmt, "CNY", 0), weight=1),',
+  '    Stat("峰值负载", concat([formatNumber(maxLoad), "%"]), weight=1)',
+  '  ]),',
+  '  Table($/orders, title="语义格式化 ProTable (固定首列)", filterField="region", filterValue=$/selectedRegions, stickyFirstColumn=true, searchable=true, exportable=true, showSummary=true, columns=[{ key: "id", label: "单号", format: "code" }, { key: "region", label: "区域" }, { key: "load", label: "负载", format: "bar", max: 100 }, { key: "delta", label: "环比", format: "delta" }, { key: "trend", label: "近 5 轮", format: "sparkline" }, { key: "status", label: "状态", format: "badge" }, { key: "amount", label: "金额", align: "right" }]),',
+  '  Row([',
+  '    Tree($/traceTree, title="带 offsetPct 偏移的分布式 Trace 瀑布", summary="Total 420ms", weight=1),',
+  '    DiffView(files=$/prFiles, title="多文件 PR 审阅与行内批注", weight=1)',
+  '  ], align="stretch")',
+  ']))',
+].join('\n')
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 function extractText(content) {
@@ -2091,6 +2285,9 @@ export function startMockLlmServer(port = PORT) {
       const isShowcase32 = /\bshowcase-32\b|combo-v046-charts/i.test(userText)
       const isShowcase33 = /\bshowcase-33\b|combo-v048-layout/i.test(userText)
       const isShowcase34 = /\bshowcase-34\b|combo-v048-charts/i.test(userText)
+      const isShowcase35 = /\bshowcase-35\b|v050-charts/i.test(userText)
+      const isShowcase36 = /\bshowcase-36\b|v050-widgets/i.test(userText)
+      const isShowcase37 = /\bshowcase-37\b|v050-upgrades/i.test(userText)
       const isDashboard = /dashboard|看板/i.test(userText)
       const isAsk = /ask|向导|部署/i.test(userText)
       const isDock = /dock|工作台|监控/i.test(userText)
@@ -2344,6 +2541,27 @@ export function startMockLlmServer(port = PORT) {
           })
           return
         }
+        if (isShowcase35) {
+          await streamToolCall(res, model, 'a2ui_render', {
+            title: 'v0.5.0 新增 7 类图表与 5 项图表增强实测台',
+            ui: SHOWCASE_V050_CHARTS_UI,
+          })
+          return
+        }
+        if (isShowcase36) {
+          await streamToolCall(res, model, 'a2ui_render', {
+            title: 'v0.5.0 新增 7 个零依赖交互原语实测台',
+            ui: SHOWCASE_V050_WIDGETS_UI,
+          })
+          return
+        }
+        if (isShowcase37) {
+          await streamToolCall(res, model, 'a2ui_render', {
+            title: 'v0.5.0 原地升级：语义列 ProTable / 条件聚合 / 偏移 Trace / 多文件批注 Diff',
+            ui: SHOWCASE_V050_UPGRADES_UI,
+          })
+          return
+        }
         if (userText.includes('[a2ui-action]')) {
           if (userText.includes('surface="analytics"') || userText.includes('action="boost_q2"')) {
             await streamToolCall(res, model, 'a2ui_render', {
@@ -2525,21 +2743,27 @@ export function startMockLlmServer(port = PORT) {
                                                                         ? '已渲染 v0.4.8 无权重 Column 并排、长 Token 防溢出、含占位符数值表格、隐藏 Tab+Accordion 懒渲染与 Modal 浮层栈真机实测台。'
                                                                         : isShowcase34
                                                                           ? '已渲染 v0.4.8 动态空->非空 ECharts 挂载、全负值柱图、276px 6 维平行坐标、64px 极端精度圆环与 3 节点 LR 拓扑真机实测台。'
-                                                                          : userText.includes(
-                                                                                '[a2ui-action]',
-                                                                              )
-                                                                            ? '已根据您的操作实时增量刷新界面数据模型。'
-                                                                            : isDock
-                                                                              ? '已将 CI/CD 发布流水线监控面板固定在输入框上方的常驻工作台（Dock），后续轮次将继续实时原地刷新。'
-                                                                              : isInline
-                                                                                ? '已在工具步骤流内嵌渲染诊断摘要。'
-                                                                                : isDashboard
-                                                                                  ? '已为您生成 2026 区域经营交互看板（示例数据），可切换图表、搜索排序明细表或一键调整预测情景。'
-                                                                                  : userText.includes(
-                                                                                        'test-error',
-                                                                                      )
-                                                                                    ? '初稿校验触发编译器诊断自愈，已自动将非法组件修正为标准组件并完成渲染。'
-                                                                                    : '已为您准备好餐厅预订交互卡片，您可直接在下方调整人数、口味或包间选项后点击确认。'
+                                                                          : isShowcase35
+                                                                            ? '已渲染 v0.5.0 新增 7 类图表（range / bullet / histogram / dumbbell / rose / radialBar / chord）与 5 项图表增强实测台。'
+                                                                            : isShowcase36
+                                                                              ? '已渲染 v0.5.0 新增 7 个交互原语（RangeSlider / Checklist / SortableList / KvEditor / Rating / ImageCompare / AnnotationText）实测台。'
+                                                                              : isShowcase37
+                                                                                ? '已渲染 v0.5.0 原地升级实测台（ProTable 语义列 + 固定首列、0ms 条件聚合函数、offsetPct Trace 瀑布树与多文件批注 DiffView）。'
+                                                                                : userText.includes(
+                                                                                      '[a2ui-action]',
+                                                                                    )
+                                                                                  ? '已根据您的操作实时增量刷新界面数据模型。'
+                                                                                  : isDock
+                                                                                    ? '已将 CI/CD 发布流水线监控面板固定在输入框上方的常驻工作台（Dock），后续轮次将继续实时原地刷新。'
+                                                                                    : isInline
+                                                                                      ? '已在工具步骤流内嵌渲染诊断摘要。'
+                                                                                      : isDashboard
+                                                                                        ? '已为您生成 2026 区域经营交互看板（示例数据），可切换图表、搜索排序明细表或一键调整预测情景。'
+                                                                                        : userText.includes(
+                                                                                              'test-error',
+                                                                                            )
+                                                                                          ? '初稿校验触发编译器诊断自愈，已自动将非法组件修正为标准组件并完成渲染。'
+                                                                                          : '已为您准备好餐厅预订交互卡片，您可直接在下方调整人数、口味或包间选项后点击确认。'
       await streamTextReply(res, model, reply)
       return
     }

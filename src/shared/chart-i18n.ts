@@ -9,6 +9,13 @@ export interface ChartUiMessages {
   readonly chartWaterfallTotal: string
   readonly chartWaterfallIncrease: string
   readonly chartWaterfallDecrease: string
+  readonly chartRangeBand: string
+  readonly chartRangeMid: string
+  readonly chartBulletActual: string
+  readonly chartBulletTarget: string
+  readonly chartHistogramFreq: string
+  readonly chartDumbbellBefore: string
+  readonly chartDumbbellAfter: string
 }
 
 export const CHART_MESSAGES: Record<UiLocale, ChartUiMessages> = {
@@ -19,6 +26,13 @@ export const CHART_MESSAGES: Record<UiLocale, ChartUiMessages> = {
     chartWaterfallTotal: '基准/汇总',
     chartWaterfallIncrease: '增长',
     chartWaterfallDecrease: '缩减',
+    chartRangeBand: '区间范围',
+    chartRangeMid: '主值',
+    chartBulletActual: '实际值',
+    chartBulletTarget: '目标值',
+    chartHistogramFreq: '频次',
+    chartDumbbellBefore: '优化前',
+    chartDumbbellAfter: '优化后',
   },
   en: {
     chartOtherGroup: 'Other',
@@ -27,5 +41,12 @@ export const CHART_MESSAGES: Record<UiLocale, ChartUiMessages> = {
     chartWaterfallTotal: 'Total',
     chartWaterfallIncrease: 'Increase',
     chartWaterfallDecrease: 'Decrease',
+    chartRangeBand: 'Range band',
+    chartRangeMid: 'Primary',
+    chartBulletActual: 'Actual',
+    chartBulletTarget: 'Target',
+    chartHistogramFreq: 'Count',
+    chartDumbbellBefore: 'Before',
+    chartDumbbellAfter: 'After',
   },
 }

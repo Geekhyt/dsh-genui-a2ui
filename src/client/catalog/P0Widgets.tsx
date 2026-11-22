@@ -1,4 +1,4 @@
-import { type CSSProperties, useMemo, useState } from 'react'
+import { type CSSProperties, Fragment, useMemo, useState } from 'react'
 import { CalloutApi, DiffViewApi, KeyValueApi, StepsApi } from '../../shared/catalog-schema.ts'
 import { useTransientFlag, useTransientKey } from '../dom-hooks.ts'
 import { parseFileTarget } from '../file-opener.tsx'
@@ -8,6 +8,9 @@ import css from './Catalog.module.css'
 import { FileOpenChip } from './FileOpenChip.tsx'
 import {
   computeLineDiff,
+  type NormalizedDiffAnnotation,
+  normalizeDiffAnnotations,
+  normalizeDiffFiles,
   normalizeKeyValueItems,
   normalizeStepItems,
   pairSplitDiffRows,
@@ -28,11 +31,31 @@ export const DshDiffViewImpl = defineComponent<{
   mode?: 'unified' | 'split'
   filePath?: unknown
   line?: unknown
+  files?: unknown
+  annotations?: unknown
   weight?: number
 }>(DiffViewApi, function DshDiffView({ props }) {
   const msg = useRuntimeMessages()
-  const beforeStr = props.before === undefined || props.before === null ? '' : String(props.before)
-  const afterStr = props.after === undefined || props.after === null ? '' : String(props.after)
+  const multiFiles = useMemo(() => normalizeDiffFiles(props.files), [props.files])
+  const isMultiFile = multiFiles.length > 0
+  const [activeFileIdx, setActiveFileIdx] = useState(0)
+  const safeFileIdx = isMultiFile ? Math.min(activeFileIdx, multiFiles.length - 1) : 0
+  const activeFile = isMultiFile ? multiFiles[safeFileIdx] : undefined
+
+  const beforeStr = activeFile
+    ? activeFile.before
+    : props.before === undefined || props.before === null
+      ? ''
+      : String(props.before)
+  const afterStr = activeFile
+    ? activeFile.after
+    : props.after === undefined || props.after === null
+      ? ''
+      : String(props.after)
+  const activeFilePath = activeFile ? activeFile.path : props.filePath
+  const activeLine = activeFile ? activeFile.line : props.line
+  const activeLanguage = activeFile ? activeFile.language : props.language
+
   const propMode: 'unified' | 'split' = props.mode === 'split' ? 'split' : 'unified'
   const [prevPropMode, setPrevPropMode] = useState<'unified' | 'split'>(propMode)
   const [mode, setMode] = useState<'unified' | 'split'>(propMode)
@@ -42,14 +65,49 @@ export const DshDiffViewImpl = defineComponent<{
   }
   const [copied, markCopied] = useTransientFlag(1400)
 
-  const diff = useMemo(() => computeLineDiff(beforeStr, afterStr), [beforeStr, afterStr])
+  const multiStats = useMemo(() => {
+    if (!isMultiFile) return null
+    return multiFiles.map((f) => computeLineDiff(f.before, f.after))
+  }, [isMultiFile, multiFiles])
+
+  const diff = useMemo(
+    () => (multiStats ? multiStats[safeFileIdx]! : computeLineDiff(beforeStr, afterStr)),
+    [multiStats, safeFileIdx, beforeStr, afterStr],
+  )
+  const totalAdded = multiStats ? multiStats.reduce((sum, s) => sum + s.added, 0) : diff.added
+  const totalRemoved = multiStats ? multiStats.reduce((sum, s) => sum + s.removed, 0) : diff.removed
+
+  const annotations = useMemo(() => {
+    const topLevel = normalizeDiffAnnotations(props.annotations)
+    if (!activeFile) return topLevel
+    if (activeFile.annotations.length > 0) return activeFile.annotations
+    return safeFileIdx === 0 && multiFiles.every((f) => f.annotations.length === 0) ? topLevel : []
+  }, [activeFile, safeFileIdx, multiFiles, props.annotations])
+
+  const annotationMap = useMemo(() => {
+    const map = new Map<string, NormalizedDiffAnnotation[]>()
+    for (const ann of annotations) {
+      const k = `${ann.side}:${ann.line}`
+      const list = map.get(k) ?? []
+      list.push(ann)
+      map.set(k, list)
+    }
+    return map
+  }, [annotations])
+
   const splitRows = useMemo(
     () => (mode === 'split' ? pairSplitDiffRows(diff.ops) : []),
     [diff.ops, mode],
   )
 
-  const hasFileLink = parseFileTarget(props.filePath, props.line) !== null
-  const title = props.title ? String(props.title) : hasFileLink ? '' : msg.diffDefaultTitle
+  const hasFileLink = parseFileTarget(activeFilePath, activeLine) !== null
+  const title = props.title
+    ? String(props.title)
+    : activeFile
+      ? activeFile.title
+      : hasFileLink
+        ? ''
+        : msg.diffDefaultTitle
 
   const handleCopyAfter = () => {
     copyToClipboardSafe(afterStr)
@@ -61,11 +119,14 @@ export const DshDiffViewImpl = defineComponent<{
       <div className={css.diffToolbar}>
         <div className={css.diffTitleGroup}>
           {title ? <span className={css.diffTitle}>{title}</span> : null}
-          <FileOpenChip filePath={props.filePath} line={props.line} />
-          {props.language ? <span className={css.diffLang}>{props.language}</span> : null}
+          {isMultiFile ? (
+            <span className={css.diffLang}>{msg.diffFilesSummary(multiFiles.length)}</span>
+          ) : null}
+          <FileOpenChip filePath={activeFilePath} line={activeLine} />
+          {activeLanguage ? <span className={css.diffLang}>{activeLanguage}</span> : null}
           <span className={css.diffStatsGroup}>
-            <span className={css.diffStatAdd}>+{diff.added}</span>
-            <span className={css.diffStatDel}>-{diff.removed}</span>
+            <span className={css.diffStatAdd}>+{totalAdded}</span>
+            <span className={css.diffStatDel}>-{totalRemoved}</span>
           </span>
         </div>
         <div className={css.diffActions}>
@@ -93,22 +154,72 @@ export const DshDiffViewImpl = defineComponent<{
         </div>
       </div>
 
+      {isMultiFile ? (
+        <div className={css.diffFileTabs} role="tablist">
+          {multiFiles.map((file, idx) => {
+            const st = multiStats?.[idx]
+            return (
+              <button
+                key={`${file.path}-${idx}`}
+                type="button"
+                role="tab"
+                aria-selected={idx === safeFileIdx}
+                className={css.diffFileTab}
+                data-active={idx === safeFileIdx ? 'true' : 'false'}
+                onClick={() => setActiveFileIdx(idx)}
+              >
+                <span className={css.diffFileTabName}>{file.title}</span>
+                {st ? (
+                  <span className={css.diffFileTabStats}>
+                    +{st.added}/-{st.removed}
+                  </span>
+                ) : null}
+              </button>
+            )
+          })}
+        </div>
+      ) : null}
+
       <div className={css.diffScroll}>
         {diff.ops.length === 0 ? (
           <div className={css.emptyCell}>{msg.diffEmpty}</div>
         ) : mode === 'unified' ? (
           <table className={css.diffTable}>
             <tbody>
-              {diff.ops.map((op, i) => (
-                <tr key={i} className={css.diffRow} data-kind={op.kind}>
-                  <td className={css.diffGutter}>{op.oldLine ?? ''}</td>
-                  <td className={css.diffGutter}>{op.newLine ?? ''}</td>
-                  <td className={css.diffMarker}>
-                    {op.kind === 'add' ? '+' : op.kind === 'remove' ? '-' : ' '}
-                  </td>
-                  <td className={css.diffCode}>{op.text || ' '}</td>
-                </tr>
-              ))}
+              {diff.ops.map((op, i) => {
+                const rowAnns = [
+                  ...(op.oldLine !== undefined && op.kind !== 'add'
+                    ? (annotationMap.get(`before:${op.oldLine}`) ?? [])
+                    : []),
+                  ...(op.newLine !== undefined
+                    ? (annotationMap.get(`after:${op.newLine}`) ?? [])
+                    : []),
+                ]
+                return (
+                  <Fragment key={i}>
+                    <tr className={css.diffRow} data-kind={op.kind}>
+                      <td className={css.diffGutter}>{op.oldLine ?? ''}</td>
+                      <td className={css.diffGutter}>{op.newLine ?? ''}</td>
+                      <td className={css.diffMarker}>
+                        {op.kind === 'add' ? '+' : op.kind === 'remove' ? '-' : ' '}
+                      </td>
+                      <td className={css.diffCode}>{op.text || ' '}</td>
+                    </tr>
+                    {rowAnns.map((ann, aIdx) => (
+                      <tr key={`ann-${i}-${aIdx}`} className={css.diffAnnRow}>
+                        <td colSpan={4} className={css.diffAnnCell}>
+                          <div className={css.diffAnnBanner} data-tone={ann.tone}>
+                            {ann.author ? (
+                              <span className={css.diffAnnAuthor}>{ann.author}</span>
+                            ) : null}
+                            <span className={css.diffAnnMsg}>{ann.message}</span>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </Fragment>
+                )
+              })}
             </tbody>
           </table>
         ) : (
@@ -120,22 +231,50 @@ export const DshDiffViewImpl = defineComponent<{
               <col />
             </colgroup>
             <tbody>
-              {splitRows.map((row, i) => (
-                <tr key={i} className={css.diffSplitTr}>
-                  <td className={css.diffGutter} data-kind={row.left?.kind ?? 'empty'}>
-                    {row.left?.oldLine ?? ''}
-                  </td>
-                  <td className={css.diffSplitCell} data-kind={row.left?.kind ?? 'empty'}>
-                    {row.left ? `${row.left.kind === 'remove' ? '- ' : '  '}${row.left.text}` : ''}
-                  </td>
-                  <td className={css.diffGutter} data-kind={row.right?.kind ?? 'empty'}>
-                    {row.right?.newLine ?? ''}
-                  </td>
-                  <td className={css.diffSplitCell} data-kind={row.right?.kind ?? 'empty'}>
-                    {row.right ? `${row.right.kind === 'add' ? '+ ' : '  '}${row.right.text}` : ''}
-                  </td>
-                </tr>
-              ))}
+              {splitRows.map((row, i) => {
+                const rowAnns = [
+                  ...(row.left?.oldLine !== undefined
+                    ? (annotationMap.get(`before:${row.left.oldLine}`) ?? [])
+                    : []),
+                  ...(row.right?.newLine !== undefined
+                    ? (annotationMap.get(`after:${row.right.newLine}`) ?? [])
+                    : []),
+                ]
+                return (
+                  <Fragment key={i}>
+                    <tr className={css.diffSplitTr}>
+                      <td className={css.diffGutter} data-kind={row.left?.kind ?? 'empty'}>
+                        {row.left?.oldLine ?? ''}
+                      </td>
+                      <td className={css.diffSplitCell} data-kind={row.left?.kind ?? 'empty'}>
+                        {row.left
+                          ? `${row.left.kind === 'remove' ? '- ' : '  '}${row.left.text}`
+                          : ''}
+                      </td>
+                      <td className={css.diffGutter} data-kind={row.right?.kind ?? 'empty'}>
+                        {row.right?.newLine ?? ''}
+                      </td>
+                      <td className={css.diffSplitCell} data-kind={row.right?.kind ?? 'empty'}>
+                        {row.right
+                          ? `${row.right.kind === 'add' ? '+ ' : '  '}${row.right.text}`
+                          : ''}
+                      </td>
+                    </tr>
+                    {rowAnns.map((ann, aIdx) => (
+                      <tr key={`sann-${i}-${aIdx}`} className={css.diffAnnRow}>
+                        <td colSpan={4} className={css.diffAnnCell}>
+                          <div className={css.diffAnnBanner} data-tone={ann.tone}>
+                            {ann.author ? (
+                              <span className={css.diffAnnAuthor}>{ann.author}</span>
+                            ) : null}
+                            <span className={css.diffAnnMsg}>{ann.message}</span>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </Fragment>
+                )
+              })}
             </tbody>
           </table>
         )}

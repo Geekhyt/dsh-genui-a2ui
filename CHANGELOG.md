@@ -2,6 +2,34 @@
 
 All notable changes to `dsh-genui-a2ui` are documented in this file.
 
+## [0.5.0] - 2026-11-22
+
+### Added
+- **7 New ECharts 6 Chart Kinds (`19 → 26`) & 5 Horizontal Chart Capabilities (`echarts-chunk.ts`, `EChartsWidget.tsx`, `constants.ts`, `chart-i18n.ts`, `catalog-schema.ts`)**:
+  - Added `range` (confidence/forecast interval band with negative-safe baseline shifting), `bullet` (OKR/SLO qualitative bands + actual bar + target marker), `histogram` (auto-binned Sturges/Freedman-Diaconis frequency distribution with `bins` and vertical percentile markLine), `dumbbell` (before/after delta connector & dual-color scatter dots), `rose` (Nightingale area-scaled polar wedges), `radialBar` (270° open-quadrant polar progress bars), and `chord` (ECharts 6.1 native `ChordChart` bi-directional service/flow ribbons with cross-filtering).
+  - Added 5 cross-chart options across Cartesian/scatter/combo views: `step` (stepped line series), `yScale: 'linear' | 'log'` (safe positive-domain logarithmic Y-axis), `stackMode: 'value' | 'percent'` (100% normalized stacked bars/areas), `markArea` (semantic shaded highlight windows via `MarkAreaComponent`), and `referenceX` / `referenceXLabel` (scatter quadrant dual-axis reference lines).
+- **7 New Zero-Dependency Native Interactive Components (`57 → 64`) (`NextGenWidgets.tsx`, `v6-helpers.ts`, `BasicWidgets.tsx`, `Catalog.module.css`, `i18n.ts`, `prompt-compact.ts`)**:
+  - Added `RangeSlider` (dual-thumb numeric interval selector wired to two `$/paths`), `Checklist` (pre-flight & compliance gate locking its action button until all `required` items are checked), `SortableList` (HTML5 drag-and-drop + accessible ↑/↓ priority ranking), `KvEditor` (dynamic env/header key-value editor with automatic secret masking for sensitive keys), `Rating` (half-star & 1..N Likert scale inputs), `ImageCompare` (before/after wipe slider comparator), and `AnnotationText` (inline entity/clause highlighting with host `HoverCard` source inspection and category count legend).
+- **In-Place Core Widget Upgrades & 0ms Conditional Aggregates (`25 → 28` functions) (`TableWidget.tsx`, `AntdParityWidgets.tsx`, `P0Widgets.tsx`, `v5-helpers.ts`, `p0-helpers.ts`, `functions.ts`)**:
+  - Upgraded `Table` (`ProTable`) with declarative semantic cell renderers (`format: 'text' | 'badge' | 'bar' | 'delta' | 'sparkline' | 'code'`, `max`) and `stickyFirstColumn`.
+  - Upgraded `Tree` with `offsetPct` paired with `sharePct` for cascading distributed APM trace waterfall bars.
+  - Upgraded `DiffView` with multi-file PR tab switching (`files`, aggregating global `+added/-removed` stats) and inline review `annotations` rendered in both Unified and Split views.
+  - Extended `sum` / `avg` with optional conditional cross-filter parameters `(items, field?, filterField?, filterValue?)` supporting scalar & array OR-matching, and added `count`, `min`, and `max` client functions.
+- **Showcases, Eval Benchmark, Screenshots & Regression Suite (`scripts/mock-llm.mjs`, `scripts/visual-qa-bot.mjs`, `src/host/eval-suite.ts`, `.eval-baseline.json`, `tests/v6-nextgen-charts-and-widgets.spec.ts`)**:
+  - Added `showcase-35`, `showcase-36`, and `showcase-37` (plus 3 Dark/Light README screenshot pairs and 31-case eval coverage ratcheted to **`64/64`** unique components) and comprehensive `276px` / `240px` ECharts SSR, helper, security, and deterministic random-chunk streaming replay tests.
+
+### Fixed
+- **Visual QA Polish & Pre-Release Security / Edge-Case Audit (`echarts-chunk.ts`, `Catalog.module.css`, `ask-tool.ts`, `persistence.ts`, `NextGenWidgets.tsx`, `P0Widgets.tsx`)**:
+  - Positioned vertical `scatter` `referenceX` and `histogram` markLine labels at `position: 'end'` (`rotate: 0`) above the plot headroom instead of colliding with bottom X-axis ticks, disabled markLine/markArea entrance animations (`animation: false`) to prevent half-drawn lines on fast theme toggles, preserved true `referenceLine` labels on negative-baseline `range` charts, and kept stacked `range` bands on linear Y-axis geometry.
+  - Opened the top-left quadrant on `radialBar` (`angleAxis: { startAngle: 90, endAngle: -180 }`, `radiusAxis.axisLabel.align: 'right'`) so labels never collide with 75–100% arcs; assigned explicit series-level `itemStyle.color` to `dumbbell` after-series so before/after legend dots stay visually distinct; and explicitly placed `KvEditor` `@container (max-width: 380px)` grid children onto 2 compact rows (`[key | ×]` + `[value]`).
+  - Redacted `value` inside array-backed `KvEditor` `{ key/name, value }` entries matching `isSecretKey` across both `ask-tool.ts` settlement and `persistence.ts` draft storage, guarded object-backed `KvEditor` against dangerous prototype keys (`__proto__`/`constructor`/`prototype`) and blank-key row drops on Add, synced streaming `defaultChecked` items on uncontrolled `Checklist`, rendered `AnnotationText` hover `sourceId` without requiring `label`, and unified `before:N` / multi-file annotation scoping in `DiffView`.
+
+### Changed
+- **Documentation, Domain Skills, Social Preview & Full Release Gate**:
+  - Partitioned all 64 components cleanly across the 4 on-demand domain skills (`core` 24, `analytics` 12, `devops` 14, `forms` 14) within existing prompt char budgets (`avgPromptTok = 6948` vs `20660` monolithic, **-66.4%**).
+  - Updated `README.md`, `README.en.md`, `docs/DETAIL*.md`, `docs/DEVELOPMENT*.md`, `docs/social-preview.png`, `locale/*.json`, and `screenshots.json` with 3 new Dark/Light visual preview pairs.
+  - Verified full release gate: **35 suites / 198 tests**, **14/14** architectural invariants, **0** comments, **4/4** TLA+ specs, **5/5** bundle budgets unchanged (`lib/client.js = 68.05 kB / 19.16 kB gzip`, +0 B cold-boot overhead), `eval:check` (`31/31`, `64/64` components), `check:host-api`, and **6/6** live DeepSeek Harness Dark & Light visual QA passes (`overflow=0 wrap=0 clip=0 errs=0`).
+
 ## [0.4.8] - 2026-11-22
 
 ### Added

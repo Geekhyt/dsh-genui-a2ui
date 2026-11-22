@@ -2,6 +2,7 @@ import {
   BarChart,
   BoxplotChart,
   CandlestickChart,
+  ChordChart,
   FunnelChart,
   GaugeChart,
   GraphChart,
@@ -20,8 +21,10 @@ import {
   DataZoomComponent,
   GridComponent,
   LegendComponent,
+  MarkAreaComponent,
   MarkLineComponent,
   ParallelComponent,
+  PolarComponent,
   RadarComponent,
   TooltipComponent,
   VisualMapComponent,
@@ -49,7 +52,9 @@ echarts.use([
   BoxplotChart,
   GraphChart,
   CandlestickChart,
+  ChordChart,
   GridComponent,
+  PolarComponent,
   LabelLayout,
   LegacyGridContainLabel,
   TooltipComponent,
@@ -58,6 +63,7 @@ echarts.use([
   ParallelComponent,
   CalendarComponent,
   MarkLineComponent,
+  MarkAreaComponent,
   VisualMapComponent,
   DataZoomComponent,
   CanvasRenderer,
@@ -82,6 +88,13 @@ export interface ChartOptionInput {
   readonly height?: number | undefined
   readonly selected?: string | readonly string[] | undefined
   readonly interactiveSelect?: boolean | undefined
+  readonly step?: boolean | undefined
+  readonly yScale?: 'linear' | 'log' | undefined
+  readonly stackMode?: 'value' | 'percent' | undefined
+  readonly markArea?: unknown
+  readonly referenceX?: number | undefined
+  readonly referenceXLabel?: string | undefined
+  readonly bins?: number | undefined
 }
 
 export function initChartInstance(el: HTMLElement): EChartsInstance {
@@ -540,7 +553,7 @@ function buildReferenceMarkLine(
   horizontal: boolean | undefined,
   color: string,
   dark: boolean,
-  position: 'insideStartTop' | 'insideEndTop' = 'insideEndTop',
+  position: 'insideStartTop' | 'insideEndTop' | 'start' | 'end' = 'insideEndTop',
   compact = false,
 ): Record<string, unknown> | undefined {
   if (value === undefined || !Number.isFinite(value)) return undefined
@@ -549,11 +562,12 @@ function buildReferenceMarkLine(
   const text = truncateByVisualWidth(rawText, compact ? 20 : 32)
   return {
     silent: true,
+    animation: false,
     symbol: ['none', 'none'],
     lineStyle: { color, type: 'dashed', width: 1.5 },
     label: {
       formatter: text,
-      position: horizontal ? 'start' : position,
+      position: horizontal ? (position === 'end' ? 'end' : 'start') : position,
       rotate: horizontal ? 0 : undefined,
       distance: compact && !horizontal ? 6 : 4,
       color,
@@ -669,7 +683,7 @@ function normalizeIsoDate(raw: unknown): string | null {
 }
 
 function extractCategoryAxisLabels(option: Record<string, unknown>): readonly string[] | null {
-  for (const axisKey of ['xAxis', 'yAxis'] as const) {
+  for (const axisKey of ['xAxis', 'yAxis', 'radiusAxis'] as const) {
     const raw = option[axisKey]
     const axis = Array.isArray(raw) ? raw[0] : raw
     if (
@@ -684,6 +698,148 @@ function extractCategoryAxisLabels(option: Record<string, unknown>): readonly st
     }
   }
   return null
+}
+
+function buildMarkAreaOption(
+  rawMarkArea: unknown,
+  theme: ReturnType<typeof resolvePalette>,
+  dark: boolean,
+  isCompact: boolean,
+): Record<string, unknown> | undefined {
+  if (!Array.isArray(rawMarkArea) || rawMarkArea.length === 0) return undefined
+  const toneFill = (tone: string): { readonly fill: string; readonly labelColor: string } => {
+    if (tone === 'danger') {
+      return {
+        fill: dark ? 'rgba(248, 113, 113, 0.16)' : 'rgba(239, 68, 68, 0.11)',
+        labelColor: theme.danger,
+      }
+    }
+    if (tone === 'warning') {
+      return {
+        fill: dark ? 'rgba(251, 191, 36, 0.16)' : 'rgba(245, 158, 11, 0.12)',
+        labelColor: theme.warn,
+      }
+    }
+    if (tone === 'success') {
+      return {
+        fill: dark ? 'rgba(52, 211, 153, 0.15)' : 'rgba(16, 185, 129, 0.11)',
+        labelColor: theme.success,
+      }
+    }
+    return {
+      fill: dark ? 'rgba(96, 165, 250, 0.14)' : 'rgba(37, 99, 235, 0.09)',
+      labelColor: theme.brand,
+    }
+  }
+  const areas: unknown[] = []
+  for (const raw of rawMarkArea) {
+    if (typeof raw !== 'object' || raw === null) continue
+    const rec = raw as Record<string, unknown>
+    const startVal = rec.start ?? rec.from ?? rec.x0
+    const endVal = rec.end ?? rec.to ?? rec.x1
+    if (startVal === undefined || endVal === undefined) continue
+    const tone = typeof rec.tone === 'string' ? rec.tone.trim().toLowerCase() : 'info'
+    const { fill, labelColor } = toneFill(tone)
+    const lbl = rec.label !== undefined && rec.label !== null ? sanitizeChartLabel(rec.label) : ''
+    const isY = rec.axis === 'y'
+    const startPoint: Record<string, unknown> = {
+      ...(isY ? { yAxis: startVal } : { xAxis: startVal }),
+      itemStyle: { color: fill },
+      ...(lbl !== ''
+        ? {
+            name: truncateByVisualWidth(lbl, isCompact ? 10 : 18),
+            label: {
+              show: true,
+              position: 'insideTop',
+              color: labelColor,
+              fontSize: isCompact ? 9 : 10,
+              fontWeight: 600,
+              distance: 4,
+            },
+          }
+        : {}),
+    }
+    const endPoint: Record<string, unknown> = isY ? { yAxis: endVal } : { xAxis: endVal }
+    areas.push([startPoint, endPoint])
+  }
+  if (areas.length === 0) return undefined
+  return { silent: true, animation: false, data: areas }
+}
+
+function formatCompactTickNum(v: number): string {
+  if (!Number.isFinite(v)) return '0'
+  const abs = Math.abs(v)
+  if (abs >= 1000) return String(Math.round(v))
+  if (abs >= 10) return String(Number(v.toFixed(1)))
+  return String(Number(v.toFixed(2)))
+}
+
+export interface HistogramBin {
+  readonly label: string
+  readonly start: number
+  readonly end: number
+  readonly count: number
+  readonly pct: number
+}
+
+export function computeHistogramBins(
+  rawValues: readonly number[],
+  requestedBins: number | undefined,
+  isCompact: boolean,
+): readonly HistogramBin[] {
+  const finite = rawValues.filter(Number.isFinite).sort((a, b) => a - b)
+  if (finite.length === 0) return []
+  const minVal = finite[0]!
+  const maxVal = finite[finite.length - 1]!
+  const span = maxVal - minVal
+  if (span <= 0) {
+    return [
+      {
+        label: formatCompactTickNum(minVal),
+        start: minVal,
+        end: maxVal,
+        count: finite.length,
+        pct: 100,
+      },
+    ]
+  }
+  const q1 = quantile(finite, 0.25)
+  const q3 = quantile(finite, 0.75)
+  const iqr = q3 - q1
+  let autoBins = Math.ceil(Math.log2(finite.length) + 1)
+  if (iqr > 0) {
+    const fdWidth = (2 * iqr) / Math.cbrt(finite.length)
+    if (fdWidth > 0) {
+      autoBins = Math.ceil(span / fdWidth)
+    }
+  }
+  const maxAuto = isCompact ? 8 : 14
+  const binCount =
+    typeof requestedBins === 'number' && Number.isFinite(requestedBins)
+      ? Math.max(2, Math.min(isCompact ? 12 : 40, Math.trunc(requestedBins)))
+      : Math.max(4, Math.min(maxAuto, autoBins))
+  const step = span / binCount
+  const counts = new Array<number>(binCount).fill(0)
+  for (const v of finite) {
+    const idx = Math.min(binCount - 1, Math.max(0, Math.floor((v - minVal) / step)))
+    counts[idx] = (counts[idx] ?? 0) + 1
+  }
+  return counts.map((count, i) => {
+    const start = minVal + i * step
+    const end = i === binCount - 1 ? maxVal : minVal + (i + 1) * step
+    return {
+      label: `${formatCompactTickNum(start)}–${formatCompactTickNum(end)}`,
+      start,
+      end,
+      count,
+      pct: Number(((count / finite.length) * 100).toFixed(1)),
+    }
+  })
+}
+
+function canUseLogScale(yScale: 'linear' | 'log' | undefined, values: readonly number[]): boolean {
+  if (yScale !== 'log') return false
+  return values.some((v) => Number.isFinite(v) && v > 0)
 }
 
 function visualWidthOf(raw: string): number {
@@ -1075,7 +1231,7 @@ function applyCrossFilterSelection(
       }
     }
 
-    if ((type === 'sankey' || type === 'graph') && Array.isArray(s.data)) {
+    if ((type === 'sankey' || type === 'graph' || type === 'chord') && Array.isArray(s.data)) {
       const hasExactNode = (s.data as unknown[]).some((node) => {
         if (typeof node !== 'object' || node === null) return false
         const rec = node as Record<string, unknown>
@@ -2428,7 +2584,7 @@ function buildChartOptionInternal(
       sortedByX.slice(midIdx).map((p) => p.y),
       props.referenceLine,
     )
-    const refLine = buildReferenceMarkLine(
+    const refLineY = buildReferenceMarkLine(
       props.referenceLine,
       props.referenceLabel,
       false,
@@ -2437,7 +2593,35 @@ function buildChartOptionInternal(
       scatterMarkPos,
       isCompact,
     )
-    const bounds = computeRefAxisBounds(scatterYVals, props.referenceLine)
+    const refLineX =
+      numericX && props.referenceX !== undefined && Number.isFinite(props.referenceX)
+        ? buildReferenceMarkLine(
+            props.referenceX,
+            props.referenceXLabel,
+            true,
+            theme.brand,
+            dark,
+            'end',
+            isCompact,
+          )
+        : undefined
+    const refLine =
+      refLineY && refLineX
+        ? {
+            silent: true,
+            animation: false,
+            symbol: ['none', 'none'],
+            lineStyle: refLineY.lineStyle,
+            label: refLineY.label,
+            data: [
+              { yAxis: props.referenceLine, lineStyle: refLineY.lineStyle, label: refLineY.label },
+              { xAxis: props.referenceX, lineStyle: refLineX.lineStyle, label: refLineX.label },
+            ],
+          }
+        : (refLineY ?? refLineX)
+    const scatterMarkArea = buildMarkAreaOption(props.markArea, theme, dark, isCompact)
+    const scatterUseLog = canUseLogScale(props.yScale, scatterYVals)
+    const bounds = scatterUseLog ? {} : computeRefAxisBounds(scatterYVals, props.referenceLine)
 
     const scatterLabelKey = Object.keys(rows[0] ?? {}).find(
       (rk) =>
@@ -2477,6 +2661,7 @@ function buildChartOptionInternal(
               },
               itemStyle: sizeKey ? { opacity: 0.78 } : undefined,
               markLine: idx === 0 ? refLine : undefined,
+              markArea: idx === 0 ? scatterMarkArea : undefined,
               data: numericX
                 ? grpRows.map((r) => ({
                     name: resolveScatterPointName(r, r[groupField]),
@@ -2504,6 +2689,7 @@ function buildChartOptionInternal(
             computeRadiusForVal(rawSizes[params?.dataIndex ?? 0] ?? 0),
           itemStyle: sizeKey ? { opacity: 0.78 } : undefined,
           markLine: idx === 0 ? refLine : undefined,
+          markArea: idx === 0 ? scatterMarkArea : undefined,
           data: numericX
             ? rows.map((r) => ({
                 name: resolveScatterPointName(r),
@@ -2538,7 +2724,7 @@ function buildChartOptionInternal(
           })
         : undefined,
       grid: {
-        top: 18,
+        top: refLineX ? 26 : 18,
         right: isCompact ? 12 : 18,
         bottom: (showScatterLegend ? 32 : 16) + (props.zoom ? 24 : 0),
         left: isCompact ? 8 : 12,
@@ -2570,7 +2756,7 @@ function buildChartOptionInternal(
         splitLine: { lineStyle: { color: theme.border } },
       },
       yAxis: {
-        type: 'value',
+        type: scatterUseLog ? 'log' : 'value',
         ...bounds,
         splitNumber: isCompact ? 3 : undefined,
         axisLabel: { color: theme.textSecondary, fontSize: isCompact ? 10 : 11, hideOverlap: true },
@@ -3166,6 +3352,8 @@ function buildChartOptionInternal(
       }
     })
 
+    const comboMarkArea = buildMarkAreaOption(props.markArea, theme, dark, isCompact)
+    const comboStep = props.step ? ('end' as const) : false
     const barKeySet = new Set(barKeys)
     const lineColorStart = barKeys.length === 1 ? 3 : barKeys.length
     const lineSeries = lineKeys.map((k, idx) => {
@@ -3175,15 +3363,20 @@ function buildChartOptionInternal(
         name: barKeySet.has(k) ? `${label} (2)` : label,
         type: 'line' as const,
         yAxisIndex: 1,
-        smooth: true,
+        smooth: !comboStep,
+        ...(comboStep ? { step: comboStep } : {}),
         symbol: 'circle',
         symbolSize: isCompact ? 5 : 6,
         lineStyle: { color: col, width: isCompact ? 2 : 2.4 },
         itemStyle: { color: col },
         markLine: idx === 0 ? refLine : undefined,
+        markArea: idx === 0 ? comboMarkArea : undefined,
         data: lineDataList[idx] ?? [],
       }
     })
+    if (lineKeys.length === 0 && barSeries[0] && comboMarkArea) {
+      ;(barSeries[0] as Record<string, unknown>).markArea = comboMarkArea
+    }
 
     const stackedComboVals = props.stacked
       ? [
@@ -3196,8 +3389,11 @@ function buildChartOptionInternal(
         ]
       : barDataList.flat()
     const lineVals = lineDataList.flat()
+    const comboUseLog = canUseLogScale(props.yScale, stackedComboVals)
     const leftBounds =
-      lineKeys.length === 0 ? computeRefAxisBounds(stackedComboVals, props.referenceLine) : {}
+      lineKeys.length === 0 && !comboUseLog
+        ? computeRefAxisBounds(stackedComboVals, props.referenceLine)
+        : {}
     const rightBounds =
       lineKeys.length > 0 ? computeRefAxisBounds(lineVals, props.referenceLine) : {}
     const totalSeriesCount = barSeries.length + lineSeries.length
@@ -3205,7 +3401,7 @@ function buildChartOptionInternal(
     const zoomCfg = buildZoomConfig(props.zoom, false, theme.border)
     const legendBottom = props.zoom ? (isCompact ? 26 : 24) : 0
     const leftYAxis = {
-      type: 'value' as const,
+      type: comboUseLog ? ('log' as const) : ('value' as const),
       ...leftBounds,
       splitNumber: isCompact ? 3 : undefined,
       splitLine: { lineStyle: { color: theme.border, type: 'dashed' as const } },
@@ -3550,11 +3746,816 @@ function buildChartOptionInternal(
     }
   }
 
+  if (props.kind === 'range') {
+    const localeMsg = CHART_MESSAGES[resolveClientLocale()]
+    const sample = rows[0] ?? {}
+    const sampleKeys = Object.keys(sample)
+    const explicitList = Array.isArray(props.yField) ? props.yField : []
+    const lowKey =
+      explicitList.length >= 2
+        ? explicitList[0]!
+        : (sampleKeys.find((k) => /^(?:low|lower|min|p10|p25|floor)$/i.test(k)) ?? 'low')
+    const highKey =
+      explicitList.length >= 3
+        ? explicitList[2]!
+        : explicitList.length === 2
+          ? explicitList[1]!
+          : (sampleKeys.find((k) => /^(?:high|upper|max|p90|p95|p99|ceil)$/i.test(k)) ?? 'high')
+    const midKey =
+      explicitList.length >= 3
+        ? explicitList[1]!
+        : typeof props.yField === 'string' &&
+            props.yField !== '' &&
+            props.yField !== lowKey &&
+            props.yField !== highKey
+          ? props.yField
+          : sampleKeys.find(
+              (k) =>
+                k !== xKey &&
+                k !== lowKey &&
+                k !== highKey &&
+                /^(?:value|mid|median|mean|avg|p50|forecast|actual|predicted)$/i.test(k),
+            )
+
+    const categories = rows.map((r) => sanitizeChartLabel(r[xKey] ?? r.name ?? r.date ?? r.label))
+    const rawLows = rows.map((r) => toNumber(r[lowKey] ?? r.low ?? r.lower ?? r.min))
+    const rawHighs = rows.map((r) => toNumber(r[highKey] ?? r.high ?? r.upper ?? r.max))
+    const orderedLows = rawLows.map((lo, i) => Math.min(lo, rawHighs[i] ?? lo))
+    const orderedHighs = rawHighs.map((hi, i) => Math.max(hi, rawLows[i] ?? hi))
+    const midVals = midKey
+      ? rows.map((r, i) => {
+          const raw = r[midKey]
+          return raw !== undefined && raw !== null
+            ? toNumber(raw)
+            : Number((((orderedLows[i] ?? 0) + (orderedHighs[i] ?? 0)) / 2).toFixed(2))
+        })
+      : orderedLows.map((lo, i) => Number(((lo + (orderedHighs[i] ?? lo)) / 2).toFixed(2)))
+    const minLow = orderedLows.length > 0 ? Math.min(...orderedLows) : 0
+    const baseline = minLow < 0 ? Math.floor(minLow * 1.1) : 0
+    const baseData = orderedLows.map((lo) => Number((lo - baseline).toFixed(4)))
+    const spanData = orderedHighs.map((hi, i) => Number((hi - (orderedLows[i] ?? 0)).toFixed(4)))
+    const shiftedMid = midVals.map((m) => Number((m - baseline).toFixed(4)))
+    const rangeMarkArea = buildMarkAreaOption(props.markArea, theme, dark, isCompact)
+    const rangeStep = props.step ? ('end' as const) : false
+    const shiftedRef =
+      props.referenceLine !== undefined && Number.isFinite(props.referenceLine)
+        ? props.referenceLine - baseline
+        : undefined
+    const rangeRefLabel =
+      props.referenceLabel !== undefined && props.referenceLabel.trim() !== ''
+        ? props.referenceLabel
+        : props.referenceLine !== undefined && Number.isFinite(props.referenceLine)
+          ? String(props.referenceLine)
+          : undefined
+    const rangeMarkPos = pickMarkLinePosition(
+      shiftedMid.slice(0, 2),
+      shiftedMid.slice(-2),
+      shiftedRef,
+    )
+    const refLine = buildReferenceMarkLine(
+      shiftedRef,
+      rangeRefLabel,
+      false,
+      theme.danger,
+      dark,
+      rangeMarkPos,
+      isCompact,
+    )
+    const estW = containerWidth !== undefined && containerWidth > 0 ? containerWidth : 540
+    const maxCatW = isCompact
+      ? Math.max(40, Math.floor((estW - 44) / Math.min(6, Math.max(2, categories.length))))
+      : undefined
+    const zoomCfg = buildZoomConfig(props.zoom, false, theme.border)
+    const midSeriesName = midKey ? sanitizeChartLabel(midKey) : localeMsg.chartRangeMid
+
+    return {
+      color: theme.colors,
+      tooltip: {
+        ...baseTooltip,
+        trigger: 'axis',
+        formatter: (params: unknown) => {
+          const list = Array.isArray(params) ? params : [params]
+          const first = list[0] as { dataIndex?: number; axisValueLabel?: string } | undefined
+          const idx = first?.dataIndex ?? -1
+          if (idx < 0 || idx >= categories.length) return ''
+          const lo = orderedLows[idx] ?? 0
+          const hi = orderedHighs[idx] ?? 0
+          const mid = midVals[idx] ?? 0
+          return `${categories[idx]}\n${midSeriesName}: ${mid}\n${localeMsg.chartRangeBand}: ${lo} – ${hi}`
+        },
+      },
+      legend: buildLegendOption({
+        isCompact,
+        scroll: isCompact,
+        bottom: props.zoom ? 24 : 0,
+        names: [midSeriesName, localeMsg.chartRangeBand],
+        data: [midSeriesName, localeMsg.chartRangeBand],
+        textColor: theme.textSecondary,
+        containerWidth,
+      }),
+      dataZoom: zoomCfg,
+      grid: {
+        top: 18,
+        right: isCompact ? 10 : 18,
+        bottom: 34 + (props.zoom ? 24 : 0),
+        left: isCompact ? 6 : 12,
+        containLabel: true,
+      },
+      xAxis: {
+        type: 'category',
+        boundaryGap: false,
+        data: categories,
+        axisLine: { lineStyle: { color: theme.border } },
+        axisLabel: {
+          color: theme.textSecondary,
+          fontSize: isCompact ? 10 : 11,
+          hideOverlap: true,
+          ...(maxCatW !== undefined
+            ? { width: maxCatW, overflow: 'truncate' as const, ellipsis: '…' }
+            : {}),
+        },
+      },
+      yAxis: {
+        type: 'value',
+        splitNumber: isCompact ? 3 : undefined,
+        splitLine: { lineStyle: { color: theme.border } },
+        axisLabel: {
+          color: theme.textSecondary,
+          fontSize: isCompact ? 10 : 11,
+          hideOverlap: true,
+          formatter: (val: number) => formatCompactTickNum(val + baseline),
+        },
+      },
+      series: [
+        {
+          name: '',
+          type: 'line',
+          stack: 'rangeBand',
+          smooth: !rangeStep,
+          ...(rangeStep ? { step: rangeStep } : {}),
+          symbol: 'none',
+          lineStyle: { opacity: 0 },
+          areaStyle: { opacity: 0 },
+          silent: true,
+          tooltip: { show: false },
+          data: baseData,
+        },
+        {
+          name: localeMsg.chartRangeBand,
+          type: 'line',
+          stack: 'rangeBand',
+          smooth: !rangeStep,
+          ...(rangeStep ? { step: rangeStep } : {}),
+          symbol: 'none',
+          lineStyle: { width: 1, opacity: 0.45, color: theme.brand },
+          areaStyle: { color: theme.brand, opacity: dark ? 0.24 : 0.18 },
+          itemStyle: { color: theme.brand },
+          data: spanData,
+        },
+        {
+          name: midSeriesName,
+          type: 'line',
+          smooth: !rangeStep,
+          ...(rangeStep ? { step: rangeStep } : {}),
+          symbol: 'circle',
+          symbolSize: isCompact ? 4 : 6,
+          lineStyle: { width: 2.2, color: theme.brand },
+          itemStyle: { color: theme.brand },
+          markLine: refLine,
+          markArea: rangeMarkArea,
+          data: shiftedMid,
+        },
+      ],
+    }
+  }
+
+  if (props.kind === 'bullet') {
+    const localeMsg = CHART_MESSAGES[resolveClientLocale()]
+    const valField =
+      typeof props.yField === 'string' && props.yField !== '' ? props.yField : primaryY
+    const parsedRows = rows.map((r, idx) => {
+      const label = sanitizeChartLabel(r[xKey] ?? r.label ?? r.name ?? `#${idx + 1}`)
+      const actual = toNumber(r[valField] ?? r.actual ?? r.value ?? 0)
+      const hasTarget = r.target !== undefined && r.target !== null
+      const target = hasTarget ? toNumber(r.target) : undefined
+      const rawRanges = Array.isArray(r.ranges)
+        ? (r.ranges as unknown[]).map(toNumber).filter((n) => n > 0)
+        : []
+      const explicitMax = r.max !== undefined && r.max !== null ? toNumber(r.max) : 0
+      const inferredMax = Math.max(
+        explicitMax,
+        actual * 1.15,
+        (target ?? 0) * 1.15,
+        rawRanges.length > 0 ? Math.max(...rawRanges) : 0,
+        100,
+      )
+      const rHigh = rawRanges[2] ?? inferredMax
+      const rMid = rawRanges[1] ?? Number((rHigh * 0.85).toFixed(2))
+      const rLow = rawRanges[0] ?? Number((rHigh * 0.6).toFixed(2))
+      return { label, actual, target, rLow, rMid, rHigh }
+    })
+    const categories = parsedRows.map((p) => p.label)
+    const maxBound = Math.max(
+      ...parsedRows.map((p) => Math.max(p.rHigh, p.actual, p.target ?? 0)),
+      1,
+    )
+    const estW = containerWidth !== undefined && containerWidth > 0 ? containerWidth : 540
+    const maxYLabelW = isCompact
+      ? Math.min(88, Math.floor(estW * 0.34))
+      : Math.min(156, Math.floor(estW * 0.32))
+    const bgHigh = dark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(15, 23, 42, 0.07)'
+    const bgMid = dark ? 'rgba(255, 255, 255, 0.14)' : 'rgba(15, 23, 42, 0.13)'
+    const bgLow = dark ? 'rgba(255, 255, 255, 0.21)' : 'rgba(15, 23, 42, 0.19)'
+    const barBandH = isCompact ? 16 : 22
+    const actualBarH = isCompact ? 7 : 10
+    const targetPoints = parsedRows
+      .map((p, idx) => (p.target !== undefined ? { name: p.label, value: [p.target, idx] } : null))
+      .filter((pt): pt is { name: string; value: [number, number] } => pt !== null)
+
+    return {
+      color: theme.colors,
+      tooltip: {
+        ...baseTooltip,
+        trigger: 'axis',
+        axisPointer: { type: 'shadow' },
+        formatter: (params: unknown) => {
+          const list = Array.isArray(params) ? params : [params]
+          const first = list[0] as { dataIndex?: number } | undefined
+          const idx = first?.dataIndex ?? -1
+          const item = parsedRows[idx]
+          if (!item) return ''
+          const lines = [`${item.label}`, `${localeMsg.chartBulletActual}: ${item.actual}`]
+          if (item.target !== undefined) {
+            const pct = item.target > 0 ? Math.round((item.actual / item.target) * 100) : 0
+            lines.push(`${localeMsg.chartBulletTarget}: ${item.target} (${pct}%)`)
+          }
+          return lines.join('\n')
+        },
+      },
+      grid: {
+        top: 14,
+        right: isCompact ? 12 : 20,
+        bottom: 18,
+        left: isCompact ? 6 : 12,
+        containLabel: true,
+      },
+      xAxis: {
+        type: 'value',
+        max: niceUpperBound(maxBound),
+        splitNumber: isCompact ? 3 : 5,
+        splitLine: { lineStyle: { color: theme.border, type: 'dashed' } },
+        axisLabel: { color: theme.textSecondary, fontSize: isCompact ? 10 : 11, hideOverlap: true },
+      },
+      yAxis: {
+        type: 'category',
+        inverse: true,
+        data: categories,
+        axisLine: { lineStyle: { color: theme.border } },
+        axisTick: { show: false },
+        axisLabel: {
+          color: theme.textPrimary,
+          fontSize: isCompact ? 10 : 11.5,
+          width: maxYLabelW,
+          overflow: 'truncate',
+          ellipsis: '…',
+        },
+      },
+      series: [
+        {
+          name: '',
+          type: 'bar',
+          barWidth: barBandH,
+          barGap: '-100%',
+          silent: true,
+          z: 1,
+          itemStyle: { color: bgHigh, borderRadius: 4 },
+          data: parsedRows.map((p) => p.rHigh),
+        },
+        {
+          name: '',
+          type: 'bar',
+          barWidth: barBandH,
+          barGap: '-100%',
+          silent: true,
+          z: 2,
+          itemStyle: { color: bgMid, borderRadius: 4 },
+          data: parsedRows.map((p) => p.rMid),
+        },
+        {
+          name: '',
+          type: 'bar',
+          barWidth: barBandH,
+          barGap: '-100%',
+          silent: true,
+          z: 3,
+          itemStyle: { color: bgLow, borderRadius: 4 },
+          data: parsedRows.map((p) => p.rLow),
+        },
+        {
+          name: localeMsg.chartBulletActual,
+          type: 'bar',
+          barWidth: actualBarH,
+          barGap: '-100%',
+          z: 4,
+          data: parsedRows.map((p) => {
+            const col =
+              p.target !== undefined
+                ? p.actual >= p.target
+                  ? theme.success
+                  : p.actual >= p.target * 0.8
+                    ? theme.brand
+                    : theme.warn
+                : theme.brand
+            return {
+              value: p.actual,
+              itemStyle: { color: col, borderRadius: 3 },
+            }
+          }),
+        },
+        ...(targetPoints.length > 0
+          ? [
+              {
+                name: localeMsg.chartBulletTarget,
+                type: 'scatter' as const,
+                symbol: 'rect',
+                symbolSize: [3, isCompact ? 16 : 22],
+                z: 6,
+                itemStyle: { color: theme.danger },
+                data: targetPoints,
+              },
+            ]
+          : []),
+      ],
+    }
+  }
+
+  if (props.kind === 'histogram') {
+    const localeMsg = CHART_MESSAGES[resolveClientLocale()]
+    const rawValues: number[] = []
+    if (Array.isArray(props.data)) {
+      for (const item of props.data) {
+        if (typeof item === 'number' && Number.isFinite(item)) {
+          rawValues.push(item)
+        } else if (typeof item === 'object' && item !== null && !Array.isArray(item)) {
+          const rec = item as Record<string, unknown>
+          const valKey =
+            typeof props.yField === 'string' && props.yField !== ''
+              ? props.yField
+              : (Object.keys(rec).find((k) => typeof rec[k] === 'number') ?? primaryY)
+          const rawV = rec[valKey] ?? rec.value ?? rec.x
+          if (typeof rawV === 'number' && Number.isFinite(rawV)) {
+            rawValues.push(rawV)
+          } else if (typeof rawV === 'string' && rawV.trim() !== '') {
+            const parsed = Number(rawV.replace(/,/g, '').trim())
+            if (Number.isFinite(parsed)) rawValues.push(parsed)
+          }
+        }
+      }
+    }
+    const bins = computeHistogramBins(rawValues, props.bins, isCompact)
+    const categories = bins.map((b) => b.label)
+    const counts = bins.map((b) => b.count)
+    const useLog = canUseLogScale(props.yScale, counts)
+    let refMarkLine: Record<string, unknown> | undefined
+    if (
+      props.referenceLine !== undefined &&
+      Number.isFinite(props.referenceLine) &&
+      bins.length > 0
+    ) {
+      let targetIdx = bins.findIndex(
+        (b, i) =>
+          props.referenceLine! >= b.start &&
+          (i === bins.length - 1 ? props.referenceLine! <= b.end : props.referenceLine! < b.end),
+      )
+      if (targetIdx < 0) {
+        targetIdx = props.referenceLine! < bins[0]!.start ? 0 : bins.length - 1
+      }
+      const refLbl =
+        props.referenceLabel !== undefined && props.referenceLabel.trim() !== ''
+          ? sanitizeChartLabel(props.referenceLabel)
+          : String(props.referenceLine)
+      refMarkLine = buildReferenceMarkLine(
+        targetIdx,
+        refLbl,
+        true,
+        theme.danger,
+        dark,
+        'end',
+        isCompact,
+      )
+    }
+    const estW = containerWidth !== undefined && containerWidth > 0 ? containerWidth : 540
+    const maxCatW = isCompact
+      ? Math.max(36, Math.floor((estW - 44) / Math.min(6, Math.max(2, categories.length))))
+      : undefined
+    const zoomCfg = buildZoomConfig(props.zoom, false, theme.border)
+
+    return {
+      color: theme.colors,
+      tooltip: {
+        ...baseTooltip,
+        trigger: 'axis',
+        axisPointer: { type: 'shadow' },
+        formatter: (params: unknown) => {
+          const list = Array.isArray(params) ? params : [params]
+          const first = list[0] as { dataIndex?: number } | undefined
+          const bin = bins[first?.dataIndex ?? -1]
+          if (!bin) return ''
+          return `${bin.label}\n${localeMsg.chartHistogramFreq}: ${bin.count} (${bin.pct}%)`
+        },
+      },
+      dataZoom: zoomCfg,
+      grid: {
+        top: refMarkLine ? 26 : 16,
+        right: isCompact ? 10 : 18,
+        bottom: 18 + (props.zoom ? 24 : 0),
+        left: isCompact ? 6 : 12,
+        containLabel: true,
+      },
+      xAxis: {
+        type: 'category',
+        data: categories,
+        axisLine: { lineStyle: { color: theme.border } },
+        axisLabel: {
+          color: theme.textSecondary,
+          fontSize: isCompact ? 9.5 : 10.5,
+          hideOverlap: true,
+          ...(maxCatW !== undefined
+            ? { width: maxCatW, overflow: 'truncate' as const, ellipsis: '…' }
+            : {}),
+        },
+      },
+      yAxis: {
+        type: useLog ? 'log' : 'value',
+        splitNumber: isCompact ? 3 : undefined,
+        splitLine: { lineStyle: { color: theme.border } },
+        axisLabel: { color: theme.textSecondary, fontSize: isCompact ? 10 : 11, hideOverlap: true },
+      },
+      series: [
+        {
+          name: localeMsg.chartHistogramFreq,
+          type: 'bar',
+          barCategoryGap: '8%',
+          itemStyle: { color: theme.brand, borderRadius: [3, 3, 0, 0] },
+          markLine: refMarkLine,
+          data: useLog ? counts.map((c) => (c > 0 ? c : null)) : counts,
+        },
+      ],
+    }
+  }
+
+  if (props.kind === 'dumbbell') {
+    const localeMsg = CHART_MESSAGES[resolveClientLocale()]
+    const sample = rows[0] ?? {}
+    const sampleKeys = Object.keys(sample)
+    const explicitList = Array.isArray(props.yField) ? props.yField : []
+    const beforeKey =
+      explicitList.length >= 2
+        ? explicitList[0]!
+        : (sampleKeys.find((k) => /^(?:before|start|from|baseline|old|min|prev)$/i.test(k)) ??
+          'before')
+    const afterKey =
+      explicitList.length >= 2
+        ? explicitList[1]!
+        : (sampleKeys.find((k) => /^(?:after|end|to|current|new|max|next)$/i.test(k)) ?? 'after')
+    const beforeName =
+      explicitList.length >= 2 ? sanitizeChartLabel(beforeKey) : localeMsg.chartDumbbellBefore
+    const afterName =
+      explicitList.length >= 2 ? sanitizeChartLabel(afterKey) : localeMsg.chartDumbbellAfter
+
+    const parsed = rows.map((r, idx) => {
+      const label = sanitizeChartLabel(r[xKey] ?? r.label ?? r.name ?? `#${idx + 1}`)
+      const before = toNumber(r[beforeKey] ?? r.before ?? r.start ?? r.from ?? 0)
+      const after = toNumber(r[afterKey] ?? r.after ?? r.end ?? r.to ?? 0)
+      return { label, before, after, delta: Number((after - before).toFixed(2)) }
+    })
+    const categories = parsed.map((p) => p.label)
+    const allVals = parsed.flatMap((p) => [p.before, p.after])
+    const minVal = allVals.length > 0 ? Math.min(...allVals) : 0
+    const baseline = minVal < 0 ? Math.floor(minVal * 1.15) : 0
+    const baseData = parsed.map((p) => Number((Math.min(p.before, p.after) - baseline).toFixed(4)))
+    const spanData = parsed.map((p) => Number(Math.abs(p.after - p.before).toFixed(4)))
+    const estW = containerWidth !== undefined && containerWidth > 0 ? containerWidth : 540
+    const maxYLabelW = isCompact
+      ? Math.min(88, Math.floor(estW * 0.34))
+      : Math.min(156, Math.floor(estW * 0.32))
+    const dotSize = isCompact ? 9 : 11
+    const connectorColor = dark ? 'rgba(148, 163, 184, 0.5)' : 'rgba(100, 116, 139, 0.42)'
+    const beforeColor = dark ? '#94a3b8' : '#64748b'
+
+    return {
+      color: [beforeColor, theme.brand],
+      tooltip: {
+        ...baseTooltip,
+        trigger: 'axis',
+        axisPointer: { type: 'shadow' },
+        formatter: (params: unknown) => {
+          const list = Array.isArray(params) ? params : [params]
+          const first = list[0] as { dataIndex?: number } | undefined
+          const item = parsed[first?.dataIndex ?? -1]
+          if (!item) return ''
+          const sign = item.delta > 0 ? '+' : ''
+          return `${item.label}\n${beforeName}: ${item.before}\n${afterName}: ${item.after} (${sign}${item.delta})`
+        },
+      },
+      legend: buildLegendOption({
+        isCompact,
+        scroll: isCompact,
+        bottom: 0,
+        names: [beforeName, afterName],
+        data: [beforeName, afterName],
+        textColor: theme.textSecondary,
+        containerWidth,
+      }),
+      grid: {
+        top: 14,
+        right: isCompact ? 12 : 20,
+        bottom: 34,
+        left: isCompact ? 6 : 12,
+        containLabel: true,
+      },
+      xAxis: {
+        type: 'value',
+        splitNumber: isCompact ? 3 : 5,
+        splitLine: { lineStyle: { color: theme.border, type: 'dashed' } },
+        axisLabel: {
+          color: theme.textSecondary,
+          fontSize: isCompact ? 10 : 11,
+          hideOverlap: true,
+          formatter: (val: number) => formatCompactTickNum(val + baseline),
+        },
+      },
+      yAxis: {
+        type: 'category',
+        inverse: true,
+        data: categories,
+        axisLine: { lineStyle: { color: theme.border } },
+        axisTick: { show: false },
+        axisLabel: {
+          color: theme.textPrimary,
+          fontSize: isCompact ? 10 : 11.5,
+          width: maxYLabelW,
+          overflow: 'truncate',
+          ellipsis: '…',
+        },
+      },
+      series: [
+        {
+          name: '',
+          type: 'bar',
+          stack: 'dumbbellLink',
+          barWidth: 3,
+          silent: true,
+          tooltip: { show: false },
+          itemStyle: { color: 'transparent' },
+          data: baseData,
+        },
+        {
+          name: '',
+          type: 'bar',
+          stack: 'dumbbellLink',
+          barWidth: 3,
+          silent: true,
+          tooltip: { show: false },
+          itemStyle: { color: connectorColor, borderRadius: 2 },
+          data: spanData,
+        },
+        {
+          name: beforeName,
+          type: 'scatter',
+          symbolSize: dotSize,
+          z: 5,
+          itemStyle: {
+            color: beforeColor,
+            borderColor: dark ? '#0f172a' : '#ffffff',
+            borderWidth: 1.5,
+          },
+          data: parsed.map((p, idx) => ({ name: p.label, value: [p.before - baseline, idx] })),
+        },
+        {
+          name: afterName,
+          type: 'scatter',
+          symbolSize: dotSize + 1,
+          z: 6,
+          itemStyle: {
+            color: theme.brand,
+            borderColor: dark ? '#0f172a' : '#ffffff',
+            borderWidth: 1.5,
+          },
+          data: parsed.map((p, idx) => ({
+            name: p.label,
+            value: [p.after - baseline, idx],
+            itemStyle: {
+              color: p.after >= p.before ? theme.success : theme.brand,
+            },
+          })),
+        },
+      ],
+    }
+  }
+
+  if (props.kind === 'rose') {
+    const items = rows.map((r) => ({
+      name: sanitizeChartLabel(r[xKey] ?? r.name ?? r.label),
+      value: Math.max(0, toNumber(r[primaryY] ?? r.value)),
+    }))
+    const hideLabels = isCompact || items.length > 6
+    return {
+      color: theme.colors,
+      tooltip: {
+        ...baseTooltip,
+        trigger: 'item',
+        formatter: isCompact ? '{b}\n{c} ({d}%)' : '{b}: {c} ({d}%)',
+      },
+      legend: buildLegendOption({
+        isCompact,
+        scroll: isCompact || items.length >= 4,
+        names: items.map((item) => item.name),
+        textColor: theme.textSecondary,
+        containerWidth,
+      }),
+      series: [
+        {
+          type: 'pie',
+          roseType: 'area',
+          radius: isCompact ? ['16%', '64%'] : ['18%', '68%'],
+          center: ['50%', '43%'],
+          itemStyle: { borderRadius: 5 },
+          label: hideLabels
+            ? { show: false }
+            : {
+                color: theme.textSecondary,
+                fontSize: 11,
+                formatter: '{b} {d}%',
+                overflow: 'truncate',
+                width: 86,
+              },
+          labelLine: hideLabels ? { show: false } : { length: 8, length2: 8 },
+          data: items,
+        },
+      ],
+    }
+  }
+
+  if (props.kind === 'radialBar') {
+    const items = rows.map((r, idx) => ({
+      name: sanitizeChartLabel(r[xKey] ?? r.name ?? r.label ?? `#${idx + 1}`),
+      value: Math.max(0, toNumber(r[primaryY] ?? r.value)),
+      max: r.max !== undefined && r.max !== null ? toNumber(r.max) : 0,
+    }))
+    const maxVal = Math.max(
+      ...items.map((it) => Math.max(it.value, it.max)),
+      items.every((it) => it.value <= 100) ? 100 : 1,
+    )
+    const radialCategories = items.map((it) => it.name)
+    const trackBg = dark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(15, 23, 42, 0.07)'
+    return {
+      color: theme.colors,
+      tooltip: {
+        ...baseTooltip,
+        trigger: 'item',
+        formatter: (p: unknown) => {
+          const rec = p as { name?: string; value?: number }
+          const pct = maxVal > 0 ? Math.round(((rec.value ?? 0) / maxVal) * 100) : 0
+          return `${sanitizeChartLabel(rec.name)}: ${rec.value ?? 0} (${pct}%)`
+        },
+      },
+      polar: {
+        radius: isCompact ? ['24%', '84%'] : ['26%', '86%'],
+        center: ['52%', '52%'],
+      },
+      angleAxis: {
+        max: maxVal,
+        startAngle: 90,
+        endAngle: -180,
+        axisLine: { show: false },
+        axisTick: { show: false },
+        axisLabel: { show: false },
+        splitLine: { show: false },
+      },
+      radiusAxis: {
+        type: 'category',
+        data: radialCategories,
+        axisLine: { show: false },
+        axisTick: { show: false },
+        axisLabel: {
+          color: theme.textSecondary,
+          fontSize: isCompact ? 9.5 : 10.5,
+          interval: 0,
+          align: 'right',
+          margin: 6,
+          width: isCompact ? 62 : 90,
+          overflow: 'truncate',
+        },
+      },
+      series: [
+        {
+          type: 'bar',
+          coordinateSystem: 'polar',
+          roundCap: true,
+          showBackground: true,
+          backgroundStyle: { color: trackBg },
+          barWidth: isCompact
+            ? Math.max(6, Math.min(11, Math.floor(54 / Math.max(1, items.length))))
+            : 12,
+          data: items.map((it, idx) => ({
+            name: it.name,
+            value: it.value,
+            itemStyle: { color: theme.colors[idx % theme.colors.length] },
+          })),
+        },
+      ],
+    }
+  }
+
+  if (props.kind === 'chord') {
+    const rawObj =
+      typeof props.data === 'object' && props.data !== null && !Array.isArray(props.data)
+        ? (props.data as Record<string, unknown>)
+        : null
+    const rawLinks = Array.isArray(rawObj?.links)
+      ? (rawObj.links as Record<string, unknown>[])
+      : Array.isArray(rawObj?.edges)
+        ? (rawObj.edges as Record<string, unknown>[])
+        : rows
+    const srcField = props.xField ?? 'source'
+    const tgtField = props.seriesField ?? 'target'
+    const valField =
+      typeof props.yField === 'string' && props.yField !== '' ? props.yField : 'value'
+
+    const nodeNames = new Set<string>()
+    if (Array.isArray(rawObj?.nodes)) {
+      for (const n of rawObj.nodes as Record<string, unknown>[]) {
+        const name = sanitizeChartLabel(n?.name ?? n?.label ?? n?.id)
+        if (name) nodeNames.add(name)
+      }
+    }
+    const links: Array<{ source: string; target: string; value: number }> = []
+    for (const r of rawLinks) {
+      if (typeof r !== 'object' || r === null) continue
+      const source = sanitizeChartLabel(r[srcField] ?? r.source ?? r.from)
+      const target = sanitizeChartLabel(r[tgtField] ?? r.target ?? r.to)
+      const value = Math.max(0.01, toNumber(r[valField] ?? r.value ?? r.weight ?? 1))
+      if (!source || !target) continue
+      nodeNames.add(source)
+      nodeNames.add(target)
+      links.push({ source, target, value })
+    }
+    const nodes = [...nodeNames].map((name, idx) => ({
+      name,
+      itemStyle: { color: theme.colors[idx % theme.colors.length] },
+    }))
+    return {
+      color: theme.colors,
+      tooltip: {
+        ...baseTooltip,
+        trigger: 'item',
+        formatter: (p: unknown) => {
+          const rec = p as {
+            dataType?: string
+            name?: string
+            data?: { source?: string; target?: string; value?: number }
+          }
+          if (rec.dataType === 'edge' && rec.data) {
+            return `${sanitizeChartLabel(rec.data.source)} → ${sanitizeChartLabel(rec.data.target)}: ${rec.data.value ?? 0}`
+          }
+          return sanitizeChartLabel(rec.name)
+        },
+      },
+      series: [
+        {
+          type: 'chord',
+          clockwise: true,
+          radius: isCompact ? ['46%', '54%'] : ['56%', '65%'],
+          center: ['50%', '50%'],
+          padAngle: 2,
+          label: {
+            show: true,
+            color: theme.textPrimary,
+            fontSize: isCompact ? 9.5 : 11,
+            width: isCompact ? 54 : 92,
+            overflow: 'truncate',
+          },
+          lineStyle: {
+            color: 'source',
+            opacity: dark ? 0.42 : 0.36,
+          },
+          emphasis: { focus: 'adjacency' },
+          data: nodes,
+          links,
+        },
+      ],
+    }
+  }
+
   const categories = [...new Set(rows.map((r) => sanitizeChartLabel(r[xKey])))]
   const echartsType = props.kind === 'bar' ? 'bar' : 'line'
   const isArea = props.kind === 'area'
   const isHorizontal = props.kind === 'bar' && Boolean(props.horizontal)
-  const stackKey = props.stacked ? 'total' : undefined
+  const isPercentStack = props.stackMode === 'percent'
+  const isStacked = Boolean(props.stacked) || isPercentStack
+  const stackKey = isStacked ? 'total' : undefined
+  const lineStep = echartsType === 'line' && props.step ? ('end' as const) : false
   const barRadius = isHorizontal ? [0, 4, 4, 0] : [4, 4, 0, 0]
   const negBarRadius = isHorizontal ? [4, 0, 0, 4] : [0, 0, 4, 4]
   const formatBarData = (vals: readonly (number | null)[]) => {
@@ -3566,7 +4567,7 @@ function buildChartOptionInternal(
     )
   }
 
-  let series: Record<string, unknown>[]
+  let rawSeriesVals: Array<{ readonly name: string; readonly vals: Array<number | null> }>
   if (props.seriesField) {
     const groupField = props.seriesField
     const groups = [...new Set(rows.map((r) => sanitizeChartLabel(r[groupField])))]
@@ -3580,24 +4581,15 @@ function buildChartOptionInternal(
       groupedSums.set(key, (groupedSums.get(key) ?? 0) + toNumber(rawVal))
     }
     const missingVal = echartsType === 'line' ? null : 0
-    series = groups.map((group) => {
-      const rawData = categories.map((cat) => {
+    rawSeriesVals = groups.map((group) => ({
+      name: group,
+      vals: categories.map((cat) => {
         const key = `${group}\u0000${cat}`
         return groupedSums.has(key) ? groupedSums.get(key)! : missingVal
-      })
-      return {
-        name: group,
-        type: echartsType,
-        smooth: echartsType === 'line',
-        stack: stackKey,
-        areaStyle: isArea ? { opacity: 0.2 } : undefined,
-        barMaxWidth: 32,
-        itemStyle: props.kind === 'bar' ? { borderRadius: barRadius } : undefined,
-        data: formatBarData(rawData),
-      }
-    })
+      }),
+    }))
   } else {
-    series = yKeys.map((k) => {
+    rawSeriesVals = yKeys.map((k) => {
       let dataValues: number[]
       if (categories.length === rows.length) {
         dataValues = rows.map((r) => toNumber(r[k]))
@@ -3609,18 +4601,43 @@ function buildChartOptionInternal(
         }
         dataValues = categories.map((cat) => sums.get(cat) ?? 0)
       }
-      return {
-        name: sanitizeChartLabel(k),
-        type: echartsType,
-        smooth: echartsType === 'line',
-        stack: stackKey,
-        areaStyle: isArea ? { opacity: 0.2 } : undefined,
-        barMaxWidth: 32,
-        itemStyle: props.kind === 'bar' ? { borderRadius: barRadius } : undefined,
-        data: formatBarData(dataValues),
-      }
+      return { name: sanitizeChartLabel(k), vals: dataValues }
     })
   }
+
+  const categoryTotals = isPercentStack
+    ? categories.map((_, cIdx) =>
+        rawSeriesVals.reduce((sum, s) => sum + Math.abs(s.vals[cIdx] ?? 0), 0),
+      )
+    : []
+
+  const allRawNums = rawSeriesVals.flatMap((s) =>
+    s.vals.filter((v): v is number => typeof v === 'number'),
+  )
+  const useLogAxis = !isPercentStack && !isStacked && canUseLogScale(props.yScale, allRawNums)
+
+  const series: Record<string, unknown>[] = rawSeriesVals.map((item) => {
+    const plottedVals = isPercentStack
+      ? item.vals.map((v, cIdx) => {
+          const tot = categoryTotals[cIdx] ?? 0
+          if (v === null || tot <= 0) return echartsType === 'line' ? null : 0
+          return Number(((Math.abs(v) / tot) * 100).toFixed(1))
+        })
+      : useLogAxis
+        ? item.vals.map((v) => (typeof v === 'number' && v > 0 ? v : null))
+        : item.vals
+    return {
+      name: item.name,
+      type: echartsType,
+      smooth: echartsType === 'line' && !lineStep,
+      ...(lineStep ? { step: lineStep } : {}),
+      stack: stackKey,
+      areaStyle: isArea ? { opacity: 0.2 } : undefined,
+      barMaxWidth: 32,
+      itemStyle: props.kind === 'bar' ? { borderRadius: barRadius } : undefined,
+      data: formatBarData(plottedVals),
+    }
+  })
 
   const extractDatumNum = (raw: unknown): number => {
     if (typeof raw === 'object' && raw !== null && 'value' in raw) {
@@ -3629,7 +4646,7 @@ function buildChartOptionInternal(
     return toNumber(raw)
   }
 
-  const stackedPosSums = props.stacked
+  const stackedPosSums = isStacked
     ? categories.map((_, cIdx) =>
         series.reduce((sum, s) => {
           const v = extractDatumNum((s.data as unknown[])[cIdx])
@@ -3637,7 +4654,7 @@ function buildChartOptionInternal(
         }, 0),
       )
     : []
-  const stackedNegSums = props.stacked
+  const stackedNegSums = isStacked
     ? categories.map((_, cIdx) =>
         series.reduce((sum, s) => {
           const v = extractDatumNum((s.data as unknown[])[cIdx])
@@ -3649,7 +4666,7 @@ function buildChartOptionInternal(
     props.referenceLine !== undefined &&
     Number.isFinite(props.referenceLine) &&
     props.referenceLine < 0
-  const cartesianEdgeVals = props.stacked
+  const cartesianEdgeVals = isStacked
     ? isNegRefLine
       ? stackedNegSums
       : stackedPosSums
@@ -3673,14 +4690,22 @@ function buildChartOptionInternal(
     cartMarkPos,
     isCompact,
   )
+  const cartMarkArea = buildMarkAreaOption(props.markArea, theme, dark, isCompact)
   if (series[0] && refLine) {
     series[0].markLine = refLine
   }
+  if (series[0] && cartMarkArea) {
+    series[0].markArea = cartMarkArea
+  }
 
-  const cartesianVals = props.stacked
+  const cartesianVals = isStacked
     ? [...stackedPosSums, ...stackedNegSums]
     : series.flatMap((s) => (s.data as unknown[]).map(extractDatumNum))
-  const cartesianBounds = computeRefAxisBounds(cartesianVals, props.referenceLine)
+  const cartesianBounds = isPercentStack
+    ? { min: 0, max: 100 }
+    : useLogAxis
+      ? {}
+      : computeRefAxisBounds(cartesianVals, props.referenceLine)
 
   const showLegend = series.length > 1
   const estCartW = containerWidth !== undefined && containerWidth > 0 ? containerWidth : 560
@@ -3713,7 +4738,7 @@ function buildChartOptionInternal(
         },
   }
   const valueAxis = {
-    type: 'value' as const,
+    type: useLogAxis ? ('log' as const) : ('value' as const),
     ...cartesianBounds,
     splitNumber: isHorizontal && isCompact ? 3 : undefined,
     splitLine: { lineStyle: { color: theme.border } },
@@ -3721,13 +4746,36 @@ function buildChartOptionInternal(
       color: theme.textSecondary,
       fontSize: isCompact ? 10 : 11,
       hideOverlap: true,
+      ...(isPercentStack ? { formatter: '{value}%' } : {}),
     },
   }
   const zoomCfg = buildZoomConfig(props.zoom, isHorizontal, theme.border)
 
   return {
     color: theme.colors,
-    tooltip: { ...baseTooltip, trigger: 'axis' },
+    tooltip: {
+      ...baseTooltip,
+      trigger: 'axis',
+      ...(isPercentStack
+        ? {
+            formatter: (params: unknown) => {
+              const list = Array.isArray(params) ? params : [params]
+              const first = list[0] as { dataIndex?: number; axisValueLabel?: string } | undefined
+              const idx = first?.dataIndex ?? -1
+              if (idx < 0 || idx >= categories.length) return ''
+              const lines = [categories[idx] ?? '']
+              for (let sIdx = 0; sIdx < rawSeriesVals.length; sIdx++) {
+                const s = rawSeriesVals[sIdx]!
+                const rawV = s.vals[idx] ?? 0
+                const tot = categoryTotals[idx] ?? 0
+                const pct = tot > 0 ? ((Math.abs(rawV) / tot) * 100).toFixed(1) : '0.0'
+                lines.push(`${s.name}: ${pct}% (${rawV})`)
+              }
+              return lines.join('\n')
+            },
+          }
+        : {}),
+    },
     legend: showLegend
       ? buildLegendOption({
           isCompact,

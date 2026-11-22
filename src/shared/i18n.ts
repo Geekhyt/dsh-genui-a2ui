@@ -419,6 +419,33 @@ export interface RuntimeUiMessages {
   readonly dateRangeEndAria: string
   readonly treeToggleBranchAria: string
   readonly defaultActionCta: string
+  readonly diffFilesSummary: (count: number) => string
+  readonly rangeSliderStartAria: string
+  readonly rangeSliderEndAria: string
+  readonly checklistDefaultTitle: string
+  readonly checklistProgress: (done: number, total: number) => string
+  readonly checklistRequiredMissing: (count: number) => string
+  readonly checklistRequiredTag: string
+  readonly checklistEmpty: string
+  readonly sortableDefaultTitle: string
+  readonly sortableMoveUpAria: string
+  readonly sortableMoveDownAria: string
+  readonly sortableEmpty: string
+  readonly kvEditorDefaultTitle: string
+  readonly kvEditorKeyLabel: string
+  readonly kvEditorValueLabel: string
+  readonly kvEditorKeyPlaceholder: string
+  readonly kvEditorValuePlaceholder: string
+  readonly kvEditorAddItem: string
+  readonly kvEditorRemoveAria: string
+  readonly kvEditorEmpty: string
+  readonly ratingAria: string
+  readonly ratingScoreOf: (val: number, max: number) => string
+  readonly imageCompareDefaultBefore: string
+  readonly imageCompareDefaultAfter: string
+  readonly imageCompareSliderAria: string
+  readonly annotationDefaultTitle: string
+  readonly annotationEmpty: string
 }
 
 export const RUNTIME_MESSAGES: Record<UiLocale, RuntimeUiMessages> = {
@@ -598,6 +625,33 @@ export const RUNTIME_MESSAGES: Record<UiLocale, RuntimeUiMessages> = {
     dateRangeEndAria: '结束日期',
     treeToggleBranchAria: '展开或收起节点',
     defaultActionCta: '执行操作',
+    diffFilesSummary: (count) => `${count} 个文件`,
+    rangeSliderStartAria: '区间下限',
+    rangeSliderEndAria: '区间上限',
+    checklistDefaultTitle: '核查清单',
+    checklistProgress: (done, total) => `${done} / ${total}`,
+    checklistRequiredMissing: (count) => `还有 ${count} 项必选项未确认`,
+    checklistRequiredTag: '必选',
+    checklistEmpty: '暂无核查项',
+    sortableDefaultTitle: '优先级排序',
+    sortableMoveUpAria: '上移一项',
+    sortableMoveDownAria: '下移一项',
+    sortableEmpty: '暂无排序项',
+    kvEditorDefaultTitle: '键值配置',
+    kvEditorKeyLabel: '键名',
+    kvEditorValueLabel: '值',
+    kvEditorKeyPlaceholder: '输入键名…',
+    kvEditorValuePlaceholder: '输入值…',
+    kvEditorAddItem: '新增一项',
+    kvEditorRemoveAria: '删除此项',
+    kvEditorEmpty: '点击右上角按钮新增配置项',
+    ratingAria: '评分',
+    ratingScoreOf: (val, max) => `${val} / ${max}`,
+    imageCompareDefaultBefore: '对比前',
+    imageCompareDefaultAfter: '对比后',
+    imageCompareSliderAria: '拖动对比前后图像',
+    annotationDefaultTitle: '标注与溯源',
+    annotationEmpty: '暂无标注文本',
   },
   en: {
     generating: 'Generating…',
@@ -775,5 +829,32 @@ export const RUNTIME_MESSAGES: Record<UiLocale, RuntimeUiMessages> = {
     dateRangeEndAria: 'End date',
     treeToggleBranchAria: 'Toggle branch',
     defaultActionCta: 'Continue',
+    diffFilesSummary: (count) => `${count} ${count === 1 ? 'file' : 'files'}`,
+    rangeSliderStartAria: 'Range minimum',
+    rangeSliderEndAria: 'Range maximum',
+    checklistDefaultTitle: 'Checklist',
+    checklistProgress: (done, total) => `${done} / ${total}`,
+    checklistRequiredMissing: (count) => `${count} required item(s) remaining`,
+    checklistRequiredTag: 'Required',
+    checklistEmpty: 'No checklist items',
+    sortableDefaultTitle: 'Priority order',
+    sortableMoveUpAria: 'Move item up',
+    sortableMoveDownAria: 'Move item down',
+    sortableEmpty: 'No items to order',
+    kvEditorDefaultTitle: 'Key-Value Editor',
+    kvEditorKeyLabel: 'Key',
+    kvEditorValueLabel: 'Value',
+    kvEditorKeyPlaceholder: 'Enter key…',
+    kvEditorValuePlaceholder: 'Enter value…',
+    kvEditorAddItem: 'Add row',
+    kvEditorRemoveAria: 'Remove row',
+    kvEditorEmpty: 'Click the button above to add a key-value entry',
+    ratingAria: 'Rating',
+    ratingScoreOf: (val, max) => `${val} / ${max}`,
+    imageCompareDefaultBefore: 'Before',
+    imageCompareDefaultAfter: 'After',
+    imageCompareSliderAria: 'Drag to compare before and after images',
+    annotationDefaultTitle: 'Annotations',
+    annotationEmpty: 'No annotated text',
   },
 }

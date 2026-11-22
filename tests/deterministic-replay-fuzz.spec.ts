@@ -474,7 +474,7 @@ describe('Eval KPI threshold baseline gate', () => {
           finalCompileRatePct: 100,
           selfRepairRecoveryPct: 100,
           avgPromptTokens: 6500,
-          uniqueComponentsUsed: 57,
+          uniqueComponentsUsed: 64,
         },
         {
           strategy: 'monolithic',
@@ -483,7 +483,7 @@ describe('Eval KPI threshold baseline gate', () => {
           finalCompileRatePct: 100,
           selfRepairRecoveryPct: 100,
           avgPromptTokens: 19400,
-          uniqueComponentsUsed: 57,
+          uniqueComponentsUsed: 64,
         },
       ],
       baseline,

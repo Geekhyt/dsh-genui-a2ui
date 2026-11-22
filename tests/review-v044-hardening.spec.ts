@@ -396,6 +396,46 @@ describe('v0.4.4 Comprehensive Review Hardening (CLS-1..CLS-8)', () => {
           { date: '2026-02-31', count: 9 },
         ],
       },
+      range: {
+        data: [
+          { t: '10:00', low: 18, value: 26, high: 35 },
+          { t: '11:00', low: 20, value: 30, high: 42 },
+        ],
+        xField: 't',
+        yField: 'value',
+      },
+      bullet: {
+        data: [{ label: '订单达成率', value: 86, target: 90, max: 100 }],
+      },
+      histogram: {
+        data: [12, 18, 22, 24, 29, 31, 45, 58, 62, 74],
+      },
+      dumbbell: {
+        data: [{ name: '结算接口 P99', before: 420, after: 118 }],
+      },
+      rose: {
+        data: [
+          { name: '华东', value: 42 },
+          { name: '华南', value: 31 },
+          { name: '华北', value: 27 },
+        ],
+      },
+      radialBar: {
+        data: [
+          { name: 'GPU 利用率', value: 84, max: 100 },
+          { name: '显存占用', value: 71, max: 100 },
+        ],
+      },
+      chord: {
+        data: {
+          nodes: [{ name: 'Gateway' }, { name: 'Order' }, { name: 'Pay' }],
+          links: [
+            { source: 'Gateway', target: 'Order', value: 40 },
+            { source: 'Order', target: 'Pay', value: 30 },
+            { source: 'Pay', target: 'Gateway', value: 12 },
+          ],
+        },
+      },
     }
 
     for (const kind of CHART_KINDS) {
@@ -663,8 +703,8 @@ describe('v0.4.4 Comprehensive Review Hardening (CLS-1..CLS-8)', () => {
     expect(kvCellContainerIdx).toBeGreaterThan(kvCellBaseIdx)
   })
 
-  it('CLS-8: renders all 57 catalog components and all 7 Slot Views without throwing', () => {
-    expect(DSH_REACT_COMPONENTS).toHaveLength(57)
+  it('CLS-8: renders all 64 catalog components and all 7 Slot Views without throwing', () => {
+    expect(DSH_REACT_COMPONENTS).toHaveLength(64)
     const buildChild = (id: string) => createElement('span', { key: id }, id)
 
     for (const comp of DSH_REACT_COMPONENTS) {

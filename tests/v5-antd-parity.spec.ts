@@ -91,12 +91,12 @@ describe('Evolution v5: Ant Design 5.x / AntD Pro / AntD X Parity (57 Components
     'Grid',
   ] as const
 
-  it('registers all 57 components across Host schema catalog and Client React catalog', () => {
-    expect(DSH_COMPONENT_APIS).toHaveLength(57)
+  it('registers all 64 components across Host schema catalog and Client React catalog', () => {
+    expect(DSH_COMPONENT_APIS).toHaveLength(64)
     const schemaNames = Object.keys(dshSchemaCatalog.toJson().components as Record<string, unknown>)
     const reactNames = [...dshReactCatalog.components.keys()]
-    expect(schemaNames).toHaveLength(57)
-    expect(reactNames).toHaveLength(57)
+    expect(schemaNames).toHaveLength(64)
+    expect(reactNames).toHaveLength(64)
     expect(schemaNames).toEqual(expect.arrayContaining([...V5_NAMES]))
     expect(reactNames).toEqual(expect.arrayContaining([...V5_NAMES]))
   })

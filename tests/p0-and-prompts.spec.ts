@@ -21,8 +21,8 @@ import {
 import { DSH_COMPONENT_APIS, dshSchemaCatalog } from '../src/shared/catalog-schema.ts'
 
 describe('P0 components: DiffView, Steps, Callout, KeyValue', () => {
-  it('exposes all 57 components in dshSchemaCatalog and compiles P0 compositions cleanly', () => {
-    expect(DSH_COMPONENT_APIS).toHaveLength(57)
+  it('exposes all 64 components in dshSchemaCatalog and compiles P0 compositions cleanly', () => {
+    expect(DSH_COMPONENT_APIS).toHaveLength(64)
     const json = dshSchemaCatalog.toJson()
     const compNames = Object.keys(json.components as Record<string, unknown>)
     expect(compNames).toEqual(expect.arrayContaining(['DiffView', 'Steps', 'Callout', 'KeyValue']))

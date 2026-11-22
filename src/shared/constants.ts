@@ -35,6 +35,13 @@ export const CHART_KINDS = [
   'sunburst',
   'parallel',
   'calendar',
+  'range',
+  'bullet',
+  'histogram',
+  'dumbbell',
+  'rose',
+  'radialBar',
+  'chord',
 ] as const
 
 export type ChartKind = (typeof CHART_KINDS)[number]

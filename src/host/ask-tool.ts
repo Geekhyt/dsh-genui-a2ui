@@ -181,11 +181,17 @@ export function sanitizePayloadObject(
       return out
     }
     if (typeof node === 'object' && node !== null) {
+      const rec = node as Record<string, unknown>
+      const isKvSecretEntry =
+        !isSurfaceRootLevel &&
+        ((typeof rec.key === 'string' && isSecretKey(rec.key)) ||
+          (typeof rec.name === 'string' && isSecretKey(rec.name)))
       const out: Record<string, unknown> = {}
       let count = 0
-      for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
+      for (const [k, v] of Object.entries(rec)) {
         if (count >= MAX_ANSWER_KEYS) break
         if (isDangerousObjectKey(k) || (!isSurfaceRootLevel && isSecretKey(k))) continue
+        if (isKvSecretEntry && k === 'value') continue
         const seg = escapeObsPointerSegment(k)
         const childPath = isSurfaceRootLevel ? '' : path === '' ? `/${seg}` : `${path}/${seg}`
         if (blocked.size > 0 && childPath !== '' && isPathObscured(childPath, blocked)) continue

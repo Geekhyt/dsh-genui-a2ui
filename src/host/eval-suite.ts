@@ -384,6 +384,53 @@ export const EVAL_BENCHMARK_CASES: readonly EvalCase[] = [
     expectedDomain: 'forms',
     expectedAnyComponents: ['TextField', 'DateTimeInput', 'Image', 'AudioPlayer'],
   },
+  {
+    id: 'cov-04-v050-nextgen-charts',
+    title: 'v0.5.0 新增 7 类图表与 5 项图表增强全覆盖',
+    category: 'analytics',
+    prompt:
+      '生成一份性能与资源综合可视化大盘，同屏组合预测置信区间带（range + markArea）、OKR 子弹图（bullet）、延迟自动分箱直方图（histogram）、优化前后哑铃对比图（dumbbell）、玫瑰图（rose）、玉玦环形柱图（radialBar）和微服务双向调用弦图（chord）。',
+    expectedTool: 'a2ui_render',
+    expectedDomain: 'analytics',
+    expectedAnyComponents: ['Chart'],
+    expectedAnyChartKinds: [
+      'range',
+      'bullet',
+      'histogram',
+      'dumbbell',
+      'rose',
+      'radialBar',
+      'chord',
+    ],
+  },
+  {
+    id: 'cov-05-v050-nextgen-widgets',
+    title: 'v0.5.0 新增 7 个零依赖交互原语全覆盖',
+    category: 'forms',
+    prompt:
+      '做一个交互式发布评审与风控工作台：包含预算双滑块区间、星级/量表打分、上线核查清单、优先级拖拽排序列表、动态环境变量编辑器、视觉前后滑动对比器与合同风险句级标注高亮。',
+    expectedTool: 'a2ui_render',
+    expectedDomain: 'forms',
+    expectedAnyComponents: [
+      'RangeSlider',
+      'Checklist',
+      'SortableList',
+      'KvEditor',
+      'Rating',
+      'ImageCompare',
+      'AnnotationText',
+    ],
+  },
+  {
+    id: 'cov-06-v050-inplace-upgrades',
+    title: 'v0.5.0 原地升级（语义列 ProTable + 条件聚合 + Trace 偏移 + 多文件 Diff）',
+    category: 'devops',
+    prompt:
+      '生成带语义列格式与固定首列的 ProTable、支持多选区域 0ms 动态条件聚合的 KPI 顶栏、带 offsetPct 偏移的分布式 Trace 瀑布树与多文件带批注的 PR DiffView。',
+    expectedTool: 'a2ui_render',
+    expectedDomain: 'devops',
+    expectedAnyComponents: ['Table', 'Tree', 'DiffView', 'MultiSelect', 'Stat'],
+  },
 ]
 
 export function classifyCompileError(errorMessage: string): CompileErrorBucket {

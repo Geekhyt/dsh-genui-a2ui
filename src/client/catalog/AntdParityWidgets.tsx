@@ -1174,11 +1174,21 @@ function GeneralTreeBranch(props: {
           <div className={css.generalTreeRight}>
             {node.sharePct !== undefined ? (
               <span className={css.generalTreeBarTrack} aria-hidden="true">
-                <span
-                  className={css.generalTreeBarFill}
-                  data-status={node.status}
-                  style={{ width: `${Math.max(3, node.sharePct)}%` }}
-                />
+                {(() => {
+                  const off = node.offsetPct ?? 0
+                  const maxW = Math.max(3, 100 - off)
+                  const widthPct = Math.min(maxW, Math.max(3, node.sharePct))
+                  return (
+                    <span
+                      className={css.generalTreeBarFill}
+                      data-status={node.status}
+                      style={{
+                        ...(off > 0 ? { marginLeft: `${off}%` } : {}),
+                        width: `${widthPct}%`,
+                      }}
+                    />
+                  )
+                })()}
               </span>
             ) : null}
             {node.metric ? <span className={css.generalTreeMetric}>{node.metric}</span> : null}

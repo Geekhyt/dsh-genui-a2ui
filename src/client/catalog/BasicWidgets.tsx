@@ -58,6 +58,15 @@ import {
   DshVideoImpl,
 } from './MediaAndDataWidgets.tsx'
 import {
+  DshAnnotationTextImpl,
+  DshChecklistImpl,
+  DshImageCompareImpl,
+  DshKvEditorImpl,
+  DshRangeSliderImpl,
+  DshRatingImpl,
+  DshSortableListImpl,
+} from './NextGenWidgets.tsx'
+import {
   DshComparisonImpl,
   DshKanbanImpl,
   DshLogViewerImpl,
@@ -70,6 +79,7 @@ import { DshCalloutImpl, DshDiffViewImpl, DshKeyValueImpl, DshStepsImpl } from '
 
 export {
   DshAccordionImpl,
+  DshAnnotationTextImpl,
   DshApiEndpointImpl,
   DshApprovalCardImpl,
   DshAudioPlayerImpl,
@@ -80,6 +90,7 @@ export {
   DshChartImpl,
   DshCheckBoxImpl,
   DshCheckCardImpl,
+  DshChecklistImpl,
   DshChoicePickerImpl,
   DshCodeImpl,
   DshColumnImpl,
@@ -92,10 +103,12 @@ export {
   DshFileTreeImpl,
   DshGridImpl,
   DshIconImpl,
+  DshImageCompareImpl,
   DshImageImpl,
   DshJsonTreeImpl,
   DshKanbanImpl,
   DshKeyValueImpl,
+  DshKvEditorImpl,
   DshListImpl,
   DshLogViewerImpl,
   DshMatrixImpl,
@@ -105,6 +118,8 @@ export {
   DshMultiSelectImpl,
   DshNumberInputImpl,
   DshProgressImpl,
+  DshRangeSliderImpl,
+  DshRatingImpl,
   DshResultImpl,
   DshRowImpl,
   DshScheduleImpl,
@@ -112,6 +127,7 @@ export {
   DshSelectImpl,
   DshServiceGraphImpl,
   DshSliderImpl,
+  DshSortableListImpl,
   DshSourceListImpl,
   DshStatImpl,
   DshStepsImpl,
@@ -186,4 +202,11 @@ export const DSH_REACT_COMPONENTS: readonly ReactCatalogComponent[] = [
   DshCheckCardImpl,
   DshTreeImpl,
   DshGridImpl,
+  DshRangeSliderImpl,
+  DshChecklistImpl,
+  DshSortableListImpl,
+  DshKvEditorImpl,
+  DshRatingImpl,
+  DshImageCompareImpl,
+  DshAnnotationTextImpl,
 ]

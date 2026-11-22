@@ -12,12 +12,12 @@ import { DOMAIN_SKILL_NAMES, SKILL_PREAMBLE } from '../src/index.ts'
 import { DSH_COMPONENT_APIS, dshSchemaCatalog } from '../src/shared/catalog-schema.ts'
 
 describe('P0 Prompt Compaction & Domain-Scoped Skill Layering', () => {
-  it('partitions all 57 registered components across SKILL_DOMAINS with zero missing and zero duplicates', () => {
+  it('partitions all 64 registered components across SKILL_DOMAINS with zero missing and zero duplicates', () => {
     const registeredNames = Object.keys(
       dshSchemaCatalog.toJson().components as Record<string, unknown>,
     ).sort()
     expect(registeredNames).toHaveLength(DSH_COMPONENT_APIS.length)
-    expect(registeredNames).toHaveLength(57)
+    expect(registeredNames).toHaveLength(64)
 
     const seen = new Set<string>()
     const duplicates: string[] = []
@@ -33,13 +33,13 @@ describe('P0 Prompt Compaction & Domain-Scoped Skill Layering', () => {
     expect(DOMAIN_SKILL_NAMES).toEqual(['a2ui', 'a2ui-analytics', 'a2ui-devops', 'a2ui-forms'])
   })
 
-  it('preserves 100% of positional component signatures, all 19 ECharts kinds, and all 23 functions losslessly', () => {
+  it('preserves 100% of positional component signatures, all 26 ECharts kinds, and all 28 functions losslessly', () => {
     const sessions = new SurfaceSessions(createGenerator())
     const raw = sessions.rawPromptSnippet()
     const compact = sessions.promptSnippet()
 
     const rawSigLines = raw.match(/^• [A-Z][A-Za-z0-9]+\([^\n]+$/gm) ?? []
-    expect(rawSigLines).toHaveLength(57)
+    expect(rawSigLines).toHaveLength(64)
 
     for (const sig of rawSigLines) {
       expect(compact, `Missing signature in compact full snippet: ${sig}`).toContain(sig)
@@ -48,7 +48,7 @@ describe('P0 Prompt Compaction & Domain-Scoped Skill Layering', () => {
     const rawWeightLines = raw.match(/^ {2}- weight: The relative weight of this component/gm) ?? []
     const compactWeightLines =
       compact.match(/^ {2}- weight: The relative weight of this component/gm) ?? []
-    expect(rawWeightLines.length).toBe(57)
+    expect(rawWeightLines.length).toBe(64)
     expect(compactWeightLines.length).toBe(0)
     expect(compact).toContain('direct child of `Row` or `Column`')
 

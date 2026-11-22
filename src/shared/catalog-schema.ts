@@ -72,88 +72,75 @@ export const ChartApi = {
   schema: spec(
     z
       .object({
-        kind: z.enum(CHART_KINDS).describe('Chart visualization type.'),
+        kind: z.enum(CHART_KINDS).describe('Chart kind.'),
         data: DynamicValueSchema.describe(
-          'REF:#/$defs/DynamicValue|Array of data row objects (or `{ nodes, links }` for graph), or a $/path binding to an array in the surface data model (recommended so update=true can refresh data incrementally).',
+          'REF:#/$defs/DynamicValue|Rows (or `{ nodes, links }` for graph/chord, number[] for histogram) or $/path.',
         ),
-        title: DynamicStringSchema.describe(
-          'REF:#/$defs/DynamicString|Optional chart title.',
-        ).optional(),
+        title: DynamicStringSchema.describe('REF:#/$defs/DynamicString|Optional title.').optional(),
         xField: z
           .string()
           .describe(
-            'Property name for the category / X axis (or item label in pie/funnel/gauge/treemap/sunburst/boxplot/waterfall/parallel, source in sankey/graph, or date in candlestick/calendar).',
+            'Category/X key (label in pie/rose/radialBar/funnel/gauge/treemap/sunburst/boxplot/waterfall/parallel/bullet/dumbbell, source in sankey/graph/chord, date in candlestick/calendar).',
           )
           .optional(),
         yField: z
           .union([z.string(), z.array(z.string()).min(1)])
           .describe(
-            'Property name(s) for numeric series values (or Y category in heatmap, delta in waterfall, left-axis bar values in combo, parallel axis dimensions in parallel, or daily count in calendar); pass an array of field names for multi-series or parallel charts.',
+            'Value key(s) (Y in heatmap, delta in waterfall, left bars in combo, dims in parallel, [low,mid?,high] in range, [before,after] in dumbbell).',
           )
           .optional(),
         y2Field: z
           .union([z.string(), z.array(z.string()).min(1)])
-          .describe(
-            'Optional property name(s) plotted as line series on a right-hand secondary Y axis (ideal for `combo` dual-axis charts pairing left-axis volume bars with right-axis rate/latency lines).',
-          )
+          .describe('Right-axis line series key(s) for `combo` dual-axis charts.')
           .optional(),
         seriesField: z
           .string()
-          .describe(
-            'Optional property name used to group rows into separate series (or target node in sankey/graph, parent group in treemap/sunburst).',
-          )
+          .describe('Group key (or target in sankey/graph/chord, parent in treemap/sunburst).')
           .optional(),
         sizeField: z
           .string()
-          .describe(
-            'Optional numeric property name mapped to bubble radius on scatter charts or cell intensity on heatmap charts.',
-          )
+          .describe('Bubble radius key (scatter) or intensity key (heatmap).')
           .optional(),
         referenceLine: DynamicNumberSchema.describe(
-          'REF:#/$defs/DynamicNumber|Optional horizontal (or vertical when `horizontal=true`) dashed threshold/target reference line value (e.g. SLO latency limit or budget target).',
+          'REF:#/$defs/DynamicNumber|Dashed threshold/target reference line.',
         ).optional(),
         referenceLabel: DynamicStringSchema.describe(
-          'REF:#/$defs/DynamicString|Optional label displayed along `referenceLine` (e.g. `"SLO 200ms"` or `"目标 ¥680w"`).',
+          'REF:#/$defs/DynamicString|Label along `referenceLine`.',
         ).optional(),
-        stacked: z
-          .boolean()
-          .default(false)
-          .describe('Whether to stack series in bar, line, area, or combo charts.')
-          .optional(),
-        horizontal: z
-          .boolean()
-          .default(false)
-          .describe('When true on bar charts, flips axes into a horizontal bar ranking chart.')
-          .optional(),
-        zoom: z
-          .boolean()
-          .default(false)
-          .describe(
-            'When true on Cartesian charts, enables interactive mouse-wheel and slider dataZoom.',
-          )
-          .optional(),
-        height: z
-          .number()
-          .min(140)
-          .max(640)
-          .default(260)
-          .describe('Canvas height in pixels.')
-          .optional(),
+        stacked: z.boolean().default(false).describe('Stack series.').optional(),
+        horizontal: z.boolean().default(false).describe('Horizontal bar chart.').optional(),
+        zoom: z.boolean().default(false).describe('Enable dataZoom.').optional(),
+        height: z.number().min(140).max(640).default(260).describe('Height px.').optional(),
         selected: DynamicValueSchema.describe(
-          'REF:#/$defs/DynamicValue|Optional two-way bound $/path (scalar string or string array) storing the clicked category/item(s) for 0ms local cross-filtering with Table, MultiSelect, or KPIs (clicking an active item toggles/clears it).',
+          'REF:#/$defs/DynamicValue|Two-way $/path (string or string[]) for 0ms cross-filtering.',
         ).optional(),
-        exportable: z
-          .boolean()
-          .default(true)
-          .describe(
-            'When true (default), displays compact 1-click PNG download and CSV copy actions in the chart header.',
-          )
+        exportable: z.boolean().default(true).describe('Show PNG/CSV actions.').optional(),
+        step: z.boolean().default(false).describe('Stepped line.').optional(),
+        yScale: z
+          .enum(['linear', 'log'])
+          .default('linear')
+          .describe('Value axis scale.')
           .optional(),
+        stackMode: z
+          .enum(['value', 'percent'])
+          .default('value')
+          .describe('"percent" for 100% stacks.')
+          .optional(),
+        markArea: DynamicValueSchema.describe(
+          'REF:#/$defs/DynamicValue|Interval bands `[{ start, end, label?, tone? }]`.',
+        ).optional(),
+        referenceX: DynamicNumberSchema.describe(
+          'REF:#/$defs/DynamicNumber|Vertical X reference line (scatter quadrants).',
+        ).optional(),
+        referenceXLabel: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Label along `referenceX`.',
+        ).optional(),
+        bins: z.number().int().min(2).max(40).describe('Histogram bin count.').optional(),
         action: ActionSchema.describe('REF:#/$defs/Action').optional(),
         weight: WeightSchema.optional(),
       })
       .describe(
-        'Interactive lazy-loaded ECharts visualization bound to structured data rows. Supports 19 chart kinds: bar, line, area, pie, scatter, radar, funnel, gauge, heatmap, treemap, sankey, boxplot, graph, candlestick, waterfall, combo, sunburst, parallel, and calendar.',
+        'Lazy-loaded ECharts visualization. Supports 26 chart kinds: bar, line, area, pie, scatter, radar, funnel, gauge, heatmap, treemap, sankey, boxplot, graph, candlestick, waterfall, combo, sunburst, parallel, calendar, range, bullet, histogram, dumbbell, rose, radialBar, and chord.',
       )
       .strict(),
     { mixins: [], required: ['kind', 'data'] },
@@ -162,12 +149,15 @@ export const ChartApi = {
 
 export const TableColumnSchema = spec(
   z.object({
-    key: z.string().describe('Property key on each row object.'),
-    label: DynamicStringSchema.describe(
-      'REF:#/$defs/DynamicString|Header label displayed for this column.',
-    ),
+    key: z.string().describe('Row key.'),
+    label: DynamicStringSchema.describe('REF:#/$defs/DynamicString|Header label.'),
     align: z.enum(['left', 'center', 'right']).optional(),
     sortable: z.boolean().optional(),
+    format: z
+      .enum(['text', 'badge', 'bar', 'delta', 'sparkline', 'code'])
+      .describe('Scalar formatter: badge/bar/delta/sparkline/code.')
+      .optional(),
+    max: z.number().positive().describe('Max scale for format="bar".').optional(),
   }),
   { closure: 'additionalProperties' },
 )
@@ -178,75 +168,41 @@ export const TableApi = {
     z
       .object({
         rows: DynamicValueSchema.describe(
-          'REF:#/$defs/DynamicValue|Array of row objects, or a $/path binding to an array in the surface data model. Cell values MUST be plain scalar primitives (strings, numbers, booleans — e.g. `"🟢 正常"` / `"🟡 预警"` / `"🔴 异常"` for status columns); nested A2UI components such as Badge or Button are NOT supported inside Table cells.',
+          'REF:#/$defs/DynamicValue|Row array or $/path. Plain scalar cells only; nested A2UI components such as Badge or Button are NOT supported inside Table cells.',
         ),
         columns: z
           .array(TableColumnSchema)
           .min(1)
-          .describe(
-            'Optional explicit column definitions; inferred automatically from row keys when omitted.',
-          )
+          .describe('Explicit columns (inferred if omitted).')
           .optional(),
-        title: DynamicStringSchema.describe(
-          'REF:#/$defs/DynamicString|Optional table header title.',
-        ).optional(),
-        searchable: z
-          .boolean()
-          .default(false)
-          .describe('When true, displays a search input to filter rows locally.')
-          .optional(),
-        pageSize: z
-          .number()
-          .int()
-          .min(3)
-          .max(100)
-          .default(10)
-          .describe('Maximum rows shown per page before pagination controls appear.')
-          .optional(),
-        exportable: z
-          .boolean()
-          .default(false)
-          .describe(
-            'When true, displays 1-click CSV export (UTF-8 BOM) and Markdown copy buttons in the table toolbar.',
-          )
-          .optional(),
+        title: DynamicStringSchema.describe('REF:#/$defs/DynamicString|Optional title.').optional(),
+        searchable: z.boolean().default(false).describe('Local search box.').optional(),
+        pageSize: z.number().int().min(3).max(100).default(10).describe('Rows/page.').optional(),
+        exportable: z.boolean().default(false).describe('CSV/MD export buttons.').optional(),
         selectable: z
           .boolean()
           .default(false)
-          .describe(
-            'When true, displays row selection checkboxes and a batch action button that dispatches selected rows via `action`.',
-          )
+          .describe('Row checkboxes + batch action.')
           .optional(),
         batchLabel: DynamicStringSchema.describe(
-          'REF:#/$defs/DynamicString|Optional label for the batch action button when `selectable=true`.',
+          'REF:#/$defs/DynamicString|Batch CTA label.',
         ).optional(),
-        showSummary: z
+        showSummary: z.boolean().default(false).describe('Numeric summary footer.').optional(),
+        expandKey: z.string().describe('Row key for inline expandable detail drawer.').optional(),
+        filterField: z.string().describe('Row key matched against `filterValue`.').optional(),
+        filterValue: DynamicValueSchema.describe(
+          'REF:#/$defs/DynamicValue|Two-way $/path filter (string or string[]) for 0ms cross-filtering.',
+        ).optional(),
+        stickyFirstColumn: z
           .boolean()
           .default(false)
-          .describe('When true, displays a numeric summary footer row across numeric columns.')
+          .describe('Freeze first column on scroll.')
           .optional(),
-        expandKey: z
-          .string()
-          .describe(
-            'Optional property key on row objects whose text/JSON content can be expanded inline beneath each row (`▸` / `▾`).',
-          )
-          .optional(),
-        filterField: z
-          .string()
-          .describe(
-            'Optional row property key matched against `filterValue` for 0ms local cross-filtering (matches any column when omitted).',
-          )
-          .optional(),
-        filterValue: DynamicValueSchema.describe(
-          'REF:#/$defs/DynamicValue|Optional two-way bound $/path filter value (scalar string or string array, e.g. paired with `Chart(..., selected=$/region)` or `MultiSelect(..., value=$/regions)`) that filters rows locally at 0ms.',
-        ).optional(),
-        action: ActionSchema.describe(
-          'REF:#/$defs/Action|Optional row drill-down or batch selection action triggered when clicking a row or batch action button.',
-        ).optional(),
+        action: ActionSchema.describe('REF:#/$defs/Action|Row or batch click action.').optional(),
         weight: WeightSchema.optional(),
       })
       .describe(
-        'Enterprise ProTable powered by TanStack Table: sortable, filterable, paginated, right-aligned tabular numeric columns, with optional 1-click CSV/Markdown export (`exportable=true`), multi-row batch selection (`selectable=true`), and numeric summary footer (`showSummary=true`). Renders plain text/scalar cells only.',
+        'ProTable: sortable, searchable, paginated, exportable, selectable, summary footer, cross-filtering, and column `format` renderers over scalar cells.',
       )
       .strict(),
     { mixins: [], required: ['rows'] },
@@ -395,11 +351,11 @@ export const DiffViewApi = {
     z
       .object({
         before: DynamicStringSchema.describe(
-          'REF:#/$defs/DynamicString|Original text, config, or source code before the change.',
-        ),
+          'REF:#/$defs/DynamicString|Original text, config, or source code before the change (omit when using `files`).',
+        ).optional(),
         after: DynamicStringSchema.describe(
-          'REF:#/$defs/DynamicString|Proposed or updated text, config, or source code after the change.',
-        ),
+          'REF:#/$defs/DynamicString|Proposed or updated text, config, or source code after the change (omit when using `files`).',
+        ).optional(),
         title: DynamicStringSchema.describe(
           'REF:#/$defs/DynamicString|Optional file path or diff header title (e.g. "nginx.conf").',
         ).optional(),
@@ -418,13 +374,19 @@ export const DiffViewApi = {
           .default('unified')
           .describe('Initial diff layout: "unified" (inline) or "split" (side-by-side).')
           .optional(),
+        files: DynamicValueSchema.describe(
+          'REF:#/$defs/DynamicValue|Optional multi-file PR diff array `[{ path, title?, before, after, language?, line?, annotations? }]`.',
+        ).optional(),
+        annotations: DynamicValueSchema.describe(
+          'REF:#/$defs/DynamicValue|Optional inline review comments `[{ line, side?: "after"|"before", author?, tone?: "info"|"warning"|"danger"|"success", message }]`.',
+        ).optional(),
         weight: WeightSchema.optional(),
       })
       .describe(
-        'Line-by-line code or config diff viewer with +added/-removed stats, Unified/Split view toggle, and optional workspace file jump.',
+        'Line-by-line single or multi-file PR code/config diff viewer with +added/-removed stats, Unified/Split toggle, inline review annotations, and workspace file jump.',
       )
       .strict(),
-    { mixins: [], required: ['before', 'after'] },
+    { mixins: [], required: [] },
   ),
 } satisfies ComponentApi
 
@@ -1512,7 +1474,7 @@ export const TreeApi = {
     z
       .object({
         nodes: DynamicValueSchema.describe(
-          'REF:#/$defs/DynamicValue|Recursive hierarchy array `[{ id?, label, sublabel?, badge?, metric?, sharePct?: number, status?: "healthy" | "warning" | "error" | "neutral", children?: [...] }]`.',
+          'REF:#/$defs/DynamicValue|Recursive hierarchy array `[{ id?, label, sublabel?, badge?, metric?, sharePct?: number, offsetPct?: number, status?: "healthy" | "warning" | "error" | "neutral", children?: [...] }]`.',
         ),
         title: DynamicStringSchema.describe(
           'REF:#/$defs/DynamicString|Optional tree header title.',
@@ -1577,6 +1539,192 @@ export const GridApi = {
   ),
 } satisfies ComponentApi
 
+export const RangeSliderApi = {
+  name: 'RangeSlider',
+  schema: spec(
+    z
+      .object({
+        checks: z.array(CheckRuleSchema.describe('REF:#/$defs/CheckRule')).optional(),
+        label: DynamicStringSchema.describe('REF:#/$defs/DynamicString|Label.').optional(),
+        min: z.number().describe('Min bound.'),
+        max: z.number().describe('Max bound.'),
+        start: DynamicNumberSchema.describe('REF:#/$defs/DynamicNumber|Lower $/path.'),
+        end: DynamicNumberSchema.describe('REF:#/$defs/DynamicNumber|Upper $/path.'),
+        step: z.number().positive().default(1).describe('Step size.').optional(),
+        prefix: DynamicStringSchema.describe('REF:#/$defs/DynamicString|Prefix.').optional(),
+        unit: DynamicStringSchema.describe('REF:#/$defs/DynamicString|Unit suffix.').optional(),
+        weight: WeightSchema.optional(),
+      })
+      .describe('Dual-thumb numeric range slider binding start/end $/paths (`start <= end`).')
+      .strict(),
+    { mixins: ['Checkable'], required: ['min', 'max', 'start', 'end'] },
+  ),
+} satisfies ComponentApi
+
+export const ChecklistApi = {
+  name: 'Checklist',
+  schema: spec(
+    z
+      .object({
+        checks: z.array(CheckRuleSchema.describe('REF:#/$defs/CheckRule')).optional(),
+        items: DynamicValueSchema.describe(
+          'REF:#/$defs/DynamicValue|Items `[{ id, label, description?, required?, tag?, tone?, checked? }]` or strings.',
+        ),
+        value: DynamicStringListSchema.describe(
+          'REF:#/$defs/DynamicStringList|Bound checked IDs $/path.',
+        ).optional(),
+        title: DynamicStringSchema.describe('REF:#/$defs/DynamicString|Optional title.').optional(),
+        showProgress: z.boolean().default(true).describe('Show progress bar.').optional(),
+        actionLabel: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Action CTA.',
+        ).optional(),
+        action: ActionSchema.describe('REF:#/$defs/Action|Completion action.').optional(),
+        weight: WeightSchema.optional(),
+      })
+      .describe(
+        'Interactive checkable pre-flight/review checklist with progress bar and required-item gate.',
+      )
+      .strict(),
+    { mixins: ['Checkable'], required: ['items'] },
+  ),
+} satisfies ComponentApi
+
+export const SortableListApi = {
+  name: 'SortableList',
+  schema: spec(
+    z
+      .object({
+        items: DynamicValueSchema.describe(
+          'REF:#/$defs/DynamicValue|Bound $/path array `[{ id?, title, subtitle?, badge?, tone? }]` or strings.',
+        ),
+        title: DynamicStringSchema.describe('REF:#/$defs/DynamicString|Optional title.').optional(),
+        maxHeight: z
+          .number()
+          .int()
+          .min(140)
+          .max(640)
+          .default(360)
+          .describe('Max height px.')
+          .optional(),
+        action: ActionSchema.describe('REF:#/$defs/Action|Dispatch reordered list.').optional(),
+        weight: WeightSchema.optional(),
+      })
+      .describe(
+        'Drag-and-drop & up/down priority-ranking list syncing ordered items back to $/path.',
+      )
+      .strict(),
+    { mixins: [], required: ['items'] },
+  ),
+} satisfies ComponentApi
+
+export const KvEditorApi = {
+  name: 'KvEditor',
+  schema: spec(
+    z
+      .object({
+        checks: z.array(CheckRuleSchema.describe('REF:#/$defs/CheckRule')).optional(),
+        items: DynamicValueSchema.describe(
+          'REF:#/$defs/DynamicValue|Bound $/path `[{ key, value }]` array or object.',
+        ),
+        title: DynamicStringSchema.describe('REF:#/$defs/DynamicString|Optional title.').optional(),
+        keyLabel: DynamicStringSchema.describe('REF:#/$defs/DynamicString|Key header.').optional(),
+        valueLabel: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Value header.',
+        ).optional(),
+        keyPlaceholder: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Key placeholder.',
+        ).optional(),
+        valuePlaceholder: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Value placeholder.',
+        ).optional(),
+        addLabel: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Add-row label.',
+        ).optional(),
+        maxItems: z.number().int().min(1).max(100).default(30).describe('Max rows.').optional(),
+        weight: WeightSchema.optional(),
+      })
+      .describe('Dynamic add/remove key-value editor with automatic secret-key masking.')
+      .strict(),
+    { mixins: ['Checkable'], required: ['items'] },
+  ),
+} satisfies ComponentApi
+
+export const RatingApi = {
+  name: 'Rating',
+  schema: spec(
+    z
+      .object({
+        checks: z.array(CheckRuleSchema.describe('REF:#/$defs/CheckRule')).optional(),
+        label: DynamicStringSchema.describe('REF:#/$defs/DynamicString|Label.').optional(),
+        value: DynamicNumberSchema.describe('REF:#/$defs/DynamicNumber|Bound score $/path.'),
+        max: z.number().int().min(3).max(10).default(5).describe('Max score (3..10).').optional(),
+        allowHalf: z.boolean().default(false).describe('Allow 0.5 steps.').optional(),
+        labels: DynamicValueSchema.describe(
+          'REF:#/$defs/DynamicValue|Score level labels.',
+        ).optional(),
+        variant: z
+          .enum(['star', 'scale'])
+          .default('star')
+          .describe('"star" or "scale" pills.')
+          .optional(),
+        weight: WeightSchema.optional(),
+      })
+      .describe('Star or Likert numeric rating control bound to $/path.')
+      .strict(),
+    { mixins: ['Checkable'], required: ['value'] },
+  ),
+} satisfies ComponentApi
+
+export const ImageCompareApi = {
+  name: 'ImageCompare',
+  schema: spec(
+    z
+      .object({
+        beforeUrl: DynamicStringSchema.describe('REF:#/$defs/DynamicString|Before image URL.'),
+        afterUrl: DynamicStringSchema.describe('REF:#/$defs/DynamicString|After image URL.'),
+        beforeLabel: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|Before badge.',
+        ).optional(),
+        afterLabel: DynamicStringSchema.describe(
+          'REF:#/$defs/DynamicString|After badge.',
+        ).optional(),
+        title: DynamicStringSchema.describe('REF:#/$defs/DynamicString|Optional title.').optional(),
+        initialPosition: z
+          .number()
+          .min(0)
+          .max(100)
+          .default(50)
+          .describe('Split % (0..100).')
+          .optional(),
+        height: z.number().int().min(160).max(520).default(260).describe('Height px.').optional(),
+        weight: WeightSchema.optional(),
+      })
+      .describe('Before/after image curtain slider for visual QA or redesign comparisons.')
+      .strict(),
+    { mixins: [], required: ['beforeUrl', 'afterUrl'] },
+  ),
+} satisfies ComponentApi
+
+export const AnnotationTextApi = {
+  name: 'AnnotationText',
+  schema: spec(
+    z
+      .object({
+        text: DynamicStringSchema.describe('REF:#/$defs/DynamicString|Source text.'),
+        annotations: DynamicValueSchema.describe(
+          'REF:#/$defs/DynamicValue|Array `[{ start?, end?, match?, label?, note?, tone?, sourceId? }]`.',
+        ),
+        title: DynamicStringSchema.describe('REF:#/$defs/DynamicString|Optional title.').optional(),
+        showLegend: z.boolean().default(true).describe('Show label legend.').optional(),
+        action: ActionSchema.describe('REF:#/$defs/Action|Span click action.').optional(),
+        weight: WeightSchema.optional(),
+      })
+      .describe('Inline entity/risk/RAG sentence highlight viewer with native HoverCard notes.')
+      .strict(),
+    { mixins: [], required: ['text', 'annotations'] },
+  ),
+} satisfies ComponentApi
+
 export const BASIC_COMPONENT_APIS: readonly ComponentApi[] = [
   DshTextApi,
   ImageApi,
@@ -1638,6 +1786,13 @@ export const DSH_EXTENDED_COMPONENT_APIS: readonly ComponentApi[] = [
   CheckCardApi,
   TreeApi,
   GridApi,
+  RangeSliderApi,
+  ChecklistApi,
+  SortableListApi,
+  KvEditorApi,
+  RatingApi,
+  ImageCompareApi,
+  AnnotationTextApi,
 ]
 
 export const DSH_COMPONENT_APIS: readonly ComponentApi[] = [
@@ -1662,11 +1817,18 @@ export const SumApi = {
   name: 'sum' as const,
   returnType: 'number' as const,
   description:
-    'Sums numeric values across an array or bound $/path array (optionally reading object[field]).',
+    'Sums numeric values across an array or bound $/path array (optionally reading object[field] and filtering by filterField/filterValue).',
   schema: spec(
     z.object({
       items: DynamicValueSchema.describe('Array or bound $/path array of numbers or row objects.'),
       field: z.string().optional().describe('Optional object property name to sum.'),
+      filterField: z
+        .string()
+        .optional()
+        .describe('Optional row field to match against filterValue.'),
+      filterValue: DynamicValueSchema.optional().describe(
+        'Optional scalar string or string[] cross-filter value (empty means no filter).',
+      ),
     }),
     { closure: 'unevaluatedProperties' },
   ),
@@ -1676,11 +1838,80 @@ export const AvgApi = {
   name: 'avg' as const,
   returnType: 'number' as const,
   description:
-    'Averages numeric values across an array or bound $/path array (optionally reading object[field]).',
+    'Averages numeric values across an array or bound $/path array (optionally reading object[field] and filtering by filterField/filterValue).',
   schema: spec(
     z.object({
       items: DynamicValueSchema.describe('Array or bound $/path array of numbers or row objects.'),
       field: z.string().optional().describe('Optional object property name to average.'),
+      filterField: z
+        .string()
+        .optional()
+        .describe('Optional row field to match against filterValue.'),
+      filterValue: DynamicValueSchema.optional().describe(
+        'Optional scalar string or string[] cross-filter value (empty means no filter).',
+      ),
+    }),
+    { closure: 'unevaluatedProperties' },
+  ),
+} satisfies FunctionApi
+
+export const CountApi = {
+  name: 'count' as const,
+  returnType: 'number' as const,
+  description:
+    'Counts elements in an array or bound $/path array (optionally filtered by filterField/filterValue).',
+  schema: spec(
+    z.object({
+      items: DynamicValueSchema.describe('Array or bound $/path array of items or row objects.'),
+      filterField: z
+        .string()
+        .optional()
+        .describe('Optional row field to match against filterValue.'),
+      filterValue: DynamicValueSchema.optional().describe(
+        'Optional scalar string or string[] cross-filter value (empty means no filter).',
+      ),
+    }),
+    { closure: 'unevaluatedProperties' },
+  ),
+} satisfies FunctionApi
+
+export const MinApi = {
+  name: 'min' as const,
+  returnType: 'number' as const,
+  description:
+    'Returns minimum numeric value across an array or bound $/path array (optionally reading field and filtering by filterField/filterValue).',
+  schema: spec(
+    z.object({
+      items: DynamicValueSchema.describe('Array or bound $/path array of numbers or row objects.'),
+      field: z.string().optional().describe('Optional object property name.'),
+      filterField: z
+        .string()
+        .optional()
+        .describe('Optional row field to match against filterValue.'),
+      filterValue: DynamicValueSchema.optional().describe(
+        'Optional scalar string or string[] cross-filter value (empty means no filter).',
+      ),
+    }),
+    { closure: 'unevaluatedProperties' },
+  ),
+} satisfies FunctionApi
+
+export const MaxApi = {
+  name: 'max' as const,
+  returnType: 'number' as const,
+  description:
+    'Returns maximum numeric value across an array or bound $/path array (optionally reading field and filtering by filterField/filterValue).',
+  schema: spec(
+    z.object({
+      items: DynamicValueSchema.describe('Array or bound $/path array of numbers or row objects.'),
+      field: z.string().optional().describe('Optional object property name.'),
+      filterField: z
+        .string()
+        .optional()
+        .describe('Optional row field to match against filterValue.'),
+      filterValue: DynamicValueSchema.optional().describe(
+        'Optional scalar string or string[] cross-filter value (empty means no filter).',
+      ),
     }),
     { closure: 'unevaluatedProperties' },
   ),
@@ -1820,6 +2051,9 @@ export const DSH_FUNCTION_APIS: readonly FunctionApi[] = [
   CopyTextApi,
   SumApi,
   AvgApi,
+  CountApi,
+  MinApi,
+  MaxApi,
   CalcApi,
   EqApi,
   GtApi,
@@ -1831,13 +2065,12 @@ export const DSH_FUNCTION_APIS: readonly FunctionApi[] = [
 ]
 
 export const DSH_CATALOG_INSTRUCTIONS = [
-  'Prefer storing mutable form values, step lists, table rows, and chart datasets under $/paths in the surface data model so follow-up turns can update them incrementally with `surface("id", update=true)`.',
-  'For multi-row equal-width KPI or card grids, prefer `Grid(children, columns?=3, gap?="md")`; for single-row KPI strips, place `Stat(..., spark?=$/trend, weight=1)` or `MetricRing(..., weight=1)` inside `Row([...])`; for structured metadata/descriptions, prefer `KeyValue($/meta, columns=2, bordered?=true)` or `JsonTree($/payload, title=...)`.',
-  'For form & calculator controls bound to $/paths, prefer `NumberInput(label, $/num, min?=..., max?=..., step?=..., unit?=...)`, `MultiSelect(label, options, $/tags, allowCreate?=false)`, `DateRange(label, $/start, $/end, presets?=true)`, `TreeSelect(label, nodes, $/choice)`, `CheckCard(label, options, $/choice)`, `Segmented(label, options, $/mode)`, `Select(label, options, $/choice)`, and `Switch(label, $/enabled)`.',
-  'For quantitative visualizations, prefer `Chart(kind, $/data, xField=..., yField=..., y2Field?=..., referenceLine?=..., title=...)` across its 19 kinds (`bar`, `line`, `area`, `pie`, `scatter`, `radar`, `funnel`, `gauge`, `heatmap`, `treemap`, `sankey`, `boxplot`, `graph`, `candlestick`, `waterfall`, `combo`, `sunburst`, `parallel`, `calendar`); for architecture/flow/sequence/state/ER/Gantt diagrams, prefer `Mermaid(code, title=...)`; for live health-colored service/module dependency DAGs, prefer `ServiceGraph($/nodes, $/edges, title=...)`.',
-  'For multi-option trade-off matrices, prefer `Comparison($/options, $/rows, title=...)`; for >= 4 tabular rows, prefer `Table($/rows, searchable=true, expandKey?=...)`; for hierarchical org/OKR/APM trace trees, prefer `Tree($/nodes, title=...)`; for sprint/remediation lanes, prefer `Kanban($/columns, title=...)`; for research citations or workspace code evidence, prefer `SourceList($/sources, title=...)`.',
-  'For workspace file trees or change summaries, prefer `FileTree($/files, title=...)`; for config/code review, prefer `DiffView($/before, $/after, title=..., filePath?=...)` or `Code(code, language=..., filePath?=...)`; for diagnostic logs & stack traces, prefer `LogViewer($/entries, title=...)`; for chronological incident/release streams, prefer `Timeline(items=[...], title=...)`; for progressive disclosure, prefer `Accordion(items=[...])`; for multi-stage plans, prefer `Steps($/stages, current=...)`; for risk warnings, prefer `Callout(title, message, tone=...)`; for clickable follow-up suggestion cards, prefer `CheckCard(label, options, action=Event("follow_up"))`.',
-  'Never fabricate real external state: if using illustrative numbers, mark them clearly in titles or captions; never claim an action has executed before receiving `[a2ui-action]`.',
+  'Store mutable state/datasets in $/paths for `surface("id", update=true)` updates.',
+  'Use `Grid`/`Row`/`KeyValue`/`JsonTree` for layouts & metadata; `Stat`/`MetricRing`/`Tracker` for KPIs.',
+  'Use `NumberInput`/`RangeSlider`/`MultiSelect`/`DateRange`/`TreeSelect`/`CheckCard`/`Rating`/`SortableList`/`KvEditor`/`Segmented`/`Select`/`Switch` for interactive inputs.',
+  'Use 26-kind `Chart` (`bar/line/area/pie/scatter/radar/funnel/gauge/heatmap/treemap/sankey/boxplot/graph/candlestick/waterfall/combo/sunburst/parallel/calendar/range/bullet/histogram/dumbbell/rose/radialBar/chord`) for data viz, `Mermaid` for diagrams, `ServiceGraph` for live DAGs.',
+  'Use `Table` (supports column `format` & `stickyFirstColumn`), `Tree` (`sharePct`/`offsetPct`), `AnnotationText`, `Comparison`, `Kanban`, `SourceList`, `DiffView` (single/multi-file + `annotations`), `Checklist`, `ImageCompare`, `LogViewer`, `FileTree`, `Timeline`, `Steps`, `Accordion`, `Callout`.',
+  'Mark illustrative data visibly; never fabricate live state or unperformed actions.',
 ].join('\n')
 
 export const dshSchemaCatalog: CatalogApi = new Catalog(
@@ -1848,7 +2081,7 @@ export const dshSchemaCatalog: CatalogApi = new Catalog(
   {
     title: 'DeepSeek Harness A2UI 1.0 Catalog',
     description:
-      'A2UI 1.0 basic components plus 39 DSH-native extensions (57 total): Grid, NumberInput, MultiSelect, DateRange, TreeSelect, CheckCard, Tree, Chart (19 ECharts kinds), Table (ProTable), Stat, MetricRing, Tracker, Progress, Badge, Code, Terminal, DiffView, Steps, Timeline, Schedule, Callout, ApprovalCard, Result, EntityHeader, KeyValue (Descriptions), Accordion, JsonTree, ApiEndpoint, FileTree, Mermaid, ServiceGraph, Select, Segmented, Switch, Comparison, Matrix, LogViewer, Kanban, and SourceList.',
+      'A2UI 1.0 basic components plus 46 DSH-native extensions (64 total): Grid, NumberInput, RangeSlider, MultiSelect, DateRange, TreeSelect, CheckCard, Rating, SortableList, KvEditor, Checklist, ImageCompare, AnnotationText, Tree, Chart (26 ECharts kinds), Table (ProTable), Stat, MetricRing, Tracker, Progress, Badge, Code, Terminal, DiffView, Steps, Timeline, Schedule, Callout, ApprovalCard, Result, EntityHeader, KeyValue (Descriptions), Accordion, JsonTree, ApiEndpoint, FileTree, Mermaid, ServiceGraph, Select, Segmented, Switch, Comparison, Matrix, LogViewer, Kanban, and SourceList.',
     instructions: DSH_CATALOG_INSTRUCTIONS,
     defModels: [WeightSchema],
   },

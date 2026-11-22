@@ -25,7 +25,7 @@ To install from a local clone instead, run `npm ci && npm run build` and then `d
 Once enabled, ask questions as usual. Click **A2UI** below the input box or type `/a2ui off` anytime to switch back to plain text.
 
 <details>
-<summary><strong>Click to expand 19 ready-to-run example prompts</strong></summary>
+<summary><strong>Click to expand 22 ready-to-run example prompts</strong></summary>
 
 1. **Executive conversion and health dashboard**: `Build a quarterly growth and conversion diagnostic dashboard with four KPI cards with sparklines on top, a four-stage Sankey flow paired with a five-axis health radar chart side by side, plus tabs for regional growth bars and a searchable channel ROI table.`
 2. **0ms Chart ↔ ProTable bidirectional cross-filtering & 1-click export**: `Build a regional operations cross-filter workbench with reactive KPI cards on top, side-by-side regional GMV bar and revenue share donut charts (supporting 0ms local cross-filter highlighting on click plus 1-click PNG download & CSV copy), and a linked orders ProTable below that filters instantly on chart or row click.`
@@ -46,6 +46,9 @@ Once enabled, ask questions as usual. Click **A2UI** below the input box or type
 17. **Persistent bottom task tracker**: `Pin a five-stage release verification tracker above the chat input showing step status and overall completion percentage across typecheck, bundle build, host API check, test suite, and tarball audit.`
 18. **Market candlestick and volatility distribution**: `Create a 10-day market review dashboard combining a sentiment gauge with a daily OHLC candlestick chart and a sector return boxplot side by side.`
 19. **Incident triage accordion and detail modal**: `Generate a layered API latency incident report using collapsible accordions for root-cause summary, key-value metrics, and mitigation steps, plus a modal button to inspect full slow-query details.`
+20. **Next-gen charts gallery (range band, bullet, histogram, dumbbell, radialBar, chord & quadrant)**: `Build an engineering and observability insight deck featuring a 95% confidence range band with a shaded incident markArea, an OKR bullet chart, an auto-binned latency histogram with a P95 threshold, a before/after dumbbell chart, a Nightingale rose chart, a 270-degree radialBar chart, an ECharts 6 bi-directional chord diagram, a dual-axis quadrant scatter chart, a 100% normalized stacked bar chart, and a stepped log-scale replica line chart.`
+21. **Zero-dependency interactive primitives (RangeSlider, Checklist, SortableList, KvEditor, ImageCompare & AnnotationText)**: `Build a release readiness and compliance review workbench combining a dual-thumb RangeSlider budget calculator, half-star and Likert Rating widgets, a required-item gated pre-flight Checklist, a drag-and-drop priority SortableList, a secret-masking KvEditor, a before/after ImageCompare wipe slider, and an AnnotationText contract risk highlighter with inline citation hover cards.`
+22. **Semantic ProTable, 0ms conditional aggregates, offset Trace waterfall & multi-file PR diff**: `Create a production rollout review console with top KPIs dynamically recalculated in 0 ms via conditional count/sum/avg/max filters, a ProTable using declarative code/bar/delta/sparkline/badge cells with a sticky first column, a distributed Trace waterfall Tree with offsetPct timeline offsets, and a multi-file DiffView with inline review annotations.`
 
 </details>
 
@@ -60,6 +63,30 @@ Equal-height KPI cards with sparklines pair with a four-stage Sankey flow and a 
 | Dark mode | Light mode |
 | :---: | :---: |
 | ![Full-funnel conversion flow and radar diagnostic dashboard (Dark)](assets/screenshots/hero-executive-dashboard.png) | ![Full-funnel conversion flow and radar diagnostic dashboard (Light)](assets/screenshots/hero-executive-dashboard-light.png) |
+
+### 26 ECharts 6 chart kinds & cross-chart enhancements (new in `v0.5.0`)
+
+Render confidence `range` bands with shaded `markArea` windows, OKR/SLO `bullet` targets, auto-binned `histogram` distributions, before/after `dumbbell` deltas, Nightingale `rose` charts, collision-free 270° `radialBar` rings, ECharts 6 bi-directional `chord` diagrams, dual-reference `scatter` quadrants, 100% normalized stacked bars (`stackMode="percent"`), and stepped logarithmic lines (`step=true, yScale="log"`) — all verified crisp inside `276px` two-column cards.
+
+| Dark mode | Light mode |
+| :---: | :---: |
+| ![v0.5.0 7 new chart kinds and 5 chart enhancements (Dark)](assets/screenshots/nextgen-charts-gallery.png) | ![v0.5.0 7 new chart kinds and 5 chart enhancements (Light)](assets/screenshots/nextgen-charts-gallery-light.png) |
+
+### 7 new zero-dependency interactive primitives (new in `v0.5.0`)
+
+Pair live dual-thumb `RangeSlider` calculators, half-star/Likert `Rating` controls, required-item gated `Checklist` panels, drag-and-drop + keyboard `SortableList` rankers, secret-masking `KvEditor` tables, interactive `ImageCompare` wipe comparators, and `AnnotationText` inline entity/citation highlighters — with zero bytes added to the cold-boot shell.
+
+| Dark mode | Light mode |
+| :---: | :---: |
+| ![v0.5.0 7 zero-dependency interactive primitives (Dark)](assets/screenshots/nextgen-interactive-primitives.png) | ![v0.5.0 7 zero-dependency interactive primitives (Light)](assets/screenshots/nextgen-interactive-primitives-light.png) |
+
+### Semantic ProTable, 0ms conditional aggregates, offset Trace waterfall & multi-file PR diff (upgraded in `v0.5.0`)
+
+Recalculate top KPIs locally in 0 ms via conditional `count`/`sum`/`avg`/`max` filters, render declarative `code`/`bar`/`delta`/`sparkline`/`badge` columns with `stickyFirstColumn` in `ProTable`, inspect cascading `offsetPct` distributed APM trace waterfalls in `Tree`, and review multi-file PR tabs with inline annotations in `DiffView`.
+
+| Dark mode | Light mode |
+| :---: | :---: |
+| ![Semantic ProTable, distributed Trace offset waterfall, and multi-file annotated PR DiffView (Dark)](assets/screenshots/protable-trace-pr-diff.png) | ![Semantic ProTable, distributed Trace offset waterfall, and multi-file annotated PR DiffView (Light)](assets/screenshots/protable-trace-pr-diff-light.png) |
 
 ### Cross-filter charts and ProTables locally in 0 ms with one-click export
 
@@ -152,25 +179,25 @@ Keep multi-stage pipelines anchored at the bottom of the window. Stages and comp
 ## Why A2UI
 
 - **Safe by design**: Built on Google's A2UI 1.0 specification, models output declarative JSON only and never execute untrusted HTML or scripts, with anti-jank streaming skeletons.
-- **Scoped domain skills, fewer tokens, higher accuracy**: Partitions all 57 components across 4 lightweight on-demand skills (`a2ui`, `a2ui-analytics`, `a2ui-devops`, `a2ui-forms`) with compile-time depth lowering — cutting prompt tokens by **-44.2%** and achieving **100%** compile pass across 28 live `deepseek-chat` benchmark cases.
+- **Scoped domain skills, fewer tokens, higher accuracy**: Partitions all 64 components across 4 lightweight on-demand skills (`a2ui`, `a2ui-analytics`, `a2ui-devops`, `a2ui-forms`) with compile-time depth lowering — cutting prompt tokens by **66%+** with **100%** compile pass across 31 benchmark cases.
 - **Native look and feel**: Every surface renders with DeepSeek Harness UI primitives, adapting automatically to light mode, dark mode, and community themes.
-- **Zero host patches, fast startup**: Built on official plugin APIs with a 16.7 KB gzipped core; chart and diagram engines load only on demand.
+- **Zero host patches, fast startup**: Built on official plugin APIs with a 19.2 KB gzipped cold-boot core; chart and diagram engines load only on demand.
 
 ## Component catalog
 
-Includes 57 native UI components, 19 interactive chart types, and full Mermaid diagram support:
+Includes 64 native UI components, 26 interactive chart types, and full Mermaid diagram support:
 
 | Category | Components | Purpose |
 | :--- | :--- | :--- |
 | **Layout & entity headers** | `Card`, `Row`, `Column`, `Grid`, `Tabs`, `Accordion`, `List`, `Modal`, `Divider`, `EntityHeader` | Responsive multi-row CSS grids, multi-column dashboards, tabs, collapsible panels, modals, and B2B object headers |
 | **Metrics, SLOs & outcomes** | `Stat`, `MetricRing`, `Tracker`, `KeyValue` (bordered Descriptions), `Steps`, `Timeline`, `Schedule`, `Progress`, `Result` | KPI cards, radial rings, Tremor SLA/category bars, bordered descriptions, timelines, Gantt schedules, and outcome receipts |
-| **Charts, topology & ProTable** | `Chart`, `ServiceGraph`, `Mermaid`, `Comparison`, `Matrix`, `Table` (expandable ProTable), `Tree`, `Kanban` | 19 chart kinds, live health DAGs, trade-off & heat matrices, expandable/exportable ProTables, org/trace trees, and Kanban boards |
-| **DevOps, APIs & risk gates** | `Code`, `Terminal`, `ApiEndpoint`, `ApprovalCard`, `DiffView`, `LogViewer`, `FileTree`, `JsonTree`, `SourceList` | Code blocks, runbook terminals, HTTP API workbenches, risk approval gates, diffs, logs, file trees, and citations |
-| **Forms & prompt cards** | `Button`, `NumberInput`, `MultiSelect`, `DateRange`, `TreeSelect`, `CheckCard`, `Segmented`, `Select`, `Switch`, `Slider`, `ChoicePicker`, `TextField`, `CheckBox`, `DateTimeInput` | Precision steppers, multi-tag selects, preset date ranges, hierarchical tree selects, visual check/prompt cards, switches, sliders, and validated inputs |
+| **Charts, topology & ProTable** | `Chart`, `ServiceGraph`, `Mermaid`, `Comparison`, `Matrix`, `Table` (semantic-cell & sticky-col ProTable), `Tree` (trace offset waterfall), `Kanban`, `AnnotationText` | 26 chart kinds, live health DAGs, trade-off & heat matrices, semantic-column/expandable/exportable ProTables, distributed trace waterfall trees, Kanban boards, and inline entity/citation highlighting |
+| **DevOps, APIs & risk gates** | `Code`, `Terminal`, `ApiEndpoint`, `ApprovalCard`, `Checklist`, `DiffView` (multi-file + review annotations), `LogViewer`, `FileTree`, `JsonTree`, `SourceList` | Code blocks, runbook terminals, HTTP API workbenches, risk approval gates, pre-flight checklists, multi-file annotated PR diffs, logs, file trees, and citations |
+| **Forms & interactive controls** | `Button`, `NumberInput`, `RangeSlider`, `Rating`, `SortableList`, `KvEditor`, `MultiSelect`, `DateRange`, `TreeSelect`, `CheckCard`, `Segmented`, `Select`, `Switch`, `Slider`, `ChoicePicker`, `TextField`, `CheckBox`, `DateTimeInput` | Dual-thumb range sliders, star/Likert ratings, drag-and-drop ranking, auto-redacted key-value editors, precision steppers, multi-tag selects, date ranges, tree selects, visual check/prompt cards, and validated inputs |
 | **Typography and alerts** | `Text`, `Callout`, `Badge`, `Icon` | Rich text, color-coded callouts, status badges, and semantic icons |
-| **Media** | `Image` (native lightbox), `AudioPlayer`, `Video` | Click-to-zoom lightbox image previews, audio players, and video playback |
+| **Media & visual compare** | `Image` (native lightbox), `ImageCompare`, `AudioPlayer`, `Video` | Lightbox image previews, before/after wipe comparator, audio players, and video playback |
 
-- **19 interactive charts (`Chart`)**: Vertical and horizontal ranking bars (`bar`), `line`, `area`, dual-axis bar + line (`combo`), variance bridge (`waterfall`), donut and pie (`pie`), bubble and `scatter`, `radar`, multi-axis `parallel`, `funnel`, `gauge`, `heatmap`, daily `calendar` heatmap, `treemap`, drill-down `sunburst`, `sankey`, `boxplot`, network (`graph`), and `candlestick`, plus `referenceLine` threshold markers, `selected` ↔ `Table` 0 ms bidirectional cross-filtering, and 1-click 2× PNG download & CSV copy.
+- **26 interactive charts (`Chart`)**: Vertical/horizontal bars (`bar`), `line`, `area`, dual-axis `combo`, variance bridge (`waterfall`), confidence/forecast band (`range`), OKR/SLO `bullet`, auto-binned `histogram`, before/after `dumbbell`, Nightingale `rose`, polar `radialBar`, bi-directional `chord`, donut/pie (`pie`), bubble & quadrant `scatter`, `radar`, multi-axis `parallel`, `funnel`, `gauge`, `heatmap`, daily `calendar` heatmap, `treemap`, drill-down `sunburst`, `sankey`, `boxplot`, network (`graph`), and `candlestick` — with stepped lines (`step`), log axes (`yScale="log"`), 100% normalized stacks (`stackMode="percent"`), shaded bands (`markArea`), quadrant axes (`referenceLine` + `referenceX`), 0 ms `Chart ↔ Table` cross-filtering, and 1-click 2× PNG download & CSV copy.
 - **Architecture and flow diagrams (`Mermaid`)**: Flowcharts, sequence diagrams, state machines, class diagrams, ER diagrams, Gantt charts, Git graphs, and mindmaps with `10%–2000%` lossless vector zoom, pointer-anchored wheel zoom, drag-to-pan, fit-to-viewport, fullscreen view, and source toggle.
 
 ## Documentation and license

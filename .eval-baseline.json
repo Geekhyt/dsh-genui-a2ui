@@ -7,7 +7,7 @@
     "minSelfRepairRecoveryPct": 100,
     "maxScopedAvgPromptTokens": 7500,
     "minScopedTokenSavingsPct": 60,
-    "minUniqueComponentsUsed": 57
+    "minUniqueComponentsUsed": 64
   },
   "live": {
     "minRoutingAccuracyPct": 90,

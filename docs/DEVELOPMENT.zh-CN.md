@@ -2,7 +2,7 @@
 
 [English](./DEVELOPMENT.md) | **简体中文** | [返回产品主页 README](../README.md)
 
-本文档面向插件开发者、架构评审者与社区贡献者，详细介绍 `dsh-genui-a2ui` 的三阶段运行机制、**Google A2UI 1.0** 协议落地规范、**DeepSeek Harness（DSH）** 零 Hack 官方扩展点映射、四分包体积预算、**57 组件 Express DSL 语法契约**以及本地调试测试流程。
+本文档面向插件开发者、架构评审者与社区贡献者，详细介绍 `dsh-genui-a2ui` 的三阶段运行机制、**Google A2UI 1.0** 协议落地规范、**DeepSeek Harness（DSH）** 零 Hack 官方扩展点映射、四分包体积预算、**64 组件 Express DSL 语法契约**以及本地调试测试流程。
 
 ---
 
@@ -37,8 +37,8 @@ flowchart TB
 
   subgraph S3["阶段 3 · Client 四分包懒加载与原生 Light-DOM 槽位"]
     SHELL["冷启动轻量壳 lib/client.js (60.5 kB)"]
-    RT["按需核心包 client.runtime.js (57 组件 + StreamingExpressSession)"]
-    EC["按需图表包 client.echarts.js (19 类 ECharts 6)"]
+    RT["按需核心包 client.runtime.js (64 组件 + StreamingExpressSession)"]
+    EC["按需图表包 client.echarts.js (26 类 ECharts 6)"]
     MM["按需架构图包 client.mermaid.js (Mermaid 11 严格沙箱)"]
     SLOTS["DSH 官方槽位 (turnTail / toolview / input.dock / input.left)"]
     SIDE["右侧边栏源码直达 sidebarRight.openResource"]
@@ -62,7 +62,7 @@ flowchart TB
 `dsh-genui-a2ui` 严格遵循 **A2UI（Agent-to-User Interface）1.0** 官方设计原则，不做任何破坏确定性的私有协议魔改：
 
 1. **Data, Not Code（声明式数据而非可执行代码，安全内生）** —— 模型绝不发送 HTML、JavaScript 脚本或 `iframe`，前后端边界只传递纯 JSON 声明消息，从协议层彻底杜绝代码注入与 XSS。
-2. **Trusted Client Catalog（客户端受控组件白名单）** —— 模型只能调用 `dshSchemaCatalog` 注册并通过 Zod 严格校验的 **57 个组件**与 **25 个函数**，未知标签在编译期与渲染期双重拦截。
+2. **Trusted Client Catalog（客户端受控组件白名单）** —— 模型只能调用 `dshSchemaCatalog` 注册并通过 Zod 严格校验的 **64 个组件**与 **28 个函数**，未知标签在编译期与渲染期双重拦截。
 3. **LLM-Friendly Flat Streaming Graph（面向流式生成的扁平 ID 拓扑）** —— 容器采用扁平组件表 + `ChildSchema` ID 引用替代深层嵌套树，天然支持流式逐行上屏与按 Surface ID 原地增量更新（`surface("id", update=true)`）。
 4. **Structure · State · Render 三层解耦** —— 组件结构（`components`）、JSON Pointer 响应式状态（`$/paths`）与 React 视图渲染完全分离。
 5. **Thin UI, Thick Agent（薄视图、厚智能体职责边界）** —— 闭式标量公式（`calc`）、条件映射（`cond`）与表单即时校验（`?checks`）在本地 `0ms` 执行；开放式多步推理、外部数据查询与真实副作用通过 `[a2ui-action]` 或 `a2ui_ask` 交回 Agent。
@@ -87,9 +87,9 @@ flowchart TB
 
 | 构建产物 | 原始体积 | Gzip 体积 | 职责与加载触发时机 |
 | :--- | :--- | :--- | :--- |
-| `lib/client.js` | **`65.8 kB`** | **`18.6 kB`** | 首屏冷启动轻量壳：注册 UI Slots、双语自适应、空会话原生轻提示与胶囊开关（构建与单测双重强制 `< 100 kB` 门禁）。 |
-| `lib/client.runtime.js` | `1.34 MB` | ~`355 kB` | 仅当对话中真正挂载 A2UI 卡片时才加载（含 `@a2ui/react`、57 组件目录、TanStack Table、0ms 交叉筛选与流式防抖）。 |
-| `lib/client.echarts.js` | `869.4 kB` | `286.6 kB` | 仅当卡片使用 `Chart` 组件时按需加载 ECharts 6（按需注册 19 类图表、标线模块、交叉筛选高亮、2× PNG 导出与 276px 紧凑自适应）。 |
+| `lib/client.js` | **`68.1 kB`** | **`19.2 kB`** | 首屏冷启动轻量壳：注册 UI Slots、双语自适应、空会话原生轻提示与胶囊开关（构建与单测双重强制 `< 100 kB` 门禁）。 |
+| `lib/client.runtime.js` | `1.41 MB` | ~`365 kB` | 仅当对话中真正挂载 A2UI 卡片时才加载（含 `@a2ui/react`、64 组件目录、TanStack Table、0ms 交叉筛选与流式防抖）。 |
+| `lib/client.echarts.js` | `908 kB` | `296 kB` | 仅当卡片使用 `Chart` 组件时按需加载 ECharts 6（按需注册 26 类图表、标线与区间带模块、交叉筛选高亮、2× PNG 导出与 276px 紧凑自适应）。 |
 | `lib/client.mermaid.js` | `3.47 MB` | ~`930 kB` | 仅当卡片使用 `Mermaid` 组件时按需加载 Mermaid 11（强制 `securityLevel: "strict"` + 逐条 CSS 作用域过滤 + SVG 净化 + LRU-64 缓存）。 |
 | `lib/index.js` | `755.0 kB` | `208.0 kB` | 自包含 Host ESM 产物（打包 `@a2ui/agent`、分域 Skill 压缩器、线性 Express 编译降维预处理与同构 Zod 契约），用户安装时零运行时 npm 依赖。 |
 
@@ -117,7 +117,7 @@ flowchart TB
 
 ---
 
-## 5. 57 组件 A2UI Express DSL 语法契约速查
+## 5. 64 组件 A2UI Express DSL 语法契约速查
 
 每个界面以 `surface("snake_id")` 开头（增量刷新使用 `surface("snake_id", update=true)`），并将根组件赋值给 `root = ...`。可变字面量状态存入 `$/path`（如 `$/rate = 3.85`）；响应式计算表达式赋值给不带 `$/` 的局部变量（如 `monthly = calc(...)`），严禁将函数表达式写入 `$/path`。
 
@@ -159,20 +159,21 @@ flowchart TB
 | `Progress` | `Progress(value, max?=100, label?, tone?="brand"\|"success"\|"warning"\|"danger")` | 响应式进度条。 |
 | `Result` | `Result(status="success"\|"info"\|"warning"\|"error"\|"empty", title, subtitle?, meta?, actionLabel?, action?, child?)` | 操作完成凭证回执单与结构化空状态。 |
 
-### 4) 图表、拓扑、矩阵、层级树与数据表格（8）
+### 4) 图表、拓扑、矩阵、层级树与数据表格（9）
 
 | 组件 | Express 语法签名 | 技术说明 |
 | :--- | :--- | :--- |
-| `Chart` | `Chart(kind, data, title?, xField?, yField?, y2Field?, seriesField?, sizeField?, referenceLine?, referenceLabel?, stacked?, horizontal?, zoom?, height?, selected?, exportable?, action?)` | 19 种 `kind`：`bar`、`line`、`area`、`combo`、`waterfall`、`pie`、`scatter`、`radar`、`parallel`、`funnel`、`gauge`、`heatmap`、`calendar`、`treemap`、`sunburst`、`sankey`、`boxplot`、`graph`、`candlestick`。 |
+| `Chart` | `Chart(kind, data, title?, xField?, yField?, y2Field?, seriesField?, sizeField?, referenceLine?, referenceLabel?, referenceX?, referenceXLabel?, stacked?, stackMode?, step?, yScale?, bins?, markArea?, horizontal?, zoom?, height?, selected?, exportable?, action?)` | 26 种 `kind`：`bar`、`line`、`area`、`combo`、`waterfall`、`range`、`bullet`、`histogram`、`dumbbell`、`rose`、`radialBar`、`chord`、`pie`、`scatter`、`radar`、`parallel`、`funnel`、`gauge`、`heatmap`、`calendar`、`treemap`、`sunburst`、`sankey`、`boxplot`、`graph`、`candlestick`。 |
 | `ServiceGraph` | `ServiceGraph(nodes, edges?, title?, direction?="LR"\|"TB", action?)` | 零依赖 DAG 拓扑图，支持健康度着色与上下游依赖高亮。 |
 | `Mermaid` | `Mermaid(code, title?, caption?)` | 支持 15 种白名单图类型（`flowchart`/`graph`、`sequenceDiagram`、`classDiagram`、`stateDiagram`/`-v2`、`erDiagram`、`gantt`、`pie`、`journey`、`gitGraph`、`mindmap`、`timeline`、`quadrantChart`、`xychart-beta`）及 `10%–2000%` 矢量缩放、漫游与全屏查看。 |
 | `Comparison` | `Comparison(options, rows, title?, action?)` | 多方案权衡矩阵（支持 `ok:` / `warn:` / `no:` 前缀与推荐列高亮）。 |
 | `Matrix` | `Matrix(rows, columns, values, title?, cornerLabel?, unit?, colorScale?, showTotals?)` | 条件格式热力交叉表（留存队列、敏感度矩阵、RBAC 权限表）。 |
-| `Table` | `Table(rows, columns?, title?, searchable?, pageSize?, exportable?, selectable?, batchLabel?, showSummary?, expandKey?, filterField?, filterValue?, action?)` | 企业级 `ProTable`：格式化数值排序、搜索、分页、密度切换、按排序导出 CSV/MD、多选批处理、汇总行、0ms 交叉筛选（`filterField`/`filterValue`）与 `expandKey` 行内展开详情抽屉。 |
-| `Tree` | `Tree(nodes, title?, summary?, searchable?, expandedDepth?=3, action?)` | 通用层级树与 APM 调用链瀑布树（支持 `sharePct` 比例耗时条与宿主 `StateDot`）。 |
+| `Table` | `Table(rows, columns?, title?, searchable?, pageSize?, exportable?, selectable?, batchLabel?, showSummary?, stickyFirstColumn?, expandKey?, filterField?, filterValue?, action?)` | 企业级 `ProTable`：列声明语义格式化（`badge`/`bar`/`delta`/`sparkline`/`code`）、冻结首列、数值排序、搜索、分页、密度切换、按排序导出 CSV/MD、多选批处理、汇总行、0ms 交叉筛选与 `expandKey` 行内展开抽屉。 |
+| `Tree` | `Tree(nodes, title?, summary?, searchable?, expandedDepth?=3, action?)` | 通用层级树与 APM 调用链瀑布树（支持 `sharePct` + `offsetPct` 偏移时间轴瀑布条与宿主 `StateDot`）。 |
 | `Kanban` | `Kanban(columns, title?, action?)` | 多泳道任务与工单分流看板。 |
+| `AnnotationText` | `AnnotationText(text, annotations, title?, action?)` | 文本实体高亮、句级风控批注与溯源浮卡（复用宿主 `HoverCard`）。 |
 
-### 5) 研发、接口调试与风控门禁（9）
+### 5) 研发、接口调试与风控门禁（10）
 
 | 组件 | Express 语法签名 | 技术说明 |
 | :--- | :--- | :--- |
@@ -180,18 +181,23 @@ flowchart TB
 | `Terminal` | `Terminal(commands, title?, cwd?, shell?="zsh", maxHeight?)` | 运维命令执行手册，清晰分离 `$ cmd`、`stdout`、`stderr` 与 `exitCode`，仅复制纯净命令。 |
 | `ApiEndpoint` | `ApiEndpoint(method, path, summary?, status?, latency?, baseUrl?, params?, headers?, requestBody?, responseBody?, action?)` | HTTP API 契约调试台，复用宿主 `JsonTree` 并支持安全转义复制 `cURL`。 |
 | `ApprovalCard` | `ApprovalCard(title, summary?, severity?="high", scope?, impacts?, confirmLabel?, approveLabel?, rejectLabel?, approveAction?, rejectAction?)` | B 端高危变更风控审批门禁，联动宿主 `Switch` 二次确认解锁放行。 |
-| `DiffView` | `DiffView(before, after, title?, filePath?, line?, language?, mode?="unified"\|"split")` | 行级差异对比、增删统计、单栏/双栏切换及右侧栏源码定位。 |
+| `Checklist` | `Checklist(items, value?=$/checkedIds, title?, description?, actionLabel?, action?)` | 发布 Pre-flight 与合规核查清单，未全部勾选 `required` 必选项前自动锁定放行按钮。 |
+| `DiffView` | `DiffView(before?, after?, files?, annotations?, title?, filePath?, line?, language?, mode?="unified"\|"split")` | 行级差异对比、多文件 PR 标签切换、行内审阅批注、`+added/-removed` 统计与右侧栏源码定位。 |
 | `LogViewer` | `LogViewer(entries, title?, searchable?, defaultLevel?, maxHeight?, action?)` | 结构化日志与堆栈排障台，支持级别筛选与右侧栏源码跳转。 |
 | `FileTree` | `FileTree(items, title?, expandedDepth?, action?)` | 复用宿主 `FileTypeIcon` 与 `PathLabel` 的工作区文件树。 |
 | `JsonTree` | `JsonTree(data, title?, expandedDepth?, copyable?)` | 复用 `@deepseek-ai/dsh-client-ui-primitives` 的原生 `JsonTree`。 |
 | `SourceList` | `SourceList(items, title?, action?)` | 溯源引用与证据列表，自动调用宿主 `LinkIconRegular` 与 `FileTypeIcon`。 |
 
-### 6) 表单交互、建议卡片与多媒体（17）
+### 6) 表单交互、建议卡片与多媒体（22）
 
 | 组件 | Express 语法签名 | 技术说明 |
 | :--- | :--- | :--- |
 | `Button` | `Button(child, variant?="primary"\|"default"\|"borderless", action=Event(name, context?, userMessage?))` | 触发 `[a2ui-action]` 或本地动作；关联 `?checks` 未通过时自动禁用。 |
 | `NumberInput` | `NumberInput(label, $/num, min?, max?, step?=1, unit?, prefix?)` | 对标 AntD `InputNumber` 的高精度步进数字框，直绑数字型 `$/path`。 |
+| `RangeSlider` | `RangeSlider(label, min, max, $/low, $/high, step?, prefix?, unit?)` | 双滑块数值区间选择器，实时联动双 `$/path` 与 0ms 测算公式。 |
+| `Rating` | `Rating(label, $/score, max?=5, allowHalf?=false, variant?="stars"\|"scale", labels?, readOnly?)` | 支持半星评分与 1..N 量表打分。 |
+| `SortableList` | `SortableList($/items, title?, description?, disabled?)` | HTML5 拖拽 + 键盘 ↑/↓ 优先级重排列表，实时回写有序数组。 |
+| `KvEditor` | `KvEditor($/pairs, title?, keyLabel?, valueLabel?, keyPlaceholder?, valuePlaceholder?, addLabel?, maxItems?, maskSecrets?=true)` | 动态环境变量/Header 键值编辑器，命中敏感键名自动密文脱敏。 |
 | `MultiSelect` | `MultiSelect(label, options, value=$/strList, placeholder?, searchable?=true, allowCreate?=false, maxTagCount?=5)` | 对标 AntD `Select(mode="multiple"\|"tags")`，支持折叠胶囊与回车自建标签。 |
 | `DateRange` | `DateRange(label, start=$/start, end=$/end, presets?=true, enableTime?=false)` | 对标 AntD `RangePicker`，含 `今日/近7天/近30天/近90天` 预设与跨度统计。 |
 | `TreeSelect` | `TreeSelect(label, nodes, value=$/str, placeholder?, searchable?=true)` | 对标 AntD `TreeSelect / Cascader`，触发器回显完整层级面包屑路径。 |
@@ -205,17 +211,19 @@ flowchart TB
 | `CheckBox` | `CheckBox(label, value=$/flag)` | 布尔值双向绑定。 |
 | `DateTimeInput` | `DateTimeInput(value=$/iso, enableDate?, enableTime?, min?, max?, label?)` | ISO 日期时间字符串绑定。 |
 | `Image` | `Image(url, description?, fit?, variant?)` | 点击可唤起宿主原生 `ImageLightbox` 全屏灯箱预览。 |
+| `ImageCompare` | `ImageCompare(beforeUrl, afterUrl, beforeLabel?, afterLabel?, title?, initialPosition?=50, height?=220)` | 视觉回归 / 设计稿改版前后可拖动滑动对比器。 |
 | `AudioPlayer` | `AudioPlayer(url, description?)` | 原生音频播放控件。 |
 | `Video` | `Video(url, posterUrl?)` | 原生 HTML5 视频播放控件。 |
 
 ---
 
-## 6. 25 个客户端响应式与校验函数参考
+## 6. 28 个客户端响应式与校验函数参考
 
-- **`0ms` 安全代数公式、查表与聚合（5）**：
+- **`0ms` 安全代数公式、查表与条件聚合（8）**：
   - `calc(expr, vars, decimals?)`：递归下降安全公式求值器，支持 `+ - * / ^ % ( ) ? : == != < <= > >= && ||` 与 `pow, sqrt, exp, log, ln, log10, abs, min, max, clamp, round, floor, ceil, pmt(ratePerPeriod, nper, pv), sin, cos, tan`；编译期静态校验真实嵌套深度（`<= 36`）与节点数（`<= 128`）。
   - `lookup(key, table, fallback?)`：深度 1 映射查表（自动解包单选 `ChoicePicker` 单元素数组），替代多层嵌套 `cond(eq(...))`。
-  - `cond(condition, truthy, falsy)`、`sum(items, field?)`、`avg(items, field?)`
+  - `cond(condition, truthy, falsy)`
+  - `sum(items, field?, filterField?, filterValue?)`、`avg(...)`、`count(...)`、`min(...)`、`max(...)`（全系支持标量/数组交叉筛选实时 0ms 重算）
 - **比较与布尔逻辑（7）**：
   - `eq(a, b)`（自动解包单选 `ChoicePicker` 单元素数组）、`gt(a, b)`、`lt(a, b)`、`includes(items, value)`、`and([...])`、`or([...])`、`not(x)`
 - **格式化与拼接（6）**：
@@ -240,13 +248,13 @@ npm run typecheck
 # 构建 Host ESM + 4 个 Client 分包（自动校验首屏 < 100 kB 门禁）
 npm run build
 
-# 运行全部 28 个测试套件 / 147 项单元、React 架构最佳实践、安全、契约与分包门禁测试
+# 运行全部单元、React 架构最佳实践、安全、契约、确定性回放与分包门禁测试
 npm test
 
-# 运行 28 用例 LLM 生成与自修复基准测试（支持 --mode=mock 或 --mode=live --model=deepseek-chat）
+# 运行 31 用例 LLM 生成与自修复基准测试（支持 --mode=mock 或 --mode=live --model=deepseek-chat）
 npm run eval:llm -- --mode=mock --strategy=both
 
-# 核验与本机 DeepSeek Harness.app 内部契约兼容性（12 平台模块、7 注入模块、30 原语、5 Slots、39 CSS 变量）
+# 核验与本机 DeepSeek Harness.app 内部契约兼容性（12 平台模块、7 注入模块、30 原语、5 Slots、40 CSS 变量）
 npm run check:host-api
 
 # 预览 npm 发布包文件清单与体积（精确 18 个文件）
@@ -260,12 +268,12 @@ node scripts/dev-env.mjs serve
 ### 核心源码目录说明
 
 - `src/index.ts` —— Host 端 Cordis 插件入口（注册工具、4 域分域 Skill、命令与系统提示词切片）
-- `src/host/` —— `a2ui_render`、`a2ui_ask`、`SurfaceSessions` 编译器（事务级状态回滚）、分域 Skill 压缩器（`prompt-compact.ts`）与 28 用例评测套件（`eval-suite.ts`）
-- `src/shared/` —— 前后端同构 `dshSchemaCatalog`（57 组件 / 25 函数）、Express 降维预处理（`express-preprocess.ts`）、跨端协议类型 `wire-types.ts`、`calc` 公式解析器、安全脱敏、本地时间辅助与跨分包双语词条
-- `src/client/index.ts` —— `65.8 kB` 首屏冷启动轻量壳与输入框胶囊开关
+- `src/host/` —— `a2ui_render`、`a2ui_ask`、`SurfaceSessions` 编译器（事务级状态回滚）、分域 Skill 压缩器（`prompt-compact.ts`）与 31 用例评测套件（`eval-suite.ts`）
+- `src/shared/` —— 前后端同构 `dshSchemaCatalog`（64 组件 / 28 函数）、Express 降维预处理（`express-preprocess.ts`）、跨端协议类型 `wire-types.ts`、`calc` 公式解析器、安全脱敏、本地时间辅助与跨分包双语词条
+- `src/client/index.ts` —— `68.1 kB` 首屏冷启动轻量壳与输入框胶囊开关
 - `src/client/dom-hooks.ts` —— 全仓唯一底层 DOM / ECharts PNG 导出 / 流式高度稳定器 / Mermaid 生命周期隔离层（业务 `.tsx` 强制 `0` `useEffect`）
 - `src/client/chunks/` —— 按需加载分包入口（`runtime-chunk.ts`、`echarts-chunk.ts`、`mermaid-chunk.ts`）
-- `src/client/catalog/` —— 57 个 Light-DOM 原生组件与 25 个客户端函数的具体实现
+- `src/client/catalog/` —— 64 个 Light-DOM 原生组件与 28 个客户端函数的具体实现
 - `build/` —— `tsdown` 五目标构建预设与 DSH 宿主模块外部化配置
 - `scripts/` —— Host API 契约核验脚本（`check-host-api.mjs`）、真模型评测脚本（`eval-llm.mjs`）与隔离演示环境（`dev-env.mjs`、`mock-llm.mjs`）
 - `AGENTS.md` —— `306px` 半宽优先 `@container` 排版、ECharts `276px` 防碰撞契约与发版前视觉回归工程规范
