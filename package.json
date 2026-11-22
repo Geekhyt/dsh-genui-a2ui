@@ -79,8 +79,8 @@
     "check:bundle": "node scripts/check-bundle-budget.mjs",
     "check:host-api": "node scripts/check-host-api.mjs",
     "verify:tla": "node scripts/verify-tla.mjs",
-    "eval:llm": "node --no-warnings --use-env-proxy --experimental-transform-types scripts/eval-llm.mjs",
-    "eval:check": "node --no-warnings --use-env-proxy --experimental-transform-types scripts/eval-llm.mjs --mode=mock --check-thresholds",
+    "eval:llm": "node --no-warnings --use-env-proxy scripts/eval-llm.mjs",
+    "eval:check": "node --no-warnings --use-env-proxy scripts/eval-llm.mjs --mode=mock --check-thresholds",
     "qa:visual": "node scripts/visual-qa-bot.mjs",
     "dev:env": "node scripts/dev-env.mjs",
     "dev:mock": "node scripts/mock-llm.mjs"

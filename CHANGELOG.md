@@ -19,6 +19,8 @@ All notable changes to `dsh-genui-a2ui` are documented in this file.
 ### Fixed
 - **Mermaid Unmount Oversized-Cache Leak Caught by TLC (`src/client/chunk-loader.ts`)**:
   - Extracted shared `trimIdleMermaidCache()` and invoked it on zero-subscriber unmount when `mermaidDiagramCache.size > MAX_MERMAID_CACHE_ENTRIES`, resolving the 8-step `BoundedIdleCache` counterexample found by TLC when `> 64` diagrams mount simultaneously and subsequently unmount.
+- **Node 26 Native Strip-Only TypeScript Compatibility (`src/host/generator.ts`, `tsconfig.json`, `package.json`)**:
+  - Replaced the lone constructor parameter property in `SurfaceSessions`, enabled `erasableSyntaxOnly: true` in `tsconfig.json`, and removed the Node 26-deprecated `--experimental-transform-types` flag from `eval:llm` / `eval:check`.
 
 ### Changed
 - **Context-Encoded Shell vs Runtime Directory Split (`src/client/shell/`, `src/client/runtime/`, `biome.json`, `AGENTS.md`, `.github/workflows/ci.yml`, `.github/workflows/release.yml`)**:

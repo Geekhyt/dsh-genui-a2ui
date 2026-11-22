@@ -336,12 +336,11 @@ export class SurfaceSessions {
   private readonly states = new Map<string, RendererState>()
   private readonly enabledBySession = new Map<string, boolean>()
   private readonly failuresBySession = new Map<string, { render: number; ask: number }>()
+  private readonly generator: A2uiGenerator
   private defaultEnabled: boolean
 
-  constructor(
-    private readonly generator: A2uiGenerator = createGenerator(DEFAULT_CATALOGS),
-    initialEnabled = true,
-  ) {
+  constructor(generator: A2uiGenerator = createGenerator(DEFAULT_CATALOGS), initialEnabled = true) {
+    this.generator = generator
     this.defaultEnabled = initialEnabled
   }
 
