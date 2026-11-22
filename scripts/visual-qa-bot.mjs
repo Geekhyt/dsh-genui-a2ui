@@ -58,10 +58,14 @@ export const SCREENSHOT_SHOWCASE_MAP = {
   'assets/screenshots/chart-table-crossfilter.png': 'showcase-25',
   'assets/screenshots/finops-waterfall-sunburst.png': 'showcase-16',
   'assets/screenshots/sre-combo-calendar-slo.png': 'showcase-17',
+  'assets/screenshots/store-operations-dashboard.png': 'showcase-6',
   'assets/screenshots/antd-capacity-checkcard-planner.png': 'showcase-9',
+  'assets/screenshots/enterprise-governance-protable.png': 'showcase-8',
   'assets/screenshots/sre-apm-topology-workbench.png': 'showcase-7',
   'assets/screenshots/zero-latency-simulator.png': 'showcase-3',
-  'assets/screenshots/human-in-the-loop-ask.png': 'showcase-10',
+  'assets/screenshots/human-in-the-loop-ask.png': 'showcase-4',
+  'assets/screenshots/codebase-explorer-sidebar.png': 'showcase-2',
+  'assets/screenshots/persistent-dock-pipeline.png': 'showcase-5',
 }
 
 export function resolveChromeBinary() {

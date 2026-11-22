@@ -277,7 +277,7 @@ export const SHOWCASE_ARCHITECTURE_UI = [
   )}`,
   '$/files = [',
   '  { path: "src/index.ts", status: "modified", line: 261, summary: "Host 插件入口、工具与系统提示词注册" },',
-  '  { path: "src/shared/catalog-schema.ts", status: "modified", line: 585, summary: "57 组件与 23 函数同构 Schema 契约" },',
+  '  { path: "src/shared/catalog-schema.ts", status: "modified", line: 585, summary: "57 组件与 25 函数同构 Schema 契约" },',
   '  { path: "src/client/chunk-loader.ts", status: "added", line: 1, summary: "window.__ModuleLoader__ 四分包懒加载" },',
   '  { path: "src/client/chunks/mermaid-chunk.ts", status: "added", line: 1, summary: "strict 沙盒与 SVG 净化架构图渲染" },',
   '  { path: "src/client/catalog/ExtendedWidgets.tsx", status: "modified", line: 196, summary: "工作区文件树与右侧边栏联动跳转" }',
@@ -287,10 +287,10 @@ export const SHOWCASE_ARCHITECTURE_UI = [
   '  protocol: "A2UI 1.0",',
   '  zeroHostHacks: true,',
   '  chunks: {',
-  '    "client.js (Cold Boot)": "58.3 KB (16.5 KB gzip)",',
-  '    "client.runtime.js": "1.29 MB (on-demand)",',
-  '    "client.echarts.js": "790 KB (14 chart kinds)",',
-  '    "client.mermaid.js": "3.51 MB (diagram-only)"',
+  '    "client.js (Cold Boot)": "69.7 KB (19.6 KB gzip)",',
+  '    "client.runtime.js": "1.37 MB (on-demand)",',
+  '    "client.echarts.js": "878 KB (19 chart kinds)",',
+  '    "client.mermaid.js": "3.47 MB (diagram-only)"',
   '  }',
   '}',
   'root = Card(Column([',
@@ -357,20 +357,20 @@ export const SHOWCASE_ASK_DIFF_UI = [
 export const SHOWCASE_DOCK_PIPELINE_UI = [
   'surface("release_dock")',
   '$/stages = [',
-  '  { title: "TypeScript 类型检查", status: "done", description: "0 errors" },',
-  '  { title: "四分包构建与体积门禁", status: "done", description: "58.3 kB < 100 kB" },',
-  '  { title: "Host API 契约核验", status: "done", description: "27 Primitives OK" },',
-  '  { title: "Vitest 77 项回归测试", status: "active", description: "执行中 (74/77)" },',
+  '  { title: "不变量与类型检查", status: "done", description: "12 rules · 0 errors" },',
+  '  { title: "五分片包体棘轮", status: "done", description: "69.7 kB < 85 kB" },',
+  '  { title: "Host API 契约核验", status: "done", description: "93 Contracts OK" },',
+  '  { title: "TLA+ & 182 项回归", status: "active", description: "执行中 (179/182)" },',
   '  { title: "npm 预打包产物审计", status: "pending", description: "等待前序完成" }',
   ']',
   'root = Column([',
   '  Steps($/stages, direction="horizontal"),',
   '  Row([',
-  '    Stat("首屏 client.js", "58.3 kB", delta="16.5 kB gzip", trend="up", weight=1),',
-  '    Stat("回归测试套件", "74 / 77", delta="运行中", trend="up", weight=1),',
-  '    Stat("零宿主 Hack 检查", "100% 通过", trend="up", weight=1)',
+  '    Stat("首屏 client.js", "69.7 kB", delta="19.6 kB gzip", trend="up", weight=1),',
+  '    Stat("回归测试套件", "182 / 182", delta="33 Suites", trend="up", weight=1),',
+  '    Stat("TLA+ 状态机检验", "8,215 状态", delta="0 errors", trend="up", weight=1)',
   '  ]),',
-  '  Progress(88, label="v0.2.1 开源发布质量流水线总进度（跨轮次常驻监控）", tone="success")',
+  '  Progress(92, label="v0.4.7 开源发布质量流水线总进度（跨轮次常驻监控）", tone="success")',
   '])',
 ].join('\n')
 
@@ -1789,19 +1789,31 @@ export function startMockLlmServer(port = PORT) {
       if (!hasRenderTool) {
         const allText = messages.map((m) => extractText(m?.content)).join('\n')
         if (tools.length === 0) {
-          const autoTitle = /showcase-1/i.test(allText)
-            ? '2026 Q3 业务增长与全链路转化诊断大盘'
-            : /showcase-2/i.test(allText)
-              ? 'dsh-genui-a2ui 分层系统架构全景与源码导航'
-              : /showcase-3/i.test(allText)
-                ? '大模型推理算力与缓存成本测算沙盘'
-                : /showcase-4/i.test(allText)
-                  ? '核心分包加载策略变更审批'
-                  : /showcase-5/i.test(allText)
-                    ? 'v0.1.0 开源发布质量门禁流水线'
-                    : /showcase-6/i.test(allText)
-                      ? '连锁门店今日实时经营仪表盘'
-                      : 'A2UI 生成式交互工作台'
+          const autoTitle = /\bshowcase-16\b/i.test(allText)
+            ? '2026 Q3 营收增减归因与算力成本多层分摊台'
+            : /\bshowcase-17\b/i.test(allText)
+              ? '推理网关吞吐量、SLO 延迟与变更热力日历'
+              : /\bshowcase-25\b/i.test(allText)
+                ? '图表与 ProTable 0ms 双向交叉筛选工作台'
+                : /\bshowcase-1(?!\d)/i.test(allText)
+                  ? '2026 Q3 业务增长与全链路转化诊断大盘'
+                  : /\bshowcase-2(?!\d)/i.test(allText)
+                    ? 'dsh-genui-a2ui 分层系统架构全景与源码导航'
+                    : /\bshowcase-3(?!\d)/i.test(allText)
+                      ? '大模型推理算力与缓存成本测算沙盘'
+                      : /\bshowcase-4(?!\d)/i.test(allText)
+                        ? '核心分包加载策略变更审批'
+                        : /\bshowcase-5(?!\d)/i.test(allText)
+                          ? 'v0.4.7 开源发布质量门禁流水线'
+                          : /\bshowcase-6(?!\d)/i.test(allText)
+                            ? '连锁门店今日实时经营仪表盘'
+                            : /\bshowcase-7(?!\d)/i.test(allText)
+                              ? '支付结算链路 P99 延迟突增拓扑与瀑布诊断'
+                              : /\bshowcase-8(?!\d)/i.test(allText)
+                                ? '专属推理集群季度巡检与 ProTable 治理台'
+                                : /\bshowcase-9(?!\d)/i.test(allText)
+                                  ? '私有化大模型集群规格选型与容量规划台'
+                                  : 'A2UI 生成式交互工作台'
           await streamTextReply(res, model, autoTitle)
           return
         }
@@ -1926,7 +1938,7 @@ export function startMockLlmServer(port = PORT) {
         }
         if (isShowcase5) {
           await streamToolCall(res, model, 'a2ui_render', {
-            title: 'v0.2.1 开源发布质量门禁流水线',
+            title: 'v0.4.7 开源发布质量门禁流水线',
             placement: 'dock',
             ui: SHOWCASE_DOCK_PIPELINE_UI,
           })
@@ -2238,7 +2250,7 @@ export function startMockLlmServer(port = PORT) {
               : isShowcase4
                 ? '已收到您的双栏 Diff 审核放行指令，正在将分包加载降级保护补丁写入工作区。'
                 : isShowcase5
-                  ? '已将 v0.2.1 发布前自动化质量流水线挂载至会话底部常驻工作台（Dock），后续各阶段核验状态将原地实时刷新。'
+                  ? '已将 v0.4.7 发布前自动化质量流水线挂载至会话底部常驻工作台（Dock），后续各阶段核验状态将原地实时刷新。'
                   : isShowcase7
                     ? '已定位延迟突增根因：Fraud Scorer 访问 TiKV 热点分片 #19 耗时占全链路 77%，可点击下方日志直跳工作区源码。'
                     : isShowcase8
