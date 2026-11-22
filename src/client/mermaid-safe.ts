@@ -212,28 +212,42 @@ export function repairMermaidSource(code: string): string {
   const needsQuote = (s: string) =>
     /[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]/.test(s) || /\s/.test(s) || /[()/:?]/.test(s)
 
+  const quoteSpans: string[] = []
+  const maskQuotedLiterals = (text: string): string =>
+    text.replace(/"(?:\\.|[^"\\\n])*"/g, (lit) => {
+      quoteSpans.push(lit)
+      return `\uE004${quoteSpans.length - 1}\uE005`
+    })
+
   const quoted = maskedPipes
     .split('\n')
     .map((line) => {
       if (/^\s*(?:style|classDef|linkStyle)\b/i.test(line)) return line
-      return line
-        .replace(/\[\(([^()[\]"\n]+)\)\]/g, (w, inner: string) => {
-          const t = inner.trim()
-          return t && needsQuote(t) ? `[("${t}")]` : w
-        })
-        .replace(/\[([^[\]"\n]+)\]/g, (w, inner: string) => {
-          const t = inner.trim()
-          if (!t || (t.startsWith('(') && t.endsWith(')'))) return w
-          return needsQuote(t) ? `["${t}"]` : w
-        })
-        .replace(/\{([^{}"\n]+)\}/g, (w, inner: string) => {
-          const t = inner.trim()
-          return t && needsQuote(t) ? `{"${t}"}` : w
-        })
-        .replace(/\(([^()[\]{}"\n]+)\)/g, (w, inner: string) => {
-          const t = inner.trim()
-          return t && needsQuote(t) ? `("${t}")` : w
-        })
+      let cur = maskQuotedLiterals(line)
+      cur = cur.replace(/\[\(([^()[\]"\n\uE004\uE005]+)\)\]/g, (w, inner: string) => {
+        const t = inner.trim()
+        return t && needsQuote(t) ? `[("${t}")]` : w
+      })
+      cur = maskQuotedLiterals(cur)
+      cur = cur.replace(/\[([^[\]"\n\uE004\uE005]+)\]/g, (w, inner: string) => {
+        const t = inner.trim()
+        if (!t || (t.startsWith('(') && t.endsWith(')'))) return w
+        return needsQuote(t) ? `["${t}"]` : w
+      })
+      cur = maskQuotedLiterals(cur)
+      cur = cur.replace(/\{([^{}"\n\uE004\uE005]+)\}/g, (w, inner: string) => {
+        const t = inner.trim()
+        return t && needsQuote(t) ? `{"${t}"}` : w
+      })
+      cur = maskQuotedLiterals(cur)
+      cur = cur.replace(/\(([^()[\]{}"\n\uE004\uE005]+)\)/g, (w, inner: string) => {
+        const t = inner.trim()
+        return t && needsQuote(t) ? `("${t}")` : w
+      })
+      return cur.replace(
+        /\uE004(\d+)\uE005/g,
+        (whole, idx: string) => quoteSpans[Number(idx)] ?? whole,
+      )
     })
     .join('\n')
 

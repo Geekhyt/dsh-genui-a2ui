@@ -139,8 +139,8 @@ export const ChartApi = {
           .default(260)
           .describe('Canvas height in pixels.')
           .optional(),
-        selected: DynamicStringSchema.describe(
-          'REF:#/$defs/DynamicString|Optional two-way bound $/path storing the clicked category/item for 0ms local cross-filtering with Table or KPIs (clicking the active item clears it).',
+        selected: DynamicValueSchema.describe(
+          'REF:#/$defs/DynamicValue|Optional two-way bound $/path (scalar string or string array) storing the clicked category/item(s) for 0ms local cross-filtering with Table, MultiSelect, or KPIs (clicking an active item toggles/clears it).',
         ).optional(),
         exportable: z
           .boolean()
@@ -237,8 +237,8 @@ export const TableApi = {
             'Optional row property key matched against `filterValue` for 0ms local cross-filtering (matches any column when omitted).',
           )
           .optional(),
-        filterValue: DynamicStringSchema.describe(
-          'REF:#/$defs/DynamicString|Optional two-way bound $/path filter value (e.g. paired with `Chart(..., selected=$/region)`) that filters rows locally at 0ms.',
+        filterValue: DynamicValueSchema.describe(
+          'REF:#/$defs/DynamicValue|Optional two-way bound $/path filter value (scalar string or string array, e.g. paired with `Chart(..., selected=$/region)` or `MultiSelect(..., value=$/regions)`) that filters rows locally at 0ms.',
         ).optional(),
         action: ActionSchema.describe(
           'REF:#/$defs/Action|Optional row drill-down or batch selection action triggered when clicking a row or batch action button.',
@@ -1648,6 +1648,7 @@ export const DSH_COMPONENT_APIS: readonly ComponentApi[] = [
 export const CopyTextApi = {
   name: 'copyText' as const,
   returnType: 'void' as const,
+  requiresUserActivation: true as const,
   description: 'Copies the resolved text string to the system clipboard.',
   schema: spec(
     z.object({
@@ -1732,8 +1733,8 @@ export const GtApi = {
   description: 'Returns true when `a > b` numerically.',
   schema: spec(
     z.object({
-      a: DynamicNumberSchema.describe('Left numeric operand or expression.'),
-      b: DynamicNumberSchema.describe('Right numeric operand or expression.'),
+      a: DynamicValueSchema.describe('Left numeric operand, numeric string, or expression.'),
+      b: DynamicValueSchema.describe('Right numeric operand, numeric string, or expression.'),
     }),
     { closure: 'unevaluatedProperties' },
   ),
@@ -1745,8 +1746,8 @@ export const LtApi = {
   description: 'Returns true when `a < b` numerically.',
   schema: spec(
     z.object({
-      a: DynamicNumberSchema.describe('Left numeric operand or expression.'),
-      b: DynamicNumberSchema.describe('Right numeric operand or expression.'),
+      a: DynamicValueSchema.describe('Left numeric operand, numeric string, or expression.'),
+      b: DynamicValueSchema.describe('Right numeric operand, numeric string, or expression.'),
     }),
     { closure: 'unevaluatedProperties' },
   ),

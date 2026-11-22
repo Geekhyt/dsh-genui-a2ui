@@ -6,11 +6,11 @@ import { LazySurfaceGroupView, useLazyStreamingExpress } from './LazySurfaceGrou
 import css from './SurfaceView.module.css'
 import type { SurfaceActionCallback } from './SurfaceView.tsx'
 import {
+  buildReplayMessagesForSurfaceCall,
   type ChatTargetSnapshot,
-  filterMessagesBySurfaceIds,
+  findCallSeq,
   isTurnClosedForCall,
   parseRenderMeta,
-  resolveSessionMessages,
 } from './turn-surfaces.ts'
 import { DshAppsIcon, DshDisclosureRow } from './ui/primitives.tsx'
 
@@ -108,25 +108,27 @@ export const A2uiToolView = memo(function A2uiToolView({
     return streamIds.length > 0 ? new Set(streamIds) : undefined
   }, [streamingSnapshot])
 
+  const callSeq = useMemo(() => findCallSeq(chatSnapshot, callId), [chatSnapshot, callId])
+
   const liveMessages = useMemo(() => {
     if (settledMeta !== null) {
-      const hasCreate = settledMeta.messages.some(
-        (m) => typeof m === 'object' && m !== null && 'createSurface' in m,
+      return buildReplayMessagesForSurfaceCall(
+        chatSnapshot,
+        settledMeta.messages,
+        settledMeta.surfaceIds,
+        callSeq,
       )
-      if (!hasCreate && settledMeta.surfaceIds.length > 0) {
-        const targetIds = new Set(settledMeta.surfaceIds)
-        const prior = filterMessagesBySurfaceIds(resolveSessionMessages(chatSnapshot), targetIds)
-        if (prior.length > 0) return prior
-      }
-      return settledMeta.messages
     }
-    const priorForStream =
-      phase !== 'result' && visibleIds !== undefined
-        ? filterMessagesBySurfaceIds(resolveSessionMessages(chatSnapshot), visibleIds)
-        : []
-    const currentMsgs = streamingSnapshot?.messages ?? []
-    return priorForStream.length > 0 ? [...priorForStream, ...currentMsgs] : currentMsgs
-  }, [chatSnapshot, phase, settledMeta, streamingSnapshot, visibleIds])
+    if (phase !== 'result') {
+      return buildReplayMessagesForSurfaceCall(
+        chatSnapshot,
+        streamingSnapshot?.messages ?? [],
+        streamingSnapshot?.surfaceIds ?? [],
+        callSeq,
+      )
+    }
+    return []
+  }, [callSeq, chatSnapshot, phase, settledMeta, streamingSnapshot])
 
   const msg = useShellMessages()
   const title = settledMeta?.title ?? argTitle ?? 'A2UI'
@@ -241,7 +243,13 @@ export const A2uiToolView = memo(function A2uiToolView({
       >
         <LazySurfaceGroupView
           messages={liveMessages}
-          visibleSurfaceIds={phase !== 'result' ? visibleIds : undefined}
+          visibleSurfaceIds={
+            phase !== 'result'
+              ? visibleIds
+              : settledMeta !== null && settledMeta.surfaceIds.length > 0
+                ? new Set(settledMeta.surfaceIds)
+                : undefined
+          }
           title={title}
           sessionId={sessionId}
           streaming={phase !== 'result'}

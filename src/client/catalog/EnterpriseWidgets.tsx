@@ -41,6 +41,8 @@ import {
   defineComponent,
   ModalCloseContext,
   renderChildRef,
+  runSurfaceAction,
+  SurfaceActionStatusContext,
   SurfaceReadOnlyContext,
   SurfaceValidationContext,
   weightStyle,
@@ -159,6 +161,11 @@ export const DshTrackerImpl = defineComponent<{
             gridTemplateColumns: `repeat(${slices.length}, minmax(0, 1fr))`,
           }}
           onMouseLeave={() => setActiveSliceId(null)}
+          onBlur={(e) => {
+            if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+              setActiveSliceId(null)
+            }
+          }}
         >
           {slices.map((s) => {
             const detail = s.note || statusText(s.status)
@@ -306,13 +313,14 @@ export const DshApprovalCardImpl = defineComponent<{
   confirmLabel?: unknown
   approveLabel?: unknown
   rejectLabel?: unknown
-  approveAction?: ((options?: ActionDispatchOptions) => Promise<void>) | undefined
-  rejectAction?: ((options?: ActionDispatchOptions) => Promise<void>) | undefined
+  approveAction?: ((options?: ActionDispatchOptions) => unknown) | undefined
+  rejectAction?: ((options?: ActionDispatchOptions) => unknown) | undefined
   weight?: number
 }>(ApprovalCardApi, function DshApprovalCard({ props }) {
   const msg = useRuntimeMessages()
   const readOnly = useContext(SurfaceReadOnlyContext)
   const closeModal = useContext(ModalCloseContext)
+  const getActionStatus = useContext(SurfaceActionStatusContext)
   const { markSubmitAttempted } = useContext(SurfaceValidationContext)
   const severity = props.severity ?? 'high'
   const title = props.title !== undefined && props.title !== null ? String(props.title) : ''
@@ -425,28 +433,31 @@ export const DshApprovalCardImpl = defineComponent<{
               onClick={() => {
                 markSubmitAttempted()
                 setDecision('rejected')
-                void Promise.resolve(
-                  props.rejectAction?.({
-                    metadata: {
-                      extensions: {
-                        dshSelection: {
-                          source: 'approvalCard',
-                          label: title,
-                          series: 'rejected',
-                          scope,
-                          severity,
-                          decision: 'rejected',
+                const rejectFn = props.rejectAction
+                void runSurfaceAction(
+                  () =>
+                    rejectFn?.({
+                      metadata: {
+                        extensions: {
+                          dshSelection: {
+                            source: 'approvalCard',
+                            label: title,
+                            series: 'rejected',
+                            scope,
+                            severity,
+                            decision: 'rejected',
+                          },
                         },
                       },
-                    },
-                  }),
-                )
-                  .then(() => {
-                    closeModal?.()
-                  })
-                  .catch(() => {
+                    }),
+                  getActionStatus,
+                ).then((ok) => {
+                  if (!ok) {
                     setDecision(null)
-                  })
+                    return
+                  }
+                  closeModal?.()
+                })
               }}
             >
               {rejectText}
@@ -460,29 +471,32 @@ export const DshApprovalCardImpl = defineComponent<{
               onClick={() => {
                 markSubmitAttempted()
                 setDecision('approved')
-                void Promise.resolve(
-                  props.approveAction?.({
-                    metadata: {
-                      extensions: {
-                        dshSelection: {
-                          source: 'approvalCard',
-                          label: title,
-                          series: 'approved',
-                          scope,
-                          severity,
-                          acknowledged,
-                          decision: 'approved',
+                const approveFn = props.approveAction
+                void runSurfaceAction(
+                  () =>
+                    approveFn?.({
+                      metadata: {
+                        extensions: {
+                          dshSelection: {
+                            source: 'approvalCard',
+                            label: title,
+                            series: 'approved',
+                            scope,
+                            severity,
+                            acknowledged,
+                            decision: 'approved',
+                          },
                         },
                       },
-                    },
-                  }),
-                )
-                  .then(() => {
-                    closeModal?.()
-                  })
-                  .catch(() => {
+                    }),
+                  getActionStatus,
+                ).then((ok) => {
+                  if (!ok) {
                     setDecision(null)
-                  })
+                    return
+                  }
+                  closeModal?.()
+                })
               }}
             >
               {approveText}
@@ -736,7 +750,7 @@ export const DshScheduleImpl = defineComponent<{
             for (const ch of barLabel) {
               estLabelPx += (ch.codePointAt(0) ?? 0) > 0xff ? 11.2 : 6.4
             }
-            const minPctForInside = Math.min(48, Math.ceil(estLabelPx / 3.4))
+            const minPctForInside = Math.min(82, Math.ceil(estLabelPx / 2.4))
             const placeOutside = tr.widthPct < minPctForInside
             const spaceRightPct = 100 - (tr.leftPct + tr.widthPct)
             const placeOutsideRight = spaceRightPct >= tr.leftPct
@@ -841,8 +855,11 @@ export const DshResultImpl = defineComponent<{
     [props.meta],
   )
   const canAct = !readOnly && typeof props.action === 'function'
-  const ctaLabel =
-    props.actionLabel !== undefined && props.actionLabel !== null ? String(props.actionLabel) : ''
+  const rawCtaLabel =
+    props.actionLabel !== undefined && props.actionLabel !== null
+      ? String(props.actionLabel).trim()
+      : ''
+  const ctaLabel = rawCtaLabel || (canAct ? msg.defaultActionCta : '')
 
   const symbol =
     status === 'success'
@@ -924,6 +941,7 @@ export const DshEntityHeaderImpl = defineComponent<{
   action?: ((options?: ActionDispatchOptions) => Promise<void>) | undefined
   weight?: number
 }>(EntityHeaderApi, function DshEntityHeader({ props }) {
+  const msg = useRuntimeMessages()
   const readOnly = useContext(SurfaceReadOnlyContext)
   const title = props.title !== undefined && props.title !== null ? String(props.title) : ''
   const subtitle =
@@ -957,8 +975,11 @@ export const DshEntityHeaderImpl = defineComponent<{
             : null
 
   const canAct = !readOnly && typeof props.action === 'function'
-  const ctaLabel =
-    props.actionLabel !== undefined && props.actionLabel !== null ? String(props.actionLabel) : ''
+  const rawCtaLabel =
+    props.actionLabel !== undefined && props.actionLabel !== null
+      ? String(props.actionLabel).trim()
+      : ''
+  const ctaLabel = rawCtaLabel || (canAct ? msg.defaultActionCta : '')
 
   return (
     <div
@@ -1088,7 +1109,9 @@ export const DshMatrixImpl = defineComponent<{
         <table className={css.matrixTable}>
           <thead>
             <tr>
-              <th className={css.matrixCornerTh}>{corner}</th>
+              <th className={css.matrixCornerTh} title={corner}>
+                {corner}
+              </th>
               {model.colLabels.map((col, idx) => (
                 <th key={`${col}-${idx}`} className={css.matrixColTh}>
                   {col}
@@ -1102,7 +1125,9 @@ export const DshMatrixImpl = defineComponent<{
           <tbody>
             {model.rowLabels.map((rowLabel, rIdx) => (
               <tr key={`${rowLabel}-${rIdx}`}>
-                <td className={css.matrixRowTd}>{rowLabel}</td>
+                <td className={css.matrixRowTd} title={rowLabel}>
+                  {rowLabel}
+                </td>
                 {(model.cells[rIdx] ?? []).map((cell, cIdx) => (
                   <td
                     key={cIdx}

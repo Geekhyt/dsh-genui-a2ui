@@ -9,7 +9,9 @@ import {
   FormatDateApi,
   FormatNumberApi,
   type FunctionImplementation,
+  NumericApi,
   OpenUrlApi,
+  RequiredApi,
 } from '@a2ui/web_core/v1_0'
 import { evaluateCalcExpression } from '../../shared/calc-engine.ts'
 import {
@@ -171,11 +173,62 @@ export function computeIncludes(items: unknown, value: unknown): boolean {
 }
 
 export function computeCond(condition: unknown, truthy: unknown, falsy: unknown): unknown {
+  if (
+    typeof condition === 'object' &&
+    condition !== null &&
+    !Array.isArray(condition) &&
+    'valid' in condition &&
+    typeof (condition as { valid?: unknown }).valid === 'boolean'
+  ) {
+    return (condition as { valid: boolean }).valid ? truthy : falsy
+  }
   if (Array.isArray(condition)) return condition.length > 0 ? truthy : falsy
   if (typeof condition === 'number')
     return Number.isFinite(condition) && condition !== 0 ? truthy : falsy
   return condition ? truthy : falsy
 }
+
+export function evaluateRequiredValue(value: unknown): { valid: boolean; message?: string } {
+  if (value === null || value === undefined || value === false) {
+    return { valid: false, message: 'This field is required.' }
+  }
+  if (typeof value === 'string' && value.trim() === '') {
+    return { valid: false, message: 'This field is required.' }
+  }
+  if (Array.isArray(value) && value.length === 0) {
+    return { valid: false, message: 'This field is required.' }
+  }
+  if (typeof value === 'number' && !Number.isFinite(value)) {
+    return { valid: false, message: 'This field is required.' }
+  }
+  return { valid: true }
+}
+
+export function evaluateNumericValue(
+  value: unknown,
+  min?: number,
+  max?: number,
+): { valid: boolean; message?: string } {
+  const num = tryFiniteScalar(value)
+  if (num === null) {
+    return { valid: false, message: 'Value must be a valid number.' }
+  }
+  if (typeof min === 'number' && Number.isFinite(min) && num < min) {
+    return { valid: false, message: `Minimum value is ${min}.` }
+  }
+  if (typeof max === 'number' && Number.isFinite(max) && num > max) {
+    return { valid: false, message: `Maximum value is ${max}.` }
+  }
+  return { valid: true }
+}
+
+export const SafeRequiredImplementation = createFunctionImplementation(RequiredApi, (args) =>
+  evaluateRequiredValue(args.value),
+)
+
+export const SafeNumericImplementation = createFunctionImplementation(NumericApi, (args) =>
+  evaluateNumericValue(args.value, args.min, args.max),
+)
 
 export const SafeOpenUrlImplementation = createFunctionImplementation(OpenUrlApi, (args) => {
   executeSafeOpenUrl(args.url)
@@ -255,24 +308,46 @@ const fmtNumberZh = createFormatNumberImplementation('zh-CN')
 const fmtNumberEn = createFormatNumberImplementation('en-US')
 export const LocaleFormatNumberImplementation = createFunctionImplementation(
   FormatNumberApi,
-  (args, context, abortSignal) =>
-    (resolveClientLocale() === 'zh' ? fmtNumberZh : fmtNumberEn).execute(
-      args,
+  (args, context, abortSignal) => {
+    const rawVal = (args as { value?: unknown }).value
+    if (
+      rawVal === null ||
+      rawVal === undefined ||
+      (typeof rawVal === 'string' && rawVal.trim() === '')
+    ) {
+      return ''
+    }
+    const coerced = tryFiniteScalar(rawVal)
+    if (coerced === null) return ''
+    return (resolveClientLocale() === 'zh' ? fmtNumberZh : fmtNumberEn).execute(
+      { ...args, value: coerced },
       context,
       abortSignal,
-    ) as string,
+    ) as string
+  },
 )
 
 const fmtCurrencyZh = createFormatCurrencyImplementation('zh-CN')
 const fmtCurrencyEn = createFormatCurrencyImplementation('en-US')
 export const LocaleFormatCurrencyImplementation = createFunctionImplementation(
   FormatCurrencyApi,
-  (args, context, abortSignal) =>
-    (resolveClientLocale() === 'zh' ? fmtCurrencyZh : fmtCurrencyEn).execute(
-      args,
+  (args, context, abortSignal) => {
+    const rawVal = (args as { value?: unknown }).value
+    if (
+      rawVal === null ||
+      rawVal === undefined ||
+      (typeof rawVal === 'string' && rawVal.trim() === '')
+    ) {
+      return ''
+    }
+    const coerced = tryFiniteScalar(rawVal)
+    if (coerced === null) return ''
+    return (resolveClientLocale() === 'zh' ? fmtCurrencyZh : fmtCurrencyEn).execute(
+      { ...args, value: coerced },
       context,
       abortSignal,
-    ) as string,
+    ) as string
+  },
 )
 
 const fmtDateZh = createFormatDateImplementation('zh-CN')
@@ -287,13 +362,22 @@ export const LocaleFormatDateImplementation = createFunctionImplementation(
     ) as string,
 )
 
-const OVERRIDDEN_BASIC_NAMES = new Set(['openUrl', 'formatNumber', 'formatCurrency', 'formatDate'])
+const OVERRIDDEN_BASIC_NAMES = new Set([
+  'required',
+  'numeric',
+  'openUrl',
+  'formatNumber',
+  'formatCurrency',
+  'formatDate',
+])
 const FILTERED_BASIC_FUNCTIONS = BASIC_FUNCTIONS.filter(
   (fn) => !OVERRIDDEN_BASIC_NAMES.has(fn.name),
 )
 
 export const SAFE_BASIC_FUNCTIONS: FunctionImplList = [
   ...FILTERED_BASIC_FUNCTIONS,
+  SafeRequiredImplementation,
+  SafeNumericImplementation,
   LocaleFormatNumberImplementation,
   LocaleFormatCurrencyImplementation,
   LocaleFormatDateImplementation,

@@ -1,5 +1,13 @@
 import type { ActionDispatchOptions } from '@a2ui/web_core/v1_0'
-import { memo, useCallback, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import {
+  type CSSProperties,
+  memo,
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react'
 import type { ChartKind } from '../../shared/catalog-schema.ts'
 import { sanitizeInlineUrlText } from '../../shared/constants.ts'
 import {
@@ -13,7 +21,20 @@ import { type EChartsClickParams, useEChartsMount, useTransientFlag } from '../d
 import { useRuntimeMessages, useUiLocale } from '../i18n.ts'
 import { useDarkTheme } from '../theme.ts'
 import css from './Catalog.module.css'
-import { computeNextCrossFilterSelection, formatChartDataToCsv } from './v4-helpers.ts'
+import {
+  computeNextCrossFilterValue,
+  formatChartDataToCsv,
+  normalizeCrossFilterTokens,
+} from './v4-helpers.ts'
+
+function chartWeightStyle(weight: number | undefined, minWidth: number): CSSProperties | undefined {
+  if (weight === undefined || !Number.isFinite(weight) || weight <= 0) return undefined
+  return {
+    flexGrow: weight,
+    flexBasis: 'var(--a2ui-flex-basis, auto)',
+    minWidth: `min(100%, ${minWidth}px)`,
+  }
+}
 
 export type { ChartKind }
 
@@ -32,11 +53,44 @@ export interface ChartWidgetProps {
   readonly horizontal?: boolean | undefined
   readonly zoom?: boolean | undefined
   readonly height?: number | undefined
-  readonly selected?: string | undefined
-  readonly onSelectChange?: ((next: string) => void) | undefined
+  readonly selected?: string | readonly string[] | undefined
+  readonly onSelectChange?: ((next: string | string[]) => void) | undefined
   readonly exportable?: boolean | undefined
   readonly action?: ((options?: ActionDispatchOptions) => Promise<void>) | undefined
   readonly weight?: number | undefined
+}
+
+function hasChartData(kind: ChartKind, data: unknown): boolean {
+  if (Array.isArray(data)) {
+    return data.some(
+      (item) =>
+        (typeof item === 'object' && item !== null && !Array.isArray(item)) ||
+        (Array.isArray(item) && item.length >= 2),
+    )
+  }
+  if (typeof data === 'object' && data !== null) {
+    const rec = data as Record<string, unknown>
+    if (kind === 'graph') {
+      const nodes = Array.isArray(rec.nodes) ? rec.nodes : []
+      const links = Array.isArray(rec.links) ? rec.links : Array.isArray(rec.edges) ? rec.edges : []
+      return nodes.length > 0 || links.length > 0
+    }
+    if (kind === 'sankey') {
+      const links = Array.isArray(rec.links) ? rec.links : Array.isArray(rec.edges) ? rec.edges : []
+      return links.length > 0
+    }
+    if (kind === 'sunburst' || kind === 'treemap') {
+      return (
+        (Array.isArray(rec.children) && rec.children.length > 0) ||
+        typeof rec.name === 'string' ||
+        typeof rec.label === 'string'
+      )
+    }
+    if (kind === 'gauge') {
+      return Object.keys(rec).length > 0
+    }
+  }
+  return false
 }
 
 function sanitizeInlineText(input: unknown): string {
@@ -105,9 +159,17 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
   xFieldRef.current = xField
   const seriesFieldRef = useRef(seriesField)
   seriesFieldRef.current = seriesField
-  const activeSelected = sanitizeChartValue(selected)
-  const activeSelectedRef = useRef(activeSelected)
-  activeSelectedRef.current = activeSelected
+  const rawSelectedRef = useRef(selected)
+  rawSelectedRef.current = selected
+  const activeTokens = useMemo(
+    () =>
+      normalizeCrossFilterTokens(selected)
+        .map((t) => sanitizeChartValue(t))
+        .filter((t) => t !== ''),
+    [selected],
+  )
+  const activeSelectedDisplay = activeTokens.join(' · ')
+  const chartHasData = useMemo(() => hasChartData(kind, data), [kind, data])
 
   const rows = useMemo(() => {
     if (!Array.isArray(data)) return []
@@ -125,7 +187,7 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
   )
 
   const option = useMemo(() => {
-    if (!chunk) return null
+    if (!chunk || !chartHasData) return null
     return chunk.buildChartOption(
       {
         kind,
@@ -142,13 +204,19 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
         horizontal,
         zoom,
         height: rawHeight,
-        selected: activeSelected || undefined,
+        selected:
+          activeTokens.length === 0
+            ? undefined
+            : activeTokens.length === 1
+              ? activeTokens[0]
+              : activeTokens,
       },
       dark,
       containerWidth,
     )
   }, [
     chunk,
+    chartHasData,
     kind,
     data,
     title,
@@ -163,7 +231,7 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
     horizontal,
     zoom,
     rawHeight,
-    activeSelected,
+    activeTokens,
     dark,
     locale,
     containerWidth,
@@ -188,14 +256,16 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
 
   const handlePointClick = useCallback((params: EChartsClickParams) => {
     if (params?.dataType === 'edge') return
-    const label = sanitizeChartValue(params?.name)
+    const tupleLabel =
+      Array.isArray(params?.value) && typeof params.value[0] === 'string'
+        ? sanitizeChartValue(params.value[0])
+        : ''
+    const label = sanitizeChartValue(params?.name) || tupleLabel
     const series = sanitizeChartValue(params?.seriesName)
     if (onSelectChangeRef.current) {
       const candidate = label || series
       if (candidate) {
-        onSelectChangeRef.current(
-          computeNextCrossFilterSelection(activeSelectedRef.current, candidate),
-        )
+        onSelectChangeRef.current(computeNextCrossFilterValue(rawSelectedRef.current, candidate))
       }
     }
     if (!actionRef.current) return
@@ -203,19 +273,23 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
       typeof params?.dataIndex === 'number' && Number.isInteger(params.dataIndex)
         ? params.dataIndex
         : undefined
-    const curXField = xFieldRef.current
+    const curRows = rowsRef.current
+    const sample = curRows[0] ?? {}
+    const sampleKeys = Object.keys(sample)
+    const resolvedXField =
+      xFieldRef.current ?? sampleKeys.find((k) => typeof sample[k] === 'string') ?? sampleKeys[0]
     const curSeriesField = seriesFieldRef.current
     const matchedRow = (() => {
-      if (curXField && label) {
-        const hit = rowsRef.current.find((r) => {
-          const xMatch = sanitizeChartValue(r[curXField]) === label
+      if (resolvedXField && label) {
+        const hit = curRows.find((r) => {
+          const xMatch = sanitizeChartValue(r[resolvedXField]) === label
           if (!xMatch) return false
           if (curSeriesField && series) return sanitizeChartValue(r[curSeriesField]) === series
           return true
         })
         if (hit !== undefined) return hit
       }
-      return idx !== undefined ? rowsRef.current[idx] : undefined
+      return idx !== undefined ? curRows[idx] : undefined
     })()
     const row = matchedRow
     void actionRef.current({
@@ -238,12 +312,23 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
     hostRef,
     chunk,
     option,
+    chartKind: kind,
+    dataIdentity: data,
     onPointClick: handlePointClick,
     onContainerWidth: handleContainerWidth,
   })
 
   const handleExportPng = () => {
-    const ok = exportPng(title || `chart-${kind}`, dark ? '#16181d' : '#ffffff')
+    if (!chartHasData) return
+    let bg = dark ? '#16181d' : '#ffffff'
+    if (typeof window !== 'undefined' && hostRef.current) {
+      const cardEl = hostRef.current.closest<HTMLElement>('[data-a2ui-chart]')
+      const computedBg = cardEl ? window.getComputedStyle(cardEl).backgroundColor : ''
+      if (computedBg && computedBg !== 'transparent' && computedBg !== 'rgba(0, 0, 0, 0)') {
+        bg = computedBg
+      }
+    }
+    const ok = exportPng(title || `chart-${kind}`, bg)
     if (ok) {
       markExportedPng()
     }
@@ -254,20 +339,16 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
     copyTextSafe(csvPayload, markCopiedCsv)
   }
 
-  const weightStyle =
-    weight !== undefined
-      ? { flexGrow: weight, flexBasis: 'var(--a2ui-flex-basis, 0px)', minWidth: 'min(100%, 220px)' }
-      : undefined
-  const showActions = Boolean(exportable && chunk && !loadError)
-  const showHeader = Boolean(title || activeSelected || showActions)
+  const showActions = Boolean(exportable && chunk && !loadError && chartHasData)
+  const showHeader = Boolean(title || activeSelectedDisplay || showActions)
   const isInteractive = Boolean(onSelectChange || action)
 
   return (
     <div
       className={css.chartCard}
-      style={weightStyle}
+      style={chartWeightStyle(weight, 220)}
       data-a2ui-chart={kind}
-      data-a2ui-chart-selected={activeSelected || undefined}
+      data-a2ui-chart-selected={activeSelectedDisplay || undefined}
       data-crossfilter={onSelectChange ? 'true' : undefined}
     >
       <div className={css.chartInner}>
@@ -275,15 +356,15 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
           <div className={css.chartHeader}>
             <div className={css.chartTitleGroup}>
               {title ? <div className={css.chartTitle}>{sanitizeInlineText(title)}</div> : null}
-              {activeSelected ? (
+              {activeSelectedDisplay ? (
                 <span className={css.crossFilterChip} data-a2ui-chart-filter="">
-                  <span>{msg.chartFilterActive(activeSelected)}</span>
+                  <span>{msg.chartFilterActive(activeSelectedDisplay)}</span>
                   {onSelectChange ? (
                     <button
                       type="button"
                       className={css.crossFilterClear}
                       aria-label={msg.chartClearFilter}
-                      onClick={() => onSelectChange('')}
+                      onClick={() => onSelectChange(Array.isArray(selected) ? [] : '')}
                     >
                       ×
                     </button>
@@ -322,6 +403,8 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
               {msg.retryLoad}
             </button>
           </div>
+        ) : !chartHasData ? (
+          <div className={css.emptyCell}>{msg.tableEmpty}</div>
         ) : (
           <div style={{ position: 'relative', width: '100%', height }}>
             {!chunk ? (

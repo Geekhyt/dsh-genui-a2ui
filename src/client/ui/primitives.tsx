@@ -10,16 +10,26 @@ import type {
 import * as HostPrimitives from '@deepseek-ai/dsh-client-ui-primitives'
 import {
   type ButtonHTMLAttributes,
+  cloneElement,
+  Fragment,
   forwardRef,
   type InputHTMLAttributes,
+  isValidElement,
   type ReactElement,
   type ReactNode,
+  useCallback,
   useRef,
   useState,
 } from 'react'
 import { createPortal } from 'react-dom'
 import { SHELL_MESSAGES, type UiLocale } from '../../shared/i18n.ts'
-import { useAutoDismissTimer, useEscapeKey, useTransientFlag } from '../dom-hooks.ts'
+import {
+  useAutoDismissTimer,
+  useDialogFocus,
+  useEscapeKey,
+  usePortalPopover,
+  useTransientFlag,
+} from '../dom-hooks.ts'
 import { useShellMessages, useUiLocale } from '../i18n.ts'
 
 export type {
@@ -98,8 +108,13 @@ const FallbackButton = forwardRef<
         alignItems: 'center',
         justifyContent: 'center',
         gap: 6,
-        height: size === 'sm' ? 28 : 36,
-        padding: size === 'sm' ? '0 10px' : '0 14px',
+        minHeight: size === 'sm' ? 28 : 36,
+        height: 'auto',
+        padding: size === 'sm' ? '4px 10px' : '6px 14px',
+        whiteSpace: 'nowrap',
+        flexShrink: 0,
+        maxWidth: '100%',
+        boxSizing: 'border-box',
         borderRadius: size === 'sm' ? 'var(--dsw-radius-sm, 8px)' : 'var(--dsw-radius-md, 10px)',
         border:
           isPrimary || isGhost
@@ -223,13 +238,23 @@ const FallbackInput = forwardRef<
   return (
     <span
       className={className}
-      style={{ display: 'inline-flex', alignItems: 'center', gap: 6, width: '100%' }}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 6,
+        width: '100%',
+        minWidth: 0,
+        boxSizing: 'border-box',
+      }}
     >
       {icon}
       <input
         ref={ref}
         style={{
+          flex: 1,
+          minWidth: 0,
           width: '100%',
+          boxSizing: 'border-box',
           height: 34,
           padding: '0 10px',
           borderRadius: 'var(--dsw-radius-sm, 8px)',
@@ -320,22 +345,49 @@ export function DshSegmentedTabs<Value extends string = string>(props: {
       role="tablist"
       aria-label={props.label}
       className={props.className}
-      style={{ display: 'flex', gap: 4, overflowX: 'auto', maxWidth: '100%' }}
+      style={{
+        display: 'flex',
+        gap: 4,
+        overflowX: 'auto',
+        maxWidth: '100%',
+        padding: 3,
+        boxSizing: 'border-box',
+        borderRadius: 'var(--dsw-radius-md, 10px)',
+        background: 'var(--dsw-alias-bg-layer-2, rgba(128,128,128,0.1))',
+      }}
     >
-      {props.items.map((item) => (
-        <button
-          key={item.value}
-          id={item.id}
-          role="tab"
-          type="button"
-          aria-selected={item.value === props.value}
-          aria-controls={item.panelId}
-          onClick={() => props.onChange(item.value)}
-          style={{ whiteSpace: 'nowrap', flexShrink: 0 }}
-        >
-          {item.label}
-        </button>
-      ))}
+      {props.items.map((item) => {
+        const selected = item.value === props.value
+        return (
+          <button
+            key={item.value}
+            id={item.id}
+            role="tab"
+            type="button"
+            aria-selected={selected}
+            aria-controls={item.panelId}
+            onClick={() => props.onChange(item.value)}
+            style={{
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
+              padding: props.size === 'sm' ? '4px 10px' : '6px 12px',
+              borderRadius: 'var(--dsw-radius-sm, 7px)',
+              border: 'none',
+              fontSize: props.size === 'sm' ? 12 : 13,
+              fontWeight: selected ? 600 : 400,
+              background: selected
+                ? 'var(--dsw-alias-bg-layer-1, light-dark(#ffffff, #2a2d36))'
+                : 'transparent',
+              color: selected
+                ? 'var(--dsw-alias-label-primary, inherit)'
+                : 'var(--dsw-alias-label-secondary, inherit)',
+              cursor: 'pointer',
+            }}
+          >
+            {item.label}
+          </button>
+        )
+      })}
     </div>
   )
 }
@@ -421,7 +473,9 @@ export function DshModal(props: {
   footer?: ReactNode
 }) {
   const hasHostModal = hasComponent(raw.Modal)
+  const dialogRef = useRef<HTMLDivElement | null>(null)
   useEscapeKey(!hasHostModal && props.open, props.onClose)
+  useDialogFocus(!hasHostModal && props.open, dialogRef)
   if (hasHostModal) {
     const HostModal = HostPrimitives.Modal
     return <HostModal {...props} />
@@ -432,7 +486,10 @@ export function DshModal(props: {
       role="dialog"
       aria-modal="true"
       aria-label={props.title}
-      onClick={props.onClose}
+      onClick={(e) => {
+        e.stopPropagation()
+        props.onClose()
+      }}
       style={{
         position: 'fixed',
         inset: 0,
@@ -444,6 +501,8 @@ export function DshModal(props: {
       }}
     >
       <div
+        ref={dialogRef}
+        tabIndex={-1}
         className="a2ui-surface"
         onClick={(e) => e.stopPropagation()}
         style={{
@@ -455,9 +514,10 @@ export function DshModal(props: {
           containerType: 'inline-size',
           padding: 20,
           borderRadius: 'var(--dsw-radius-xl, 16px)',
-          background: 'var(--dsw-alias-bg-layer-2, light-dark(#ffffff, #1f1f24))',
+          background: 'var(--dsw-alias-bg-layer-1, light-dark(#ffffff, #18191e))',
           color: 'var(--dsw-alias-label-primary, inherit)',
           border: '1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.25))',
+          outline: 'none',
         }}
       >
         <div
@@ -495,7 +555,16 @@ export function DshTooltip(props: { label: string; disabled?: boolean; children:
       </HostPrimitives.Tooltip>
     )
   }
-  return <span title={props.label}>{props.children}</span>
+  if (isValidElement(props.children) && props.children.type !== Fragment) {
+    return cloneElement(props.children as ReactElement<{ title?: string }>, {
+      title: props.label,
+    })
+  }
+  return (
+    <span title={props.label} style={{ display: 'contents' }}>
+      {props.children}
+    </span>
+  )
 }
 
 export function DshMarkdown(props: {
@@ -893,6 +962,35 @@ export function DshToast(props: {
   return <FallbackToast {...props} />
 }
 
+function computeFallbackMenuBox(
+  anchorEl: HTMLElement | null,
+  side: 'top' | 'bottom',
+): { left: number; top?: number; bottom?: number; maxHeight: number } {
+  if (typeof window === 'undefined' || !anchorEl) {
+    return { left: 16, top: 64, maxHeight: 280 }
+  }
+  const rect = anchorEl.getBoundingClientRect()
+  const vw = window.innerWidth || 1024
+  const vh = window.innerHeight || 768
+  const menuW = Math.max(180, Math.round(rect.width))
+  const left = Math.max(8, Math.min(Math.round(rect.left), vw - menuW - 8))
+  const spaceBelow = Math.max(0, vh - rect.bottom - 12)
+  const spaceAbove = Math.max(0, rect.top - 12)
+  const preferTop = side === 'top' || (spaceBelow < 180 && spaceAbove > spaceBelow)
+  if (preferTop && spaceAbove >= 80) {
+    return {
+      left,
+      bottom: Math.max(8, Math.round(vh - rect.top + 6)),
+      maxHeight: Math.min(280, Math.floor(spaceAbove)),
+    }
+  }
+  return {
+    left,
+    top: Math.min(vh - 80, Math.round(rect.bottom + 6)),
+    maxHeight: Math.max(80, Math.min(280, Math.floor(spaceBelow))),
+  }
+}
+
 export function DshMenu(props: {
   open: boolean
   items: readonly MenuItem[]
@@ -904,7 +1002,26 @@ export function DshMenu(props: {
 }) {
   const hasHostMenu = hasComponent(raw.Menu)
   const anchorWrapRef = useRef<HTMLSpanElement | null>(null)
-  useEscapeKey(!hasHostMenu && props.open, props.onClose)
+  const menuPopoverRef = useRef<HTMLDivElement | null>(null)
+  const resolvedSide = props.side ?? 'top'
+  const [menuBox, setMenuBox] = useState<{
+    left: number
+    top?: number
+    bottom?: number
+    maxHeight: number
+  } | null>(null)
+
+  const repositionMenu = useCallback(() => {
+    setMenuBox(computeFallbackMenuBox(anchorWrapRef.current, resolvedSide))
+  }, [resolvedSide])
+
+  usePortalPopover({
+    open: !hasHostMenu && props.open,
+    triggerRef: anchorWrapRef,
+    popoverRef: menuPopoverRef,
+    onClose: props.onClose,
+    onReposition: repositionMenu,
+  })
 
   if (hasHostMenu) {
     return (
@@ -914,42 +1031,15 @@ export function DshMenu(props: {
         selectedId={props.selectedId}
         onSelect={props.onSelect}
         onClose={props.onClose}
-        side={props.side ?? 'top'}
+        side={resolvedSide}
         portal={true}
         anchor={props.anchor}
       />
     )
   }
 
-  let menuStyle: { left: number; top?: number; bottom?: number; maxHeight: number } = {
-    left: 16,
-    top: 64,
-    maxHeight: 280,
-  }
-  if (props.open && typeof window !== 'undefined' && anchorWrapRef.current) {
-    const rect = anchorWrapRef.current.getBoundingClientRect()
-    const vw = window.innerWidth || 1024
-    const vh = window.innerHeight || 768
-    const menuW = Math.max(180, Math.round(rect.width))
-    const left = Math.max(8, Math.min(Math.round(rect.left), vw - menuW - 8))
-    const spaceBelow = Math.max(0, vh - rect.bottom - 12)
-    const spaceAbove = Math.max(0, rect.top - 12)
-    const preferTop =
-      (props.side ?? 'top') === 'top' || (spaceBelow < 180 && spaceAbove > spaceBelow)
-    if (preferTop && spaceAbove >= 80) {
-      menuStyle = {
-        left,
-        bottom: Math.max(8, Math.round(vh - rect.top + 6)),
-        maxHeight: Math.min(280, Math.floor(spaceAbove)),
-      }
-    } else {
-      menuStyle = {
-        left,
-        top: Math.min(vh - 80, Math.round(rect.bottom + 6)),
-        maxHeight: Math.max(80, Math.min(280, Math.floor(spaceBelow))),
-      }
-    }
-  }
+  const menuStyle =
+    props.open && menuBox ? menuBox : computeFallbackMenuBox(anchorWrapRef.current, resolvedSide)
 
   return (
     <span ref={anchorWrapRef} style={{ position: 'relative', display: 'inline-flex' }}>
@@ -958,7 +1048,10 @@ export function DshMenu(props: {
         ? createPortal(
             <div
               role="presentation"
-              onClick={props.onClose}
+              onClick={(e) => {
+                e.stopPropagation()
+                props.onClose()
+              }}
               style={{
                 position: 'fixed',
                 inset: 0,
@@ -966,6 +1059,7 @@ export function DshMenu(props: {
               }}
             >
               <div
+                ref={menuPopoverRef}
                 role="menu"
                 onClick={(e) => e.stopPropagation()}
                 style={{
@@ -1060,7 +1154,9 @@ function FallbackDisclosureRow(props: FallbackDisclosureRowProps) {
         {props.icon}
         <span style={{ fontWeight: 500 }}>{props.title}</span>
         {(!isOpen || props.keepContentWhenOpen) && props.collapsedContent ? (
-          <span style={{ minWidth: 0, flex: 1 }}>{props.collapsedContent}</span>
+          <span style={{ minWidth: 0, flex: 1, overflow: 'hidden', display: 'flex' }}>
+            {props.collapsedContent}
+          </span>
         ) : null}
       </button>
       {isOpen && props.children ? (
@@ -1181,12 +1277,16 @@ export function DshHoverCard(props: {
       />
     )
   }
-  return props.fallbackTitle ? (
+  if (!props.fallbackTitle) return props.anchor
+  if (isValidElement(props.anchor) && props.anchor.type !== Fragment) {
+    return cloneElement(props.anchor as ReactElement<{ title?: string }>, {
+      title: props.fallbackTitle,
+    })
+  }
+  return (
     <span title={props.fallbackTitle} style={{ display: 'contents' }}>
       {props.anchor}
     </span>
-  ) : (
-    props.anchor
   )
 }
 
@@ -1199,7 +1299,9 @@ export function DshImageLightbox(props: {
   onClose: () => void
 }) {
   const hasHostLightbox = hasComponent(raw.ImageLightbox)
+  const dialogRef = useRef<HTMLDivElement | null>(null)
   useEscapeKey(!hasHostLightbox && props.open, props.onClose)
+  useDialogFocus(!hasHostLightbox && props.open, dialogRef)
   if (!props.open || typeof document === 'undefined') return null
   if (hasHostLightbox) {
     return (
@@ -1213,10 +1315,15 @@ export function DshImageLightbox(props: {
   }
   return createPortal(
     <div
+      ref={dialogRef}
+      tabIndex={-1}
       role="dialog"
       aria-modal="true"
       aria-label={props.dialogLabel}
-      onClick={props.onClose}
+      onClick={(e) => {
+        e.stopPropagation()
+        props.onClose()
+      }}
       style={{
         position: 'fixed',
         inset: 0,
@@ -1226,6 +1333,7 @@ export function DshImageLightbox(props: {
         justifyContent: 'center',
         padding: 24,
         background: 'var(--dsw-alias-bg-mask-1, rgba(0, 0, 0, 0.72))',
+        outline: 'none',
       }}
     >
       <button

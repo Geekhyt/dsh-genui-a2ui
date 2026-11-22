@@ -104,7 +104,7 @@ const COMPACT_FUNCTIONS_SECTION = [
   '## Positional Function Signatures',
   '',
   'Use these exact positional signatures for check rules, formulas, or formatting:',
-  '• calc(expr, vars?, decimals?) — Safe 0ms infix formula (`+ - * / ^ % ( ) ? : == != < <= > >= && ||`, `pow, sqrt, exp, log, ln, log10, abs, min, max, clamp, round, floor, ceil, pmt(ratePerPeriod, nper, pv)`) over `vars` (`{ w: $/wan }`), `decimals` 0..8.',
+  '• calc(expr, vars?, decimals?) — Safe 0ms infix formula (`+ - * / ^ % ( ) ? : == != < <= > >= && ||`, `pow, sqrt, exp, log, ln, log10, abs, min, max, clamp, round, floor, ceil, sin, cos, tan, pmt(ratePerPeriod, nper, pv)`) over `vars` (`{ w: $/wan }`), `decimals` 0..8.',
   '• cond(condition, truthy, falsy) — Ternary branch.',
   '• sum(items, field?) / avg(items, field?) — Aggregate numeric array or row object `field`.',
   '• eq(a, b) — Equality (auto-unwraps single-select ChoicePicker `["x"]` vs `"x"`).',

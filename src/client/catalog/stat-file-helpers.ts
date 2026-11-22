@@ -111,12 +111,12 @@ export function normalizeFileEntries(rawItems: unknown): NormalizedFileEntry[] {
   const out: NormalizedFileEntry[] = []
   for (const item of rawItems) {
     if (typeof item === 'string') {
-      const clean = item
-        .replace(/\\/g, '/')
-        .replace(/^\/+|\/+$/g, '')
-        .trim()
-      if (clean !== '') {
-        const isDir = item.trim().endsWith('/')
+      const normalizedSlashes = item.replace(/\\/g, '/').trim()
+      const isAbs = normalizedSlashes.startsWith('/')
+      const body = normalizedSlashes.replace(/^\/+|\/+$/g, '').trim()
+      if (body !== '') {
+        const clean = isAbs ? `/${body}` : body
+        const isDir = normalizedSlashes.endsWith('/')
         out.push({ path: clean, kind: isDir ? 'dir' : 'file', raw: { path: clean } })
       }
       continue
@@ -125,14 +125,16 @@ export function normalizeFileEntries(rawItems: unknown): NormalizedFileEntry[] {
       const rec = item as Record<string, unknown>
       const rawPath =
         typeof rec.path === 'string' ? rec.path : typeof rec.file === 'string' ? rec.file : ''
-      const clean = rawPath
+      const normalizedSlashes = rawPath
         .replace(/\\/g, '/')
         .replace(/^(?:\.\/)+/, '')
-        .replace(/^\/+|\/+$/g, '')
         .trim()
-      if (clean === '') continue
+      const isAbs = normalizedSlashes.startsWith('/')
+      const body = normalizedSlashes.replace(/^\/+|\/+$/g, '').trim()
+      if (body === '') continue
+      const clean = isAbs ? `/${body}` : body
       const explicitKind =
-        rec.kind === 'dir' || rec.type === 'dir' || rawPath.trim().endsWith('/') ? 'dir' : 'file'
+        rec.kind === 'dir' || rec.type === 'dir' || normalizedSlashes.endsWith('/') ? 'dir' : 'file'
       const status = normalizeStatus(rec.status)
       const summary =
         typeof rec.summary === 'string' && rec.summary.trim() !== ''

@@ -197,13 +197,68 @@ export function usePortalPopover(params: {
     const removeEscape = registerEscapeHandler(() => onCloseRef.current())
     window.addEventListener('resize', handleResize, { passive: true })
     window.addEventListener('scroll', handleScroll, { capture: true, passive: true })
+    const ro =
+      typeof ResizeObserver !== 'undefined' && triggerRef.current
+        ? new ResizeObserver(() => scheduleSync())
+        : null
+    if (ro && triggerRef.current) ro.observe(triggerRef.current)
     return () => {
       removeEscape()
+      ro?.disconnect()
       if (rafId !== 0) window.cancelAnimationFrame(rafId)
       window.removeEventListener('resize', handleResize)
       window.removeEventListener('scroll', handleScroll, { capture: true })
     }
   }, [open, popoverRef, triggerRef])
+}
+
+export function useDialogFocus(open: boolean, dialogRef: RefObject<HTMLElement | null>): void {
+  const prevFocusedRef = useRef<HTMLElement | null>(null)
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+    if (!open) {
+      const prev = prevFocusedRef.current
+      prevFocusedRef.current = null
+      if (prev?.isConnected) {
+        prev.focus?.()
+      }
+      return
+    }
+    const active = document.activeElement
+    prevFocusedRef.current = active instanceof HTMLElement ? active : null
+    const dialog = dialogRef.current
+    if (dialog) {
+      const firstFocusable = dialog.querySelector<HTMLElement>(
+        'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
+      )
+      ;(firstFocusable ?? dialog).focus?.()
+    }
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab') return
+      const root = dialogRef.current
+      if (!root) return
+      const focusables = Array.from(
+        root.querySelectorAll<HTMLElement>(
+          'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
+        ),
+      )
+      if (focusables.length === 0) return
+      const first = focusables[0]!
+      const last = focusables[focusables.length - 1]!
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault()
+        first.focus()
+      }
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [open, dialogRef])
 }
 
 export interface EChartsClickParams {
@@ -222,13 +277,17 @@ export function useEChartsMount(params: {
   readonly hostRef: RefObject<HTMLDivElement | null>
   readonly chunk: EchartsChunkModule | null
   readonly option: Record<string, unknown> | null
+  readonly chartKind?: string | undefined
+  readonly dataIdentity?: unknown
   readonly onPointClick: (event: EChartsClickParams) => void
   readonly onContainerWidth: (width: number) => void
 }): EChartsMountHandle {
-  const { hostRef, chunk, option, onPointClick, onContainerWidth } = params
+  const { hostRef, chunk, option, chartKind, dataIdentity, onPointClick, onContainerWidth } = params
   const chartRef = useRef<ReturnType<EchartsChunkModule['initChartInstance']> | null>(null)
   const optionRef = useRef<Record<string, unknown> | null>(option)
   optionRef.current = option
+  const prevKindRef = useRef<string | undefined>(chartKind)
+  const prevDataIdRef = useRef<unknown>(dataIdentity)
   const onPointClickRef = useRef(onPointClick)
   onPointClickRef.current = onPointClick
   const onContainerWidthRef = useRef(onContainerWidth)
@@ -302,10 +361,64 @@ export function useEChartsMount(params: {
   }, [chunk, hostRef])
 
   useEffect(() => {
-    if (option && chartRef.current) {
-      chartRef.current.setOption(option, { notMerge: true })
+    const inst = chartRef.current
+    if (!option || !inst) {
+      prevKindRef.current = chartKind
+      prevDataIdRef.current = dataIdentity
+      return
     }
-  }, [chunk, option])
+    const preserveInteractive =
+      prevKindRef.current === chartKind && prevDataIdRef.current === dataIdentity
+    prevKindRef.current = chartKind
+    prevDataIdRef.current = dataIdentity
+    let prevZoom: Array<{ start?: number; end?: number }> | null = null
+    let prevLegendSelected: Record<string, boolean> | null = null
+    if (preserveInteractive && typeof inst.getOption === 'function') {
+      try {
+        const cur = inst.getOption() as {
+          dataZoom?: Array<{ start?: number; end?: number }>
+          legend?: Array<{ selected?: Record<string, boolean> }>
+        }
+        if (Array.isArray(cur?.dataZoom) && cur.dataZoom.length > 0) {
+          prevZoom = cur.dataZoom.map((z) => ({ start: z.start, end: z.end }))
+        }
+        const firstLegend = Array.isArray(cur?.legend) ? cur.legend[0] : undefined
+        if (firstLegend?.selected && Object.keys(firstLegend.selected).length > 0) {
+          prevLegendSelected = { ...firstLegend.selected }
+        }
+      } catch {}
+    }
+    let nextOption = option
+    if (prevZoom && Array.isArray(option.dataZoom)) {
+      nextOption = {
+        ...nextOption,
+        dataZoom: (option.dataZoom as Array<Record<string, unknown>>).map((dz, idx) => {
+          const saved = prevZoom?.[idx]
+          if (!saved || (saved.start === undefined && saved.end === undefined)) return dz
+          return {
+            ...dz,
+            ...(saved.start !== undefined ? { start: saved.start } : {}),
+            ...(saved.end !== undefined ? { end: saved.end } : {}),
+          }
+        }),
+      }
+    }
+    if (
+      prevLegendSelected &&
+      option.legend &&
+      typeof option.legend === 'object' &&
+      !Array.isArray(option.legend)
+    ) {
+      nextOption = {
+        ...nextOption,
+        legend: {
+          ...(option.legend as Record<string, unknown>),
+          selected: prevLegendSelected,
+        },
+      }
+    }
+    inst.setOption(nextOption, { notMerge: true })
+  }, [chunk, option, chartKind, dataIdentity])
 
   const exportPng = useCallback((filename: string, backgroundColor: string): boolean => {
     const inst = chartRef.current

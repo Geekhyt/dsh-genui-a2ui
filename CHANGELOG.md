@@ -2,6 +2,34 @@
 
 All notable changes to `dsh-genui-a2ui` are documented in this file.
 
+## [0.4.6] - 2026-11-22
+
+### Fixed
+- **G1: CSS Layout & Anti-Collapse Composition Contract (`Catalog.module.css`, `SurfaceView.module.css`, `ActionUserChip.module.css`, `LayoutWidgets.tsx`, `OpsAndInsightWidgets.tsx`)**:
+  - Established global `:where(...)` width and `box-sizing: border-box` anti-collapse guards so `container-type: inline-size` widgets (`Table`, `Chart`, `DiffView`, `Schedule`, etc.) no longer collapse to `2px` inside `Column(align="start")` or `Callout` nested under a `Row` ancestor, isolating `--a2ui-flex-basis` strictly by direct-child axis (`.row > *` vs vertical containers `> *`).
+  - Added equal-specificity narrow `@container` breakpoints for `.responsiveGrid[data-columns="3"]` and `.checkCardGrid[data-columns="3"]` (`<= 340px` single-column collapse), tuned `DshCardImpl` `minWidth` to `190px` (preserving desktop 3-up weighted cards while stacking cleanly at `306px`) and separated `.statCard` in unweighted rows to `flex: 1 1 min(100%, 140px)`, and tightened 3-digit `DiffView` split-mode line-number gutters (`30px`) with `pre-wrap` wrapping.
+- **G2: Portal Popovers, Modal Semantics & Wrapper-Free Triggers (`dom-hooks.ts`, `primitives.tsx`, `LayoutWidgets.tsx`, `P0Widgets.tsx`, `functions.ts`)**:
+  - Attached `ResizeObserver` on `triggerRef` inside `usePortalPopover` so `MultiSelect` popovers inside `Modal` dynamically shift downward when selected tags wrap to multiple rows (`+4.3px` zero-overlap verified).
+  - Kept local function actions (`copyText`, `openUrl`) from closing ancestor `Modal` dialogs via `isLocalFunctionAction()`, delegated `CopyText` user-activation enforcement directly to `@a2ui/web_core` (`requiresUserActivation = true`), added capture-phase invalid-form blocking on Modal triggers, restored dialog focus on close, and guarded `DshTooltip`/`DshHoverCard` `cloneElement` against `Fragment` children.
+- **G3: Validation, Expressions, Express Preprocessor & Form Defaults (`functions.ts`, `InputWidgets.tsx`, `AntdParityWidgets.tsx`, `express-preprocess.ts`, `generator.ts`, `prompt-compact.ts`, `v5-helpers.ts`)**:
+  - Overrode `SafeRequiredImplementation` / `SafeNumericImplementation` and updated `computeCond` to unwrap `{ valid }` validation results (fixing `cond(required(...))` false-positive truthiness), hardened `formatNumber` against blank/non-numeric inputs, and expanded `DateRange(?required)` validation plus server-side static-string misuse rejection and 5 Express preprocessor boundary fixes.
+  - Corrected default states across 4 input widgets: `ChoicePicker` defaults to `singleSelection` native radios (and added explicit `variant="multipleSelection"` to `BOOKING_UI` flavor preferences), `Segmented` avoids fake first-item selection on empty string, `NumberInput` renders empty instead of `min` when unset, and `DateTimeInput(enableTime=true)` defaults to pure time mode (`09:30`); `buildDatePresetRange(1, true)` produces full `00:00–23:59` windows.
+- **G4: End-to-End Array Cross-Filtering & ProTable Aggregation (`v4-helpers.ts`, `EChartsWidget.tsx`, `echarts-chunk.ts`, `TableWidget.tsx`, `catalog-schema.ts`, `stat-file-helpers.ts`, `MediaAndDataWidgets.tsx`)**:
+  - Extended `filterPath` cross-filtering across `MultiSelect`, `Chart`, and `ProTable` to support `string | string[]` OR-matching (rendering `us-east · eu-west` chips, multi-bar highlighting, and 3-row OR filtering) while preserving existing scalar string cross-filtering (`showcase-25`).
+  - Decoupled `detectNumericColumnKeys` from column `align` by sampling non-empty cell values (fixing missing summaries on centered numeric columns), added high-SLA decimal precision formatting (`99.95%`) on `Progress`/`Matrix`, and normalized leading slashes in `FileTree`.
+- **G5: 19-Kind ECharts `276px` Contract & Chart State Isolation (`echarts-chunk.ts`, `EChartsWidget.tsx`, `dom-hooks.ts`)**:
+  - Fixed `Gauge` `value`/`max` field precedence (`72` instead of `100`), numeric `yField` sorting in `Heatmap`, `seriesField` long-table pivoting in `Radar`, negative-total bottom positioning & negative-axis headroom in `Waterfall`, dark-mode leaf-label visibility + wrapped long link tooltips in `Sankey`, and cross-filter dimming in `Scatter`/`Calendar`/`Graph`.
+  - Widened `hasChartData` for single-object `gauge`/`sunburst`/`treemap`, `{ edges }` in `sankey`/`graph`, and tuple arrays; tracked `chartKind` in `useEChartsMount` to reset stale zoom/legend state via `notMerge` when chart kinds switch.
+- **G6: Mermaid Quote-Safe Repair, Fullscreen Dual-Axis Fit & Light Gantt Contrast (`mermaid-safe.ts`, `mermaid-chunk.ts`, `ExtendedWidgets.tsx`, `Catalog.module.css`)**:
+  - Reordered `repairMermaidSource` outer-to-inner (`[]` → `{}` → `()`) with quoted-string masking so labels such as `A[用户 (管理员)]` never double-quote into parse errors.
+  - Changed Mermaid fullscreen Fit scaling to `Math.min(stageW / natW, stageH / natH)` (`410%` clipped → `93%` full 8-node view) with drawn-box wheel zoom anchoring; upgraded Light Mode Gantt saturated bar fills with pure `#ffffff` task text and `@container (max-width: 720px)` tick thinning.
+- **G7 & G8: Enterprise Ops Widgets & Runtime Lifecycle / Redaction Isolation (`EnterpriseWidgets.tsx`, `OpsAndInsightWidgets.tsx`, `AskToolView.tsx`, `DockView.tsx`, `SurfaceView.tsx`, `ToolView.tsx`, `TurnTailView.tsx`, `turn-surfaces.ts`, `persistence.ts`, `ask-tool.ts`, `src/index.ts`, `i18n.ts`)**:
+  - Added overnight `Schedule` (`22:00–04:00`) minute normalization & dual-theme `currentColor` progress overlays, `EntityHeader`/`Result` default CTA fallback (`msg.defaultActionCta`), `ApiEndpoint` cURL deduplication, `ApprovalCard` failure rollback, and `LogViewer`/`ServiceGraph` state syncing.
+  - Hardened per-`surfaceId` bounded `seq` replay, partial multi-surface read-only superseding, `a2ui_ask` draft scoping (`sessionId::ask::callId`) & post-submit cleanup, renamed sensitive `context` key redaction on server settle, RFC 6901 pointer escaping, and `DockView` local-state fallback.
+
+### Changed
+- Added 3 comprehensive composition QA showcases (`showcase-30`, `showcase-31`, `showcase-32`) to `scripts/mock-llm.mjs` and added `tests/composition-audit-v046.spec.ts`, expanding Vitest coverage to **30 suites / 163 tests** (`lib/client.js = 69.69 kB / 19.66 kB gzip`, `0` Biome/Lint/Comments/TS diagnostics, `check:host-api` green, live Dark & Light DeepSeek Harness visual QA verified across all 3 audit showcases + 5 existing regression showcases with 0 application errors).
+
 ## [0.4.5] - 2026-11-22
 
 ### Fixed

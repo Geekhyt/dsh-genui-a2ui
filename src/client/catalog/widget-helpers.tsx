@@ -19,7 +19,53 @@ export const SurfaceReadOnlyContext = createContext(false)
 
 export const ModalCloseContext = createContext<(() => void) | null>(null)
 
+export const ModalOpenContext = createContext<(() => void) | null>(null)
+
 export const ModalTriggerContext = createContext(false)
+
+export interface SurfaceActionStatus {
+  readonly seq: number
+  readonly ok: boolean
+}
+
+export const SurfaceActionStatusContext = createContext<(() => SurfaceActionStatus) | null>(null)
+
+export async function runSurfaceAction(
+  fn: () => Promise<unknown> | unknown,
+  getStatus: (() => SurfaceActionStatus) | null,
+): Promise<boolean> {
+  const before = getStatus?.()
+  try {
+    const res = await fn()
+    if (res === false) return false
+    const after = getStatus?.()
+    if (before !== undefined && after !== undefined && after.seq !== before.seq && !after.ok) {
+      return false
+    }
+    return true
+  } catch {
+    return false
+  }
+}
+
+const LOCAL_UTILITY_FUNCTIONS = new Set(['copyText', 'openUrl'])
+
+export function isLocalFunctionAction(context: unknown, propName = 'action'): boolean {
+  if (typeof context !== 'object' || context === null) return false
+  const model = (context as { componentModel?: unknown }).componentModel
+  if (typeof model !== 'object' || model === null) return false
+  const rawProps = (model as { properties?: unknown }).properties
+  if (typeof rawProps !== 'object' || rawProps === null) return false
+  const rawAction = (rawProps as Record<string, unknown>)[propName]
+  if (typeof rawAction !== 'object' || rawAction === null || Array.isArray(rawAction)) return false
+  const rec = rawAction as Record<string, unknown>
+  const fnCall =
+    (typeof rec.functionCall === 'object' && rec.functionCall !== null
+      ? (rec.functionCall as Record<string, unknown>)
+      : undefined) ?? rec
+  const callName = fnCall['@call'] ?? fnCall.call
+  return typeof callName === 'string' && LOCAL_UTILITY_FUNCTIONS.has(callName)
+}
 
 export interface SurfaceValidationContextValue {
   readonly submitAttempted: boolean
@@ -57,10 +103,10 @@ export function defineComponent<Props>(
 }
 
 export function weightStyle(weight: number | undefined, minWidth = 0): CSSProperties | undefined {
-  if (weight === undefined) return undefined
+  if (weight === undefined || !Number.isFinite(weight) || weight <= 0) return undefined
   return {
     flexGrow: weight,
-    flexBasis: 'var(--a2ui-flex-basis, 0px)',
+    flexBasis: 'var(--a2ui-flex-basis, auto)',
     minWidth: minWidth > 0 ? `min(100%, ${minWidth}px)` : 0,
   }
 }

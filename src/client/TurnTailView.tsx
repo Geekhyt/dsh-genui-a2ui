@@ -44,10 +44,11 @@ export const A2uiTurnTailView = memo(function A2uiTurnTailView({
       <LazySurfaceGroupView
         messages={batch.messages}
         visibleSurfaceIds={batch.visibleSurfaceIds}
+        readOnlySurfaceIds={batch.supersededSurfaceIds}
         title={batch.title}
         sessionId={sessionId}
         streaming={false}
-        readOnly={batch.superseded}
+        readOnly={batch.allSuperseded}
         readOnlyLabel={msg.readOnlySnapshot}
         onAction={sendAction}
         openWorkspaceFile={openWorkspaceFile}

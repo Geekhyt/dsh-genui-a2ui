@@ -125,13 +125,17 @@ function createActionSender(
     const conversation = host.sessions.scope?.(sessionId)?.get?.('conversation') as
       | ConversationLike
       | undefined
-    if (conversation === undefined) return
-    void conversation.send(message).catch((err: unknown) => {
-      console.warn(
-        '[dsh-genui-a2ui] failed to send action to session:',
-        err instanceof Error ? err.message : String(err),
-      )
-    })
+    if (conversation === undefined) return false
+    return conversation.send(message).then(
+      () => true,
+      (err: unknown) => {
+        console.warn(
+          '[dsh-genui-a2ui] failed to send action to session:',
+          err instanceof Error ? err.message : String(err),
+        )
+        return false
+      },
+    )
   }
 }
 
@@ -279,6 +283,7 @@ export function apply(ctx: Context, config: ClientConfig = {}): void {
             key: ASK_TOOL,
             inject: (sessionId: string) => ({
               sessionId,
+              chatStore: resolveChatStore(host, sessionId),
             }),
           },
           A2uiAskToolView,

@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo, useSyncExternalStore } from 'react'
+import { memo, useCallback, useMemo, useState, useSyncExternalStore } from 'react'
 import css from './DockView.module.css'
 import type { WorkspaceFileOpener } from './file-opener.tsx'
 import { useShellMessages } from './i18n.ts'
@@ -33,6 +33,8 @@ export const A2uiDockView = memo(function A2uiDockView({
   openWorkspaceFile,
 }: A2uiDockViewProps) {
   const msg = useShellMessages()
+  const [localCollapsed, setLocalCollapsed] = useState(false)
+  const [localDismissedSeq, setLocalDismissedSeq] = useState(0)
   const subscribeChat = useCallback(
     (listener: () => void) => (chatStore ? chatStore.subscribe(listener) : NOOP_SUBSCRIBE()),
     [chatStore],
@@ -45,18 +47,27 @@ export const A2uiDockView = memo(function A2uiDockView({
 
   const batch = useMemo(() => resolveDockBatch(snapshot), [snapshot])
 
+  const effectiveDismissedSeq = sessionId ? uiState.dismissedSeq : localDismissedSeq
   if (batch === null || batch.messages.length === 0) return null
-  if (uiState.dismissedSeq >= batch.latestSeq) return null
+  if (effectiveDismissedSeq >= batch.latestSeq) return null
 
-  const collapsed = uiState.collapsed
+  const collapsed = sessionId ? uiState.collapsed : localCollapsed
   const title = batch.title ?? msg.dockDefaultTitle
 
   const toggleCollapsed = () => {
-    if (sessionId) setDockCollapsed(sessionId, !collapsed)
+    if (sessionId) {
+      setDockCollapsed(sessionId, !collapsed)
+    } else {
+      setLocalCollapsed((v) => !v)
+    }
   }
 
   const handleDismiss = () => {
-    if (sessionId) dismissDockAtSeq(sessionId, batch.latestSeq)
+    if (sessionId) {
+      dismissDockAtSeq(sessionId, batch.latestSeq)
+    } else {
+      setLocalDismissedSeq(batch.latestSeq)
+    }
   }
 
   return (
@@ -84,7 +95,8 @@ export const A2uiDockView = memo(function A2uiDockView({
           <button
             type="button"
             className={css.iconBtn}
-            aria-label={collapsed ? msg.dockExpand : msg.dockCollapse}
+            tabIndex={-1}
+            aria-hidden="true"
             title={collapsed ? msg.dockExpand : msg.dockCollapse}
             onClick={toggleCollapsed}
           >

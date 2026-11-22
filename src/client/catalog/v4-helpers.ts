@@ -279,12 +279,14 @@ export function buildEndpointCurl(params: {
   const safeMethod = /^[A-Z]+$/.test(rawMethod) ? rawMethod : 'GET'
   const parts: string[] = [`curl -X ${safeMethod} ${shellEscapeSingle(`${origin}${cleanPath}`)}`]
 
+  let hasContentType = false
   if (Array.isArray(params.headers)) {
     for (const item of params.headers) {
       if (typeof item !== 'object' || item === null) continue
       const rec = item as Record<string, unknown>
       const name = stripCrlf(String(rec.name ?? rec.key ?? ''))
       if (!name) continue
+      if (name.toLowerCase() === 'content-type') hasContentType = true
       const val = stripCrlf(String(rec.value ?? rec.example ?? ''))
       parts.push(`-H ${shellEscapeSingle(`${name}: ${val}`)}`)
     }
@@ -292,11 +294,14 @@ export function buildEndpointCurl(params: {
     for (const [k, v] of Object.entries(params.headers as Record<string, unknown>)) {
       const safeK = stripCrlf(k)
       if (!safeK) continue
+      if (safeK.toLowerCase() === 'content-type') hasContentType = true
       parts.push(`-H ${shellEscapeSingle(`${safeK}: ${stripCrlf(String(v ?? ''))}`)}`)
     }
   }
   if (params.requestBody !== undefined && params.requestBody !== null) {
-    parts.push(`-H 'Content-Type: application/json'`)
+    if (!hasContentType) {
+      parts.push(`-H 'Content-Type: application/json'`)
+    }
     const bodyStr =
       typeof params.requestBody === 'string'
         ? params.requestBody
@@ -455,15 +460,48 @@ export function normalizeScheduleItems(
   if (parsed.length === 0) return { tracks: [], axisTicks: [] }
 
   const kind = parsed[0]!.kind
+  const rangeStart =
+    Array.isArray(rawRange) && rawRange.length >= 2 ? parseTemporalPosition(rawRange[0]) : null
+  const rangeEnd =
+    Array.isArray(rawRange) && rawRange.length >= 2 ? parseTemporalPosition(rawRange[1]) : null
+  const rangeIsOvernightHhmm =
+    rangeStart !== null &&
+    rangeEnd !== null &&
+    rangeStart.kind === 'hhmm' &&
+    rangeEnd.kind === 'hhmm' &&
+    rangeEnd.numeric < rangeStart.numeric
+  const anyItemOvernightHhmm =
+    kind === 'hhmm' && parsed.some((p) => p.kind === 'hhmm' && p.eNum >= 1440)
+  let overnightAnchor: number | null = null
+  if (kind === 'hhmm') {
+    if (rangeIsOvernightHhmm && rangeStart) {
+      overnightAnchor = rangeStart.numeric
+    } else if (anyItemOvernightHhmm) {
+      const eveningStarts = parsed.filter((p) => p.sNum >= 720).map((p) => p.sNum)
+      overnightAnchor = eveningStarts.length > 0 ? Math.min(...eveningStarts) : parsed[0]!.sNum
+    }
+  }
+
+  if (overnightAnchor !== null) {
+    for (const p of parsed) {
+      if (p.kind !== 'hhmm') continue
+      if (p.sNum < overnightAnchor) {
+        p.sNum += 1440
+        if (p.eNum < 1440) p.eNum += 1440
+      }
+      if (p.eNum < p.sNum) p.eNum += 1440
+    }
+  }
+
   let minB = Math.min(...parsed.map((p) => p.sNum))
   let maxB = Math.max(...parsed.map((p) => p.eNum))
 
-  if (Array.isArray(rawRange) && rawRange.length >= 2) {
-    const r0 = parseTemporalPosition(rawRange[0])
-    const r1 = parseTemporalPosition(rawRange[1])
-    if (r0 && r1 && r1.numeric > r0.numeric) {
-      minB = Math.min(minB, r0.numeric)
-      maxB = Math.max(maxB, r1.numeric)
+  if (rangeStart && rangeEnd) {
+    const r0Num = rangeStart.numeric
+    const r1Num = rangeIsOvernightHhmm ? rangeEnd.numeric + 1440 : rangeEnd.numeric
+    if (r1Num > r0Num) {
+      minB = Math.min(minB, r0Num)
+      maxB = Math.max(maxB, r1Num)
     }
   }
   const span = maxB > minB ? maxB - minB : 1
@@ -493,9 +531,15 @@ export function normalizeScheduleItems(
   let nowLabel: string | undefined
   if (rawNow !== undefined && rawNow !== null && String(rawNow).trim() !== '') {
     const pNow = parseTemporalPosition(rawNow)
-    if (pNow && pNow.numeric >= minB && pNow.numeric <= maxB) {
-      nowPct = Number((((pNow.numeric - minB) / span) * 100).toFixed(2))
-      nowLabel = String(rawNow).trim()
+    if (pNow) {
+      let nowNum = pNow.numeric
+      if (overnightAnchor !== null && pNow.kind === 'hhmm' && nowNum < overnightAnchor) {
+        nowNum += 1440
+      }
+      if (nowNum >= minB && nowNum <= maxB) {
+        nowPct = Number((((nowNum - minB) / span) * 100).toFixed(2))
+        nowLabel = String(rawNow).trim()
+      }
     }
   }
 
@@ -514,6 +558,15 @@ export interface NormalizedMatrixModel {
   readonly colLabels: readonly string[]
   readonly cells: readonly (readonly NormalizedMatrixCell[])[]
   readonly rowSummaries?: readonly string[] | undefined
+}
+
+function formatMatrixCellNumber(v: number): string {
+  if (Number.isInteger(v)) return String(v)
+  const abs = Math.abs(v)
+  if ((abs > 99 && abs < 100) || (abs > 0 && abs < 0.1)) {
+    return String(Number(v.toFixed(3)))
+  }
+  return String(Number(v.toFixed(2)))
 }
 
 export function normalizeMatrixData(params: {
@@ -561,7 +614,7 @@ export function normalizeMatrixData(params: {
         rowNums.push(v)
         const ratio = maxNum === minNum ? 0.65 : (v - minNum) / numSpan
         const intensityPct = Math.round(8 + ratio * 34)
-        const formatted = Number.isInteger(v) ? String(v) : v.toFixed(1).replace(/\.0$/, '')
+        const formatted = formatMatrixCellNumber(v)
         rowOut.push({
           kind: 'number',
           display: `${formatted}${unit}`,
@@ -609,7 +662,7 @@ export function normalizeMatrixData(params: {
     if (params.showTotals) {
       if (rowNums.length > 0) {
         const avg = rowNums.reduce((a, b) => a + b, 0) / rowNums.length
-        const avgStr = Number.isInteger(avg) ? String(avg) : avg.toFixed(1)
+        const avgStr = formatMatrixCellNumber(avg)
         rowSummaries.push(`${avgStr}${unit}`)
       } else {
         rowSummaries.push('—')
@@ -704,24 +757,21 @@ export function detectNumericColumnKeys(
 ): ReadonlySet<string> {
   const set = new Set<string>()
   if (rows.length === 0) return set
-  const sample = rows.slice(0, 20)
   for (const col of columns) {
-    if (col.align === 'left' || col.align === 'center') continue
-    if (col.align === 'right') {
-      set.add(col.key)
-      continue
-    }
     let nonEmpty = 0
     let numericHits = 0
-    for (const r of sample) {
+    for (const r of rows) {
       const v = r[col.key]
       if (v === undefined || v === null || v === '') continue
       nonEmpty += 1
       if (parseFormattedNumericCell(v) !== null) {
         numericHits += 1
       }
+      if (nonEmpty >= 30) break
     }
     if (nonEmpty > 0 && numericHits === nonEmpty) {
+      set.add(col.key)
+    } else if (nonEmpty === 0 && col.align === 'right') {
       set.add(col.key)
     }
   }
@@ -784,6 +834,32 @@ export function computeTableNumericSummary(
   return summary
 }
 
+export function normalizeCrossFilterTokens(raw: unknown): readonly string[] {
+  if (Array.isArray(raw)) {
+    const out: string[] = []
+    const seen = new Set<string>()
+    for (const item of raw) {
+      if (item === null || item === undefined) continue
+      const s = String(item).trim()
+      if (s === '') continue
+      const key = s.toLowerCase()
+      if (!seen.has(key)) {
+        seen.add(key)
+        out.push(s)
+      }
+    }
+    return out
+  }
+  if (typeof raw === 'string') {
+    const s = raw.trim()
+    return s === '' ? [] : [s]
+  }
+  if (typeof raw === 'number' && Number.isFinite(raw)) {
+    return [String(raw)]
+  }
+  return []
+}
+
 export function computeNextCrossFilterSelection(
   currentSelected: string | undefined,
   clickedLabel: string | undefined,
@@ -792,6 +868,28 @@ export function computeNextCrossFilterSelection(
   if (next === '') return ''
   const cur = (currentSelected ?? '').trim()
   return cur !== '' && cur.toLowerCase() === next.toLowerCase() ? '' : next
+}
+
+export function computeNextCrossFilterValue(
+  currentSelected: string | readonly string[] | undefined,
+  clickedLabel: string | undefined,
+): string | string[] {
+  const next = (clickedLabel ?? '').trim()
+  if (Array.isArray(currentSelected)) {
+    const tokens = [...normalizeCrossFilterTokens(currentSelected)]
+    if (next === '') return []
+    const targetLower = next.toLowerCase()
+    const idx = tokens.findIndex((t) => t.toLowerCase() === targetLower)
+    if (idx >= 0) {
+      tokens.splice(idx, 1)
+      return tokens
+    }
+    return [...tokens, next]
+  }
+  return computeNextCrossFilterSelection(
+    typeof currentSelected === 'string' ? currentSelected : undefined,
+    clickedLabel,
+  )
 }
 
 function matchesPrefixBoundary(haystack: string, needle: string): boolean {
@@ -813,10 +911,12 @@ function normalizeFilterToken(input: string): string {
 export function filterTableRowsByField(
   rows: readonly Record<string, unknown>[],
   filterField: string | undefined,
-  filterValue: string | undefined,
+  filterValue: string | readonly string[] | undefined,
 ): readonly Record<string, unknown>[] {
-  const q = normalizeFilterToken(filterValue ?? '')
-  if (q === '') return rows
+  const rawTokens = normalizeCrossFilterTokens(filterValue)
+  if (rawTokens.length === 0) return rows
+  const queries = rawTokens.map(normalizeFilterToken).filter((q) => q !== '')
+  if (queries.length === 0) return rows
   const field = filterField?.trim()
 
   const cellText = (v: unknown): string => {
@@ -825,23 +925,37 @@ export function filterTableRowsByField(
     return normalizeFilterToken(String(v))
   }
 
-  const exact = rows.filter((row) => {
-    if (field) return cellText(row[field]) === q
-    return Object.values(row).some((val) => cellText(val) === q)
-  })
-  if (exact.length > 0) return exact
+  const matchedIndices = new Set<number>()
+  for (const q of queries) {
+    let exactHits = 0
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i]!
+      const hit = field
+        ? cellText(row[field]) === q
+        : Object.values(row).some((val) => cellText(val) === q)
+      if (hit) {
+        matchedIndices.add(i)
+        exactHits += 1
+      }
+    }
+    if (exactHits > 0) continue
 
-  const fuzzyMatch = (t: string): boolean => {
-    if (t === '') return false
-    if (matchesPrefixBoundary(t, q) || matchesPrefixBoundary(q, t)) return true
-    if (q.length >= 3 && (field || /[\u4e00-\u9fa5]/.test(q)) && t.includes(q)) return true
-    return false
+    const fuzzyMatch = (t: string): boolean => {
+      if (t === '') return false
+      if (matchesPrefixBoundary(t, q) || matchesPrefixBoundary(q, t)) return true
+      if (q.length >= 3 && (field || /[\u4e00-\u9fa5]/.test(q)) && t.includes(q)) return true
+      return false
+    }
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i]!
+      const hit = field
+        ? fuzzyMatch(cellText(row[field]))
+        : Object.values(row).some((val) => fuzzyMatch(cellText(val)))
+      if (hit) matchedIndices.add(i)
+    }
   }
 
-  return rows.filter((row) => {
-    if (field) return fuzzyMatch(cellText(row[field]))
-    return Object.values(row).some((val) => fuzzyMatch(cellText(val)))
-  })
+  return rows.filter((_, idx) => matchedIndices.has(idx))
 }
 
 export function formatChartDataToCsv(data: unknown): string | null {
@@ -853,7 +967,11 @@ export function formatChartDataToCsv(data: unknown): string | null {
     )
   } else if (typeof data === 'object' && data !== null) {
     const rec = data as Record<string, unknown>
-    const rawLinks = Array.isArray(rec.links) ? rec.links : null
+    const rawLinks = Array.isArray(rec.links)
+      ? rec.links
+      : Array.isArray(rec.edges)
+        ? rec.edges
+        : null
     const rawNodes = Array.isArray(rec.nodes) ? rec.nodes : null
     const source = rawLinks && rawLinks.length > 0 ? rawLinks : rawNodes
     if (source) {

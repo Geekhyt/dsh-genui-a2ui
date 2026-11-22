@@ -18,7 +18,7 @@ export const BOOKING_UI = [
   '  Text("### 餐厅预订确认\\n请核对预订信息并提交（示例数据）："),',
   '  TextField(label="预订人姓名", value=$/form/name),',
   '  Slider(label="用餐人数", value=$/form/guests, min=1, max=12),',
-  '  ChoicePicker(label="口味偏好", options=[{label: "少油少盐", value: "less_oil"}, {label: "微辣", value: "mild_spicy"}, {label: "不要香菜", value: "no_cilantro"}], value=$/form/taste, displayStyle="chips"),',
+  '  ChoicePicker(label="口味偏好", options=[{label: "少油少盐", value: "less_oil"}, {label: "微辣", value: "mild_spicy"}, {label: "不要香菜", value: "no_cilantro"}], value=$/form/taste, variant="multipleSelection", displayStyle="chips"),',
   '  CheckBox(label="需要包间（VIP）", value=$/form/vip),',
   '  Text($/status, variant="caption"),',
   '  Button(Text("确认预订"), variant="primary", action=Event("confirm_booking", {name: $/form/name, guests: $/form/guests, vip: $/form/vip, taste: $/form/taste}, userMessage="确认餐厅预订"))',
@@ -1345,6 +1345,258 @@ export const SHOWCASE_COMBO_DOCK_FORMS_AUDIT_UI = [
   '])',
 ].join('\n')
 
+const LONG_DIFF_BEFORE = JSON.stringify(
+  Array.from({ length: 104 }, (_, i) =>
+    i === 99
+      ? 'const timeoutMs = 1200'
+      : i === 101
+        ? 'const maxRetries = 2'
+        : `const step_${i + 1} = "ok_${i + 1}"`,
+  ).join('\n'),
+)
+
+const LONG_DIFF_AFTER = JSON.stringify(
+  Array.from({ length: 104 }, (_, i) =>
+    i === 99
+      ? 'const timeoutMs = 450'
+      : i === 101
+        ? 'const maxRetries = 4'
+        : `const step_${i + 1} = "ok_${i + 1}"`,
+  ).join('\n'),
+)
+
+export const SHOWCASE_COMBO_AUDIT_V046_LAYOUT_UI = [
+  'surface("combo_v046_layout")',
+  '$/segVal = "p99"',
+  '$/sliderUnweighted = 64',
+  '$/checkCard3 = "pro"',
+  '$/calloutRows = [',
+  '  { svc: "gateway-edge", p99: "18 ms", status: "Healthy" },',
+  '  { svc: "billing-core", p99: "84 ms", status: "Degraded" },',
+  '  { svc: "tikv-shard-19", p99: "142 ms", status: "Critical" }',
+  ']',
+  '$/kv3 = [',
+  '  { label: "集群编号", value: "cn-hz-prod-01", mono: true },',
+  '  { label: "拓扑版本", value: "v4.12.8" },',
+  '  { label: "路由模式", value: "Active-Active" },',
+  '  { label: "尾行跨3列说明", value: "此项自动跨 3 列，容器缩至 2 列时不应产生隐式第 3 列空白" }',
+  ']',
+  '$/overnightSchedule = [',
+  '  { title: "流量排空", owner: "SRE", start: "22:00", end: "01:00", status: "done", progress: 100, note: "22:00-01:00" },',
+  '  { title: "分片热迁移", owner: "DBA", start: "00:30", end: "02:30", status: "running", progress: 62, note: "00:30-02:30" },',
+  '  { title: "全量回切校验", owner: "QA", start: "02:15", end: "03:45", status: "pending", progress: 35, note: "02:15-03:45" }',
+  ']',
+  '$/colStartChart = [',
+  '  { region: "华东", qps: 420 },',
+  '  { region: "华北", qps: 310 },',
+  '  { region: "华南", qps: 275 }',
+  ']',
+  'root = Card(Column([',
+  '  Text("### 组合深度实测 30：Flex-Basis 塌陷 · 3列 Grid/CheckCard 断点 · 无权重 Segmented/Slider · 跨夜 Schedule · 高精度 Progress"),',
+  '  EntityHeader("prod-inference-gateway-cn-east-01-superlongtoken", subtitle="cn-hz-mesh-cluster-01.internal.example.com", avatarText="GW", status="healthy", statusLabel="运行健康 · 99.995%", tags=["Multi-AZ", "Canary"], metrics=[{ label: "QPS", value: "48.2k" }, { label: "P99", value: "24 ms" }], action=Event("inspect_entity")),',
+  '  Row([',
+  '    Callout("Row 内 Callout 嵌套带 weight 的 Table（验证 --a2ui-flex-basis 不塌陷为 0px）", tone="info", child=Table($/calloutRows, title="Callout 内 Table(weight=1)", weight=1))',
+  '  ]),',
+  '  Row([',
+  '    Segmented("无权重 Row 内 4项 Segmented", ["p50", "p95", "p99", "max"], $/segVal),',
+  '    Slider(label="无权重 Row 内 Slider", value=$/sliderUnweighted, min=0, max=100),',
+  '    Progress(value=99.95, max=100, label="高精度 SLA Progress (99.95%)", tone="success")',
+  '  ]),',
+  '  Column([',
+  '    Text("Column(align=start) 内含 container-type 组件（Table + Chart 不应塌陷为 0px）", variant="caption"),',
+  '    Table($/calloutRows, title="align=start 内 Table"),',
+  '    Chart("bar", $/colStartChart, title="align=start 内 Chart", xField="region", yField="qps", height=170)',
+  '  ], align="start"),',
+  '  Grid([',
+  '    Card(Column([',
+  '      Text("306px 内嵌套 3列 Grid & 3列 CheckCard（应折叠为单列）", variant="h4"),',
+  '      Grid([',
+  '        Stat("延迟 P99", "24 ms", trend="up"),',
+  '        Stat("吞吐", "48k", trend="up"),',
+  '        Stat("错误率", "0.01%", trend="neutral")',
+  '      ], columns=3, gap="sm"),',
+  '      CheckCard("3列 CheckCard 窄容器折叠验证", [{ value: "std", title: "标准版", description: "单可用区" }, { value: "pro", title: "专业版", description: "双活容灾", recommended: true }, { value: "ent", title: "旗舰版", description: "三地五中心" }], $/checkCard3, columns=3),',
+  '      Row([',
+  '        Card(Text("权重卡 A"), weight=1),',
+  '        Card(Text("权重卡 B"), weight=1),',
+  '        Card(Text("权重卡 C"), weight=1)',
+  '      ])',
+  '    ])),',
+  '    Card(Column([',
+  '      Text("306px 内 104行 Split DiffView + 跨夜 Schedule + Result 无 actionLabel", variant="h4"),',
+  `      DiffView(${LONG_DIFF_BEFORE}, ${LONG_DIFF_AFTER}, title="104行 3位数行号 Split", filePath="src/gateway/timeout.ts", mode="split"),`,
+  '      Schedule($/overnightSchedule, title="跨夜维护窗口 (22:00 - 04:00)", range=["22:00", "04:00"], now="01:30"),',
+  '      Result("success", "灰度验证已达标", subtitle="自动提供默认行动按钮文案", action=Event("view_report"))',
+  '    ]))',
+  '  ], columns=2, gap="md"),',
+  '  Modal(',
+  '    trigger=Button(Text("打开 Modal 检验 KeyValue 3列→2列 隐式列 Bug"), variant="default", action=Event("open_kv_modal")),',
+  '    content=Column([',
+  '      Text("### Modal (~460px) 内 3 列 KeyValue（4 项）"),',
+  '      KeyValue($/kv3, title="3列 KeyValue 缩至 2列", columns=3, bordered=true)',
+  '    ])',
+  '  )',
+  ']))',
+].join('\n')
+
+export const SHOWCASE_COMBO_AUDIT_V046_FORMS_OVERLAYS_UI = [
+  'surface("combo_v046_forms")',
+  '$/name = ""',
+  '$/agreed = false',
+  '$/rate = 42',
+  '$/replicas = ""',
+  '$/emptySeg = ""',
+  '$/alarmTime = "09:30"',
+  '$/startDate = ""',
+  '$/endDate = ""',
+  '$/plan = ["pro"]',
+  '$/regions = ["us-east"]',
+  '$/modalTags = ["canary"]',
+  '$/modalTeam = "platform"',
+  '$/plainEnv = "prod-hz"',
+  '$/regionStats = [',
+  '  { region: "us-east", qps: 520, latency: 22 },',
+  '  { region: "eu-west", qps: 380, latency: 38 },',
+  '  { region: "ap-sg", qps: 290, latency: 45 }',
+  ']',
+  '$/regionRows = [',
+  '  { id: "N-01", region: "us-east", node: "us-east-a", qps: 280, p99: "19 ms" },',
+  '  { id: "N-02", region: "us-east", node: "us-east-b", qps: 240, p99: "24 ms" },',
+  '  { id: "N-03", region: "eu-west", node: "eu-west-a", qps: 380, p99: "38 ms" },',
+  '  { id: "N-04", region: "ap-sg", node: "ap-sg-a", qps: 290, p99: "45 ms" }',
+  ']',
+  '$/treeNodes = [',
+  '  { value: "platform", label: "基础架构部（可直选分支）", children: [',
+  '    { value: "platform/gateway", label: "边缘网关组" },',
+  '    { value: "platform/storage", label: "分布式存储组" }',
+  '  ] },',
+  '  { value: "ai", label: "智能引擎部", children: [',
+  '    { value: "ai/inference", label: "推理加速组" }',
+  '  ] }',
+  ']',
+  'nameStatus = cond(required($/name), "名称已就绪", "待填写名称")',
+  'rateHigh = cond(gt($/rate, 50), "高阈值 (>50)", "常规阈值 (<=50)")',
+  'root = Card(Column([',
+  '  Row([',
+  '    Text("### 组合深度实测 31：表单校验 · 控件默认值 · 弹窗联动 · 多选数组交叉筛选"),',
+  '    Badge(nameStatus, tone="info"),',
+  '    Badge(rateHigh, tone="warning")',
+  '  ], justify="spaceBetween"),',
+  '  Grid([',
+  '    Card(Column([',
+  '      TextField("服务名称（必填）", value=$/name, placeholder="输入非空白名称", ?required("服务名称不能为空")),',
+  '      TextField("限流配额 (0-100, 支持小数 1.05)", value=$/rate, variant="number", ?numeric(0, 100, "请输入 0-100 有效数字")),',
+  '      CheckBox("我已阅读并同意变更风险协议（必填）", value=$/agreed, ?required("必须勾选风险协议")),',
+  '      DateRange("变更窗口（起止必填）", start=$/startDate, end=$/endDate, enableTime=true, ?required("请选择完整时间窗口")),',
+  '      Row([',
+  '        Button(Text("校验提交表单"), variant="primary", action=Event("submit_v046_form", { name: $/name, rate: $/rate, agreed: $/agreed }), ?required($/name, "请填写服务名称"), ?required($/agreed, "请勾选风险协议"), ?numeric($/rate, 0, 100, "配额需为 0-100")),',
+  '        Modal(',
+  '          trigger=Button(Text("需先填名称才可打开 Modal"), variant="default", action=Event("open_gated_modal"), ?required($/name, "请先填写服务名称")),',
+  '          content=Column([',
+  '            Text("### 弹窗内 MultiSelect 折行 + TreeSelect 分支选择 + CopyText 不关弹窗 + 普通 Select"),',
+  '            MultiSelect("多选标签（选多项验证浮层不遮挡）", [{ value: "canary", label: "金丝雀发布" }, { value: "strict", label: "严格校验" }, { value: "audit", label: "合规审计" }, { value: "dr", label: "跨区容灾" }, { value: "zero-trust", label: "零信任鉴权" }, { value: "autoscaling", label: "自动弹性扩缩" }], $/modalTags),',
+  '            TreeSelect("归属团队（支持选中父节点）", $/treeNodes, $/modalTeam),',
+  '            Select("普通 Select（无搜索/无描述）", [{ value: "prod-hz", label: "杭州生产" }, { value: "prod-sh", label: "上海容灾" }, { value: "stg-bj", label: "北京预发" }], $/plainEnv),',
+  '            Row([',
+  '              Button(Text("复制凭证（不应关闭弹窗）"), variant="default", action=copyText("dsh_demo_token_2026")),',
+  '              Button(Text("确认并关闭弹窗"), variant="primary", action=Event("confirm_modal_v046", { tags: $/modalTags, team: $/modalTeam }))',
+  '            ])',
+  '          ])',
+  '        )',
+  '      ])',
+  '    ])),',
+  '    Card(Column([',
+  '      ChoicePicker("默认单选 ChoicePicker（省略 variant 应渲染单选 Radio）", options=[{ value: "std", label: "标准版" }, { value: "pro", label: "专业版" }, { value: "ent", label: "旗舰版" }], value=$/plan),',
+  '      Segmented("空值 Segmented（不应伪造首项高亮）", ["dev", "staging", "prod"], $/emptySeg),',
+  '      Row([',
+  '        NumberInput("空初始值副本数 (min=1)", $/replicas, min=1, max=32, unit="pods", weight=1),',
+  '        DateTimeInput($/alarmTime, label="纯时间选择 (enableTime=true)", enableTime=true, weight=1)',
+  '      ])',
+  '    ]))',
+  '  ], columns=2, gap="md"),',
+  '  Card(Column([',
+  '    Text("多选数组交叉筛选联动（MultiSelect ↔ Chart ↔ ProTable 共享 $/regions 数组）", variant="h4"),',
+  '    MultiSelect("筛选区域（支持多选 OR 联动）", [{ value: "us-east", label: "us-east" }, { value: "eu-west", label: "eu-west" }, { value: "ap-sg", label: "ap-sg" }], $/regions),',
+  '    Grid([',
+  '      Chart("bar", $/regionStats, title="区域 QPS（点击联动数组）", xField="region", yField="qps", selected=$/regions, height=190),',
+  '      Table($/regionRows, title="节点明细（OR 匹配多选区域）", filterField="region", filterValue=$/regions, columns=[{ key: "id", label: "ID" }, { key: "region", label: "区域" }, { key: "node", label: "节点" }, { key: "qps", label: "QPS", align: "center", sortable: true }, { key: "p99", label: "P99", align: "right", sortable: true }], showSummary=true)',
+  '    ], columns=2, gap="md")',
+  '  ]))',
+  ']))',
+].join('\n')
+
+export const SHOWCASE_COMBO_AUDIT_V046_CHARTS_MERMAID_UI = [
+  'surface("combo_v046_charts")',
+  '$/scSel = ""',
+  '$/calSel = ""',
+  '$/gaugeData = [{ value: 72, max: 100 }]',
+  '$/heatNumericY = [',
+  '  { day: "Mon", count: 42, hour: 9 }, { day: "Mon", count: 88, hour: 14 }, { day: "Mon", count: 31, hour: 20 },',
+  '  { day: "Tue", count: 29, hour: 9 }, { day: "Tue", count: 95, hour: 14 }, { day: "Tue", count: 54, hour: 20 },',
+  '  { day: "Wed", count: 61, hour: 9 }, { day: "Wed", count: 74, hour: 14 }, { day: "Wed", count: 48, hour: 20 }',
+  ']',
+  '$/scatterPts = [',
+  '  { svc: "Auth", latency: 18, qps: 420 },',
+  '  { svc: "Billing", latency: 84, qps: 210 },',
+  '  { svc: "Search", latency: 46, qps: 680 },',
+  '  { svc: "Gateway", latency: 12, qps: 940 }',
+  ']',
+  '$/calDays = [',
+  '  { date: "2026-11-01", count: 4 }, { date: "2026-11-01", count: 6 },',
+  '  { date: "2026-11-05", count: 14 }, { date: "2026-11-12", count: 22 },',
+  '  { date: "2026-11-18", count: 9 }, { date: "2026-11-21", count: 18 }',
+  ']',
+  '$/radarLong = [',
+  '  { dim: "吞吐", score: 92, model: "DeepSeek-V3" }, { dim: "延迟", score: 88, model: "DeepSeek-V3" }, { dim: "成本", score: 95, model: "DeepSeek-V3" }, { dim: "稳定", score: 91, model: "DeepSeek-V3" },',
+  '  { dim: "吞吐", score: 78, model: "DeepSeek-R1" }, { dim: "延迟", score: 72, model: "DeepSeek-R1" }, { dim: "成本", score: 84, model: "DeepSeek-R1" }, { dim: "稳定", score: 96, model: "DeepSeek-R1" }',
+  ']',
+  '$/waterfallNeg = [',
+  '  { item: "期初结余", delta: 40 },',
+  '  { item: "硬件折旧", delta: -65 },',
+  '  { item: "带宽支出", delta: -35 },',
+  '  { item: "回款冲抵", delta: 20 },',
+  '  { item: "净现金流", delta: -40, isTotal: true }',
+  ']',
+  '$/funnelWide = [',
+  '  { stage: "企业试用注册入口", count: 1000 },',
+  '  { stage: "完成 API Key 配置", count: 640 },',
+  '  { stage: "首周调用达标", count: 360 },',
+  '  { stage: "正式签约付费", count: 180 }',
+  ']',
+  '$/sankeyLong = [',
+  '  { source: "Onboarding Enterprise Pipeline", target: "Solution Architect Review", value: 142 },',
+  '  { source: "Solution Architect Review", target: "Production Cluster Rollout", value: 98 },',
+  '  { source: "Onboarding Enterprise Pipeline", target: "Self-Serve Sandbox Tier", value: 210 }',
+  ']',
+  '$/portraitMermaid = "flowchart TD\\n  A[\\"1. 边缘接入网关\\"] --> B[\\"2. 身份鉴权中心\\"]\\n  B --> C[\\"3. 速率限流引擎\\"]\\n  C --> D[\\"4. 推理路由调度\\"]\\n  D --> E[\\"5. 显存 KV 缓存池\\"]\\n  E --> F[\\"6. 账单计量落盘\\"]\\n  F --> G[\\"7. 审计日志归档\\"]\\n  G --> H[\\"8. 监控告警推送\\"]"',
+  '$/parenRepairMermaid = "flowchart LR\\n  A[用户 (管理员)] --> B[接口 (/v1/orders)]\\n  B --> C[风控 (高敏策略)]"',
+  '$/ganttLightMermaid = "gantt\\n  title Light Mode WCAG 对比度检测\\n  dateFormat YYYY-MM-DD\\n  section 发版\\n  已完成基线 :done, g1, 2026-11-18, 2d\\n  进行中压测 :active, g2, after g1, 2d\\n  待上线灰度 :g3, after g2, 2d"',
+  'root = Card(Column([',
+  '  Text("### 组合深度实测 32：Gauge/Heatmap数值Y/Scatter+Calendar联动/Radar分组/负值Waterfall/长Tooltip/Mermaid竖图全屏与括号修复"),',
+  '  Grid([',
+  '    Chart("gauge", $/gaugeData, title="CPU 使用率 (应为 72 而非 100)", height=210),',
+  '    Chart("heatmap", $/heatNumericY, title="Heatmap 数值 yField=hour (应显示 9/14/20)", xField="day", yField="hour", sizeField="count", height=210)',
+  '  ], columns=2, gap="md"),',
+  '  Grid([',
+  '    Chart("scatter", $/scatterPts, title="Scatter 点击联动（不应全部变暗）", xField="svc", yField="latency", sizeField="qps", selected=$/scSel, height=210),',
+  '    Chart("calendar", $/calDays, title="Calendar 重复日汇总与点击联动", xField="date", yField="count", selected=$/calSel, height=210)',
+  '  ], columns=2, gap="md"),',
+  '  Grid([',
+  '    Chart("radar", $/radarLong, title="Radar 长表 seriesField=model", xField="dim", yField="score", seriesField="model", height=220),',
+  '    Chart("waterfall", $/waterfallNeg, title="Waterfall 负合计标签不压轴", xField="item", yField="delta", height=220)',
+  '  ], columns=2, gap="md"),',
+  '  Grid([',
+  '    Chart("funnel", $/funnelWide, title="Funnel 窄卡标签防越界", xField="stage", yField="count", height=210),',
+  '    Chart("sankey", $/sankeyLong, title="Sankey 276px 长 Tooltip 防裁切", xField="source", seriesField="target", yField="value", height=210)',
+  '  ], columns=2, gap="md"),',
+  '  Grid([',
+  '    Mermaid($/portraitMermaid, title="竖版 Mermaid（全屏 Fit 点击 - 号缩放验证）"),',
+  '    Mermaid($/parenRepairMermaid, title="括号标签修复（用户 (管理员) 不应崩溃）")',
+  '  ], columns=2, gap="md"),',
+  '  Mermaid($/ganttLightMermaid, title="Mermaid Gantt（亮暗双主题任务对比度）")',
+  ']))',
+].join('\n')
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 function extractText(content) {
@@ -1628,6 +1880,9 @@ export function startMockLlmServer(port = PORT) {
       const isShowcase28 = /\bshowcase-28\b|combo-charts-audit/i.test(userText)
       const isShowcase29Dock = /\bshowcase-29-dock\b/i.test(userText)
       const isShowcase29 = !isShowcase29Dock && /\bshowcase-29\b|combo-dock-audit/i.test(userText)
+      const isShowcase30 = /\bshowcase-30\b|combo-v046-layout/i.test(userText)
+      const isShowcase31 = /\bshowcase-31\b|combo-v046-forms/i.test(userText)
+      const isShowcase32 = /\bshowcase-32\b|combo-v046-charts/i.test(userText)
       const isDashboard = /dashboard|看板/i.test(userText)
       const isAsk = /ask|向导|部署/i.test(userText)
       const isDock = /dock|工作台|监控/i.test(userText)
@@ -1843,6 +2098,27 @@ export function startMockLlmServer(port = PORT) {
           await streamToolCall(res, model, 'a2ui_render', {
             title: '全面组合实测 C：Accordion/3列Tracker/无标题Code/媒体混排',
             ui: SHOWCASE_COMBO_DOCK_FORMS_AUDIT_UI,
+          })
+          return
+        }
+        if (isShowcase30) {
+          await streamToolCall(res, model, 'a2ui_render', {
+            title: '深度组合审计 30：Flex塌陷/3列Grid断点/跨夜Schedule/104行Diff',
+            ui: SHOWCASE_COMBO_AUDIT_V046_LAYOUT_UI,
+          })
+          return
+        }
+        if (isShowcase31) {
+          await streamToolCall(res, model, 'a2ui_render', {
+            title: '深度组合审计 31：表单校验/默认值/弹窗浮层/多选数组交叉筛选',
+            ui: SHOWCASE_COMBO_AUDIT_V046_FORMS_OVERLAYS_UI,
+          })
+          return
+        }
+        if (isShowcase32) {
+          await streamToolCall(res, model, 'a2ui_render', {
+            title: '深度组合审计 32：19类图表边界与联动 + Mermaid 全屏缩放与括号修复',
+            ui: SHOWCASE_COMBO_AUDIT_V046_CHARTS_MERMAID_UI,
           })
           return
         }

@@ -56,10 +56,14 @@ import {
   computeDropdownSide,
   defineComponent,
   InsideButtonContext,
+  isLocalFunctionAction,
   ModalCloseContext,
+  ModalOpenContext,
   ModalTriggerContext,
   NativeDateField,
   renderChildRef,
+  runSurfaceAction,
+  SurfaceActionStatusContext,
   SurfaceReadOnlyContext,
   SurfaceValidationContext,
   weightStyle,
@@ -68,20 +72,24 @@ import {
 export function DshButtonView({
   props,
   buildChild,
+  context,
 }: {
   props: {
     child?: ChildRef
     variant?: 'default' | 'primary' | 'borderless'
-    action?: ((options?: ActionDispatchOptions) => Promise<void>) | undefined
+    action?: ((options?: ActionDispatchOptions) => unknown) | undefined
     isValid?: boolean
     validationErrors?: readonly string[]
     weight?: number
   }
   buildChild: (id: string, basePath?: string) => ReactNode
+  context?: unknown
 }) {
   const readOnly = useContext(SurfaceReadOnlyContext)
   const closeModal = useContext(ModalCloseContext)
+  const openModal = useContext(ModalOpenContext)
   const isModalTrigger = useContext(ModalTriggerContext)
+  const getActionStatus = useContext(SurfaceActionStatusContext)
   const { markSubmitAttempted } = useContext(SurfaceValidationContext)
 
   const variant: ButtonVariant =
@@ -94,6 +102,7 @@ export function DshButtonView({
 
   const btn = (
     <DshButton
+      data-a2ui-button=""
       variant={variant}
       disabled={hardDisabled}
       aria-disabled={softInvalidDisabled || undefined}
@@ -101,17 +110,49 @@ export function DshButtonView({
         ...weightStyle(props.weight),
         ...(softInvalidDisabled ? { opacity: 0.52, cursor: 'not-allowed' } : undefined),
       }}
-      onClickCapture={softInvalidDisabled ? () => markSubmitAttempted() : undefined}
-      onClick={() => {
-        if (hardDisabled) return
+      onClickCapture={
+        softInvalidDisabled
+          ? (e) => {
+              e?.preventDefault?.()
+              e?.stopPropagation?.()
+              markSubmitAttempted()
+            }
+          : undefined
+      }
+      onClick={(e) => {
+        if (hardDisabled) {
+          e?.preventDefault?.()
+          e?.stopPropagation?.()
+          return
+        }
         if (softInvalidDisabled) {
+          e?.preventDefault?.()
+          e?.stopPropagation?.()
           markSubmitAttempted()
+          return
+        }
+        if (isModalTrigger) {
+          e?.stopPropagation?.()
+          openModal?.()
           return
         }
         if (props.action) {
           markSubmitAttempted()
-          void props.action()
-          closeModal?.()
+          const localFn = isLocalFunctionAction(context)
+          const actionFn = props.action
+          if (getActionStatus === null) {
+            try {
+              const res = actionFn()
+              if (res && typeof (res as PromiseLike<unknown>).then === 'function') {
+                void Promise.resolve(res).catch(() => {})
+              }
+              if (!localFn && res !== false) closeModal?.()
+            } catch {}
+            return
+          }
+          void runSurfaceAction(() => actionFn(), getActionStatus).then((ok) => {
+            if (!localFn && ok) closeModal?.()
+          })
         }
       }}
     >
@@ -127,7 +168,7 @@ export function DshButtonView({
 export const DshButtonImpl = defineComponent<{
   child?: ChildRef
   variant?: 'default' | 'primary' | 'borderless'
-  action?: ((options?: ActionDispatchOptions) => Promise<void>) | undefined
+  action?: ((options?: ActionDispatchOptions) => unknown) | undefined
   isValid?: boolean
   validationErrors?: readonly string[]
   weight?: number
@@ -151,15 +192,33 @@ export function DshTextFieldView({
   const readOnly = useContext(SurfaceReadOnlyContext)
   const { submitAttempted } = useContext(SurfaceValidationContext)
   const [touched, setTouched] = useState(false)
+  const [focused, setFocused] = useState(false)
 
   const label = props.label ? String(props.label) : ''
   const val = props.value === undefined || props.value === null ? '' : String(props.value)
+  const [draft, setDraft] = useState(val)
+  const [prevVal, setPrevVal] = useState(val)
+  if (val !== prevVal) {
+    setPrevVal(val)
+    if (props.variant === 'number' && focused) {
+      const trimmedDraft = draft.trim()
+      const parsedDraft = trimmedDraft === '' ? Number.NaN : Number(trimmedDraft)
+      const parsedVal = val.trim() === '' ? Number.NaN : Number(val.trim())
+      const sameNumeric =
+        Number.isFinite(parsedDraft) && Number.isFinite(parsedVal) && parsedDraft === parsedVal
+      if (!sameNumeric && trimmedDraft !== val) {
+        setDraft(val)
+      }
+    } else {
+      setDraft(val)
+    }
+  }
   const placeholder = props.placeholder ? String(props.placeholder) : undefined
   const showError = !readOnly && (touched || submitAttempted) && props.isValid === false
   const err = showError ? props.validationErrors?.[0] : undefined
 
-  const inputType =
-    props.variant === 'number' ? 'number' : props.variant === 'obscured' ? 'password' : 'text'
+  const isNumber = props.variant === 'number'
+  const inputType = isNumber ? 'number' : props.variant === 'obscured' ? 'password' : 'text'
 
   return (
     <div className={css.field} style={weightStyle(props.weight, 160)}>
@@ -186,18 +245,7 @@ export function DshTextFieldView({
           onBlur={() => setTouched(true)}
           onChange={(e) => {
             if (readOnly) return
-            const raw = e.target.value
-            if (props.variant === 'number') {
-              const trimmed = raw.trim()
-              if (trimmed === '') {
-                props.setValue?.('')
-                return
-              }
-              const parsed = Number(trimmed)
-              props.setValue?.((Number.isFinite(parsed) ? parsed : raw) as unknown as string)
-              return
-            }
-            props.setValue?.(raw)
+            props.setValue?.(e.target.value)
           }}
         />
       ) : (
@@ -205,18 +253,29 @@ export function DshTextFieldView({
           id={fieldId}
           type={inputType}
           autoComplete="off"
-          value={val}
+          value={isNumber && focused ? draft : val}
           placeholder={placeholder}
           disabled={readOnly}
           aria-invalid={showError || undefined}
-          onBlur={() => setTouched(true)}
+          onFocus={() => {
+            setFocused(true)
+            setDraft(val)
+          }}
+          onBlur={() => {
+            setFocused(false)
+            setTouched(true)
+          }}
           onChange={(e) => {
             if (readOnly) return
             const raw = e.target.value
-            if (props.variant === 'number') {
+            if (isNumber) {
+              setDraft(raw)
               const trimmed = raw.trim()
               if (trimmed === '') {
                 props.setValue?.('')
+                return
+              }
+              if (trimmed === '-' || trimmed === '.' || trimmed === '-.') {
                 return
               }
               const parsed = Number(trimmed)
@@ -333,7 +392,7 @@ export const DshChoicePickerImpl = defineComponent<{
     )
   }, [options, props.filterable, deferredQuery])
 
-  const isSingle = props.variant === 'mutuallyExclusive'
+  const isSingle = props.variant !== 'multipleSelection'
   const showError = !readOnly && (touched || submitAttempted) && props.isValid === false
   const err = showError ? props.validationErrors?.[0] : undefined
   const label = props.label ? String(props.label) : ''
@@ -496,8 +555,8 @@ export const DshDateTimeInputImpl = defineComponent<{
   const readOnly = useContext(SurfaceReadOnlyContext)
   const { submitAttempted } = useContext(SurfaceValidationContext)
   const [touched, setTouched] = useState(false)
-  const enableDate = props.enableDate !== false
   const enableTime = Boolean(props.enableTime)
+  const enableDate = props.enableDate === true || (props.enableDate !== false && !enableTime)
   const type = enableDate && enableTime ? 'datetime-local' : enableTime ? 'time' : 'date'
   const normalizedVal = formatNativeTemporalValue(props.value, type)
   const normalizedMin =
@@ -649,6 +708,7 @@ export function DshSelectView({
 
   const closePopover = useCallback(() => {
     setOpen(false)
+    setQuery('')
     setTouched(true)
   }, [])
 
@@ -712,6 +772,15 @@ export function DshSelectView({
     </button>
   )
 
+  const resolvedPopoverBox =
+    popoverBox ??
+    (effectiveOpen && useCustomPopover && triggerRef.current
+      ? computeClampedPopoverBox(triggerRef.current.getBoundingClientRect(), {
+          minWidth: 180,
+          estHeight: Math.min(280, options.length * 40 + (searchable ? 52 : 12)),
+        })
+      : null)
+
   return (
     <div className={css.field} style={weightStyle(props.weight, 160)} data-a2ui-select="">
       {label || err ? (
@@ -730,21 +799,28 @@ export function DshSelectView({
       {useCustomPopover ? (
         <>
           {triggerButton}
-          {effectiveOpen && popoverBox && typeof document !== 'undefined'
+          {effectiveOpen && resolvedPopoverBox && typeof document !== 'undefined'
             ? createPortal(
-                <div role="presentation" className={css.selectBackdrop} onClick={closePopover}>
+                <div
+                  role="presentation"
+                  className={css.selectBackdrop}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    closePopover()
+                  }}
+                >
                   <div
                     ref={popoverRef}
                     role="listbox"
                     aria-label={label || placeholder}
                     className={css.selectPopover}
                     style={{
-                      ...(popoverBox.placeAbove
-                        ? { bottom: popoverBox.bottom }
-                        : { top: popoverBox.top }),
-                      left: popoverBox.left,
-                      width: popoverBox.width,
-                      maxHeight: popoverBox.maxHeight,
+                      ...(resolvedPopoverBox.placeAbove
+                        ? { bottom: resolvedPopoverBox.bottom }
+                        : { top: resolvedPopoverBox.top }),
+                      left: resolvedPopoverBox.left,
+                      width: resolvedPopoverBox.width,
+                      maxHeight: resolvedPopoverBox.maxHeight,
                     }}
                     onClick={(e) => e.stopPropagation()}
                     onKeyDown={(e) => handleListboxArrowKey(e, popoverRef.current)}
@@ -851,8 +927,7 @@ export function DshSegmentedView({
     [options],
   )
   const rawVal = props.value === undefined || props.value === null ? '' : String(props.value)
-  const activeVal =
-    options.some((opt) => opt.value === rawVal) || options.length === 0 ? rawVal : options[0]!.value
+  const activeVal = options.some((opt) => opt.value === rawVal) ? rawVal : ''
 
   const label = props.label ? String(props.label) : ''
   const showError = !readOnly && (touched || submitAttempted) && props.isValid === false

@@ -22,6 +22,7 @@ import {
 } from '../chunk-loader.ts'
 import {
   type PendingMermaidZoomAnchor,
+  useDialogFocus,
   useMermaidViewportDom,
   useTransientFlag,
 } from '../dom-hooks.ts'
@@ -123,16 +124,29 @@ export const DshAccordionImpl = defineComponent<{
 
   if (prevDefaultSig !== defaultOpenSig) {
     setPrevDefaultSig(defaultOpenSig)
-    const nextOpen = new Set(openSet)
+    const nextOpen = new Set<number>()
+    for (const idx of openSet) {
+      if (idx >= 0 && idx < items.length) nextOpen.add(idx)
+    }
     items.forEach((item, idx) => {
       const wasOpen = prevDefaultSig[idx] === '1'
       const nowOpen = resolveItemDefaultOpen(item)
       if (!wasOpen && nowOpen) {
         if (!multiple) nextOpen.clear()
         nextOpen.add(idx)
+      } else if (wasOpen && !nowOpen) {
+        nextOpen.delete(idx)
       }
     })
     setOpenSet(nextOpen)
+    const prunedVisited = new Set<number>()
+    for (const idx of visitedSet) {
+      if (idx >= 0 && idx < items.length) prunedVisited.add(idx)
+    }
+    for (const idx of nextOpen) prunedVisited.add(idx)
+    if (prunedVisited.size !== visitedSet.size) {
+      setVisitedSet(prunedVisited)
+    }
   }
 
   let hasUnvisitedOpen = false
@@ -552,12 +566,14 @@ export function DshMermaidView({ props }: { props: MermaidWidgetProps }) {
   const activeFullscreen = fullscreen && !readOnly
 
   const hostRef = useRef<HTMLDivElement | null>(null)
+  const dialogCardRef = useRef<HTMLDivElement | null>(null)
   const inlineViewportRef = useRef<HTMLDivElement | null>(null)
   const inlineStageRef = useRef<HTMLDivElement | null>(null)
   const dialogViewportRef = useRef<HTMLDivElement | null>(null)
   const dialogStageRef = useRef<HTMLDivElement | null>(null)
   const pendingAnchorRef = useRef<PendingMermaidZoomAnchor | null>(null)
   const dragCleanupRef = useRef<(() => void) | null>(null)
+  useDialogFocus(activeFullscreen, dialogCardRef)
 
   const subscribeDiagram = useCallback(
     (listener: () => void) => subscribeMermaidDiagram(code, dark, () => hostRef.current, listener),
@@ -629,9 +645,21 @@ export function DshMermaidView({ props }: { props: MermaidWidgetProps }) {
       }
       if (curMode === 'fit') {
         const svgEl = stage.querySelector('svg')
-        const renderedWidth = svgEl ? svgEl.getBoundingClientRect().width : 0
-        if (renderedWidth > 0 && preparedSvg.width > 0) {
-          setFit(clampMermaidZoom((renderedWidth / preparedSvg.width) * 100))
+        const rect = svgEl ? svgEl.getBoundingClientRect() : null
+        if (
+          rect &&
+          rect.width > 0 &&
+          rect.height > 0 &&
+          preparedSvg.width > 0 &&
+          preparedSvg.height > 0
+        ) {
+          const fitScale = Math.min(
+            rect.width / preparedSvg.width,
+            rect.height / preparedSvg.height,
+          )
+          if (Number.isFinite(fitScale) && fitScale > 0) {
+            setFit(clampMermaidZoom(fitScale * 100))
+          }
         }
       }
       const overflows =
@@ -651,16 +679,32 @@ export function DshMermaidView({ props }: { props: MermaidWidgetProps }) {
       if (viewport && targetEl) {
         const vpRect = viewport.getBoundingClientRect()
         const targetRect = targetEl.getBoundingClientRect()
+        let contentLeft = targetRect.left
+        let contentTop = targetRect.top
+        let contentW = targetRect.width
+        let contentH = targetRect.height
+        if (
+          preparedSvg &&
+          preparedSvg.width > 0 &&
+          preparedSvg.height > 0 &&
+          targetRect.width > 0 &&
+          targetRect.height > 0
+        ) {
+          const scale = Math.min(
+            targetRect.width / preparedSvg.width,
+            targetRect.height / preparedSvg.height,
+          )
+          const paintedW = preparedSvg.width * scale
+          const paintedH = preparedSvg.height * scale
+          contentLeft = targetRect.left + (targetRect.width - paintedW) / 2
+          contentTop = targetRect.top + (targetRect.height - paintedH) / 2
+          contentW = paintedW
+          contentH = paintedH
+        }
         const px = clientX ?? vpRect.left + viewport.clientWidth / 2
         const py = clientY ?? vpRect.top + viewport.clientHeight / 2
-        const relX =
-          targetRect.width > 0
-            ? Math.max(0, Math.min(1, (px - targetRect.left) / targetRect.width))
-            : 0.5
-        const relY =
-          targetRect.height > 0
-            ? Math.max(0, Math.min(1, (py - targetRect.top) / targetRect.height))
-            : 0.5
+        const relX = contentW > 0 ? Math.max(0, Math.min(1, (px - contentLeft) / contentW)) : 0.5
+        const relY = contentH > 0 ? Math.max(0, Math.min(1, (py - contentTop) / contentH)) : 0.5
         pendingAnchorRef.current = {
           inDialog,
           relX,
@@ -677,7 +721,7 @@ export function DshMermaidView({ props }: { props: MermaidWidgetProps }) {
         setInlineManualPct(clamped)
       }
     },
-    [],
+    [preparedSvg],
   )
 
   const showSourceFallback = viewMode === 'source' || (preparedSvg === null && renderError !== null)
@@ -1027,9 +1071,17 @@ export function DshMermaidView({ props }: { props: MermaidWidgetProps }) {
               aria-label={displayTitle}
               className={css.mermaidFullscreenMask}
               data-a2ui-mermaid-dialog=""
-              onClick={handleCloseFullscreen}
+              onClick={(e) => {
+                e.stopPropagation()
+                handleCloseFullscreen()
+              }}
             >
-              <div className={css.mermaidFullscreenCard} onClick={(e) => e.stopPropagation()}>
+              <div
+                ref={dialogCardRef}
+                tabIndex={-1}
+                className={css.mermaidFullscreenCard}
+                onClick={(e) => e.stopPropagation()}
+              >
                 {renderToolbar(true)}
                 {renderDiagramBody(true)}
                 {caption ? <div className={css.mermaidCaption}>{caption}</div> : null}

@@ -80,7 +80,7 @@ export interface ChartOptionInput {
   readonly horizontal?: boolean | undefined
   readonly zoom?: boolean | undefined
   readonly height?: number | undefined
-  readonly selected?: string | undefined
+  readonly selected?: string | readonly string[] | undefined
 }
 
 export function initChartInstance(el: HTMLElement): EChartsInstance {
@@ -691,9 +691,28 @@ function buildLegendOption(opts: {
   }
 }
 
+function normalizeSelectedQueries(rawSelected: string | readonly string[] | undefined): string[] {
+  if (Array.isArray(rawSelected)) {
+    const out: string[] = []
+    const seen = new Set<string>()
+    for (const item of rawSelected) {
+      const q = String(item ?? '')
+        .trim()
+        .toLowerCase()
+      if (q !== '' && !seen.has(q)) {
+        seen.add(q)
+        out.push(q)
+      }
+    }
+    return out
+  }
+  const q = typeof rawSelected === 'string' ? rawSelected.trim().toLowerCase() : ''
+  return q === '' ? [] : [q]
+}
+
 function applyHierarchyCrossFilter(
   nodes: readonly unknown[],
-  q: string,
+  queries: readonly string[],
   exactOnly: boolean,
   highlightBorder: string,
 ): { readonly nodes: unknown[]; readonly matched: boolean } {
@@ -702,11 +721,11 @@ function applyHierarchyCrossFilter(
     if (typeof item !== 'object' || item === null) return item
     const rec = item as Record<string, unknown>
     const nameNorm = sanitizeChartLabel(rec.name).trim().toLowerCase()
-    const selfMatch = exactOnly
-      ? nameNorm === q
-      : nameNorm === q || (nameNorm !== '' && nameNorm.includes(q))
+    const selfMatch = queries.some((q) =>
+      exactOnly ? nameNorm === q : nameNorm === q || (nameNorm !== '' && nameNorm.includes(q)),
+    )
     const childRes = Array.isArray(rec.children)
-      ? applyHierarchyCrossFilter(rec.children, q, exactOnly, highlightBorder)
+      ? applyHierarchyCrossFilter(rec.children, queries, exactOnly, highlightBorder)
       : null
     const isMatch = selfMatch || Boolean(childRes?.matched)
     if (isMatch) anyMatched = true
@@ -727,23 +746,24 @@ function applyHierarchyCrossFilter(
   return { nodes: mapped, matched: anyMatched }
 }
 
-function hasExactHierarchyMatch(nodes: readonly unknown[], q: string): boolean {
+function hasExactHierarchyMatch(nodes: readonly unknown[], queries: readonly string[]): boolean {
   for (const item of nodes) {
     if (typeof item !== 'object' || item === null) continue
     const rec = item as Record<string, unknown>
-    if (sanitizeChartLabel(rec.name).trim().toLowerCase() === q) return true
-    if (Array.isArray(rec.children) && hasExactHierarchyMatch(rec.children, q)) return true
+    const nameNorm = sanitizeChartLabel(rec.name).trim().toLowerCase()
+    if (queries.includes(nameNorm)) return true
+    if (Array.isArray(rec.children) && hasExactHierarchyMatch(rec.children, queries)) return true
   }
   return false
 }
 
 function applyCrossFilterSelection(
   option: echarts.EChartsCoreOption,
-  rawSelected: string | undefined,
+  rawSelected: string | readonly string[] | undefined,
   dark: boolean,
 ): echarts.EChartsCoreOption {
-  const q = (rawSelected ?? '').trim().toLowerCase()
-  if (q === '' || typeof option !== 'object' || option === null) return option
+  const queries = normalizeSelectedQueries(rawSelected)
+  if (queries.length === 0 || typeof option !== 'object' || option === null) return option
 
   const opt = option as Record<string, unknown>
   if (!Array.isArray(opt.series)) return option
@@ -755,14 +775,14 @@ function applyCrossFilterSelection(
     if (typeof s !== 'object' || s === null) return s
     const type = String(s.type ?? '')
     const seriesNameNorm = sanitizeChartLabel(s.name).trim().toLowerCase()
-    const seriesMatched = seriesNameNorm !== '' && seriesNameNorm === q
+    const seriesMatched = seriesNameNorm !== '' && queries.includes(seriesNameNorm)
 
     if (
       (type === 'pie' || type === 'funnel' || type === 'treemap' || type === 'sunburst') &&
       Array.isArray(s.data)
     ) {
-      const exactOnly = hasExactHierarchyMatch(s.data, q)
-      const res = applyHierarchyCrossFilter(s.data, q, exactOnly, highlightBorder)
+      const exactOnly = hasExactHierarchyMatch(s.data, queries)
+      const res = applyHierarchyCrossFilter(s.data, queries, exactOnly, highlightBorder)
       return { ...s, data: res.nodes }
     }
 
@@ -780,15 +800,17 @@ function applyCrossFilterSelection(
           .replace(/\s*->\s*/g, ' -> ')
           .trim()
           .toLowerCase()
-      const qNorm = norm(q)
-      const hasExactCat = categories.some((c) => norm(c) === qNorm)
+      const qNorms = queries.map(norm)
+      const hasExactCat = categories.some((c) => qNorms.includes(norm(c)))
       let anyPointMatched = false
       const nextData = (s.data as unknown[]).map((pt, idx) => {
         const cat = categories[idx] ?? ''
         const catNorm = norm(cat)
-        const catMatch = hasExactCat
-          ? catNorm === qNorm
-          : catNorm === qNorm || (catNorm !== '' && catNorm.includes(qNorm))
+        const catMatch = qNorms.some((qNorm) =>
+          hasExactCat
+            ? catNorm === qNorm
+            : catNorm === qNorm || (catNorm !== '' && catNorm.includes(qNorm)),
+        )
         const isMatch = seriesMatched || catMatch
         if (isMatch) anyPointMatched = true
         if (typeof pt === 'object' && pt !== null && !Array.isArray(pt)) {
@@ -841,23 +863,30 @@ function applyCrossFilterSelection(
     }
 
     if ((type === 'sankey' || type === 'graph') && Array.isArray(s.data)) {
-      const hasExactNode = (s.data as unknown[]).some(
-        (node) =>
-          typeof node === 'object' &&
-          node !== null &&
-          sanitizeChartLabel((node as Record<string, unknown>).name)
-            .trim()
-            .toLowerCase() === q,
-      )
-      const matchedNodeNames = new Set<string>()
+      const hasExactNode = (s.data as unknown[]).some((node) => {
+        if (typeof node !== 'object' || node === null) return false
+        const rec = node as Record<string, unknown>
+        const nameNorm = sanitizeChartLabel(rec.name).trim().toLowerCase()
+        const idNorm = sanitizeChartLabel(rec.id).trim().toLowerCase()
+        return queries.includes(nameNorm) || (idNorm !== '' && queries.includes(idNorm))
+      })
+      const matchedNodeKeys = new Set<string>()
       const nextNodes = (s.data as unknown[]).map((node) => {
         if (typeof node !== 'object' || node === null) return node
         const rec = node as Record<string, unknown>
         const nameNorm = sanitizeChartLabel(rec.name).trim().toLowerCase()
-        const isMatch = hasExactNode
-          ? nameNorm === q
-          : nameNorm === q || (nameNorm !== '' && nameNorm.includes(q))
-        if (isMatch) matchedNodeNames.add(nameNorm)
+        const idNorm = sanitizeChartLabel(rec.id).trim().toLowerCase()
+        const isMatch = queries.some((q) =>
+          hasExactNode
+            ? nameNorm === q || (idNorm !== '' && idNorm === q)
+            : nameNorm === q ||
+              (nameNorm !== '' && nameNorm.includes(q)) ||
+              (idNorm !== '' && (idNorm === q || idNorm.includes(q))),
+        )
+        if (isMatch) {
+          if (nameNorm) matchedNodeKeys.add(nameNorm)
+          if (idNorm) matchedNodeKeys.add(idNorm)
+        }
         const prevStyle =
           typeof rec.itemStyle === 'object' && rec.itemStyle !== null
             ? (rec.itemStyle as Record<string, unknown>)
@@ -876,7 +905,7 @@ function applyCrossFilterSelection(
             const rec = lk as Record<string, unknown>
             const src = sanitizeChartLabel(rec.source).trim().toLowerCase()
             const tgt = sanitizeChartLabel(rec.target).trim().toLowerCase()
-            const linkMatch = matchedNodeNames.has(src) || matchedNodeNames.has(tgt)
+            const linkMatch = matchedNodeKeys.has(src) || matchedNodeKeys.has(tgt)
             const prevLine =
               typeof rec.lineStyle === 'object' && rec.lineStyle !== null
                 ? (rec.lineStyle as Record<string, unknown>)
@@ -896,12 +925,20 @@ function applyCrossFilterSelection(
           const rec = pt as Record<string, unknown>
           const nameNorm = sanitizeChartLabel(rec.name).trim().toLowerCase()
           const isMatch =
-            seriesMatched || nameNorm === q || (nameNorm !== '' && nameNorm.includes(q))
+            seriesMatched ||
+            queries.some((q) => nameNorm === q || (nameNorm !== '' && nameNorm.includes(q)))
           const prevStyle =
             typeof rec.itemStyle === 'object' && rec.itemStyle !== null
               ? (rec.itemStyle as Record<string, unknown>)
               : {}
-          return { ...rec, itemStyle: { ...prevStyle, opacity: isMatch ? 1 : 0.25 } }
+          return {
+            ...rec,
+            itemStyle: {
+              ...prevStyle,
+              opacity: isMatch ? 1 : 0.25,
+              ...(isMatch ? { borderColor: highlightBorder, borderWidth: 1.5 } : {}),
+            },
+          }
         }
         return { value: pt, itemStyle: { opacity: seriesMatched ? 1 : 0.25 } }
       })
@@ -910,17 +947,64 @@ function applyCrossFilterSelection(
 
     if (type === 'heatmap' && Array.isArray(s.data)) {
       const nextData = (s.data as unknown[]).map((pt) => {
+        if (Array.isArray(pt) && typeof pt[0] === 'string') {
+          const nameNorm = sanitizeChartLabel(pt[0]).trim().toLowerCase()
+          const isMatch = queries.some(
+            (q) => nameNorm === q || (nameNorm !== '' && nameNorm.includes(q)),
+          )
+          return {
+            value: pt,
+            itemStyle: {
+              opacity: isMatch ? 1 : 0.28,
+              ...(isMatch ? { borderColor: highlightBorder, borderWidth: 1.5 } : {}),
+            },
+          }
+        }
         if (typeof pt === 'object' && pt !== null && !Array.isArray(pt)) {
           const rec = pt as Record<string, unknown>
           const nameNorm = sanitizeChartLabel(rec.name).trim().toLowerCase()
-          const isMatch = nameNorm === q || (nameNorm !== '' && nameNorm.includes(q))
+          const isMatch = queries.some(
+            (q) => nameNorm === q || (nameNorm !== '' && nameNorm.includes(q)),
+          )
           const prevStyle =
             typeof rec.itemStyle === 'object' && rec.itemStyle !== null
               ? (rec.itemStyle as Record<string, unknown>)
               : {}
-          return { ...rec, itemStyle: { ...prevStyle, opacity: isMatch ? 1 : 0.28 } }
+          return {
+            ...rec,
+            itemStyle: {
+              ...prevStyle,
+              opacity: isMatch ? 1 : 0.28,
+              ...(isMatch ? { borderColor: highlightBorder, borderWidth: 1.5 } : {}),
+            },
+          }
         }
         return pt
+      })
+      return { ...s, data: nextData }
+    }
+
+    if (type === 'radar' && Array.isArray(s.data)) {
+      const nextData = (s.data as unknown[]).map((pt) => {
+        if (typeof pt !== 'object' || pt === null) return pt
+        const rec = pt as Record<string, unknown>
+        const nameNorm = sanitizeChartLabel(rec.name).trim().toLowerCase()
+        const isMatch = queries.some(
+          (q) => nameNorm === q || (nameNorm !== '' && nameNorm.includes(q)),
+        )
+        const prevLine =
+          typeof rec.lineStyle === 'object' && rec.lineStyle !== null
+            ? (rec.lineStyle as Record<string, unknown>)
+            : {}
+        const prevArea =
+          typeof rec.areaStyle === 'object' && rec.areaStyle !== null
+            ? (rec.areaStyle as Record<string, unknown>)
+            : {}
+        return {
+          ...rec,
+          lineStyle: { ...prevLine, opacity: isMatch ? 1 : 0.22, width: isMatch ? 2.4 : 1.2 },
+          areaStyle: { ...prevArea, opacity: isMatch ? (dark ? 0.24 : 0.2) : 0.04 },
+        }
       })
       return { ...s, data: nextData }
     }
@@ -1003,13 +1087,19 @@ function buildChartOptionInternal(
   const primaryY = yKeys[0] ?? 'value'
   const isCompact = containerWidth !== undefined && containerWidth > 0 && containerWidth < 400
 
+  const tooltipMaxW = isCompact ? Math.max(150, Math.min(220, (containerWidth ?? 276) - 36)) : 320
   const baseTooltip = {
     renderMode: 'richText' as const,
     confine: true,
     backgroundColor: theme.tooltipBg,
     borderColor: theme.border,
     padding: isCompact ? [5, 8] : [6, 10],
-    textStyle: { color: theme.textPrimary, fontSize: isCompact ? 11 : 12 },
+    textStyle: {
+      color: theme.textPrimary,
+      fontSize: isCompact ? 10.5 : 12,
+      width: tooltipMaxW,
+      overflow: 'break' as const,
+    },
   }
 
   if (props.kind === 'pie' || props.kind === 'funnel') {
@@ -1077,19 +1167,26 @@ function buildChartOptionInternal(
               type: 'funnel',
               top: 10,
               bottom: isCompact ? 36 : 38,
-              left: isCompact ? '6%' : '12%',
-              width: isCompact ? '88%' : '76%',
-              minSize: isCompact ? '32%' : '14%',
+              left: isCompact ? '6%' : '15%',
+              width: isCompact ? '88%' : '70%',
+              minSize: isCompact ? '32%' : '18%',
               labelLayout: { hideOverlap: true },
-              label: isCompact
-                ? {
-                    position: 'inside',
-                    ...FILLED_SHAPE_LABEL,
-                    fontSize: 10,
-                    overflow: 'truncate',
-                    width: 112,
-                  }
-                : { color: theme.textPrimary, fontSize: 11.5 },
+              label:
+                isCompact ||
+                (containerWidth !== undefined && containerWidth > 0 && containerWidth < 460)
+                  ? {
+                      position: 'inside',
+                      ...FILLED_SHAPE_LABEL,
+                      fontSize: isCompact ? 10 : 11,
+                      overflow: 'truncate',
+                      width: isCompact ? 112 : 140,
+                    }
+                  : {
+                      color: theme.textPrimary,
+                      fontSize: 11.5,
+                      overflow: 'truncate',
+                      width: 96,
+                    },
               data: items,
             },
       ],
@@ -1097,12 +1194,42 @@ function buildChartOptionInternal(
   }
 
   if (props.kind === 'gauge') {
-    const first = rows[0] ?? {}
-    const val = toNumber(first[primaryY] ?? first.value ?? 0)
+    const first =
+      rows[0] ??
+      (typeof props.data === 'object' && props.data !== null && !Array.isArray(props.data)
+        ? (props.data as Record<string, unknown>)
+        : {})
+    const firstKeys = Object.keys(first)
+    const explicitGaugeY =
+      typeof props.yField === 'string' && props.yField !== '' ? props.yField : undefined
+    const gaugeValKey =
+      explicitGaugeY ??
+      (first.value !== undefined
+        ? 'value'
+        : first.score !== undefined
+          ? 'score'
+          : first.percent !== undefined
+            ? 'percent'
+            : (firstKeys.find(
+                (k) => k !== 'max' && k !== 'target' && typeof first[k] === 'number',
+              ) ?? primaryY))
+    const val = toNumber(first[gaugeValKey] ?? first.value ?? 0)
     const rawMax = first.max ?? first.target
     const parsedMax = rawMax !== undefined ? toNumber(rawMax) : 100
     const gaugeMax = parsedMax > 0 ? Math.max(parsedMax, val) : 100
-    const name = sanitizeChartLabel(first[xKey] ?? first.name ?? props.title ?? '')
+    const gaugeLabelKey =
+      props.xField ??
+      (typeof first.name === 'string'
+        ? 'name'
+        : typeof first.label === 'string'
+          ? 'label'
+          : firstKeys.find(
+              (k) =>
+                k !== gaugeValKey && k !== 'max' && k !== 'target' && typeof first[k] === 'string',
+            ))
+    const name = gaugeLabelKey
+      ? sanitizeChartLabel(first[gaugeLabelKey])
+      : sanitizeChartLabel(props.title ?? '')
     const arcWidth = isCompact ? 9 : 12
     const estGaugeW = containerWidth !== undefined && containerWidth > 0 ? containerWidth : 480
     return {
@@ -1143,19 +1270,42 @@ function buildChartOptionInternal(
   }
 
   if (props.kind === 'radar') {
-    const rawRadarMax = Math.max(0, ...rows.flatMap((r) => yKeys.map((k) => toNumber(r[k]))))
+    const groupField = props.seriesField
+    const radarAxes = groupField
+      ? [...new Set(rows.map((r) => sanitizeChartLabel(r[xKey])))]
+      : rows.map((r) => sanitizeChartLabel(r[xKey]))
+    const radarSeriesItems: Array<{ name: string; value: number[] }> = groupField
+      ? (() => {
+          const groups = [...new Set(rows.map((r) => sanitizeChartLabel(r[groupField])))]
+          const map = new Map<string, number>()
+          for (const r of rows) {
+            const g = sanitizeChartLabel(r[groupField])
+            const ax = sanitizeChartLabel(r[xKey])
+            map.set(`${g}\u0000${ax}`, toNumber(r[primaryY]))
+          }
+          return groups.map((g) => ({
+            name: g,
+            value: radarAxes.map((ax) => map.get(`${g}\u0000${ax}`) ?? 0),
+          }))
+        })()
+      : yKeys.map((k) => ({
+          name: sanitizeChartLabel(k),
+          value: rows.map((r) => toNumber(r[k])),
+        }))
+    const rawRadarMax = Math.max(0, ...radarSeriesItems.flatMap((item) => item.value))
     const radarCeiling =
       rawRadarMax > 0
         ? rawRadarMax <= 10
           ? Math.ceil(rawRadarMax * 1.15 * 100) / 100
           : Math.ceil(rawRadarMax * 1.15)
         : 100
-    const indicator = rows.map((r) => ({
-      name: sanitizeChartLabel(r[xKey]),
+    const indicator = radarAxes.map((axName) => ({
+      name: axName,
       max: radarCeiling,
     }))
     const isUltraNarrow = containerWidth !== undefined && containerWidth > 0 && containerWidth < 300
-    const radiusPct = isUltraNarrow ? 0.38 : isCompact ? 0.48 : yKeys.length > 1 ? 0.58 : 0.65
+    const showRadarLegend = radarSeriesItems.length > 1
+    const radiusPct = isUltraNarrow ? 0.38 : isCompact ? 0.48 : showRadarLegend ? 0.58 : 0.65
     const estW = containerWidth !== undefined && containerWidth > 0 ? containerWidth : 520
     const estH = Math.min(640, Math.max(140, props.height ?? 260))
     const rPx = (Math.min(estW, estH) / 2) * radiusPct
@@ -1192,17 +1342,16 @@ function buildChartOptionInternal(
     return {
       color: theme.colors,
       tooltip: { ...baseTooltip, trigger: 'item' },
-      legend:
-        yKeys.length > 1
-          ? buildLegendOption({
-              isCompact,
-              scroll: isCompact || yKeys.length >= 4,
-              names: yKeys.map(sanitizeChartLabel),
-              textColor: theme.textSecondary,
-            })
-          : undefined,
+      legend: showRadarLegend
+        ? buildLegendOption({
+            isCompact,
+            scroll: isCompact || radarSeriesItems.length >= 4,
+            names: radarSeriesItems.map((item) => item.name),
+            textColor: theme.textSecondary,
+          })
+        : undefined,
       radar: {
-        center: yKeys.length > 1 ? ['50%', '46%'] : ['50%', '50%'],
+        center: showRadarLegend ? ['50%', '46%'] : ['50%', '50%'],
         radius: `${Math.round(radiusPct * 100)}%`,
         axisNameGap: isUltraNarrow ? 6 : 12,
         indicator: indicator.length > 0 ? indicator : [{ name: '-', max: 100 }],
@@ -1219,10 +1368,7 @@ function buildChartOptionInternal(
         {
           type: 'radar',
           areaStyle: { opacity: dark ? 0.18 : 0.14 },
-          data: yKeys.map((k) => ({
-            name: sanitizeChartLabel(k),
-            value: rows.map((r) => toNumber(r[k])),
-          })),
+          data: radarSeriesItems,
         },
       ],
     }
@@ -1235,17 +1381,23 @@ function buildChartOptionInternal(
     const numericKeys = sampleKeys.filter((k) => typeof sample[k] === 'number')
 
     const hxKey = props.xField ?? stringKeys[0] ?? sampleKeys[0] ?? 'x'
-    const explicitYStr = typeof props.yField === 'string' ? props.yField : undefined
+    const explicitYStr =
+      typeof props.yField === 'string' && props.yField !== '' ? props.yField : undefined
+    const hasOtherNumericBesidesExplicitY =
+      explicitYStr !== undefined && numericKeys.some((k) => k !== hxKey && k !== explicitYStr)
     const hyKey =
-      explicitYStr && explicitYStr !== hxKey && typeof sample[explicitYStr] === 'string'
-        ? explicitYStr
-        : (props.seriesField ??
-          stringKeys.find((k) => k !== hxKey) ??
-          sampleKeys.find((k) => k !== hxKey) ??
-          'y')
+      props.seriesField && props.seriesField !== hxKey
+        ? props.seriesField
+        : explicitYStr &&
+            explicitYStr !== hxKey &&
+            (props.sizeField !== undefined ||
+              typeof sample[explicitYStr] === 'string' ||
+              hasOtherNumericBesidesExplicitY)
+          ? explicitYStr
+          : (stringKeys.find((k) => k !== hxKey) ?? sampleKeys.find((k) => k !== hxKey) ?? 'y')
     const valKey =
       props.sizeField ??
-      (explicitYStr && typeof sample[explicitYStr] === 'number' ? explicitYStr : undefined) ??
+      (explicitYStr && explicitYStr !== hyKey ? explicitYStr : undefined) ??
       numericKeys.find((k) => k !== hxKey && k !== hyKey) ??
       'value'
 
@@ -1350,7 +1502,13 @@ function buildChartOptionInternal(
   }
 
   if (props.kind === 'treemap' || props.kind === 'sunburst') {
-    const treeData = buildHierarchyTree(rows, props, xKey, primaryY)
+    const hierarchyRows =
+      rows.length > 0
+        ? rows
+        : typeof props.data === 'object' && props.data !== null && !Array.isArray(props.data)
+          ? [props.data as Record<string, unknown>]
+          : rows
+    const treeData = buildHierarchyTree(hierarchyRows, props, xKey, primaryY)
     const borderCol = dark ? '#18181b' : '#ffffff'
 
     if (props.kind === 'sunburst') {
@@ -1362,6 +1520,52 @@ function buildChartOptionInternal(
         64,
         Math.floor((containerWidth ?? 580) / 2 - outerRingRadiusPx - 18),
       )
+      const measureDepth = (nodes: readonly Record<string, unknown>[]): number => {
+        let maxD = 0
+        for (const n of nodes) {
+          const kids = Array.isArray(n.children) ? (n.children as Record<string, unknown>[]) : []
+          maxD = Math.max(maxD, kids.length > 0 ? 1 + measureDepth(kids) : 1)
+        }
+        return maxD
+      }
+      const treeDepth = Math.max(1, Math.min(6, measureDepth(treeData)))
+      const sunburstLevels: Record<string, unknown>[] = [{}]
+      const innerStart = 18
+      const innerEnd = useInnerOnly ? 85 : treeDepth <= 2 ? 72 : 75
+      const bandSpan = (innerEnd - innerStart) / treeDepth
+      for (let lv = 0; lv < treeDepth; lv++) {
+        const r0 = Math.round(innerStart + lv * bandSpan)
+        const r = Math.round(innerStart + (lv + 1) * bandSpan)
+        const isOuterWide = !useInnerOnly && lv === treeDepth - 1 && treeDepth >= 3
+        sunburstLevels.push(
+          isOuterWide
+            ? {
+                r0: `${Math.max(r0, 66)}%`,
+                r: `${r}%`,
+                label: {
+                  position: 'outside',
+                  rotate: 0,
+                  padding: 5,
+                  fontSize: 11,
+                  color: theme.textPrimary,
+                  width: outerLabelWidth,
+                  overflow: 'truncate',
+                },
+              }
+            : {
+                r0: `${r0}%`,
+                r: `${r}%`,
+                label: {
+                  ...FILLED_SHAPE_LABEL,
+                  rotate: 'tangential',
+                  fontSize: useInnerOnly ? (lv === 0 ? 10 : 9.5) : lv === 0 ? 10.5 : 10,
+                  minAngle: lv === treeDepth - 1 && useInnerOnly ? 22 : undefined,
+                  overflow: 'truncate',
+                  width: useInnerOnly ? 58 + lv * 4 : 68 + lv * 4,
+                },
+              },
+        )
+      }
 
       return {
         color: theme.colors,
@@ -1371,7 +1575,7 @@ function buildChartOptionInternal(
             type: 'sunburst',
             center: ['50%', '51%'],
             radius: useInnerOnly ? ['18%', '85%'] : ['18%', '70%'],
-            nodeClick: 'rootToNode',
+            nodeClick: props.selected !== undefined ? false : 'rootToNode',
             sort: 'desc',
             minAngle: useInnerOnly ? 16 : 10,
             emphasis: { focus: 'ancestor' },
@@ -1388,82 +1592,7 @@ function buildChartOptionInternal(
               borderColor: borderCol,
               borderWidth: 2,
             },
-            levels: useInnerOnly
-              ? [
-                  {},
-                  {
-                    r0: '18%',
-                    r: '44%',
-                    label: {
-                      ...FILLED_SHAPE_LABEL,
-                      rotate: 'tangential',
-                      fontSize: 10,
-                      overflow: 'truncate',
-                      width: 58,
-                    },
-                  },
-                  {
-                    r0: '44%',
-                    r: '66%',
-                    label: {
-                      ...FILLED_SHAPE_LABEL,
-                      rotate: 'tangential',
-                      fontSize: 9.5,
-                      overflow: 'truncate',
-                      width: 64,
-                    },
-                  },
-                  {
-                    r0: '66%',
-                    r: '85%',
-                    label: {
-                      ...FILLED_SHAPE_LABEL,
-                      rotate: 'tangential',
-                      fontSize: 9.5,
-                      minAngle: 22,
-                      overflow: 'truncate',
-                      width: 68,
-                    },
-                  },
-                ]
-              : [
-                  {},
-                  {
-                    r0: '18%',
-                    r: '43%',
-                    label: {
-                      ...FILLED_SHAPE_LABEL,
-                      rotate: 'tangential',
-                      fontSize: 10.5,
-                      overflow: 'truncate',
-                      width: 68,
-                    },
-                  },
-                  {
-                    r0: '43%',
-                    r: '68%',
-                    label: {
-                      ...FILLED_SHAPE_LABEL,
-                      rotate: 'tangential',
-                      fontSize: 10,
-                      overflow: 'truncate',
-                      width: 72,
-                    },
-                  },
-                  {
-                    r0: '68%',
-                    r: '75%',
-                    label: {
-                      position: 'outside',
-                      rotate: 0,
-                      padding: 5,
-                      fontSize: 11,
-                      color: theme.textPrimary,
-                      width: outerLabelWidth,
-                      overflow: 'truncate',
-                    },
-                  },
-                ],
+            levels: sunburstLevels,
             data: treeData,
           },
         ],
@@ -1511,14 +1640,15 @@ function buildChartOptionInternal(
     const srcField = props.xField ?? 'source'
     const tgtField = props.seriesField ?? 'target'
     const valField = (typeof props.yField === 'string' ? props.yField : undefined) ?? 'value'
+    const sankeyObj =
+      typeof props.data === 'object' && props.data !== null && !Array.isArray(props.data)
+        ? (props.data as Record<string, unknown>)
+        : null
     const sankeySourceRows =
       rows.length > 0
         ? rows
-        : typeof props.data === 'object' &&
-            props.data !== null &&
-            !Array.isArray(props.data) &&
-            Array.isArray((props.data as Record<string, unknown>).links)
-          ? normalizeChartRows((props.data as Record<string, unknown>).links)
+        : sankeyObj !== null && Array.isArray(sankeyObj.links ?? sankeyObj.edges)
+          ? normalizeChartRows(sankeyObj.links ?? sankeyObj.edges)
           : rows
 
     const linkTotals = new Map<string, { source: string; target: string; value: number }>()
@@ -1574,9 +1704,38 @@ function buildChartOptionInternal(
       ? Math.max(38, Math.min(stageGap + 6, rightPadding - 10))
       : Math.max(48, rightPadding - 14)
 
+    const sankeyLabelBase = {
+      color: theme.textPrimary,
+      fontSize: isCompact ? 9.5 : 11.5,
+      overflow: 'truncate' as const,
+      width: labelMaxW,
+      textBorderColor: dark ? 'rgba(15, 23, 42, 0.85)' : 'rgba(255, 255, 255, 0.88)',
+      textBorderWidth: 2,
+    }
+
     return {
       color: theme.colors,
-      tooltip: { ...baseTooltip, trigger: 'item' },
+      tooltip: {
+        ...baseTooltip,
+        trigger: 'item',
+        formatter: (params: unknown) => {
+          const p = params as {
+            dataType?: string
+            name?: unknown
+            value?: unknown
+            data?: { source?: unknown; target?: unknown; value?: unknown }
+          }
+          if (p?.dataType === 'edge' && p.data) {
+            const src = sanitizeChartLabel(p.data.source)
+            const tgt = sanitizeChartLabel(p.data.target)
+            const val = sanitizeChartLabel(p.data.value ?? p.value)
+            return isCompact ? `${src} →\n${tgt}: ${val}` : `${src} → ${tgt}: ${val}`
+          }
+          const name = sanitizeChartLabel(p?.name)
+          const val = sanitizeChartLabel(p?.value)
+          return val !== '' ? `${name}: ${val}` : name
+        },
+      },
       series: [
         {
           type: 'sankey',
@@ -1589,19 +1748,12 @@ function buildChartOptionInternal(
           nodeWidth: nodeW,
           labelLayout: { hideOverlap: true },
           lineStyle: { color: 'gradient', curveness: 0.5, opacity: dark ? 0.36 : 0.28 },
-          label: {
-            color: theme.textPrimary,
-            fontSize: isCompact ? 9.5 : 11.5,
-            overflow: 'truncate',
-            width: labelMaxW,
-            textBorderColor: dark ? 'rgba(15, 23, 42, 0.85)' : 'rgba(255, 255, 255, 0.88)',
-            textBorderWidth: 2,
-          },
+          label: sankeyLabelBase,
           data: nodeNames.map((name) => ({
             name,
             label:
               !sourceSet.has(name) && isCompact
-                ? { width: Math.max(48, rightPadding - 8) }
+                ? { ...sankeyLabelBase, width: Math.max(48, rightPadding - 8) }
                 : undefined,
           })),
           links,
@@ -1666,9 +1818,15 @@ function buildChartOptionInternal(
     } else {
       const srcField = props.xField ?? 'source'
       const tgtField = props.seriesField ?? 'target'
+      const edgeRows =
+        rows.length > 0
+          ? rows
+          : rawObj !== null && Array.isArray(rawObj.links ?? rawObj.edges)
+            ? normalizeChartRows(rawObj.links ?? rawObj.edges)
+            : rows
       const seen = new Set<string>()
       const defaultSymbolSize = Math.round(30 * sizeScale)
-      for (const r of rows) {
+      for (const r of edgeRows) {
         const s = sanitizeChartLabel(r[srcField] ?? r.source ?? r.from ?? r.name)
         const t = sanitizeChartLabel(r[tgtField] ?? r.target ?? r.to)
         if (s && !seen.has(s)) {
@@ -1687,8 +1845,15 @@ function buildChartOptionInternal(
               ? {
                   show: true,
                   formatter: sanitizeChartLabel(r.label),
-                  fontSize: 10,
+                  fontSize: isCompact ? 9 : 10,
                   color: theme.textSecondary,
+                  backgroundColor: isCompact
+                    ? dark
+                      ? 'rgba(15, 23, 42, 0.78)'
+                      : 'rgba(255, 255, 255, 0.85)'
+                    : undefined,
+                  padding: isCompact ? [1, 3] : undefined,
+                  borderRadius: isCompact ? 3 : undefined,
                 }
               : undefined,
           })
@@ -1844,8 +2009,9 @@ function buildChartOptionInternal(
       yAxis: {
         type: 'value',
         ...bounds,
+        splitNumber: isCompact ? 3 : undefined,
         splitLine: { lineStyle: { color: theme.border } },
-        axisLabel: { color: theme.textSecondary, fontSize: isCompact ? 10 : 11 },
+        axisLabel: { color: theme.textSecondary, fontSize: isCompact ? 10 : 11, hideOverlap: true },
       },
       series: [
         {
@@ -1908,15 +2074,31 @@ function buildChartOptionInternal(
         type: 'category',
         data: categories,
         axisLine: { lineStyle: { color: theme.border } },
-        axisLabel: { color: theme.textSecondary, fontSize: isCompact ? 10 : 11, hideOverlap: true },
+        axisLabel: {
+          color: theme.textSecondary,
+          fontSize: isCompact ? 10 : 11,
+          hideOverlap: true,
+          ...(isCompact
+            ? {
+                width: Math.max(
+                  40,
+                  Math.floor(
+                    ((containerWidth ?? 276) - 44) / Math.min(5, Math.max(2, categories.length)),
+                  ),
+                ),
+                overflow: 'truncate' as const,
+                ellipsis: '…',
+              }
+            : {}),
+        },
       },
       yAxis: {
         type: 'value',
         scale: true,
         ...bounds,
-        splitNumber: isCompact ? 4 : undefined,
+        splitNumber: isCompact ? 3 : undefined,
         splitLine: { lineStyle: { color: theme.border } },
-        axisLabel: { color: theme.textSecondary, fontSize: isCompact ? 10 : 11 },
+        axisLabel: { color: theme.textSecondary, fontSize: isCompact ? 10 : 11, hideOverlap: true },
       },
       series: [
         {
@@ -1974,6 +2156,24 @@ function buildChartOptionInternal(
     )
     const bounds = computeRefAxisBounds(scatterYVals, props.referenceLine)
 
+    const scatterLabelKey = Object.keys(rows[0] ?? {}).find(
+      (rk) =>
+        rk !== xKey &&
+        !yKeys.includes(rk) &&
+        rk !== sizeKey &&
+        rk !== props.seriesField &&
+        typeof rows[0]?.[rk] === 'string' &&
+        String(rows[0]?.[rk]).trim() !== '',
+    )
+    const resolveScatterPointName = (r: Record<string, unknown>, fallback?: unknown): string =>
+      sanitizeChartLabel(
+        r.name ??
+          r.label ??
+          (scatterLabelKey !== undefined ? r[scatterLabelKey] : undefined) ??
+          fallback ??
+          r[xKey],
+      )
+
     const scatterSeries: Record<string, unknown>[] = props.seriesField
       ? (() => {
           const groupField = props.seriesField
@@ -1995,16 +2195,21 @@ function buildChartOptionInternal(
               itemStyle: sizeKey ? { opacity: 0.78 } : undefined,
               markLine: idx === 0 ? refLine : undefined,
               data: numericX
-                ? grpRows.map((r) =>
-                    sizeKey
+                ? grpRows.map((r) => ({
+                    name: resolveScatterPointName(r, r[groupField]),
+                    value: sizeKey
                       ? [toNumber(r[xKey]), toNumber(r[primaryY]), toNumber(r[sizeKey])]
                       : [toNumber(r[xKey]), toNumber(r[primaryY])],
-                  )
+                  }))
                 : grpRows.map((r) => {
-                    const cx = xCategories.indexOf(sanitizeChartLabel(r[xKey]))
-                    return sizeKey
-                      ? [cx, toNumber(r[primaryY]), toNumber(r[sizeKey])]
-                      : [cx, toNumber(r[primaryY])]
+                    const cxLabel = sanitizeChartLabel(r[xKey])
+                    const cx = xCategories.indexOf(cxLabel)
+                    return {
+                      name: cxLabel,
+                      value: sizeKey
+                        ? [cx, toNumber(r[primaryY]), toNumber(r[sizeKey])]
+                        : [cx, toNumber(r[primaryY])],
+                    }
                   }),
             }
           })
@@ -2017,12 +2222,16 @@ function buildChartOptionInternal(
           itemStyle: sizeKey ? { opacity: 0.78 } : undefined,
           markLine: idx === 0 ? refLine : undefined,
           data: numericX
-            ? rows.map((r) =>
-                sizeKey
+            ? rows.map((r) => ({
+                name: resolveScatterPointName(r),
+                value: sizeKey
                   ? [toNumber(r[xKey]), toNumber(r[k]), toNumber(r[sizeKey])]
                   : [toNumber(r[xKey]), toNumber(r[k])],
-              )
-            : rows.map((r) => toNumber(r[k])),
+              }))
+            : rows.map((r) => ({
+                name: sanitizeChartLabel(r[xKey]),
+                value: toNumber(r[k]),
+              })),
         }))
 
     const showScatterLegend = scatterSeries.length > 1
@@ -2056,7 +2265,24 @@ function buildChartOptionInternal(
         type: numericX ? 'value' : 'category',
         data: scatterCategories,
         splitNumber: numericX && isCompact ? 3 : undefined,
-        axisLabel: { color: theme.textSecondary, fontSize: isCompact ? 10 : 11, hideOverlap: true },
+        axisLabel: {
+          color: theme.textSecondary,
+          fontSize: isCompact ? 10 : 11,
+          hideOverlap: true,
+          ...(!numericX && isCompact && scatterCategories
+            ? {
+                width: Math.max(
+                  38,
+                  Math.floor(
+                    ((containerWidth ?? 276) - 44) /
+                      Math.min(5, Math.max(2, scatterCategories.length)),
+                  ),
+                ),
+                overflow: 'truncate' as const,
+                ellipsis: '…',
+              }
+            : {}),
+        },
         splitLine: { lineStyle: { color: theme.border } },
       },
       yAxis: {
@@ -2188,7 +2414,20 @@ function buildChartOptionInternal(
       wfMarkPos,
       isCompact,
     )
-    const bounds = computeRefAxisBounds(peaks, props.referenceLine)
+    const refBounds = computeRefAxisBounds(peaks, props.referenceLine)
+    const minPeak = Math.min(0, ...peaks)
+    const negHeadroomMin = minPeak < 0 ? -niceUpperBound(Math.abs(minPeak) * 1.24) : undefined
+    const bounds = {
+      ...refBounds,
+      ...(negHeadroomMin !== undefined
+        ? {
+            min:
+              refBounds.min !== undefined
+                ? Math.min(refBounds.min, negHeadroomMin)
+                : negHeadroomMin,
+          }
+        : {}),
+    }
     const hasTotal = totalData.some((v) => v !== '-')
     const showBarLabels = rows.length <= 8
     const barLabelFontSize = isCompact ? 9.5 : 10.5
@@ -2241,8 +2480,29 @@ function buildChartOptionInternal(
       ...FILLED_SHAPE_LABEL,
     }
 
+    const hasPosTotal = totalData.some((v) => typeof v === 'number' && v >= 0)
+    const hasNegTotal = totalData.some((v) => typeof v === 'number' && v < 0)
+    const allTotalsNeg = hasNegTotal && !hasPosTotal
+
     const totalItems = totalData.map((val, i) => {
       if (typeof val !== 'number') return val
+      if (val < 0) {
+        if (showBarLabels && overlapsRefBand(i, val - ySpan * 0.085, val)) {
+          if (fitsInsideBar(String(val), Math.abs(val))) {
+            return {
+              value: val,
+              itemStyle: { color: theme.brand, borderRadius: [0, 0, 4, 4] },
+              label: insideHaloLabel,
+            }
+          }
+        }
+        if (allTotalsNeg) return val
+        return {
+          value: val,
+          itemStyle: { color: theme.brand, borderRadius: [0, 0, 4, 4] },
+          label: { position: 'bottom' as const },
+        }
+      }
       if (showBarLabels && overlapsRefBand(i, val, val + ySpan * 0.085)) {
         if (fitsInsideBar(String(val), Math.abs(val))) {
           return { value: val, label: insideHaloLabel }
@@ -2387,13 +2647,30 @@ function buildChartOptionInternal(
         data: categories,
         axisLine: { lineStyle: { color: theme.border } },
         axisTick: { show: false },
-        axisLabel: { color: theme.textSecondary, fontSize: isCompact ? 10 : 11, hideOverlap: true },
+        axisLabel: {
+          color: theme.textSecondary,
+          fontSize: isCompact ? 10 : 11,
+          hideOverlap: true,
+          ...(isCompact
+            ? {
+                width: Math.max(
+                  36,
+                  Math.floor(
+                    ((containerWidth ?? 276) - 44) / Math.min(6, Math.max(2, categories.length)),
+                  ),
+                ),
+                overflow: 'truncate' as const,
+                ellipsis: '…',
+              }
+            : {}),
+        },
       },
       yAxis: {
         type: 'value',
         ...bounds,
+        splitNumber: isCompact ? 3 : undefined,
         splitLine: { lineStyle: { color: theme.border, type: 'dashed' } },
-        axisLabel: { color: theme.textSecondary, fontSize: isCompact ? 10 : 11 },
+        axisLabel: { color: theme.textSecondary, fontSize: isCompact ? 10 : 11, hideOverlap: true },
       },
       series: [
         {
@@ -2411,11 +2688,14 @@ function buildChartOptionInternal(
           type: 'bar',
           stack: 'waterfall',
           barMaxWidth: 34,
-          itemStyle: { color: theme.brand, borderRadius: [4, 4, 0, 0] },
+          itemStyle: {
+            color: theme.brand,
+            borderRadius: allTotalsNeg ? [0, 0, 4, 4] : [4, 4, 0, 0],
+          },
           labelLayout: { hideOverlap: true },
           label: {
             show: showBarLabels,
-            position: 'top',
+            position: allTotalsNeg ? 'bottom' : 'top',
             color: theme.textPrimary,
             fontSize: barLabelFontSize,
           },
@@ -2636,20 +2916,46 @@ function buildChartOptionInternal(
         data: categories,
         axisLine: { lineStyle: { color: theme.border } },
         axisTick: { show: false },
-        axisLabel: { color: theme.textSecondary, fontSize: isCompact ? 10 : 11, hideOverlap: true },
+        axisLabel: {
+          color: theme.textSecondary,
+          fontSize: isCompact ? 10 : 11,
+          hideOverlap: true,
+          ...(isCompact
+            ? {
+                width: Math.max(
+                  38,
+                  Math.floor(
+                    ((containerWidth ?? 276) - 44) / Math.min(6, Math.max(2, categories.length)),
+                  ),
+                ),
+                overflow: 'truncate' as const,
+                ellipsis: '…',
+              }
+            : {}),
+        },
       },
       yAxis: [
         {
           type: 'value',
           ...leftBounds,
+          splitNumber: isCompact ? 3 : undefined,
           splitLine: { lineStyle: { color: theme.border, type: 'dashed' } },
-          axisLabel: { color: theme.textSecondary, fontSize: isCompact ? 10 : 11 },
+          axisLabel: {
+            color: theme.textSecondary,
+            fontSize: isCompact ? 10 : 11,
+            hideOverlap: true,
+          },
         },
         {
           type: 'value',
           ...rightBounds,
+          splitNumber: isCompact ? 3 : undefined,
           splitLine: { show: false },
-          axisLabel: { color: theme.textSecondary, fontSize: isCompact ? 10 : 11 },
+          axisLabel: {
+            color: theme.textSecondary,
+            fontSize: isCompact ? 10 : 11,
+            hideOverlap: true,
+          },
         },
       ],
       series: [...barSeries, ...lineSeries],
@@ -2780,17 +3086,20 @@ function buildChartOptionInternal(
       props.sizeField ??
       primaryY
 
-    const parsedCells: Array<[string, number]> = []
+    const dateSums = new Map<string, number>()
     for (const r of rows) {
       const iso = normalizeIsoDate(r[dateField] ?? r.date ?? r.day ?? r[xKey])
       if (!iso) continue
       const val = toNumber(r[valField] ?? r.value ?? r.count ?? r[primaryY])
-      parsedCells.push([iso, val])
+      dateSums.set(iso, (dateSums.get(iso) ?? 0) + val)
     }
-    parsedCells.sort((a, b) => a[0].localeCompare(b[0]))
+    const parsedCells: Array<[string, number]> = [...dateSums.entries()].sort((a, b) =>
+      a[0].localeCompare(b[0]),
+    )
 
-    let rangeStart = '2026-01-01'
-    let rangeEnd = '2026-06-30'
+    const curYear = new Date().getUTCFullYear()
+    let rangeStart = `${curYear}-01-01`
+    let rangeEnd = `${curYear}-06-30`
     if (parsedCells.length > 0) {
       const firstIso = parsedCells[0]![0]
       const lastIso = parsedCells[parsedCells.length - 1]![0]

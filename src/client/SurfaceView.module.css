@@ -1,3 +1,11 @@
+:global(:root) {
+  --a2ui-z-modal: 1000;
+  --a2ui-z-popover-backdrop: 1099;
+  --a2ui-z-popover: 1100;
+  --a2ui-z-fullscreen: 1200;
+  --a2ui-z-toast: 1300;
+}
+
 .card {
   --a2ui-z-modal: 1000;
   --a2ui-z-popover-backdrop: 1099;
@@ -114,6 +122,10 @@
   min-width: 0;
 }
 
+.surfaceStack > * {
+  --a2ui-flex-basis: auto;
+}
+
 .surfaceStackReadOnly {
   opacity: 0.76;
   pointer-events: none;
@@ -219,6 +231,7 @@
   gap: 8px;
   margin-left: 8px;
   min-width: 0;
+  max-width: 100%;
   font-size: 12px;
   color: inherit;
 }

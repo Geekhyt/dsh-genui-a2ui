@@ -63,8 +63,8 @@ export function computeDateRangeSpanDays(startStr: string, endStr: string): numb
   if (!startStr || !endStr) return null
   const s = Date.parse(startStr.slice(0, 10))
   const e = Date.parse(endStr.slice(0, 10))
-  if (Number.isNaN(s) || Number.isNaN(e)) return null
-  const diffDays = Math.round(Math.abs(e - s) / 86_400_000) + 1
+  if (Number.isNaN(s) || Number.isNaN(e) || e < s) return null
+  const diffDays = Math.round((e - s) / 86_400_000) + 1
   return Math.max(1, diffDays)
 }
 
@@ -74,6 +74,14 @@ export function buildDatePresetRange(
   anchorEndStr?: string,
 ): { readonly start: string; readonly end: string } {
   const endObj = parseLocalDateAnchor(anchorEndStr)
+  if (days <= 1 && enableTime) {
+    const startOfDay = new Date(endObj.getFullYear(), endObj.getMonth(), endObj.getDate(), 0, 0, 0)
+    const endOfDay = new Date(endObj.getFullYear(), endObj.getMonth(), endObj.getDate(), 23, 59, 0)
+    return {
+      start: formatLocalDateValue(startOfDay, true),
+      end: formatLocalDateValue(endOfDay, true),
+    }
+  }
   const startObj = new Date(
     endObj.getFullYear(),
     endObj.getMonth(),
@@ -93,6 +101,7 @@ export type HierarchyNodeStatus = 'healthy' | 'warning' | 'error' | 'neutral'
 export interface NormalizedHierarchyNode {
   readonly id: string
   readonly value: string
+  readonly hasExplicitValue?: boolean | undefined
   readonly label: string
   readonly sublabel?: string | undefined
   readonly badge?: string | undefined
@@ -137,6 +146,8 @@ export function normalizeHierarchyTree(
     if (typeof item === 'object' && item !== null) {
       const rec = item as Record<string, unknown>
       const label = String(rec.label ?? rec.title ?? rec.name ?? rec.value ?? `Node ${idx + 1}`)
+      const hasExplicitValue =
+        rec.value !== undefined && rec.value !== null && String(rec.value).trim() !== ''
       const value = String(
         rec.value ?? rec.id ?? rec.key ?? (parentPath ? `${parentPath}/${label}` : label),
       )
@@ -152,6 +163,7 @@ export function normalizeHierarchyTree(
       out.push({
         id,
         value,
+        hasExplicitValue,
         label,
         sublabel: rec.sublabel ? String(rec.sublabel) : undefined,
         badge: rec.badge ? String(rec.badge) : undefined,

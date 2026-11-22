@@ -22,6 +22,10 @@ const MAX_ANSWER_ARRAY_LEN = 200
 const MAX_ANSWER_KEYS = 200
 let fallbackAskSeq = 0
 
+function escapeObsPointerSegment(segment: string): string {
+  return segment.replace(/~/g, '~0').replace(/\//g, '~1')
+}
+
 function normalizeObsPointer(pointer: string): string {
   const trimmed = pointer.trim()
   if (trimmed === '' || trimmed === '/') return '/'
@@ -42,6 +46,72 @@ function isPathObscured(path: string, obscured: ReadonlySet<string>): boolean {
     if (isRelative && (norm.endsWith(obs) || norm.includes(`${obs}/`))) return true
   }
   return false
+}
+
+function referencesObscuredPointer(
+  node: unknown,
+  obscured: ReadonlySet<string>,
+  depth = 0,
+): boolean {
+  if (obscured.size === 0 || depth > 8 || typeof node !== 'object' || node === null) return false
+  if (Array.isArray(node)) {
+    return node.some((el) => referencesObscuredPointer(el, obscured, depth + 1))
+  }
+  const rec = node as Record<string, unknown>
+  const rawPath = rec.path ?? rec['@path']
+  if (typeof rawPath === 'string' && rawPath.trim() !== '' && isPathObscured(rawPath, obscured)) {
+    return true
+  }
+  for (const val of Object.values(rec)) {
+    if (referencesObscuredPointer(val, obscured, depth + 1)) return true
+  }
+  return false
+}
+
+export function collectObscuredContextPointersFromMessages(
+  messages: readonly AgentToRendererMessage[],
+  obscuredPointers: ReadonlySet<string>,
+): Set<string> {
+  const out = new Set<string>(obscuredPointers)
+  if (obscuredPointers.size === 0) return out
+  const inspectContext = (ctx: unknown, prefix: string, depth: number) => {
+    if (depth > 6 || typeof ctx !== 'object' || ctx === null || Array.isArray(ctx)) return
+    for (const [k, v] of Object.entries(ctx as Record<string, unknown>)) {
+      const seg = escapeObsPointerSegment(k)
+      const nextPath = prefix === '' ? `/${seg}` : `${prefix}/${seg}`
+      if (referencesObscuredPointer(v, obscuredPointers)) {
+        out.add(nextPath)
+      } else if (typeof v === 'object' && v !== null && !Array.isArray(v)) {
+        inspectContext(v, nextPath, depth + 1)
+      }
+    }
+  }
+  const inspectAction = (action: unknown) => {
+    if (typeof action !== 'object' || action === null) return
+    const event = (action as Record<string, unknown>).event
+    if (typeof event !== 'object' || event === null) return
+    inspectContext((event as Record<string, unknown>).context, '', 0)
+  }
+  const inspectComponents = (list: unknown) => {
+    if (!Array.isArray(list)) return
+    for (const item of list) {
+      if (typeof item !== 'object' || item === null) continue
+      const rec = item as Record<string, unknown>
+      inspectAction(rec.action)
+      inspectAction(rec.approveAction)
+      inspectAction(rec.rejectAction)
+    }
+  }
+  for (const msg of messages) {
+    const rec = msg as unknown as Record<string, unknown>
+    if (rec.createSurface && typeof rec.createSurface === 'object') {
+      inspectComponents((rec.createSurface as Record<string, unknown>).components)
+    }
+    if (rec.updateComponents && typeof rec.updateComponents === 'object') {
+      inspectComponents((rec.updateComponents as Record<string, unknown>).components)
+    }
+  }
+  return out
 }
 
 export function collectObscuredPointersFromMessages(
@@ -106,8 +176,9 @@ export function sanitizePayloadObject(
       for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
         if (count >= MAX_ANSWER_KEYS) break
         if (isDangerousObjectKey(k) || isSecretKey(k)) continue
+        const seg = escapeObsPointerSegment(k)
         const childPath =
-          stripPerSurfaceRoot && depth === 0 ? '' : path === '' ? `/${k}` : `${path}/${k}`
+          stripPerSurfaceRoot && depth === 0 ? '' : path === '' ? `/${seg}` : `${path}/${seg}`
         if (blocked.size > 0 && childPath !== '' && isPathObscured(childPath, blocked)) continue
         const next = clean(v, childPath, depth + 1)
         if (next !== undefined) {
@@ -159,6 +230,7 @@ interface PendingEntry {
   readonly callId: string
   readonly defaultSurfaceId: string
   readonly obscuredPointers: ReadonlySet<string>
+  readonly obscuredContextPointers: ReadonlySet<string>
   resolve(settlement: AskSettlement): void
   reject(error: Error): void
   cleanup(): void
@@ -188,9 +260,17 @@ export class PendingAskRegistry {
     readonly timeoutSeconds: number
     readonly signal?: AbortSignal | undefined
     readonly obscuredPointers?: ReadonlySet<string> | undefined
+    readonly obscuredContextPointers?: ReadonlySet<string> | undefined
   }): Promise<AskSettlement> {
-    const { sessionId, callId, defaultSurfaceId, timeoutSeconds, signal, obscuredPointers } =
-      options
+    const {
+      sessionId,
+      callId,
+      defaultSurfaceId,
+      timeoutSeconds,
+      signal,
+      obscuredPointers,
+      obscuredContextPointers,
+    } = options
     if (signal?.aborted) {
       const reason = signal.reason
       return Promise.reject(reason instanceof Error ? reason : new Error('a2ui_ask aborted'))
@@ -234,6 +314,7 @@ export class PendingAskRegistry {
         callId,
         defaultSurfaceId,
         obscuredPointers: obscuredPointers ?? new Set<string>(),
+        obscuredContextPointers: obscuredContextPointers ?? obscuredPointers ?? new Set<string>(),
         resolve: (settlement) => {
           cleanup()
           this.entries.delete(mapKey)
@@ -278,7 +359,7 @@ export class PendingAskRegistry {
       surfaceId: trimCap(input.surfaceId, 256) || target.defaultSurfaceId,
       sourceComponentId: trimCap(input.sourceComponentId, 256),
       ...(userMessage !== '' ? { userMessage } : {}),
-      context: sanitizePayloadObject(input.context, target.obscuredPointers, false),
+      context: sanitizePayloadObject(input.context, target.obscuredContextPointers, false),
       dataModels: sanitizePayloadObject(input.dataModels, target.obscuredPointers, true),
     })
     return true
@@ -483,6 +564,10 @@ export function createAskTool(sessions: SurfaceSessions, asks: PendingAskRegistr
       sessions.clearCompileFailures(sid, 'ask')
       const surfaceIds = surfaceIdsOf(messages)
       const obscuredPointers = collectObscuredPointersFromMessages(messages)
+      const obscuredContextPointers = collectObscuredContextPointersFromMessages(
+        messages,
+        obscuredPointers,
+      )
       const callId =
         typeof exec?.callId === 'string' && exec.callId.trim() !== ''
           ? exec.callId.trim()
@@ -494,6 +579,7 @@ export function createAskTool(sessions: SurfaceSessions, asks: PendingAskRegistr
         timeoutSeconds: timeout,
         signal: exec?.signal,
         obscuredPointers,
+        obscuredContextPointers,
       })
 
       if (settlement.status !== 'answered') {

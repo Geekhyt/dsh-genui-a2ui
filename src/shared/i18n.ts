@@ -418,6 +418,7 @@ export interface RuntimeUiMessages {
   readonly dateRangeStartAria: string
   readonly dateRangeEndAria: string
   readonly treeToggleBranchAria: string
+  readonly defaultActionCta: string
 }
 
 export const RUNTIME_MESSAGES: Record<UiLocale, RuntimeUiMessages> = {
@@ -596,6 +597,7 @@ export const RUNTIME_MESSAGES: Record<UiLocale, RuntimeUiMessages> = {
     dateRangeStartAria: '开始日期',
     dateRangeEndAria: '结束日期',
     treeToggleBranchAria: '展开或收起节点',
+    defaultActionCta: '执行操作',
   },
   en: {
     generating: 'Generating…',
@@ -772,5 +774,6 @@ export const RUNTIME_MESSAGES: Record<UiLocale, RuntimeUiMessages> = {
     dateRangeStartAria: 'Start date',
     dateRangeEndAria: 'End date',
     treeToggleBranchAria: 'Toggle branch',
+    defaultActionCta: 'Continue',
   },
 }

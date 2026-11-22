@@ -158,6 +158,10 @@ export function computeMessagesFingerprint(messages: readonly unknown[]): string
   return (hash >>> 0).toString(16).padStart(8, '0')
 }
 
+export function escapeJsonPointerSegment(key: string): string {
+  return key.replace(/~/g, '~0').replace(/\//g, '~1')
+}
+
 export function normalizePointerPath(pointer: string): string {
   const trimmed = pointer.trim()
   if (trimmed === '' || trimmed === '/') return '/'
@@ -224,7 +228,8 @@ export function sanitizeDataModel(
       const out: Record<string, unknown> = {}
       for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
         if (isDangerousObjectKey(k) || isSecretKey(k)) continue
-        const childPath = currentPath === '/' ? `/${k}` : `${currentPath}/${k}`
+        const escK = escapeJsonPointerSegment(k)
+        const childPath = currentPath === '/' ? `/${escK}` : `${currentPath}/${escK}`
         if (blocked.size > 0 && isPointerObscured(childPath, blocked)) continue
         const cleaned = walk(v, childPath, depth + 1)
         if (cleaned !== undefined) {

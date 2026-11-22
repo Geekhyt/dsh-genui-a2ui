@@ -286,12 +286,71 @@ export function resolveSessionMessages(
   return collectOrderedCalls(snapshot).flatMap((c) => c.messages)
 }
 
+export function findCallSeq(
+  snapshot: ChatTargetSnapshot | undefined,
+  callId: string,
+): number | undefined {
+  if (snapshot === undefined || callId === '') return undefined
+  let best: number | undefined
+  for (const node of snapshot.nodes.values()) {
+    if (node.kind === A2UI_SURFACE_NODE_KIND) {
+      const data = node.data as SettledA2uiCall | undefined
+      if (node.id === callId || data?.callId === callId) {
+        const seq = typeof data?.seq === 'number' ? data.seq : node.anchorSeq
+        best = best === undefined ? seq : Math.max(best, seq)
+      }
+      continue
+    }
+    if (node.kind === 'tool-call') {
+      const data = node.data as { readonly root?: { readonly callId?: unknown } } | undefined
+      if (node.id === callId || data?.root?.callId === callId) {
+        if (best === undefined) best = node.anchorSeq
+      }
+    }
+  }
+  return best
+}
+
+export function buildReplayMessagesForSurfaceCall(
+  snapshot: ChatTargetSnapshot | undefined,
+  currentMessages: readonly AgentToRendererMessage[],
+  targetSurfaceIds: readonly string[] | ReadonlySet<string>,
+  beforeSeq?: number,
+): AgentToRendererMessage[] {
+  const targets =
+    targetSurfaceIds instanceof Set ? [...targetSurfaceIds] : [...new Set(targetSurfaceIds)]
+  if (targets.length === 0) return [...currentMessages]
+  const createdInCurrent = new Set<string>()
+  for (const msg of currentMessages) {
+    if (!isRecord(msg)) continue
+    const created = (msg as Record<string, unknown>).createSurface
+    if (isRecord(created) && typeof created.surfaceId === 'string') {
+      createdInCurrent.add(created.surfaceId)
+    }
+  }
+  const missingIds = new Set<string>()
+  for (const id of targets) {
+    if (!createdInCurrent.has(id)) missingIds.add(id)
+  }
+  if (missingIds.size === 0) return [...currentMessages]
+  const priorCalls = collectOrderedCalls(snapshot).filter(
+    (call) => beforeSeq === undefined || call.seq < beforeSeq,
+  )
+  const prior = filterMessagesBySurfaceIds(
+    priorCalls.flatMap((call) => call.messages),
+    missingIds,
+  )
+  return prior.length > 0 ? [...prior, ...currentMessages] : [...currentMessages]
+}
+
 export interface TurnTailBatch {
   readonly title: string | null
   readonly visibleSurfaceIds: ReadonlySet<string>
+  readonly supersededSurfaceIds: ReadonlySet<string>
   readonly messages: readonly AgentToRendererMessage[]
   readonly latestSeq: number
   readonly superseded: boolean
+  readonly allSuperseded: boolean
 }
 
 const turnTailBySnapshot = new WeakMap<ChatTargetSnapshot, Map<number, TurnTailBatch | null>>()
@@ -322,15 +381,57 @@ export function resolveTurnTailBatch(
   const inThisTurnAnswer: SettledA2uiCall[] = []
   const laterUpdatedIds = new Set<string>()
   const dockedIdsUpToTurn = new Set<string>()
+  const visibleSurfaceIds = new Set<string>()
+  let lastTitle: string | null = null
+  let latestSeq = 0
 
   for (const call of allCalls) {
     if (call.turn <= turnNumber) {
       upToTurn.push(call)
       if (call.placement === 'dock') {
-        for (const id of call.surfaceIds) dockedIdsUpToTurn.add(id)
-      }
-      if (call.turn === turnNumber && call.placement === 'answer') {
-        inThisTurnAnswer.push(call)
+        for (const id of call.surfaceIds) {
+          dockedIdsUpToTurn.add(id)
+          visibleSurfaceIds.delete(id)
+        }
+        for (const msg of call.messages) {
+          const del = (msg as { deleteSurface?: { surfaceId?: unknown } }).deleteSurface
+          if (del && typeof del.surfaceId === 'string') {
+            dockedIdsUpToTurn.delete(del.surfaceId)
+          }
+          const created = (msg as { createSurface?: { surfaceId?: unknown } }).createSurface
+          if (created && typeof created.surfaceId === 'string') {
+            dockedIdsUpToTurn.add(created.surfaceId)
+            visibleSurfaceIds.delete(created.surfaceId)
+          }
+        }
+      } else {
+        if (call.turn === turnNumber && call.placement === 'answer') {
+          inThisTurnAnswer.push(call)
+          if (call.title !== null) lastTitle = call.title
+          if (call.seq > latestSeq) latestSeq = call.seq
+          for (const id of call.surfaceIds) {
+            if (!dockedIdsUpToTurn.has(id)) {
+              visibleSurfaceIds.add(id)
+            }
+          }
+        }
+        for (const msg of call.messages) {
+          const del = (msg as { deleteSurface?: { surfaceId?: unknown } }).deleteSurface
+          if (del && typeof del.surfaceId === 'string') {
+            dockedIdsUpToTurn.delete(del.surfaceId)
+            visibleSurfaceIds.delete(del.surfaceId)
+          }
+          if (call.turn === turnNumber && call.placement === 'answer') {
+            const created = (msg as { createSurface?: { surfaceId?: unknown } }).createSurface
+            if (
+              created &&
+              typeof created.surfaceId === 'string' &&
+              !dockedIdsUpToTurn.has(created.surfaceId)
+            ) {
+              visibleSurfaceIds.add(created.surfaceId)
+            }
+          }
+        }
       }
     } else {
       for (const id of call.surfaceIds) laterUpdatedIds.add(id)
@@ -342,42 +443,19 @@ export function resolveTurnTailBatch(
     turnTailBySnapshot.set(snapshot, targetSnapMap)
   }
 
-  if (inThisTurnAnswer.length === 0) {
+  if (inThisTurnAnswer.length === 0 || visibleSurfaceIds.size === 0) {
     targetSnapMap.set(turnNumber, null)
     return null
   }
 
-  const visibleSurfaceIds = new Set<string>()
-  let lastTitle: string | null = null
-  let latestSeq = 0
-  for (const call of inThisTurnAnswer) {
-    if (call.title !== null) lastTitle = call.title
-    if (call.seq > latestSeq) latestSeq = call.seq
-    for (const id of call.surfaceIds) {
-      if (!dockedIdsUpToTurn.has(id)) {
-        visibleSurfaceIds.add(id)
-      }
-    }
-    for (const msg of call.messages) {
-      const del = (msg as { deleteSurface?: { surfaceId?: unknown } }).deleteSurface
-      if (del && typeof del.surfaceId === 'string') {
-        visibleSurfaceIds.delete(del.surfaceId)
-      }
-    }
-  }
-
-  if (visibleSurfaceIds.size === 0) {
-    targetSnapMap.set(turnNumber, null)
-    return null
-  }
-
-  let superseded = false
+  const supersededSurfaceIds = new Set<string>()
   for (const id of visibleSurfaceIds) {
     if (laterUpdatedIds.has(id)) {
-      superseded = true
-      break
+      supersededSurfaceIds.add(id)
     }
   }
+  const superseded = supersededSurfaceIds.size > 0
+  const allSuperseded = supersededSurfaceIds.size === visibleSurfaceIds.size
 
   const messages = filterMessagesBySurfaceIds(
     upToTurn.flatMap((call) => call.messages),
@@ -386,7 +464,7 @@ export function resolveTurnTailBatch(
 
   const firstCallId = inThisTurnAnswer[0]?.callId ?? String(turnNumber)
   const memoKey = `${firstCallId}::${turnNumber}`
-  const sig = `${latestSeq}|${superseded ? 1 : 0}|${messages.length}|${[...visibleSurfaceIds].join(',')}|${lastTitle ?? ''}`
+  const sig = `${latestSeq}|${superseded ? 1 : 0}|${allSuperseded ? 1 : 0}|${[...supersededSurfaceIds].join(',')}|${messages.length}|${[...visibleSurfaceIds].join(',')}|${lastTitle ?? ''}`
   const prev = turnTailMemo.get(memoKey)
   if (prev !== undefined && prev.sig === sig) {
     turnTailMemo.delete(memoKey)
@@ -398,9 +476,11 @@ export function resolveTurnTailBatch(
   const batch: TurnTailBatch = {
     title: lastTitle,
     visibleSurfaceIds,
+    supersededSurfaceIds,
     messages,
     latestSeq,
     superseded,
+    allSuperseded,
   }
   turnTailMemo.delete(memoKey)
   if (turnTailMemo.size >= MAX_TURN_TAIL_MEMO) {

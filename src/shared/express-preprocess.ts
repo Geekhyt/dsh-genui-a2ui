@@ -150,12 +150,29 @@ function findTopLevelChar(src: string, target: string): number {
   return -1
 }
 
+function splitTrailingLineComment(line: string): { code: string; comment: string } {
+  let i = 0
+  while (i < line.length) {
+    const ch = line[i]
+    if (ch === '#' || (ch === '-' && line[i + 1] === '-') || (ch === '/' && line[i + 1] === '/')) {
+      return { code: line.slice(0, i), comment: line.slice(i) }
+    }
+    const skipped = scanStringOrComment(line, i)
+    if (skipped !== -1) {
+      i = skipped
+      continue
+    }
+    i += 1
+  }
+  return { code: line, comment: '' }
+}
+
 function isStringLikeConcatTerm(term: string): boolean {
   const t = term.trim()
   return (
     t.startsWith('"') ||
-    t.startsWith("'") ||
     t.startsWith('r"') ||
+    t.startsWith('R"') ||
     /^(?:formatNumber|formatCurrency|formatDate|formatString|concat)\s*\(/.test(t)
   )
 }
@@ -228,7 +245,11 @@ function transformConcatRhs(rhs: string, depth: number): string {
 export function desugarExpressConcat(ui: string): string {
   if (!ui.includes('+')) return ui
   return splitTopLevel(ui, '\n')
-    .map((stmt) => transformConcatChunk(stmt, '=', 0))
+    .map((stmt) => {
+      const { code, comment } = splitTrailingLineComment(stmt)
+      if (!code.includes('+')) return stmt
+      return `${transformConcatChunk(code, '=', 0)}${comment}`
+    })
     .join('\n')
 }
 
@@ -236,11 +257,21 @@ function isStaticScalarLiteral(expr: string): boolean {
   const t = expr.trim()
   if (/^-?\d+(?:\.\d+)?$/.test(t)) return true
   if (t === 'true' || t === 'false') return true
-  if ((t.startsWith('"') && t.endsWith('"')) || (t.startsWith("'") && t.endsWith("'"))) {
+  if (t.startsWith('"') && t.endsWith('"')) {
     const end = scanStringOrComment(t, 0)
     return end === t.length
   }
   return false
+}
+
+function isNonCanonicalNumericString(str: string): boolean {
+  const trimmed = str.trim()
+  if (trimmed === '') return false
+  if (!/^[+-]?(?:\d[\d,]*\.?\d*|\.\d+)$/.test(trimmed)) return false
+  const cleaned = trimmed.replace(/,/g, '')
+  const num = Number(cleaned)
+  if (!Number.isFinite(num)) return false
+  return String(num) !== str
 }
 
 function parseJsonStringLiteral(literal: string): string | null {
@@ -266,10 +297,22 @@ function parseEqLiteralCall(expr: string): { keyExpr: string; matchKey: string }
   const b = args[1]!.trim()
   const aStr = parseJsonStringLiteral(a)
   const bStr = parseJsonStringLiteral(b)
-  if (bStr !== null && aStr === null && !isDangerousObjectKey(bStr) && !bStr.startsWith('@')) {
+  if (
+    bStr !== null &&
+    aStr === null &&
+    !isDangerousObjectKey(bStr) &&
+    !bStr.startsWith('@') &&
+    !isNonCanonicalNumericString(bStr)
+  ) {
     return { keyExpr: a, matchKey: b }
   }
-  if (aStr !== null && bStr === null && !isDangerousObjectKey(aStr) && !aStr.startsWith('@')) {
+  if (
+    aStr !== null &&
+    bStr === null &&
+    !isDangerousObjectKey(aStr) &&
+    !aStr.startsWith('@') &&
+    !isNonCanonicalNumericString(aStr)
+  ) {
     return { keyExpr: b, matchKey: a }
   }
   return null
@@ -396,33 +439,65 @@ function parseCalcCall(
   const args = splitTopLevel(t.slice(5, -1), ',').filter((a) => a.trim() !== '')
   if (args.length < 1 || args.length > 3) return null
 
-  let exprArg = args[0]!.trim()
-  const exprNamedEq = findTopLevelChar(exprArg, '=')
-  if (exprNamedEq !== -1 && exprArg.slice(0, exprNamedEq).trim() === 'expr') {
-    exprArg = exprArg.slice(exprNamedEq + 1).trim()
+  let exprRaw: string | null = null
+  let varsRaw: string | null = null
+  let decimalsArg: string | null = null
+  const positional: string[] = []
+
+  for (const rawArg of args) {
+    const trimmed = rawArg.trim()
+    const eqIdx = findTopLevelChar(trimmed, '=')
+    if (eqIdx !== -1 && trimmed[eqIdx + 1] !== '=' && !/[!<>]/.test(trimmed[eqIdx - 1] ?? '')) {
+      const name = trimmed.slice(0, eqIdx).trim()
+      const val = trimmed.slice(eqIdx + 1).trim()
+      if (name === 'expr') {
+        if (exprRaw !== null) return null
+        exprRaw = val
+        continue
+      }
+      if (name === 'vars') {
+        if (varsRaw !== null) return null
+        varsRaw = val
+        continue
+      }
+      if (name === 'decimals') {
+        if (decimalsArg !== null) return null
+        decimalsArg = trimmed
+        continue
+      }
+      return null
+    }
+    positional.push(trimmed)
   }
-  const expr = parseJsonStringLiteral(exprArg)
+
+  let posIdx = 0
+  if (exprRaw === null && posIdx < positional.length) {
+    exprRaw = positional[posIdx++]!
+  }
+  if (varsRaw === null && posIdx < positional.length) {
+    varsRaw = positional[posIdx++]!
+  }
+  if (decimalsArg === null && posIdx < positional.length) {
+    decimalsArg = positional[posIdx++]!
+  }
+  if (posIdx < positional.length || exprRaw === null) return null
+
+  const expr = parseJsonStringLiteral(exprRaw)
   if (expr === null) return null
 
-  if (args.length === 1) {
-    return { expr, vars: Object.create(null) as Record<string, string>, decimalsArg: null }
+  if (varsRaw === null) {
+    return { expr, vars: Object.create(null) as Record<string, string>, decimalsArg }
   }
 
-  let varsArg = args[1]!.trim()
-  const varsNamedEq = findTopLevelChar(varsArg, '=')
-  if (varsNamedEq !== -1 && varsArg.slice(0, varsNamedEq).trim() === 'vars') {
-    varsArg = varsArg.slice(varsNamedEq + 1).trim()
-  }
   const vars =
-    parseSimpleObjectLiteral(varsArg) ??
-    (/^[A-Za-z_][A-Za-z0-9_]*$/.test(varsArg) ? (localMaps.get(varsArg) ?? null) : null)
+    parseSimpleObjectLiteral(varsRaw) ??
+    (/^[A-Za-z_][A-Za-z0-9_]*$/.test(varsRaw) ? (localMaps.get(varsRaw) ?? null) : null)
   if (!vars) return null
 
   const varsCopy = Object.create(null) as Record<string, string>
   for (const [k, v] of Object.entries(vars)) {
     if (!isDangerousObjectKey(k)) varsCopy[k] = v
   }
-  const decimalsArg = args[2] !== undefined ? args[2].trim() : null
   return { expr, vars: varsCopy, decimalsArg }
 }
 
@@ -471,9 +546,14 @@ function inlineSingleCalcCall(
   let mergedExpr = parsed.expr
   const mergedVars = Object.create(null) as Record<string, string>
   let didInline = false
+  const outerBuiltins = new Set<string>(usesUnboundBuiltinConstant(parsed.expr, parsed.vars))
 
   for (const [k, rawVal] of Object.entries(parsed.vars)) {
-    const refCalc = /^[A-Za-z_][A-Za-z0-9_]*$/.test(rawVal) ? calcDefs.get(rawVal) : undefined
+    let refCalc = /^[A-Za-z_][A-Za-z0-9_]*$/.test(rawVal) ? calcDefs.get(rawVal) : undefined
+    if (!refCalc && rawVal.startsWith('calc(')) {
+      const nested = inlineSingleCalcCall(rawVal, localMaps, calcDefs, nextAlias)
+      if (nested) refCalc = nested.def
+    }
     if (!refCalc || refCalc.hasDynamicDecimals) {
       mergedVars[k] = rawVal
       continue
@@ -500,18 +580,23 @@ function inlineSingleCalcCall(
       ...Object.keys(mergedVars),
       ...Object.keys(parsed.vars),
       ...Object.keys(refCalc.vars),
+      ...outerBuiltins,
     ])
     const pendingEntries: Array<[string, string]> = []
 
     for (const [subKey, subVal] of Object.entries(refCalc.vars)) {
       const sameMerged = Object.hasOwn(mergedVars, subKey) && mergedVars[subKey] === subVal
       const sameOuter = Object.hasOwn(parsed.vars, subKey) && parsed.vars[subKey] === subVal
-      if (sameMerged || sameOuter) {
+      if (!outerBuiltins.has(subKey) && (sameMerged || sameOuter)) {
         pendingEntries.push([subKey, subVal])
         continue
       }
       let targetKey = subKey
-      if (Object.hasOwn(mergedVars, targetKey) || Object.hasOwn(parsed.vars, targetKey)) {
+      if (
+        outerBuiltins.has(targetKey) ||
+        Object.hasOwn(mergedVars, targetKey) ||
+        Object.hasOwn(parsed.vars, targetKey)
+      ) {
         do {
           targetKey = `_${subKey}_${nextAlias()}`
         } while (reserved.has(targetKey) || CALC_CONSTANTS.has(targetKey))
@@ -605,10 +690,11 @@ export function flattenChainedCalc(ui: string): string {
   }
 
   const outStmts = stmts.map((stmt) => {
-    const trimmed = stmt.trim()
+    const { code, comment } = splitTrailingLineComment(stmt)
+    const trimmed = code.trim()
     const assignMatch = /^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*([\s\S]+)$/.exec(trimmed)
     if (!assignMatch) {
-      return rewriteInlineCalcsInStatement(stmt, localMaps, calcDefs, nextAlias)
+      return `${rewriteInlineCalcsInStatement(code, localMaps, calcDefs, nextAlias)}${comment}`
     }
 
     const varName = assignMatch[1]!
@@ -617,27 +703,106 @@ export function flattenChainedCalc(ui: string): string {
     const objMap = parseSimpleObjectLiteral(rhs)
     if (objMap !== null) {
       calcDefs.delete(varName)
-      localMaps.set(varName, objMap)
-      return stmt
+      const rewrittenCode = rewriteInlineCalcsInStatement(code, localMaps, calcDefs, nextAlias)
+      const rewrittenMatch = /^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*([\s\S]+)$/.exec(rewrittenCode.trim())
+      const nextObjMap =
+        rewrittenMatch !== null ? (parseSimpleObjectLiteral(rewrittenMatch[2]!) ?? objMap) : objMap
+      localMaps.set(varName, nextObjMap)
+      return `${rewrittenCode}${comment}`
     }
 
     const inlined = inlineSingleCalcCall(rhs, localMaps, calcDefs, nextAlias)
     if (!inlined) {
-      const rewritten = rewriteInlineCalcsInStatement(stmt, localMaps, calcDefs, nextAlias)
+      const rewritten = rewriteInlineCalcsInStatement(code, localMaps, calcDefs, nextAlias)
       calcDefs.delete(varName)
       localMaps.delete(varName)
-      return rewritten
+      return `${rewritten}${comment}`
     }
 
     localMaps.delete(varName)
     calcDefs.set(varName, inlined.def)
     if (!inlined.didInline) return stmt
 
-    const lead = /^\s*/.exec(stmt)?.[0] ?? ''
-    return `${lead}${varName} = ${inlined.rewritten}`
+    const lead = /^\s*/.exec(code)?.[0] ?? ''
+    const trailSpace = /\s*$/.exec(code)?.[0] ?? ''
+    return `${lead}${varName} = ${inlined.rewritten}${comment ? `${trailSpace}${comment}` : ''}`
   })
 
   return outStmts.join('\n')
+}
+
+function rewriteDateRangeCallArgs(inner: string): string {
+  const args = splitTopLevel(inner, ',')
+  let startExpr: string | null = null
+  let endExpr: string | null = null
+  const positional: string[] = []
+
+  for (const arg of args) {
+    const trimmed = arg.trim()
+    if (trimmed === '' || trimmed.startsWith('?')) continue
+    const eqIdx = findTopLevelChar(trimmed, '=')
+    if (eqIdx !== -1 && trimmed[eqIdx + 1] !== '=' && !/[!<>]/.test(trimmed[eqIdx - 1] ?? '')) {
+      const key = trimmed.slice(0, eqIdx).trim()
+      const val = trimmed.slice(eqIdx + 1).trim()
+      if (key === 'start') startExpr = val
+      else if (key === 'end') endExpr = val
+    } else {
+      positional.push(trimmed)
+    }
+  }
+  if (startExpr === null && positional.length >= 2) startExpr = positional[1]!
+  if (endExpr === null && positional.length >= 3) endExpr = positional[2]!
+  if (!startExpr || !endExpr) return inner
+
+  let changed = false
+  const nextArgs = args.map((arg) => {
+    const lead = /^\s*/.exec(arg)?.[0] ?? ''
+    const trail = /\s*$/.exec(arg)?.[0] ?? ''
+    const trimmed = arg.trim()
+    if (!trimmed.startsWith('?')) return arg
+    const afterQ = trimmed.slice(1).trimStart()
+    if (!afterQ.startsWith('required(') || !afterQ.endsWith(')')) return arg
+    const bMap = buildBracketMap(afterQ)
+    if (bMap[8] !== afterQ.length - 1) return arg
+    const reqArgs = splitTopLevel(afterQ.slice(9, -1), ',').filter((a) => a.trim() !== '')
+    if (reqArgs.length === 0) {
+      changed = true
+      return `${lead}?and([required(${startExpr}), required(${endExpr})])${trail}`
+    }
+    if (reqArgs.length === 1 && parseJsonStringLiteral(reqArgs[0]!.trim()) !== null) {
+      changed = true
+      return `${lead}?and([required(${startExpr}), required(${endExpr})], ${reqArgs[0]!.trim()})${trail}`
+    }
+    return arg
+  })
+  return changed ? nextArgs.join(',') : inner
+}
+
+export function expandDateRangeShorthandChecks(ui: string): string {
+  if (!ui.includes('DateRange(') || !ui.includes('?')) return ui
+  const brackets = buildBracketMap(ui)
+  let out = ''
+  let i = 0
+  while (i < ui.length) {
+    const skipped = scanStringOrComment(ui, i)
+    if (skipped !== -1) {
+      out += ui.slice(i, skipped)
+      i = skipped
+      continue
+    }
+    if (ui.startsWith('DateRange(', i) && (i === 0 || !isIdentChar(ui[i - 1]))) {
+      const closeIdx = brackets[i + 9] ?? -1
+      if (closeIdx !== -1) {
+        const inner = ui.slice(i + 10, closeIdx)
+        out += `DateRange(${rewriteDateRangeCallArgs(inner)})`
+        i = closeIdx + 1
+        continue
+      }
+    }
+    out += ui[i]!
+    i += 1
+  }
+  return out
 }
 
 export function extractUpdateSurfaceIds(cleanedUi: string): string[] {
@@ -685,7 +850,8 @@ export function extractUpdateSurfaceIds(cleanedUi: string): string[] {
 }
 
 export function preprocessExpressProgram(ui: string): string {
-  const step1 = desugarExpressConcat(ui)
+  const step0 = expandDateRangeShorthandChecks(ui)
+  const step1 = desugarExpressConcat(step0)
   const step2 = foldNestedCondToLookup(step1)
   return flattenChainedCalc(step2)
 }

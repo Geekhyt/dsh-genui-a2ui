@@ -25,6 +25,8 @@ import { isDangerousObjectKey } from '../shared/constants.ts'
 import { enrichActionWithSelection, formatActionMessage } from './action-protocol.ts'
 import { DSH_CLIENT_CATALOGS } from './catalog/index.ts'
 import {
+  type SurfaceActionStatus,
+  SurfaceActionStatusContext,
   SurfaceReadOnlyContext,
   SurfaceValidationContext,
   type SurfaceValidationContextValue,
@@ -36,6 +38,7 @@ import { useRuntimeMessages } from './i18n.ts'
 import { notifySubscribers } from './notify.ts'
 import {
   computeMessagesFingerprint,
+  escapeJsonPointerSegment,
   isPointerObscuredOrParent,
   loadSurfaceDraft,
   normalizePointerPath,
@@ -123,11 +126,19 @@ function collectBlockedSecretValues(
   obscuredPointers: ReadonlySet<string>,
 ): { readonly blocked: Set<string>; readonly failed: boolean } {
   const blocked = new Set<string>()
+  const addSecret = (val: unknown) => {
+    if (typeof val === 'string' && val.length >= 4) {
+      blocked.add(val)
+    } else if (typeof val === 'number' && Number.isFinite(val)) {
+      const s = String(val)
+      if (s.length >= 4) blocked.add(s)
+    }
+  }
   const collectLeaves = (node: unknown, path: string, depth: number) => {
     if (depth > 8 || node === null || node === undefined) return
-    if (typeof node === 'string') {
-      if (node.length >= 4 && isPointerObscuredOrParent(path, obscuredPointers)) {
-        blocked.add(node)
+    if (typeof node === 'string' || typeof node === 'number') {
+      if (isPointerObscuredOrParent(path, obscuredPointers)) {
+        addSecret(node)
       }
       return
     }
@@ -139,7 +150,8 @@ function collectBlockedSecretValues(
     }
     if (typeof node === 'object') {
       for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
-        collectLeaves(v, path === '/' ? `/${k}` : `${path}/${k}`, depth + 1)
+        const seg = escapeJsonPointerSegment(k)
+        collectLeaves(v, path === '/' ? `/${seg}` : `${path}/${seg}`, depth + 1)
       }
     }
   }
@@ -151,9 +163,7 @@ function collectBlockedSecretValues(
     }
     try {
       const secretVal = surface.dataModel.get(normalizePointerPath(pointer))
-      if (typeof secretVal === 'string' && secretVal.length >= 4) {
-        blocked.add(secretVal)
-      }
+      addSecret(secretVal)
     } catch {
       return { blocked, failed: true }
     }
@@ -200,6 +210,9 @@ function stripObscuredFromContext(
   }
   if (typeof value === 'string') {
     return scrubStringWithBlockedValues(value, blockedValues)
+  }
+  if (typeof value === 'number' && Number.isFinite(value) && blockedValues.has(String(value))) {
+    return undefined
   }
   if (Array.isArray(value)) {
     const rawArr = Array.isArray(rawBinding) ? rawBinding : undefined
@@ -405,11 +418,12 @@ export type SurfaceActionCallback = (
   formattedMessage: string,
   raw: ActionPayload,
   dataModels: Record<string, unknown>,
-) => void
+) => unknown
 
 export interface SurfaceGroupViewProps {
   readonly messages: readonly AgentToRendererMessage[]
   readonly visibleSurfaceIds?: ReadonlySet<string> | undefined
+  readonly readOnlySurfaceIds?: ReadonlySet<string> | undefined
   readonly title?: string | null | undefined
   readonly streaming?: boolean | undefined
   readonly sessionId?: string | undefined
@@ -425,6 +439,7 @@ export class SurfaceSessionStore {
   readonly processor: MessageProcessor<ReactCatalogComponent>
   private onAction: SurfaceActionCallback | undefined = undefined
   private readOnly = false
+  private readOnlySurfaceIds: ReadonlySet<string> | undefined = undefined
   private streaming = false
   private sessionId: string | undefined = undefined
   private fingerprint = ''
@@ -435,6 +450,8 @@ export class SurfaceSessionStore {
   private appliedPrefix: readonly AgentToRendererMessage[] = []
   private mutatingModel = false
   private lastActionAt = 0
+  private actionSeq = 0
+  private lastActionOk = true
   private _generation = 0
   private mountedListeners = 0
   private readonly externalListeners = new Set<() => void>()
@@ -452,18 +469,48 @@ export class SurfaceSessionStore {
   constructor() {
     this.processor = new MessageProcessor<ReactCatalogComponent>(
       [...DSH_CLIENT_CATALOGS],
-      (action: ActionPayload) => {
-        if (this.readOnly) return
+      async (action: ActionPayload) => {
+        if (this.readOnly || this.readOnlySurfaceIds?.has(action.surfaceId)) {
+          this.actionSeq += 1
+          this.lastActionOk = false
+          return
+        }
         const handler = this.onAction
-        if (handler === undefined) return
+        if (handler === undefined) {
+          this.actionSeq += 1
+          this.lastActionOk = false
+          return
+        }
         const now = Date.now()
-        if (now - this.lastActionAt < ACTION_COOLDOWN_MS) return
+        if (now - this.lastActionAt < ACTION_COOLDOWN_MS) {
+          this.actionSeq += 1
+          this.lastActionOk = false
+          return
+        }
         this.lastActionAt = now
 
         const dataModels = readSanitizedDataModels(this.processor, this.visibleSurfaceIds)
         const targetSurface = this.processor.getSurfaces().get(action.surfaceId)
         const cleanAction = sanitizeActionPayloadForSurface(targetSurface, action)
-        handler(formatActionMessage(cleanAction, dataModels), cleanAction, dataModels)
+        try {
+          const result = await handler(
+            formatActionMessage(cleanAction, dataModels),
+            cleanAction,
+            dataModels,
+          )
+          if (result === false) {
+            this.lastActionAt = 0
+            this.actionSeq += 1
+            this.lastActionOk = false
+            return
+          }
+          this.actionSeq += 1
+          this.lastActionOk = true
+        } catch {
+          this.lastActionAt = 0
+          this.actionSeq += 1
+          this.lastActionOk = false
+        }
       },
       {
         version: 'v1.0',
@@ -472,6 +519,11 @@ export class SurfaceSessionStore {
       },
     )
   }
+
+  readonly getActionStatus = (): SurfaceActionStatus => ({
+    seq: this.actionSeq,
+    ok: this.lastActionOk,
+  })
 
   get generation(): number {
     return this._generation
@@ -534,6 +586,13 @@ export class SurfaceSessionStore {
     }
   }
 
+  private cancelPendingDraftWrites(): void {
+    for (const entry of this.pendingDraftWrites.values()) {
+      clearTimeout(entry.timer)
+    }
+    this.pendingDraftWrites.clear()
+  }
+
   private syncDraftSubscriptions(): void {
     if (this.mountedListeners === 0) return
     const activeSet = new Set(this.processor.getSurfaces().values())
@@ -546,7 +605,14 @@ export class SurfaceSessionStore {
     for (const surface of activeSet) {
       if (this.draftSubs.has(surface)) continue
       const sub = surface.dataModel.subscribe('/', (rootVal) => {
-        if (this.mutatingModel || this.streaming || this.readOnly) return
+        if (
+          this.mutatingModel ||
+          this.streaming ||
+          this.readOnly ||
+          this.readOnlySurfaceIds?.has(surface.id)
+        ) {
+          return
+        }
         const sid = this.sessionId
         const fp = this.fingerprint
         if (!sid || !fp || typeof rootVal !== 'object' || rootVal === null) return
@@ -569,6 +635,7 @@ export class SurfaceSessionStore {
     options: {
       readonly streaming: boolean
       readonly readOnly: boolean
+      readonly readOnlySurfaceIds?: ReadonlySet<string> | undefined
       readonly sessionId: string | undefined
       readonly fingerprint: string
       readonly visibleSurfaceIds: ReadonlySet<string> | undefined
@@ -579,6 +646,7 @@ export class SurfaceSessionStore {
   ): void {
     this.streaming = options.streaming
     this.readOnly = options.readOnly
+    this.readOnlySurfaceIds = options.readOnlySurfaceIds
     this.sessionId = options.sessionId
     this.fingerprint = options.fingerprint
     this.visibleSurfaceIds = options.visibleSurfaceIds
@@ -595,6 +663,7 @@ export class SurfaceSessionStore {
       this.mutatingModel = true
       try {
         if (!isExtension) {
+          this.cancelPendingDraftWrites()
           for (const id of [...this.processor.getSurfaces().keys()]) {
             this.processor.processMessages({
               version: '1.0',
@@ -608,6 +677,18 @@ export class SurfaceSessionStore {
 
         const slice = messages.slice(this.appliedCount)
         if (slice.length > 0) {
+          if (
+            isExtension &&
+            prevCount > 0 &&
+            slice.some(
+              (m) =>
+                typeof m === 'object' &&
+                m !== null &&
+                ('updateComponents' in m || 'createSurface' in m),
+            )
+          ) {
+            this._generation += 1
+          }
           this.processor.processMessagesWithErrors(slice as unknown as ProcessableMessage[])
           this.appliedCount = messages.length
           this.appliedPrefix = messages
@@ -632,8 +713,9 @@ export class SurfaceSessionStore {
       try {
         for (const surface of this.surfacesSnapshot) {
           if (
-            options.visibleSurfaceIds !== undefined &&
-            !options.visibleSurfaceIds.has(surface.id)
+            (options.visibleSurfaceIds !== undefined &&
+              !options.visibleSurfaceIds.has(surface.id)) ||
+            options.readOnlySurfaceIds?.has(surface.id)
           ) {
             continue
           }
@@ -696,6 +778,7 @@ export class SurfaceSessionStore {
 export const SurfaceGroupView = memo(function SurfaceGroupView({
   messages,
   visibleSurfaceIds,
+  readOnlySurfaceIds,
   title,
   streaming = false,
   sessionId,
@@ -722,6 +805,7 @@ export const SurfaceGroupView = memo(function SurfaceGroupView({
     store.reconcile(messages, {
       streaming,
       readOnly,
+      readOnlySurfaceIds,
       sessionId,
       fingerprint,
       visibleSurfaceIds,
@@ -735,13 +819,24 @@ export const SurfaceGroupView = memo(function SurfaceGroupView({
     store.reconcile(messages, {
       streaming,
       readOnly,
+      readOnlySurfaceIds,
       sessionId,
       fingerprint,
       visibleSurfaceIds,
       onAction,
       notify: true,
     })
-  }, [store, messages, streaming, readOnly, sessionId, fingerprint, visibleSurfaceIds, onAction])
+  }, [
+    store,
+    messages,
+    streaming,
+    readOnly,
+    readOnlySurfaceIds,
+    sessionId,
+    fingerprint,
+    visibleSurfaceIds,
+    onAction,
+  ])
 
   const surfaces = useSyncExternalStore(store.subscribe, store.getSurfaces, store.getServerSurfaces)
 
@@ -777,6 +872,12 @@ export const SurfaceGroupView = memo(function SurfaceGroupView({
     },
     [readOnly],
   )
+
+  const setSubSurfaceInertRef = useCallback((node: HTMLDivElement | null) => {
+    if (node !== null) {
+      ;(node as HTMLDivElement & { inert?: boolean }).inert = true
+    }
+  }, [])
 
   const msg = useRuntimeMessages()
   const themeClass = dark ? 'a2ui-dark' : 'a2ui-light'
@@ -818,48 +919,72 @@ export const SurfaceGroupView = memo(function SurfaceGroupView({
           </span>
         </header>
       ) : null}
-      <SurfaceReadOnlyContext.Provider value={Boolean(readOnly)}>
-        <SurfaceValidationContext.Provider value={validationContext}>
-          <FileOpenContext.Provider value={streaming || readOnly ? undefined : openWorkspaceFile}>
-            <MarkdownComponentContext.Provider value={HostMarkdown}>
-              <div
-                ref={setStackInertRef}
-                className={`${css.surfaceStack}${readOnly ? ` ${css.surfaceStackReadOnly}` : ''}`}
-              >
-                {shown.length === 0 ? (
-                  streaming ? (
-                    <div className={css.skeletonWrap} data-a2ui-skeleton="" aria-live="polite">
-                      {SKELETON_KPI_ROW}
-                      {SKELETON_CHART}
-                      <span className={css.skeletonHint}>
-                        <DshTextShimmer active={true}>{msg.buildingSurface}</DshTextShimmer>
-                      </span>
-                    </div>
+      <SurfaceActionStatusContext.Provider value={store.getActionStatus}>
+        <SurfaceReadOnlyContext.Provider value={Boolean(readOnly)}>
+          <SurfaceValidationContext.Provider value={validationContext}>
+            <FileOpenContext.Provider value={streaming || readOnly ? undefined : openWorkspaceFile}>
+              <MarkdownComponentContext.Provider value={HostMarkdown}>
+                <div
+                  ref={setStackInertRef}
+                  className={`${css.surfaceStack}${readOnly ? ` ${css.surfaceStackReadOnly}` : ''}`}
+                >
+                  {shown.length === 0 ? (
+                    streaming ? (
+                      <div className={css.skeletonWrap} data-a2ui-skeleton="" aria-live="polite">
+                        {SKELETON_KPI_ROW}
+                        {SKELETON_CHART}
+                        <span className={css.skeletonHint}>
+                          <DshTextShimmer active={true}>{msg.buildingSurface}</DshTextShimmer>
+                        </span>
+                      </div>
+                    ) : (
+                      <div className={css.skeleton}>{msg.emptySurface}</div>
+                    )
                   ) : (
-                    <div className={css.skeleton}>{msg.emptySurface}</div>
-                  )
-                ) : (
-                  shown.map((surface) => (
-                    <ErrorBoundary
-                      key={surface.id}
-                      resetKey={`${store.generation}:${streaming ? 1 : 0}:${messages.length}`}
-                      label={msg.surfaceRenderFailed(surface.id)}
+                    shown.map((surface) => {
+                      const partialReadOnly =
+                        !readOnly && Boolean(readOnlySurfaceIds?.has(surface.id))
+                      const body = (
+                        <ErrorBoundary
+                          key={surface.id}
+                          resetKey={`${store.generation}:${streaming ? 1 : 0}:${messages.length}`}
+                          label={msg.surfaceRenderFailed(surface.id)}
+                        >
+                          <A2uiSurface surface={surface} />
+                        </ErrorBoundary>
+                      )
+                      if (!partialReadOnly) return body
+                      return (
+                        <SurfaceReadOnlyContext.Provider key={surface.id} value={true}>
+                          <FileOpenContext.Provider value={undefined}>
+                            <div
+                              ref={setSubSurfaceInertRef}
+                              className={css.surfaceStackReadOnly}
+                              data-surface-readonly="true"
+                            >
+                              {body}
+                            </div>
+                          </FileOpenContext.Provider>
+                        </SurfaceReadOnlyContext.Provider>
+                      )
+                    })
+                  )}
+                  {streaming && shown.length > 0 ? (
+                    <div
+                      className={css.streamingFoot}
+                      data-a2ui-streaming-foot=""
+                      aria-live="polite"
                     >
-                      <A2uiSurface surface={surface} />
-                    </ErrorBoundary>
-                  ))
-                )}
-                {streaming && shown.length > 0 ? (
-                  <div className={css.streamingFoot} data-a2ui-streaming-foot="" aria-live="polite">
-                    <span className={css.streamingDot} aria-hidden="true" />
-                    <DshTextShimmer active={true}>{msg.streamingSyncing}</DshTextShimmer>
-                  </div>
-                ) : null}
-              </div>
-            </MarkdownComponentContext.Provider>
-          </FileOpenContext.Provider>
-        </SurfaceValidationContext.Provider>
-      </SurfaceReadOnlyContext.Provider>
+                      <span className={css.streamingDot} aria-hidden="true" />
+                      <DshTextShimmer active={true}>{msg.streamingSyncing}</DshTextShimmer>
+                    </div>
+                  ) : null}
+                </div>
+              </MarkdownComponentContext.Provider>
+            </FileOpenContext.Provider>
+          </SurfaceValidationContext.Provider>
+        </SurfaceReadOnlyContext.Provider>
+      </SurfaceActionStatusContext.Provider>
     </section>
   )
 })

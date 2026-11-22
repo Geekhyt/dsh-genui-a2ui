@@ -10,6 +10,7 @@ import {
 import { type CSSProperties, type ReactNode, useCallback, useContext, useId, useState } from 'react'
 import { DshTextApi, GridApi } from '../../shared/catalog-schema.ts'
 import { useRuntimeMessages } from '../i18n.ts'
+import { useDarkTheme } from '../theme.ts'
 import { DshMarkdown, DshModal, DshSegmentedTabs, type SegmentedTab } from '../ui/primitives.tsx'
 import css from './Catalog.module.css'
 import {
@@ -19,6 +20,7 @@ import {
   InsideButtonContext,
   JUSTIFY_MAP,
   ModalCloseContext,
+  ModalOpenContext,
   ModalTriggerContext,
   renderChildList,
   renderChildRef,
@@ -70,7 +72,7 @@ export const DshCardImpl = defineComponent<{
   return (
     <div
       className={css.card}
-      style={weightStyle(props.weight)}
+      style={weightStyle(props.weight, 190)}
       data-a2ui-card=""
       data-a2ui-weighted={props.weight !== undefined ? 'true' : undefined}
     >
@@ -175,7 +177,7 @@ export const DshColumnImpl = defineComponent<{
       data-a2ui-column=""
       data-a2ui-weighted={props.weight !== undefined ? 'true' : undefined}
       style={{
-        ...weightStyle(props.weight),
+        ...weightStyle(props.weight, 180),
         justifyContent: JUSTIFY_MAP[props.justify ?? 'start'] ?? 'flex-start',
         alignItems: ALIGN_MAP[props.align ?? 'stretch'] ?? 'stretch',
       }}
@@ -196,7 +198,7 @@ export const DshListImpl = defineComponent<{
     <div
       className={isHorizontal ? css.listHorizontal : css.listVertical}
       style={{
-        ...weightStyle(props.weight),
+        ...weightStyle(props.weight, 220),
         alignItems: ALIGN_MAP[props.align ?? 'stretch'] ?? 'stretch',
       }}
     >
@@ -223,7 +225,7 @@ export const DshGridImpl = defineComponent<{
       : 3
   const gapPx = GRID_GAP_MAP[props.gap ?? 'md'] ?? 12
   return (
-    <div className={css.containerHost} style={weightStyle(props.weight)}>
+    <div className={css.containerHost} style={weightStyle(props.weight, 220)}>
       <div
         className={css.responsiveGrid}
         data-a2ui-grid=""
@@ -271,15 +273,35 @@ export const DshTabsImpl = defineComponent<{
   const baseId = useId()
   const [activeIdx, setActiveIdx] = useState(0)
   const [visitedIndices, setVisitedIndices] = useState<ReadonlySet<number>>(() => new Set([0]))
+  const [prevTabCount, setPrevTabCount] = useState(tabs.length)
   const safeIdx = tabs.length === 0 ? 0 : Math.min(activeIdx, tabs.length - 1)
 
-  if (tabs.length > 0 && !visitedIndices.has(safeIdx)) {
-    const next = new Set(visitedIndices)
-    next.add(safeIdx)
-    setVisitedIndices(next)
+  if (tabs.length !== prevTabCount) {
+    setPrevTabCount(tabs.length)
+    if (tabs.length > 0) {
+      const pruned = new Set<number>()
+      for (const idx of visitedIndices) {
+        if (idx >= 0 && idx < tabs.length) pruned.add(idx)
+      }
+      pruned.add(safeIdx)
+      setVisitedIndices(pruned)
+    } else if (visitedIndices.size > 0) {
+      setVisitedIndices(new Set())
+    }
   }
 
   if (tabs.length === 0) return null
+
+  const handleTabChange = (v: string) => {
+    const nextIdx = Math.max(0, Math.min(Number(v) || 0, tabs.length - 1))
+    setActiveIdx(nextIdx)
+    setVisitedIndices((prev) => {
+      if (prev.has(nextIdx)) return prev
+      const next = new Set(prev)
+      next.add(nextIdx)
+      return next
+    })
+  }
 
   const items = tabs.map((tab, idx) => ({
     value: String(idx),
@@ -289,12 +311,12 @@ export const DshTabsImpl = defineComponent<{
   })) as unknown as readonly [SegmentedTab<string>, ...SegmentedTab<string>[]]
 
   return (
-    <div className={css.tabsWrap} style={weightStyle(props.weight)} data-a2ui-tabs="">
+    <div className={css.tabsWrap} style={weightStyle(props.weight, 220)} data-a2ui-tabs="">
       <div className={css.tabsHeaderScroll}>
         <DshSegmentedTabs
           items={items}
           value={String(safeIdx)}
-          onChange={(v) => setActiveIdx(Number(v) || 0)}
+          onChange={handleTabChange}
           label={msg.tabsAriaLabel}
           size="sm"
         />
@@ -332,12 +354,17 @@ export function DshModalView({
   buildChild: (id: string, basePath?: string) => ReactNode
 }) {
   const msg = useRuntimeMessages()
+  const dark = useDarkTheme()
   const readOnly = useContext(SurfaceReadOnlyContext)
   const [open, setOpen] = useState(false)
 
   if (readOnly && open) {
     setOpen(false)
   }
+
+  const openModal = useCallback(() => {
+    if (!readOnly) setOpen(true)
+  }, [readOnly])
 
   const closeModal = useCallback(() => {
     setOpen(false)
@@ -355,17 +382,44 @@ export function DshModalView({
         className={css.modalTrigger}
         aria-disabled={readOnly || undefined}
         onClickCapture={(e) => {
+          if (readOnly) {
+            e.preventDefault()
+            e.stopPropagation()
+            return
+          }
+          const target = e.target as HTMLElement | null
+          if (target?.closest?.('[disabled], [aria-disabled="true"]')) return
           e.stopPropagation()
+          e.preventDefault()
+          setOpen(true)
+        }}
+        onKeyDown={(e) => {
+          if (e.defaultPrevented) return
+          if (e.key !== 'Enter' && e.key !== ' ') return
+          const target = e.target as HTMLElement | null
+          if (
+            target?.closest(
+              'button, a, input, select, textarea, [disabled], [aria-disabled="true"]',
+            )
+          ) {
+            return
+          }
           if (readOnly) {
             e.preventDefault()
             return
           }
+          e.preventDefault()
+          e.stopPropagation()
           setOpen(true)
         }}
       >
-        <ModalTriggerContext.Provider value={true}>
-          {renderChildRef(buildChild, props.trigger)}
-        </ModalTriggerContext.Provider>
+        <ModalCloseContext.Provider value={null}>
+          <ModalOpenContext.Provider value={openModal}>
+            <ModalTriggerContext.Provider value={true}>
+              {renderChildRef(buildChild, props.trigger)}
+            </ModalTriggerContext.Provider>
+          </ModalOpenContext.Provider>
+        </ModalCloseContext.Provider>
       </div>
       <DshModal
         open={isOpen}
@@ -374,7 +428,7 @@ export function DshModalView({
         closeLabel={msg.modalClose}
       >
         {isOpen ? (
-          <div className={css.containerHost}>
+          <div className={`${css.containerHost} a2ui-surface ${dark ? 'a2ui-dark' : 'a2ui-light'}`}>
             <ModalCloseContext.Provider value={closeModal}>
               {renderChildRef(buildChild, props.content)}
             </ModalCloseContext.Provider>

@@ -50,9 +50,12 @@ import {
   type ClampedPopoverBox,
   computeClampedPopoverBox,
   defineComponent,
+  isLocalFunctionAction,
   isWritableProp,
   ModalCloseContext,
   NativeDateField,
+  runSurfaceAction,
+  SurfaceActionStatusContext,
   SurfaceReadOnlyContext,
   SurfaceValidationContext,
   weightStyle,
@@ -65,6 +68,7 @@ const CHECK_ICON_12 = <DshCheckIcon size={12} />
 function handleOptionListArrowKey(
   e: ReactKeyboardEvent<HTMLElement>,
   container: HTMLElement | null,
+  roleSelector = '[role="option"]',
 ): void {
   if (!container) return
   if (
@@ -75,7 +79,7 @@ function handleOptionListArrowKey(
     return
   }
   if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp' && e.key !== 'Home' && e.key !== 'End') return
-  const items = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="option"]'))
+  const items = Array.from(container.querySelectorAll<HTMLButtonElement>(roleSelector))
   if (items.length === 0) return
   const active = typeof document !== 'undefined' ? document.activeElement : null
   const idx = items.indexOf(active as HTMLButtonElement)
@@ -111,29 +115,35 @@ export const DshNumberInputImpl = defineComponent<{
   const [touched, setTouched] = useState(false)
   const [focused, setFocused] = useState(false)
   const [draft, setDraft] = useState('')
-  const [prevSafeVal, setPrevSafeVal] = useState<number | null>(null)
+  const [prevValueKey, setPrevValueKey] = useState<string | null>(null)
 
   const hasRawVal =
     props.value !== undefined && props.value !== null && String(props.value).trim() !== ''
   const numVal = hasRawVal ? Number(props.value) : Number.NaN
+  const hasValidNum = hasRawVal && Number.isFinite(numVal)
   const safeMin =
     typeof props.min === 'number' && Number.isFinite(props.min) ? props.min : undefined
   const safeMax =
     typeof props.max === 'number' && Number.isFinite(props.max) ? props.max : undefined
-  const safeVal = Number.isFinite(numVal) ? numVal : (safeMin ?? 0)
-  if (prevSafeVal !== safeVal) {
-    setPrevSafeVal(safeVal)
+  const safeVal = hasValidNum ? numVal : (safeMin ?? 0)
+  const valueKey = hasValidNum ? String(numVal) : ''
+  if (prevValueKey !== valueKey) {
+    setPrevValueKey(valueKey)
     if (focused) {
-      const parsedDraft = Number(draft.trim())
-      if (!Number.isFinite(parsedDraft) || parsedDraft !== safeVal) {
-        setDraft(String(safeVal))
+      const trimmedDraft = draft.trim()
+      const parsedDraft = trimmedDraft === '' ? Number.NaN : Number(trimmedDraft)
+      const draftMatches =
+        (hasValidNum && Number.isFinite(parsedDraft) && parsedDraft === numVal) ||
+        (!hasValidNum && trimmedDraft === '')
+      if (!draftMatches) {
+        setDraft(valueKey)
       }
     }
   }
   const step =
     typeof props.step === 'number' && Number.isFinite(props.step) && props.step > 0 ? props.step : 1
-  const atMin = safeMin !== undefined && safeVal <= safeMin
-  const atMax = safeMax !== undefined && safeVal >= safeMax
+  const atMin = hasValidNum && safeMin !== undefined && numVal <= safeMin
+  const atMax = hasValidNum && safeMax !== undefined && numVal >= safeMax
 
   const label = props.label !== undefined && props.label !== null ? String(props.label) : ''
   const unit = props.unit !== undefined && props.unit !== null ? String(props.unit) : ''
@@ -144,13 +154,21 @@ export const DshNumberInputImpl = defineComponent<{
   const applyDelta = (delta: number) => {
     if (readOnly) return
     setTouched(true)
-    const next = clampAndStepNumber({
-      current: safeVal,
-      delta,
-      min: safeMin,
-      max: safeMax,
-      step,
-    })
+    const next = hasValidNum
+      ? clampAndStepNumber({
+          current: numVal,
+          delta,
+          min: safeMin,
+          max: safeMax,
+          step,
+        })
+      : clampAndStepNumber({
+          current: safeVal,
+          delta: 0,
+          min: safeMin,
+          max: safeMax,
+          step,
+        })
     if (focused) setDraft(String(next))
     props.setValue?.(next)
   }
@@ -187,25 +205,32 @@ export const DshNumberInputImpl = defineComponent<{
             type="text"
             inputMode="decimal"
             role="spinbutton"
-            aria-valuenow={safeVal}
+            aria-valuenow={hasValidNum ? numVal : undefined}
             aria-valuemin={safeMin}
             aria-valuemax={safeMax}
             className={css.numberBareInput}
-            value={focused ? draft : String(safeVal)}
+            value={focused ? draft : hasValidNum ? String(numVal) : ''}
             disabled={readOnly}
             aria-invalid={showError || undefined}
             onFocus={() => {
               setFocused(true)
-              setDraft(String(safeVal))
+              setDraft(hasValidNum ? String(numVal) : '')
             }}
             onBlur={() => {
               setFocused(false)
               setTouched(true)
-              const parsed = Number.parseFloat(draft.trim())
+              const trimmed = draft.trim()
+              if (trimmed === '') {
+                if (hasValidNum) {
+                  props.setValue?.('' as unknown as number)
+                }
+                return
+              }
+              const parsed = Number.parseFloat(trimmed)
               let clamped = Number.isFinite(parsed) ? parsed : safeVal
               if (safeMin !== undefined) clamped = Math.max(safeMin, clamped)
               if (safeMax !== undefined) clamped = Math.min(safeMax, clamped)
-              if (clamped !== safeVal) props.setValue?.(clamped)
+              if (!hasValidNum || clamped !== numVal) props.setValue?.(clamped)
             }}
             onKeyDown={(e) => {
               if (readOnly) return
@@ -234,8 +259,11 @@ export const DshNumberInputImpl = defineComponent<{
               if (!/^-?\d*\.?\d*(?:[eE][+-]?\d*)?$/.test(rawText.trim())) return
               setDraft(rawText)
               const trimmed = rawText.trim()
+              if (trimmed === '') {
+                props.setValue?.('' as unknown as number)
+                return
+              }
               if (
-                trimmed === '' ||
                 trimmed === '-' ||
                 trimmed === '.' ||
                 trimmed === '-.' ||
@@ -288,6 +316,9 @@ export const DshMultiSelectImpl = defineComponent<{
   const triggerRef = useRef<HTMLDivElement | null>(null)
   const popoverRef = useRef<HTMLDivElement | null>(null)
   const [popoverBox, setPopoverBox] = useState<ClampedPopoverBox | null>(null)
+  if (readOnly && open) {
+    setOpen(false)
+  }
   const effectiveOpen = open && !readOnly
 
   const selected = useMemo(
@@ -333,6 +364,7 @@ export const DshMultiSelectImpl = defineComponent<{
 
   const closePopover = useCallback(() => {
     setOpen(false)
+    setQuery('')
     setTouched(true)
   }, [])
 
@@ -454,7 +486,14 @@ export const DshMultiSelectImpl = defineComponent<{
 
       {effectiveOpen && popoverBox && typeof document !== 'undefined'
         ? createPortal(
-            <div role="presentation" className={css.selectBackdrop} onClick={closePopover}>
+            <div
+              role="presentation"
+              className={css.selectBackdrop}
+              onClick={(e) => {
+                e.stopPropagation()
+                closePopover()
+              }}
+            >
               <div
                 ref={popoverRef}
                 role="listbox"
@@ -630,6 +669,7 @@ export const DshDateRangeImpl = defineComponent<{
           inputClassName={css.dateRangeInput}
           buttonClassName={css.dateRangePickerBtn}
           iconSize={13}
+          onBlur={() => setTouched(true)}
           onChange={(nextS) => {
             if (readOnly) return
             setTouched(true)
@@ -652,6 +692,7 @@ export const DshDateRangeImpl = defineComponent<{
           inputClassName={css.dateRangeInput}
           buttonClassName={css.dateRangePickerBtn}
           iconSize={13}
+          onBlur={() => setTouched(true)}
           onChange={(nextE) => {
             if (readOnly) return
             setTouched(true)
@@ -678,6 +719,7 @@ function TreeSelectOptionBranch(props: {
   const isBranch = node.children.length > 0
   const isOpen = forceExpanded || expanded
   const isSelected = node.value === selectedValue
+  const selectableBranch = isBranch && Boolean(node.hasExplicitValue)
 
   return (
     <Fragment>
@@ -690,9 +732,11 @@ function TreeSelectOptionBranch(props: {
           <button
             type="button"
             className={css.treeCaretBtn}
+            disabled={forceExpanded}
+            aria-expanded={isOpen}
             onClick={(e) => {
               e.stopPropagation()
-              setExpanded((v) => !v)
+              if (!forceExpanded) setExpanded((v) => !v)
             }}
           >
             {isOpen ? '▾' : '▸'}
@@ -702,10 +746,13 @@ function TreeSelectOptionBranch(props: {
         )}
         <button
           type="button"
+          role="treeitem"
+          aria-selected={isSelected}
+          aria-expanded={isBranch ? isOpen : undefined}
           className={css.treeSelectNodeBtn}
           onClick={() => {
-            if (isBranch) {
-              setExpanded((v) => !v)
+            if (isBranch && !selectableBranch) {
+              if (!forceExpanded) setExpanded((v) => !v)
             } else {
               onSelect(node.value)
             }
@@ -756,6 +803,9 @@ export const DshTreeSelectImpl = defineComponent<{
   const triggerRef = useRef<HTMLButtonElement | null>(null)
   const popoverRef = useRef<HTMLDivElement | null>(null)
   const [popoverBox, setPopoverBox] = useState<ClampedPopoverBox | null>(null)
+  if (readOnly && open) {
+    setOpen(false)
+  }
   const effectiveOpen = open && !readOnly
 
   const tree = useMemo(() => normalizeHierarchyTree(props.nodes), [props.nodes])
@@ -776,6 +826,7 @@ export const DshTreeSelectImpl = defineComponent<{
 
   const closePopover = useCallback(() => {
     setOpen(false)
+    setQuery('')
     setTouched(true)
   }, [])
 
@@ -826,7 +877,8 @@ export const DshTreeSelectImpl = defineComponent<{
         disabled={readOnly}
         aria-haspopup="tree"
         aria-expanded={effectiveOpen}
-        data-placeholder={breadcrumb ? 'false' : 'true'}
+        aria-invalid={showError || undefined}
+        data-placeholder={breadcrumb || selectedVal ? 'false' : 'true'}
         onClick={handleToggleOpen}
       >
         <span className={css.selectTriggerText}>{breadcrumb ?? (selectedVal || placeholder)}</span>
@@ -837,7 +889,14 @@ export const DshTreeSelectImpl = defineComponent<{
 
       {effectiveOpen && popoverBox && typeof document !== 'undefined'
         ? createPortal(
-            <div role="presentation" className={css.selectBackdrop} onClick={closePopover}>
+            <div
+              role="presentation"
+              className={css.selectBackdrop}
+              onClick={(e) => {
+                e.stopPropagation()
+                closePopover()
+              }}
+            >
               <div
                 ref={popoverRef}
                 role="tree"
@@ -851,6 +910,9 @@ export const DshTreeSelectImpl = defineComponent<{
                   maxHeight: popoverBox.maxHeight,
                 }}
                 onClick={(e) => e.stopPropagation()}
+                onKeyDown={(e) =>
+                  handleOptionListArrowKey(e, popoverRef.current, '[role="treeitem"]')
+                }
               >
                 {props.searchable !== false ? (
                   <div className={css.selectSearchRow}>
@@ -901,7 +963,7 @@ export const DshCheckCardImpl = defineComponent<{
   setValue?: (next: string | string[]) => void
   multiple?: boolean
   columns?: number
-  action?: ((options?: ActionDispatchOptions) => Promise<void>) | undefined
+  action?: ((options?: ActionDispatchOptions) => unknown) | undefined
   isValid?: boolean
   validationErrors?: readonly string[]
   weight?: number
@@ -909,7 +971,8 @@ export const DshCheckCardImpl = defineComponent<{
   const msg = useRuntimeMessages()
   const readOnly = useContext(SurfaceReadOnlyContext)
   const closeModal = useContext(ModalCloseContext)
-  const { submitAttempted } = useContext(SurfaceValidationContext)
+  const getActionStatus = useContext(SurfaceActionStatusContext)
+  const { submitAttempted, markSubmitAttempted } = useContext(SurfaceValidationContext)
   const [touched, setTouched] = useState(false)
 
   const options = useMemo(() => normalizeCheckCardOptions(props.options), [props.options])
@@ -951,19 +1014,30 @@ export const DshCheckCardImpl = defineComponent<{
       }
     }
     if (typeof props.action === 'function') {
-      void props.action({
-        metadata: {
-          extensions: {
-            dshSelection: {
-              source: 'checkCard',
-              label: opt.title,
-              value: opt.value,
-              option: opt.raw,
+      if (!isFormBound && props.isValid === false) {
+        markSubmitAttempted()
+        return
+      }
+      const localFn = isLocalFunctionAction(context)
+      const actionFn = props.action
+      void runSurfaceAction(
+        () =>
+          actionFn({
+            metadata: {
+              extensions: {
+                dshSelection: {
+                  source: 'checkCard',
+                  label: opt.title,
+                  value: opt.value,
+                  option: opt.raw,
+                },
+              },
             },
-          },
-        },
+          }),
+        getActionStatus,
+      ).then((ok) => {
+        if (!localFn && !multiple && ok) closeModal?.()
       })
-      closeModal?.()
     }
   }
 
@@ -1065,7 +1139,10 @@ function GeneralTreeBranch(props: {
           <button
             type="button"
             className={css.treeCaretBtn}
-            onClick={() => onToggle(node.id, isOpen)}
+            disabled={forceExpandAll}
+            onClick={() => {
+              if (!forceExpandAll) onToggle(node.id, isOpen)
+            }}
             aria-label={msg.treeToggleBranchAria}
           >
             {isOpen ? '▾' : '▸'}
@@ -1162,13 +1239,15 @@ export const DshTreeImpl = defineComponent<{
   const title = props.title !== undefined && props.title !== null ? String(props.title) : ''
   const summary = props.summary !== undefined && props.summary !== null ? String(props.summary) : ''
   const canAct = !readOnly && typeof props.action === 'function'
+  const searchActive = Boolean(props.searchable && deferredQuery.trim() !== '')
   const allOpen =
-    branches.length > 0 &&
-    branches.every(({ id, depth }) => {
-      const baseOpen =
-        treeMode === 'all' ? true : treeMode === 'none' ? false : depth < expandedDepth
-      return toggledMap.get(id) ?? baseOpen
-    })
+    searchActive ||
+    (branches.length > 0 &&
+      branches.every(({ id, depth }) => {
+        const baseOpen =
+          treeMode === 'all' ? true : treeMode === 'none' ? false : depth < expandedDepth
+        return toggledMap.get(id) ?? baseOpen
+      }))
 
   const toggleBranch = (id: string, currentlyOpen: boolean) => {
     setToggledMap((prev) => {
@@ -1185,7 +1264,7 @@ export const DshTreeImpl = defineComponent<{
           <span className={css.fileTreeTitle}>{title}</span>
           <div className={css.proTableRightGroup}>
             {summary ? <span className={css.trackerSummary}>{summary}</span> : null}
-            {branches.length > 0 ? (
+            {branches.length > 0 && !searchActive ? (
               <button
                 type="button"
                 className={css.diffCopyBtn}

@@ -33,9 +33,13 @@ export const DshDiffViewImpl = defineComponent<{
   const msg = useRuntimeMessages()
   const beforeStr = props.before === undefined || props.before === null ? '' : String(props.before)
   const afterStr = props.after === undefined || props.after === null ? '' : String(props.after)
-  const [mode, setMode] = useState<'unified' | 'split'>(
-    props.mode === 'split' ? 'split' : 'unified',
-  )
+  const propMode: 'unified' | 'split' = props.mode === 'split' ? 'split' : 'unified'
+  const [prevPropMode, setPrevPropMode] = useState<'unified' | 'split'>(propMode)
+  const [mode, setMode] = useState<'unified' | 'split'>(propMode)
+  if (propMode !== prevPropMode) {
+    setPrevPropMode(propMode)
+    setMode(propMode)
+  }
   const [copied, markCopied] = useTransientFlag(1400)
 
   const diff = useMemo(() => computeLineDiff(beforeStr, afterStr), [beforeStr, afterStr])
@@ -357,6 +361,7 @@ export const DshKeyValueImpl = defineComponent<{
             <div
               key={`${entry.label}-${idx}`}
               className={bordered ? css.kvCellBordered : css.kvCell}
+              data-kv-span={spanCols > 1 ? String(spanCols) : undefined}
               style={spanCols > 1 ? ({ '--kv-span': spanCols } as CSSProperties) : undefined}
             >
               <dt className={bordered ? css.kvLabelBordered : css.kvLabel}>{entry.label}</dt>

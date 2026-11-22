@@ -26,7 +26,8 @@ function readMermaidThemeColor(
   probe.style.setProperty('color', value, 'important')
   if (probe.style.color === '') return fallback
   probe.style.setProperty('display', 'none', 'important')
-  document.body.appendChild(probe)
+  const probeParent = target?.isConnected ? target : document.body
+  probeParent.appendChild(probe)
   let color: string
   try {
     color = getComputedStyle(probe).color
@@ -139,17 +140,17 @@ function configureMermaidForHost(dark: boolean, target?: HTMLElement | null): vo
       altSectionBkgColor: dark ? 'rgba(255,255,255,0.015)' : 'rgba(15,23,42,0.01)',
       gridColor: dark ? 'rgba(255,255,255,0.14)' : 'rgba(15,23,42,0.14)',
       excludeBkgColor: dark ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.06)',
-      taskBkgColor: dark ? '#1d4ed8' : '#3b82f6',
+      taskBkgColor: dark ? '#1d4ed8' : '#2563eb',
       taskBorderColor: brand,
-      activeTaskBkgColor: dark ? '#d97706' : '#f59e0b',
+      activeTaskBkgColor: dark ? '#b45309' : '#b45309',
       activeTaskBorderColor: warn,
-      doneTaskBkgColor: dark ? '#047857' : '#10b981',
+      doneTaskBkgColor: dark ? '#047857' : '#047857',
       doneTaskBorderColor: success,
-      critBkgColor: danger,
+      critBkgColor: dark ? '#b91c1c' : '#dc2626',
       critBorderColor: danger,
       taskTextColor: '#ffffff',
       taskTextLightColor: '#ffffff',
-      taskTextDarkColor: textPrimary,
+      taskTextDarkColor: '#ffffff',
       taskTextOutsideColor: textPrimary,
       taskTextClickableColor: brand,
       todayLineColor: danger,
@@ -199,6 +200,15 @@ function configureMermaidForHost(dark: boolean, target?: HTMLElement | null): vo
       gitBranchLabel1: '#ffffff',
       gitBranchLabel2: '#ffffff',
       gitBranchLabel3: '#ffffff',
+      gitBranchLabel4: '#ffffff',
+      gitBranchLabel5: '#ffffff',
+      gitBranchLabel6: '#ffffff',
+      gitBranchLabel7: '#ffffff',
+      commitLabelColor: textPrimary,
+      commitLabelBackground: surfaceBg,
+      tagLabelColor: textPrimary,
+      tagLabelBackground: surfaceBg,
+      tagLabelBorder: border,
       xyChart: {
         backgroundColor: 'transparent',
         titleColor: textPrimary,

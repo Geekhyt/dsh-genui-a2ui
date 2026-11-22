@@ -34,6 +34,7 @@ import {
   isSafeAvMediaUrl,
   isSafeImageUrl,
   isWritableProp,
+  ModalTriggerContext,
   SurfaceReadOnlyContext,
   weightStyle,
 } from './widget-helpers.tsx'
@@ -67,6 +68,8 @@ export const DshImageImpl = defineComponent<{
 }>(ImageApi, function DshImage({ props }) {
   const msg = useRuntimeMessages()
   const readOnly = useContext(SurfaceReadOnlyContext)
+  const insideButton = useContext(InsideButtonContext)
+  const isModalTrigger = useContext(ModalTriggerContext)
   const [lightboxOpen, setLightboxOpen] = useState(false)
   const [broken, setBroken] = useState(false)
   const [prevUrl, setPrevUrl] = useState<unknown>(props.url)
@@ -84,11 +87,11 @@ export const DshImageImpl = defineComponent<{
   const fit = props.fit === 'scaleDown' ? 'scale-down' : (props.fit ?? 'cover')
   const height = IMAGE_HEIGHTS[props.variant ?? 'mediumFeature'] ?? 168
   const isAvatar = props.variant === 'avatar' || props.variant === 'icon'
-  const canZoom = props.variant !== 'icon' && !broken && !readOnly
+  const canZoom =
+    props.variant !== 'icon' && !broken && !readOnly && !insideButton && !isModalTrigger
 
   const wrapStyle = {
-    ...(isAvatar ? { flexShrink: 0 } : weightStyle(props.weight, 140)),
-    width: isAvatar ? height : props.weight !== undefined ? undefined : '100%',
+    ...(isAvatar ? { flexShrink: 0, width: height } : weightStyle(props.weight, 140)),
     height,
     borderRadius: props.variant === 'avatar' ? '999px' : undefined,
     ...(canZoom
@@ -102,6 +105,7 @@ export const DshImageImpl = defineComponent<{
         <button
           type="button"
           className={css.imageWrap}
+          data-avatar={isAvatar ? 'true' : undefined}
           style={wrapStyle}
           aria-label={alt || msg.imageZoomHint}
           title={msg.imageZoomHint}
@@ -117,8 +121,16 @@ export const DshImageImpl = defineComponent<{
           />
         </button>
       ) : (
-        <div className={css.imageWrap} style={wrapStyle}>
-          {broken ? null : (
+        <div
+          className={css.imageWrap}
+          data-avatar={isAvatar ? 'true' : undefined}
+          style={wrapStyle}
+        >
+          {broken ? (
+            <div className={css.emptyCell} role="img" aria-label={alt || 'Image unavailable'}>
+              {alt || '—'}
+            </div>
+          ) : (
             <img
               src={src}
               alt={alt}
@@ -146,13 +158,16 @@ export const DshImageImpl = defineComponent<{
 
 export const DshVideoImpl = defineComponent<{
   url?: unknown
+  posterUrl?: unknown
   weight?: number
 }>(VideoApi, function DshVideo({ props }) {
   if (!isSafeAvMediaUrl(props.url)) return null
+  const poster = isSafeImageUrl(props.posterUrl) ? String(props.posterUrl) : undefined
   return (
-    <div className={css.imageWrap} style={weightStyle(props.weight)}>
+    <div className={css.imageWrap} style={weightStyle(props.weight, 200)}>
       <video
         src={props.url}
+        poster={poster}
         controls
         playsInline
         preload="metadata"
@@ -219,7 +234,7 @@ export function DshStatView({
   return (
     <div
       className={css.statCard}
-      style={weightStyle(props.weight)}
+      style={weightStyle(props.weight, 130)}
       data-a2ui-stat=""
       data-a2ui-weight={props.weight !== undefined ? String(props.weight) : undefined}
     >
@@ -274,6 +289,14 @@ export const DshStatImpl = defineComponent<{
   weight?: number
 }>(StatApi, DshStatView)
 
+function formatProgressPct(rawPct: number): string {
+  if (rawPct >= 100) return '100'
+  if (rawPct <= 0) return '0'
+  if (rawPct > 99 && rawPct < 100) return String(Number(rawPct.toFixed(3)))
+  if (rawPct > 0 && rawPct < 1) return String(Number(rawPct.toFixed(2)))
+  return String(Math.round(rawPct))
+}
+
 export const DshProgressImpl = defineComponent<{
   value?: unknown
   max?: number
@@ -286,7 +309,9 @@ export const DshProgressImpl = defineComponent<{
     typeof props.max === 'number' && Number.isFinite(props.max) && props.max > 0 ? props.max : 100
   const raw = Number(props.value ?? 0)
   const val = Number.isFinite(raw) ? Math.min(max, Math.max(0, raw)) : 0
-  const pct = Math.round((val / max) * 100)
+  const rawPct = (val / max) * 100
+  const displayPct = formatProgressPct(rawPct)
+  const fillWidthPct = `${Math.max(0, Math.min(100, rawPct)).toFixed(3)}%`
   const label = props.label ? String(props.label) : ''
 
   return (
@@ -300,13 +325,13 @@ export const DshProgressImpl = defineComponent<{
       >
         <div className={css.progressHeader}>
           <span>{label}</span>
-          <span className={css.progressValue}>{pct}%</span>
+          <span className={css.progressValue}>{displayPct}%</span>
         </div>
         <div className={css.progressTrack}>
           <div
             className={css.progressFill}
             data-tone={props.tone ?? 'brand'}
-            style={{ width: `${pct}%` }}
+            style={{ width: fillWidthPct }}
           />
         </div>
       </AriaProgressBar>
@@ -343,7 +368,7 @@ export const DshCodeImpl = defineComponent<{
 
   if (titleText || hasFileLink) {
     return (
-      <div className={css.codeWrap} style={weightStyle(props.weight)} data-a2ui-code="">
+      <div className={css.codeWrap} style={weightStyle(props.weight, 220)} data-a2ui-code="">
         <div className={css.codeHeader}>
           {titleText ? <span className={css.codeHeaderTitle}>{titleText}</span> : null}
           <FileOpenChip filePath={props.filePath} line={props.line} />
@@ -358,7 +383,7 @@ export const DshCodeImpl = defineComponent<{
   }
 
   return (
-    <div className={css.codeWrap} style={weightStyle(props.weight)} data-a2ui-code="">
+    <div className={css.codeWrap} style={weightStyle(props.weight, 220)} data-a2ui-code="">
       <DshCodeBlock
         code={String(props.code ?? '')}
         lang={props.language}
@@ -367,6 +392,12 @@ export const DshCodeImpl = defineComponent<{
     </div>
   )
 })
+
+function normalizeBoundSelectionProp(raw: unknown): string | readonly string[] | undefined {
+  if (Array.isArray(raw)) return raw.map(String)
+  if (raw !== undefined && raw !== null) return String(raw)
+  return undefined
+}
 
 export const DshChartImpl = defineComponent<{
   kind: ChartKind
@@ -384,7 +415,7 @@ export const DshChartImpl = defineComponent<{
   zoom?: boolean
   height?: number
   selected?: unknown
-  setSelected?: (next: string) => void
+  setSelected?: (next: string | string[]) => void
   exportable?: boolean
   action?: ((options?: ActionDispatchOptions) => Promise<void>) | undefined
   weight?: number
@@ -419,9 +450,7 @@ export const DshChartImpl = defineComponent<{
       horizontal={props.horizontal}
       zoom={props.zoom}
       height={props.height}
-      selected={
-        props.selected !== undefined && props.selected !== null ? String(props.selected) : undefined
-      }
+      selected={normalizeBoundSelectionProp(props.selected)}
       onSelectChange={canCrossFilter ? props.setSelected : undefined}
       exportable={props.exportable}
       action={readOnly ? undefined : props.action}
@@ -443,7 +472,7 @@ export const DshTableImpl = defineComponent<{
   expandKey?: string
   filterField?: string
   filterValue?: unknown
-  setFilterValue?: (next: string) => void
+  setFilterValue?: (next: string | string[]) => void
   action?: ((options?: ActionDispatchOptions) => Promise<void>) | undefined
   weight?: number
 }>(TableApi, function DshTable({ props, context }) {
@@ -462,11 +491,7 @@ export const DshTableImpl = defineComponent<{
       showSummary={props.showSummary}
       expandKey={props.expandKey}
       filterField={props.filterField}
-      filterValue={
-        props.filterValue !== undefined && props.filterValue !== null
-          ? String(props.filterValue)
-          : undefined
-      }
+      filterValue={normalizeBoundSelectionProp(props.filterValue)}
       onFilterValueChange={canFilterWrite ? props.setFilterValue : undefined}
       action={readOnly ? undefined : props.action}
       weight={props.weight}

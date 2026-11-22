@@ -123,6 +123,33 @@ function isDynamicBindingObject(rec: Record<string, unknown>): boolean {
   return false
 }
 
+function validateCheckRulesInComponents(components: readonly unknown[]): void {
+  for (const item of components) {
+    if (typeof item !== 'object' || item === null) continue
+    const rec = item as Record<string, unknown>
+    if (!Array.isArray(rec.checks)) continue
+    const compName = typeof rec.component === 'string' ? rec.component : 'Component'
+    const compId = typeof rec.id === 'string' ? rec.id : compName
+    for (const rule of rec.checks) {
+      if (typeof rule !== 'object' || rule === null) continue
+      const cond = (rule as Record<string, unknown>).condition
+      if (typeof cond !== 'object' || cond === null) continue
+      const condRec = cond as Record<string, unknown>
+      const callName = condRec['@call'] ?? condRec.call
+      if (callName !== 'required') continue
+      const args = condRec.args
+      if (typeof args !== 'object' || args === null) continue
+      const val = (args as Record<string, unknown>).value
+      if (typeof val === 'string') {
+        throw new A2uiError(
+          `Component "${compId}" (${compName}) has ?required(${JSON.stringify(val)}) without a target $/path binding. Pass the target $/path as the first argument (e.g. ?required($/field, ${JSON.stringify(val)})).`,
+          'VALIDATION_ERROR',
+        )
+      }
+    }
+  }
+}
+
 function validateCalcCallsInNode(node: unknown): void {
   if (typeof node !== 'object' || node === null) return
   if (Array.isArray(node)) {
@@ -240,6 +267,7 @@ function validateCompiledLimits(messages: readonly AgentToRendererMessage[]): vo
         }
         componentCounts.set(key, nextCount)
         validateCalcCallsInNode(p.components)
+        validateCheckRulesInComponents(p.components)
       }
 
       if (kind === 'createSurface' && p.dataModel !== undefined) {

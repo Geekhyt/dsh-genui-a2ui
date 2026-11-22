@@ -5,13 +5,14 @@ import dockCss from './DockView.module.css'
 import type { WorkspaceFileOpener } from './file-opener.tsx'
 import { useShellMessages } from './i18n.ts'
 import { LazySurfaceGroupView, useLazyStreamingExpress } from './LazySurfaceGroupView.tsx'
+import { computeMessagesFingerprint, removeSurfaceDraft } from './persistence.ts'
 import css from './SurfaceView.module.css'
 import type { ChatExternalStore, ToolViewOwnerProps } from './ToolView.tsx'
 import {
-  filterMessagesBySurfaceIds,
+  buildReplayMessagesForSurfaceCall,
+  findCallSeq,
   parseAskMeta,
   resolveActiveAskCall,
-  resolveSessionMessages,
 } from './turn-surfaces.ts'
 import { DshAppsIcon, DshButton, DshDisclosureRow } from './ui/primitives.tsx'
 
@@ -65,41 +66,57 @@ export const A2uiAskDockView = memo(function A2uiAskDockView({
     return ids.length > 0 ? new Set(ids) : undefined
   }, [streamingSnapshot])
 
-  const priorMessages = useMemo(
-    () =>
-      liveVisibleIds !== undefined
-        ? filterMessagesBySurfaceIds(resolveSessionMessages(chatSnapshot), liveVisibleIds)
-        : [],
-    [chatSnapshot, liveVisibleIds],
+  const activeAskSeq = useMemo(
+    () => (activeAsk ? findCallSeq(chatSnapshot, activeAsk.callId) : undefined),
+    [activeAsk, chatSnapshot],
   )
 
-  const liveMessages = useMemo(() => {
-    const current = streamingSnapshot?.messages ?? []
-    if (priorMessages.length === 0) return current
-    return [...priorMessages, ...current]
-  }, [priorMessages, streamingSnapshot])
+  const liveMessages = useMemo(
+    () =>
+      buildReplayMessagesForSurfaceCall(
+        chatSnapshot,
+        streamingSnapshot?.messages ?? [],
+        streamingSnapshot?.surfaceIds ?? [],
+        activeAskSeq,
+      ),
+    [activeAskSeq, chatSnapshot, streamingSnapshot],
+  )
 
   const activeCallId = activeAsk?.callId ?? ''
+  const draftSessionId =
+    sessionId && activeCallId ? `${sessionId}::ask::${activeCallId}` : undefined
   const inFlightCallIdRef = useRef<string | null>(null)
   const submitting = activeCallId !== '' && submittingCallId === activeCallId
   const submitError =
     activeCallId !== '' && errorState?.callId === activeCallId ? errorState.message : null
 
+  const clearAskDrafts = useCallback(() => {
+    if (!draftSessionId || !liveVisibleIds || liveMessages.length === 0) return
+    const fp = computeMessagesFingerprint(liveMessages)
+    for (const id of liveVisibleIds) {
+      removeSurfaceDraft(draftSessionId, id, fp)
+    }
+  }, [draftSessionId, liveMessages, liveVisibleIds])
+
   const handleSurfaceAction = useCallback(
-    (_formatted: string, raw: ActionPayload, dataModels: Record<string, unknown>) => {
+    (
+      _formatted: string,
+      raw: ActionPayload,
+      dataModels: Record<string, unknown>,
+    ): Promise<boolean> => {
       if (
         !activeCallId ||
         submitting ||
         inFlightCallIdRef.current === activeCallId ||
         submitAskAnswer === undefined
       ) {
-        return
+        return Promise.resolve(false)
       }
       const targetCallId = activeCallId
       inFlightCallIdRef.current = targetCallId
       setSubmittingCallId(targetCallId)
       setErrorState(null)
-      void submitAskAnswer({
+      return submitAskAnswer({
         callId: targetCallId,
         action: raw.name,
         surfaceId: raw.surfaceId,
@@ -112,10 +129,13 @@ export const A2uiAskDockView = memo(function A2uiAskDockView({
           if (inFlightCallIdRef.current === targetCallId) {
             inFlightCallIdRef.current = null
           }
-          if (!ok) {
-            setSubmittingCallId((prev) => (prev === targetCallId ? null : prev))
-            setErrorState({ callId: targetCallId, message: msg.askSubmitRetry })
+          if (ok) {
+            clearAskDrafts()
+            return true
           }
+          setSubmittingCallId((prev) => (prev === targetCallId ? null : prev))
+          setErrorState({ callId: targetCallId, message: msg.askSubmitRetry })
+          return false
         },
         (err: unknown) => {
           if (inFlightCallIdRef.current === targetCallId) {
@@ -126,10 +146,11 @@ export const A2uiAskDockView = memo(function A2uiAskDockView({
             callId: targetCallId,
             message: err instanceof Error ? err.message : msg.askSubmitFailed,
           })
+          return false
         },
       )
     },
-    [activeCallId, msg, submitAskAnswer, submitting],
+    [activeCallId, clearAskDrafts, msg, submitAskAnswer, submitting],
   )
 
   const handleSkip = useCallback(() => {
@@ -150,10 +171,12 @@ export const A2uiAskDockView = memo(function A2uiAskDockView({
         if (inFlightCallIdRef.current === targetCallId) {
           inFlightCallIdRef.current = null
         }
-        if (!ok) {
-          setSubmittingCallId((prev) => (prev === targetCallId ? null : prev))
-          setErrorState({ callId: targetCallId, message: msg.askSkipRetry })
+        if (ok) {
+          clearAskDrafts()
+          return
         }
+        setSubmittingCallId((prev) => (prev === targetCallId ? null : prev))
+        setErrorState({ callId: targetCallId, message: msg.askSkipRetry })
       },
       (err: unknown) => {
         if (inFlightCallIdRef.current === targetCallId) {
@@ -166,7 +189,7 @@ export const A2uiAskDockView = memo(function A2uiAskDockView({
         })
       },
     )
-  }, [activeCallId, msg, submitAskAnswer, submitting])
+  }, [activeCallId, clearAskDrafts, msg, submitAskAnswer, submitting])
 
   if (activeAsk === null) return null
 
@@ -210,7 +233,7 @@ export const A2uiAskDockView = memo(function A2uiAskDockView({
           key={activeCallId}
           messages={liveMessages}
           visibleSurfaceIds={liveVisibleIds}
-          sessionId={sessionId}
+          sessionId={draftSessionId}
           variant="bare"
           streaming={!waiting}
           readOnly={!waiting || submitting}
@@ -229,12 +252,21 @@ export const A2uiAskDockView = memo(function A2uiAskDockView({
 })
 
 export const A2uiAskToolView = memo(function A2uiAskToolView({
+  callId,
   phase,
   block,
   inspect,
+  chatStore,
 }: A2uiAskToolViewProps) {
   const msg = useShellMessages()
   const [expanded, setExpanded] = useState(false)
+
+  const subscribe = useCallback(
+    (listener: () => void) => (chatStore ? chatStore.subscribe(listener) : NOOP_SUBSCRIBE()),
+    [chatStore],
+  )
+  const getSnapshot = useCallback(() => chatStore?.getSnapshot(), [chatStore])
+  const chatSnapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 
   const argTitle = block.args?.text('title')?.trim() || undefined
   const argUi = block.args?.text('ui') ?? ''
@@ -247,6 +279,21 @@ export const A2uiAskToolView = memo(function A2uiAskToolView({
   const settledVisibleIds = useMemo(
     () => (settledMeta ? new Set(settledMeta.surfaceIds) : undefined),
     [settledMeta],
+  )
+
+  const callSeq = useMemo(() => findCallSeq(chatSnapshot, callId), [chatSnapshot, callId])
+
+  const replayedSettledMessages = useMemo(
+    () =>
+      settledMeta !== null
+        ? buildReplayMessagesForSurfaceCall(
+            chatSnapshot,
+            settledMeta.messages,
+            settledMeta.surfaceIds,
+            callSeq,
+          )
+        : [],
+    [callSeq, chatSnapshot, settledMeta],
   )
 
   const title = settledMeta?.title ?? argTitle ?? msg.askDefaultTitle
@@ -317,7 +364,7 @@ export const A2uiAskToolView = memo(function A2uiAskToolView({
             settledMeta?.userMessage ?? settledMeta?.action ?? msg.askDefaultAction,
           )
 
-  const settledMessages = settledMeta?.messages ?? []
+  const settledMessages = replayedSettledMessages
   const canExpand = settledMessages.length > 0 || argUi.trim() !== ''
 
   return (

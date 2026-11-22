@@ -37,7 +37,11 @@ import {
 import {
   type ChildRef,
   defineComponent,
+  isLocalFunctionAction,
+  ModalCloseContext,
   renderChildRef,
+  runSurfaceAction,
+  SurfaceActionStatusContext,
   SurfaceReadOnlyContext,
   weightStyle,
 } from './widget-helpers.tsx'
@@ -99,16 +103,20 @@ export const DshComparisonImpl = defineComponent<{
   options?: unknown
   rows?: unknown
   title?: unknown
-  action?: ((options?: ActionDispatchOptions) => Promise<void>) | undefined
+  action?: ((options?: ActionDispatchOptions) => unknown) | undefined
   weight?: number
-}>(ComparisonApi, function DshComparison({ props }) {
+}>(ComparisonApi, function DshComparison({ props, context }) {
   const msg = useRuntimeMessages()
   const readOnly = useContext(SurfaceReadOnlyContext)
+  const closeModal = useContext(ModalCloseContext)
+  const getActionStatus = useContext(SurfaceActionStatusContext)
   const { options, rows } = useMemo(
     () => normalizeComparisonData(props.options, props.rows),
     [props.options, props.rows],
   )
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
+  const activeSelectedKey =
+    selectedKey !== null && options.some((o) => o.key === selectedKey) ? selectedKey : null
   const canAct = !readOnly && typeof props.action === 'function'
   const title = props.title !== undefined && props.title !== null ? String(props.title) : ''
 
@@ -117,18 +125,30 @@ export const DshComparisonImpl = defineComponent<{
   const handleSelectOption = (opt: (typeof options)[number]) => {
     if (!canAct) return
     setSelectedKey(opt.key)
-    void props.action?.({
-      metadata: {
-        extensions: {
-          dshSelection: {
-            source: 'comparison',
-            label: opt.title,
-            value: opt.badge ?? opt.subtitle,
-            key: opt.key,
-            option: opt.raw,
+    const localFn = isLocalFunctionAction(context)
+    const actionFn = props.action
+    void runSurfaceAction(
+      () =>
+        actionFn?.({
+          metadata: {
+            extensions: {
+              dshSelection: {
+                source: 'comparison',
+                label: opt.title,
+                value: opt.badge ?? opt.subtitle,
+                key: opt.key,
+                option: opt.raw,
+              },
+            },
           },
-        },
-      },
+        }),
+      getActionStatus,
+    ).then((ok) => {
+      if (!ok) {
+        setSelectedKey(null)
+        return
+      }
+      if (!localFn) closeModal?.()
     })
   }
 
@@ -213,7 +233,7 @@ export const DshComparisonImpl = defineComponent<{
               <tr>
                 <td className={css.comparisonFooterDimTd} />
                 {options.map((opt) => {
-                  const chosen = selectedKey === opt.key
+                  const chosen = activeSelectedKey === opt.key
                   return (
                     <td
                       key={opt.key}
@@ -263,13 +283,29 @@ export const DshLogViewerImpl = defineComponent<{
   const msg = useRuntimeMessages()
   const readOnly = useContext(SurfaceReadOnlyContext)
   const entries = useMemo(() => normalizeLogEntries(props.entries), [props.entries])
-  const [levelFilter, setLevelFilter] = useState<'all' | LogLevel>(props.defaultLevel ?? 'all')
+  const propDefaultLevel: 'all' | LogLevel = props.defaultLevel ?? 'all'
+  const [prevDefaultLevel, setPrevDefaultLevel] = useState<'all' | LogLevel>(propDefaultLevel)
+  const [levelFilter, setLevelFilter] = useState<'all' | LogLevel>(propDefaultLevel)
+  if (prevDefaultLevel !== propDefaultLevel) {
+    setPrevDefaultLevel(propDefaultLevel)
+    setLevelFilter(propDefaultLevel)
+  }
   const [query, setQuery] = useState('')
   const deferredQuery = useDeferredValue(query)
-  const [expandedIds, setExpandedIds] = useState<ReadonlySet<string>>(() => {
-    const firstErr = entries.find((e) => e.level === 'error' && e.detail !== '')
-    return firstErr ? new Set([firstErr.id]) : new Set()
-  })
+  const firstErrId = useMemo(
+    () => entries.find((e) => e.level === 'error' && e.detail !== '')?.id ?? null,
+    [entries],
+  )
+  const [autoExpandedErr, setAutoExpandedErr] = useState<boolean>(() => firstErrId !== null)
+  const [expandedIds, setExpandedIds] = useState<ReadonlySet<string>>(() =>
+    firstErrId !== null ? new Set([firstErrId]) : new Set(),
+  )
+  if (!autoExpandedErr && firstErrId !== null) {
+    setAutoExpandedErr(true)
+    if (expandedIds.size === 0) {
+      setExpandedIds(new Set([firstErrId]))
+    }
+  }
   const [copiedAll, markCopiedAll] = useTransientFlag(1300)
 
   const counts = useMemo(() => {
@@ -344,7 +380,7 @@ export const DshLogViewerImpl = defineComponent<{
           <div className={css.logLevelPills} role="group">
             {(['all', 'error', 'warn', 'info', 'debug'] as const).map((lv) => {
               const count = counts[lv]
-              if (lv !== 'all' && count === 0) return null
+              if (lv !== 'all' && lv !== levelFilter && count === 0) return null
               const labelText =
                 lv === 'all' ? `${msg.logAllLevels} (${count})` : `${lv.toUpperCase()} (${count})`
               return (
@@ -391,7 +427,7 @@ export const DshLogViewerImpl = defineComponent<{
                   </span>
                   {entry.service ? <span className={css.logService}>[{entry.service}]</span> : null}
                   <span className={css.logMessage}>{entry.message}</span>
-                  {entry.detail ? (
+                  {hasExtra ? (
                     <button
                       type="button"
                       className={css.logDetailToggle}
@@ -1050,11 +1086,11 @@ export const DshServiceGraphImpl = defineComponent<{
                     {node.label}
                   </span>
                 </span>
-                {node.metric || node.sublabel ? (
+                {node.metric || node.sublabel || node.group ? (
                   <span className={css.serviceNodeBottom}>
-                    {node.sublabel ? (
-                      <span className={css.serviceNodeSub} title={node.sublabel}>
-                        {node.sublabel}
+                    {node.sublabel || node.group ? (
+                      <span className={css.serviceNodeSub} title={node.sublabel || node.group}>
+                        {node.sublabel || node.group}
                       </span>
                     ) : null}
                     {node.metric ? (
@@ -1105,6 +1141,7 @@ export const DshServiceGraphImpl = defineComponent<{
           <div className={css.serviceInspectorInfo}>
             <span className={css.serviceInspectorName}>{activeNode.label}</span>
             <DshTag tone={statusTone(activeNode.status)}>{statusText(activeNode.status)}</DshTag>
+            {activeNode.group ? <DshTag tone="neutral">{activeNode.group}</DshTag> : null}
             {activeNode.metric ? (
               <span className={css.serviceInspectorMetric}>{activeNode.metric}</span>
             ) : null}
