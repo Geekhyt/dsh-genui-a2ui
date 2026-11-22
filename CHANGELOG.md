@@ -2,6 +2,31 @@
 
 All notable changes to `dsh-genui-a2ui` are documented in this file.
 
+## [0.4.8] - 2026-11-22
+
+### Added
+- **2 New Architectural Invariant Rules (`scripts/check-invariants.mjs`, `tests/invariants-lint.spec.ts`)**:
+  - Added Rule #13 (`echarts-tooltip-contrast-token`) requiring WCAG luminance-aware tooltip contrast resolution and `--dsw-alias-tooltip-label` wiring in `echarts-chunk.ts`, and Rule #14 (`no-raw-json-stringify-in-helpers`) banning raw `JSON.stringify` inside deterministic helper modules (bringing total static invariant checks to **14 rules**).
+- **Multi-Component Composition Torture Showcases & Regression Suite (`scripts/mock-llm.mjs`, `scripts/visual-qa-bot.mjs`, `tests/composition-audit-v048.spec.ts`)**:
+  - Added `showcase-33` (unweighted `Row([Column, Column])`, 306px long-token stress, Timeline nested `Grid(Stat + Schedule)`, ProTable `"-"` placeholder summary, hidden `Tabs` + collapsed `Accordion` lazy mount, Modal nested `Select`/`DateRange(enableTime)`/`Mermaid` fullscreen LIFO Esc) and `showcase-34` (dynamic empty→data ECharts mount, all-negative bar + negative ref line, 276px 6-dim parallel, 64px high-precision `MetricRing`, 3-node LR `ServiceGraph` with group labels & skip edge), expanding live Visual QA coverage to **70/70 PASS** (35 showcases × Dark/Light).
+
+### Fixed
+- **Layout, CSS Container Queries, Slider Geometry & Overlay Focus (`Catalog.module.css`, `InputWidgets.tsx`, `P0Widgets.tsx`, `AntdParityWidgets.tsx`, `OpsAndInsightWidgets.tsx`, `dom-hooks.ts`)**:
+  - Eliminated 8px `Slider` 100% thumb overflow (`showcase-29` / `29-dock` Dark & Light: 4 FAIL → 4 PASS) by switching `.sliderTrack` to full-width with 11px inset rail/fill and `calc(pct% + (11 - 0.22 * pct)px)` thumb positioning.
+  - Extended unweighted `Row` / `List` flex split rules and `container-type: inline-size` to `.column`, `.listVertical`, `[data-a2ui-modal-root]`, and `.timelineChildSlot`; added universal `min-width: 0; overflow-wrap: anywhere` guards across composite cards; fixed `KeyValue` 3→2 column grid orphan holes (`--kv-span-2`), `DateRange[data-enable-time="true"]` narrow stacking, and `DiffView` split-mode top-aligned line gutters + `.diffStatsGroup` atomic `+N/-M` grouping.
+  - Fixed `useEChartsMount` permanent blank canvas when transitioning from empty data (`暂无匹配数据`) to populated data by wiring explicit `mounted` mount/dispose dependency; added LIFO `dialogFocusStack` to `useDialogFocus` for nested dialogs; added generalized ResizeObserver `fitScale` (`>= 0.72`) auto-fit scaling to `ServiceGraph` so 3-node LR graphs render without right clipping or horizontal scrollbars.
+- **19-Kind ECharts Dual-Theme Contrast, Scroll Legend & Compact Geometry (`echarts-chunk.ts`, `EChartsWidget.tsx`)**:
+  - Added WCAG luminance-aware `resolveTooltipTextAndBorder()` reading `--dsw-alias-tooltip-label` with `>= 4.5` contrast fallback, fixing unreadable dark-on-dark Light Mode tooltips across all 19 chart kinds.
+  - Implemented closed-form dual-bound scroll-legend pagination gap calculation in `buildLegendOption`, eliminating mid-word slicing and peeking icons beside `◀ 1/N ▶` at `276px` while keeping `<= 3` short legends uncut; replaced fixed-width stretching on `buildReferenceMarkLine` with visual-width text truncation.
+  - Hardened all-negative bar 0-baseline & bottom radii `[0,0,4,4]`, negative reference-line avoidance, 6-dim `parallel` asymmetric `276px` margins, `gauge` compact pointer length (`48%`/`54%`), `graph` Light/Dark edge contrast, `waterfall` seamless zero-crossing radii & bottom negative labels, `combo` single Y-axis without line series, `calendar` negative `visualMap.min`, `sunburst` `nodeClick` guard, `isOpaqueCssColor` PNG export check, and cross-filter hierarchy propagation, `'-'` sentinel skip, exact-match precedence, and `boxplot`/`candlestick`/`parallel` support.
+- **Deterministic Helpers Precision & Edge Cases (`v3-helpers.ts`, `v4-helpers.ts`, `v5-helpers.ts`, `p0-helpers.ts`, `stat-file-helpers.ts`)**:
+  - Preserved `< 100` high-SLA precision (`99.9997%`) and calibrated `64px` `MetricRing` inner-hole clearances; accounted for `n.group` and mono metric widths in `ServiceGraph` layout; tolerated `"-"`/`"—"` placeholders in `ProTable` numeric detection with 2-decimal summaries for `< 0.1%` rates; hardened `Schedule` `HH:MM` validation/wrap, `Matrix` numeric/warn normalization, `ApiEndpoint` absolute URL cURL generation, tree-flattening CSV export, `NumberInput` empty-string handling, `HierarchyTree` zero-value preservation, `CheckCard` `price: 0` & dedup, `Steps`/`KeyValue` sanitization, `Sparkline` finite-span guards, and `FileTree` path normalization.
+- **Security Redaction, Streaming Replay, Express Compiler & Chunk Loader (`action-protocol.ts`, `ask-tool.ts`, `render-tool.ts`, `streaming.ts`, `express-preprocess.ts`, `chunk-loader.ts`)**:
+  - Prevented double-enrichment secret re-injection in `action-protocol.ts` while preserving `token_*` surface root IDs; tightened parent-path secret pointer detection and explicit `isSurfaceRootLevel` redaction in `ask-tool.ts`; guarded empty `parentId`/`parentSession` in `render-tool.ts` and counted empty-message repairs; unified `feed()`/`close()` replay with `streamRejected` guard in `streaming.ts`; fixed multi-line/leading comments, `refConstants` propagation, inline `calc`, and bare `?required` in `express-preprocess.ts`; added disconnected-target checks and error-cache sibling notifications in `chunk-loader.ts`.
+
+### Changed
+- Verified full automated release gate: **34 suites / 188 tests** passing, **14/14** architectural invariants, **0** comments, **4/4** TLA+ formal specs, **5/5** bundle budgets (`lib/client.js = 69.69 kB / 19.67 kB gzip`), `eval:check` (`100%` / `57/57`), `check:host-api`, and **70/70** live DeepSeek Harness Dark & Light visual QA passes.
+
 ## [0.4.7] - 2026-11-22
 
 ### Added

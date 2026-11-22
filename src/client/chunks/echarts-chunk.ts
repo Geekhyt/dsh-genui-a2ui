@@ -81,6 +81,7 @@ export interface ChartOptionInput {
   readonly zoom?: boolean | undefined
   readonly height?: number | undefined
   readonly selected?: string | readonly string[] | undefined
+  readonly interactiveSelect?: boolean | undefined
 }
 
 export function initChartInstance(el: HTMLElement): EChartsInstance {
@@ -150,30 +151,83 @@ function readToken(name: string, fallback: string): string {
   return resolveCssColorForCanvas(val, fallback)
 }
 
-function isChromaticCanvasColor(color: string): boolean {
-  const rgb = color.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i)
+function parseColorRgb(color: string): readonly [number, number, number] | null {
+  const trimmed = color.trim()
+  const rgb = trimmed.match(/^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)/i)
   if (rgb) {
     const r = Number(rgb[1])
     const g = Number(rgb[2])
     const b = Number(rgb[3])
-    return Math.max(r, g, b) - Math.min(r, g, b) >= 24
+    if (Number.isFinite(r) && Number.isFinite(g) && Number.isFinite(b)) return [r, g, b]
   }
-  const hex = color.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i)
+  const hex = trimmed.match(/^#([0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i)
   if (hex) {
     const raw = hex[1] ?? ''
-    const full =
-      raw.length === 3
+    const rgbHex =
+      raw.length === 3 || raw.length === 4
         ? raw
+            .slice(0, 3)
             .split('')
             .map((ch) => ch + ch)
             .join('')
-        : raw
-    const r = Number.parseInt(full.slice(0, 2), 16)
-    const g = Number.parseInt(full.slice(2, 4), 16)
-    const b = Number.parseInt(full.slice(4, 6), 16)
-    return Math.max(r, g, b) - Math.min(r, g, b) >= 24
+        : raw.slice(0, 6)
+    const r = Number.parseInt(rgbHex.slice(0, 2), 16)
+    const g = Number.parseInt(rgbHex.slice(2, 4), 16)
+    const b = Number.parseInt(rgbHex.slice(4, 6), 16)
+    return [r, g, b]
   }
-  return true
+  return null
+}
+
+function relativeLuminance(rgb: readonly [number, number, number]): number {
+  const lin = (c: number) => {
+    const s = Math.max(0, Math.min(1, c / 255))
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4
+  }
+  return 0.2126 * lin(rgb[0]) + 0.7152 * lin(rgb[1]) + 0.0722 * lin(rgb[2])
+}
+
+function contrastRatio(
+  a: readonly [number, number, number],
+  b: readonly [number, number, number],
+): number {
+  const la = relativeLuminance(a)
+  const lb = relativeLuminance(b)
+  const hi = Math.max(la, lb)
+  const lo = Math.min(la, lb)
+  return (hi + 0.05) / (lo + 0.05)
+}
+
+function resolveTooltipTextAndBorder(
+  tooltipBg: string,
+  rawTooltipLabel: string,
+  fallbackBorder: string,
+  dark: boolean,
+): { readonly tooltipText: string; readonly tooltipBorder: string } {
+  const bgRgb = parseColorRgb(tooltipBg)
+  if (!bgRgb) {
+    return {
+      tooltipText: rawTooltipLabel || (dark ? '#f9fafb' : '#0f1115'),
+      tooltipBorder: fallbackBorder,
+    }
+  }
+  const bgLum = relativeLuminance(bgRgb)
+  const isDarkBg = bgLum < 0.42
+  const tooltipBorder = isDarkBg ? 'rgba(255, 255, 255, 0.16)' : fallbackBorder
+  const candidateRgb = rawTooltipLabel ? parseColorRgb(rawTooltipLabel) : null
+  if (candidateRgb && contrastRatio(bgRgb, candidateRgb) >= 4.5) {
+    return { tooltipText: rawTooltipLabel, tooltipBorder }
+  }
+  return {
+    tooltipText: isDarkBg ? '#f9fafb' : '#0f1115',
+    tooltipBorder,
+  }
+}
+
+function isChromaticCanvasColor(color: string): boolean {
+  const rgb = parseColorRgb(color)
+  if (!rgb) return true
+  return Math.max(rgb[0], rgb[1], rgb[2]) - Math.min(rgb[0], rgb[1], rgb[2]) >= 24
 }
 
 function readChromaticToken(name: string, fallback: string): string {
@@ -195,6 +249,18 @@ function resolvePalette(dark: boolean) {
   const colors = dark
     ? [brand, success, warn, '#a78bfa', '#38bdf8', '#f472b6', danger]
     : [brand, success, warn, '#7c3aed', '#0284c7', '#db2777', danger]
+  const border = readToken(
+    '--dsw-alias-border-l1',
+    dark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.1)',
+  )
+  const tooltipBg = readToken('--dsw-alias-tooltip-bg', dark ? '#1f2937' : '#ffffff')
+  const rawTooltipLabel = readToken('--dsw-alias-tooltip-label', '')
+  const { tooltipText, tooltipBorder } = resolveTooltipTextAndBorder(
+    tooltipBg,
+    rawTooltipLabel,
+    border,
+    dark,
+  )
   return {
     brand,
     success,
@@ -203,8 +269,10 @@ function resolvePalette(dark: boolean) {
     colors,
     textPrimary: readToken('--dsw-alias-label-primary', dark ? '#e5e7eb' : '#111827'),
     textSecondary: readToken('--dsw-alias-label-secondary', dark ? '#9ca3af' : '#4b5563'),
-    border: readToken('--dsw-alias-border-l1', dark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.1)'),
-    tooltipBg: readToken('--dsw-alias-tooltip-bg', dark ? '#1f2937' : '#ffffff'),
+    border,
+    tooltipBg,
+    tooltipText,
+    tooltipBorder,
     heatLow: dark ? 'rgba(96, 165, 250, 0.14)' : 'rgba(37, 99, 235, 0.08)',
   }
 }
@@ -213,10 +281,29 @@ function inferFields(
   rows: readonly Record<string, unknown>[],
   explicitX: string | undefined,
   explicitY: string | string[] | undefined,
+  excludeKeys?: readonly (string | undefined)[],
 ): { xKey: string; yKeys: string[] } {
-  const sample = rows[0] ?? {}
-  const keys = Object.keys(sample)
-  const xKey = explicitX ?? keys.find((k) => typeof sample[k] === 'string') ?? keys[0] ?? 'label'
+  const excluded = new Set((excludeKeys ?? []).filter((k): k is string => Boolean(k)))
+  const sampleSlice = rows.slice(0, 16)
+  const keys: string[] = []
+  const seenKeys = new Set<string>()
+  for (const row of sampleSlice) {
+    for (const k of Object.keys(row)) {
+      if (!seenKeys.has(k)) {
+        seenKeys.add(k)
+        keys.push(k)
+      }
+    }
+  }
+  const hasStringVal = (k: string) => sampleSlice.some((r) => typeof r[k] === 'string')
+  const hasNumericVal = (k: string) =>
+    sampleSlice.some((r) => typeof r[k] === 'number' && Number.isFinite(r[k]))
+  const xKey =
+    explicitX ??
+    keys.find((k) => !excluded.has(k) && hasStringVal(k)) ??
+    keys.find((k) => hasStringVal(k)) ??
+    keys[0] ??
+    'label'
 
   if (typeof explicitY === 'string' && explicitY !== '') {
     return { xKey, yKeys: [explicitY] }
@@ -224,10 +311,13 @@ function inferFields(
   if (Array.isArray(explicitY) && explicitY.length > 0) {
     return { xKey, yKeys: explicitY }
   }
-  const numericKeys = keys.filter((k) => k !== xKey && typeof sample[k] === 'number')
+  const numericKeys = keys.filter((k) => k !== xKey && !excluded.has(k) && hasNumericVal(k))
   return {
     xKey,
-    yKeys: numericKeys.length > 0 ? numericKeys : keys.filter((k) => k !== xKey).slice(0, 1),
+    yKeys:
+      numericKeys.length > 0
+        ? numericKeys
+        : keys.filter((k) => k !== xKey && !excluded.has(k)).slice(0, 1),
   }
 }
 
@@ -367,8 +457,10 @@ function computeRefAxisBounds(
 ): { min?: number | undefined; max?: number | undefined } {
   if (refLine === undefined || !Number.isFinite(refLine)) return {}
   const finiteVals = values.filter(Number.isFinite)
-  const dataMax = finiteVals.length > 0 ? Math.max(...finiteVals) : 0
-  const dataMin = finiteVals.length > 0 ? Math.min(...finiteVals) : 0
+  const rawMax = finiteVals.length > 0 ? Math.max(...finiteVals) : 0
+  const rawMin = finiteVals.length > 0 ? Math.min(...finiteVals) : 0
+  const dataMax = scale ? rawMax : Math.max(0, rawMax)
+  const dataMin = scale ? rawMin : Math.min(0, rawMin)
 
   let max: number | undefined
   let min: number | undefined
@@ -385,19 +477,25 @@ function computeRefAxisBounds(
     } else {
       max = niceUpperBound(Math.max(dataMax, refLine) * 1.1)
     }
-  } else if (refLine <= 0 && refLine > dataMax) {
+  } else if (scale && refLine <= 0 && refLine > dataMax) {
     max = Number(
-      (refLine + Math.max(dataSpan * 0.1, Math.abs(dataMin - refLine) * 0.1)).toPrecision(6),
+      (refLine + Math.max(dataSpan * 0.12, Math.abs(dataMin - refLine) * 0.12)).toPrecision(6),
     )
   }
 
   if (refLine < 0 && refLine <= dataMin * 0.94) {
     min = -niceUpperBound(Math.abs(Math.min(dataMin, refLine)) * 1.1)
   } else if (scale && refLine < dataMin) {
-    min =
-      refLine >= 0
-        ? Number((refLine * 0.92).toPrecision(6))
-        : -niceUpperBound(Math.abs(refLine) * 1.1)
+    if (refLine >= 0 && dataSpan < dataMax * 0.35) {
+      const target = Math.max(0, refLine - dataSpan * 0.22)
+      const step = 10 ** Math.floor(Math.log10(Math.max(1e-9, dataSpan)) - 1)
+      min = Number((Math.floor(target / step) * step).toPrecision(6))
+    } else {
+      min =
+        refLine >= 0
+          ? Number((refLine * 0.92).toPrecision(6))
+          : -niceUpperBound(Math.abs(refLine) * 1.1)
+    }
   }
 
   return { min, max }
@@ -413,23 +511,25 @@ function pickMarkLinePosition(
   const allVals = [...leftValues, ...rightValues].filter(Number.isFinite)
   const span =
     allVals.length > 0
-      ? Math.max(1e-9, Math.max(...allVals) - Math.min(...allVals))
+      ? Math.max(1e-9, Math.max(...allVals, 0) - Math.min(...allVals, 0))
       : Math.max(1e-9, Math.abs(refLine))
   const tolerance = Math.max(span * 0.05, Math.abs(refLine) * 0.05)
-  const bandLow = refLine - tolerance
   const proxScale = Math.max(1e-9, span * 0.5)
+  const isNegRef = refLine < 0
   const obstruction = (vals: readonly number[]) =>
-    vals.reduce(
-      (score, v) =>
-        v >= bandLow
-          ? score + 1000 + Math.max(0, 200 * (1 - Math.abs(v - refLine) / proxScale))
-          : score,
-      0,
-    )
+    vals.reduce((score, v) => {
+      const covers = isNegRef ? v <= refLine + tolerance : v >= refLine - tolerance
+      return covers
+        ? score + 1000 + Math.max(0, 200 * (1 - Math.abs(v - refLine) / proxScale))
+        : score
+    }, 0)
   const leftScore = obstruction(leftValues)
   const rightScore = obstruction(rightValues)
   if (leftScore !== rightScore) {
     return leftScore < rightScore ? 'insideStartTop' : 'insideEndTop'
+  }
+  if (isNegRef) {
+    return Math.min(...leftValues) > Math.min(...rightValues) ? 'insideStartTop' : 'insideEndTop'
   }
   return Math.max(...leftValues) < Math.max(...rightValues) ? 'insideStartTop' : 'insideEndTop'
 }
@@ -444,8 +544,9 @@ function buildReferenceMarkLine(
   compact = false,
 ): Record<string, unknown> | undefined {
   if (value === undefined || !Number.isFinite(value)) return undefined
-  const text =
+  const rawText =
     label !== undefined && label.trim() !== '' ? sanitizeChartLabel(label) : String(value)
+  const text = truncateByVisualWidth(rawText, compact ? 20 : 32)
   return {
     silent: true,
     symbol: ['none', 'none'],
@@ -645,12 +746,38 @@ function buildLegendOption(opts: {
   readonly itemHeight?: number | undefined
   readonly data?: readonly string[] | undefined
   readonly names?: readonly string[] | undefined
+  readonly containerWidth?: number | undefined
 }): Record<string, unknown> {
   const { isCompact, scroll, textColor } = opts
+  const fontSize = opts.fontSize ?? 11
+  const itemWidth = opts.itemWidth ?? 10
+  const itemHeight = opts.itemHeight ?? 8
   const candidateNames = opts.names ?? opts.data
+  const uniqueNames = candidateNames ? [...new Set(candidateNames)] : []
+  const uniqueNameSet = new Set(uniqueNames)
+  const estContainerW =
+    opts.containerWidth !== undefined && opts.containerWidth > 0
+      ? opts.containerWidth
+      : isCompact
+        ? 276
+        : 520
+  const availW = Math.max(120, estContainerW - 12)
+  const estNaturalTotalPx =
+    uniqueNames.length > 0
+      ? uniqueNames.reduce(
+          (sum, n) => sum + itemWidth + 6 + visualWidthOf(n) * (fontSize * 0.62) + 8,
+          -8,
+        )
+      : 0
+  const fitsNaturallyWithoutScroll =
+    uniqueNames.length > 0 && uniqueNames.length <= 3 && estNaturalTotalPx <= availW - 6
+  const wideTwoSeriesFit =
+    uniqueNames.length > 0 &&
+    uniqueNames.length <= 2 &&
+    uniqueNames.every((n) => visualWidthOf(n) <= 14)
+
   let compactFormatter: ((name: string) => string) | undefined
   if (isCompact) {
-    const uniqueNames = candidateNames ? [...new Set(candidateNames)] : []
     const baseMaxUnits = 8
     const collided = new Set<string>()
     if (uniqueNames.length > 1) {
@@ -666,9 +793,10 @@ function buildLegendOption(opts: {
         }
       }
     }
-    const wideTwoSeriesFit =
-      uniqueNames.length <= 2 && uniqueNames.every((n) => visualWidthOf(n) <= 14)
     compactFormatter = (name: string) => {
+      if ((wideTwoSeriesFit || fitsNaturallyWithoutScroll) && uniqueNameSet.has(name)) {
+        return name
+      }
       if (collided.has(name)) {
         if (wideTwoSeriesFit) return name
         return truncateMiddleByVisualWidth(name, 9)
@@ -676,18 +804,71 @@ function buildLegendOption(opts: {
       return truncateByVisualWidth(name, baseMaxUnits)
     }
   }
+
+  const formattedNames = uniqueNames.map((n) => (compactFormatter ? compactFormatter(n) : n))
+  const formattedMinWidths = formattedNames.map(
+    (s) => itemWidth + 5 + Math.floor(visualWidthOf(s) * (fontSize * 0.5)),
+  )
+  const formattedMaxWidths = formattedNames.map(
+    (s) => itemWidth + 5 + Math.ceil(visualWidthOf(s) * (fontSize * 0.6)),
+  )
+  const estFormattedTotalMax =
+    formattedMaxWidths.length > 0 ? formattedMaxWidths.reduce((sum, w) => sum + w + 8, -8) : 0
+
+  const willPaginateScroll =
+    isCompact &&
+    scroll &&
+    uniqueNames.length >= 3 &&
+    !fitsNaturallyWithoutScroll &&
+    estFormattedTotalMax > availW - 6
+  const pageCtrlW = 56
+  const clipW = Math.max(100, availW - pageCtrlW)
+  const perPage = estContainerW < 340 ? 2 : 3
+  let scrollItemGap = 8
+  if (willPaginateScroll) {
+    const maxK = Math.min(uniqueNames.length - 1, perPage + 1)
+    for (let k = maxK; k >= 1; k -= 1) {
+      let sumMin = 0
+      let sumMax = 0
+      for (let i = 0; i < k; i += 1) {
+        sumMin += formattedMinWidths[i] ?? 0
+        sumMax += formattedMaxWidths[i] ?? 0
+      }
+      if (k === 1) {
+        scrollItemGap = Math.max(8, Math.min(52, Math.ceil(clipW - sumMin + 12)))
+        break
+      }
+      const gapMin = Math.ceil((clipW - sumMin + 12) / k)
+      const gapMax = Math.floor((clipW - sumMax - 6) / (k - 1))
+      if (gapMax >= 8 && gapMin <= gapMax) {
+        scrollItemGap = Math.max(8, Math.min(52, gapMin))
+        break
+      }
+    }
+  }
+  const slotTextW = willPaginateScroll
+    ? Math.max(42, Math.floor((clipW - 8 * (perPage - 1)) / perPage) - itemWidth - 5)
+    : undefined
+
   return {
     type: scroll ? 'scroll' : 'plain',
     bottom: opts.bottom ?? 0,
     left: isCompact ? 6 : 'center',
     ...(isCompact ? { right: 6 } : {}),
-    itemWidth: opts.itemWidth ?? 10,
-    itemHeight: opts.itemHeight ?? 8,
-    itemGap: 8,
-    ...(scroll ? { pageButtonGap: 8, pageIconSize: 10 } : {}),
+    ...(willPaginateScroll ? { padding: 0 } : {}),
+    itemWidth,
+    itemHeight,
+    itemGap: scrollItemGap,
+    ...(scroll ? { pageButtonGap: 8, pageButtonItemGap: 4, pageIconSize: 10 } : {}),
     ...(compactFormatter ? { formatter: compactFormatter } : {}),
     ...(opts.data ? { data: [...opts.data] } : {}),
-    textStyle: { color: textColor, fontSize: opts.fontSize ?? 11 },
+    textStyle: {
+      color: textColor,
+      fontSize,
+      ...(slotTextW !== undefined
+        ? { width: slotTextW, overflow: 'truncate' as const, ellipsis: '…' }
+        : {}),
+    },
   }
 }
 
@@ -715,6 +896,7 @@ function applyHierarchyCrossFilter(
   queries: readonly string[],
   exactOnly: boolean,
   highlightBorder: string,
+  ancestorMatched = false,
 ): { readonly nodes: unknown[]; readonly matched: boolean } {
   let anyMatched = false
   const mapped = nodes.map((item) => {
@@ -725,9 +907,15 @@ function applyHierarchyCrossFilter(
       exactOnly ? nameNorm === q : nameNorm === q || (nameNorm !== '' && nameNorm.includes(q)),
     )
     const childRes = Array.isArray(rec.children)
-      ? applyHierarchyCrossFilter(rec.children, queries, exactOnly, highlightBorder)
+      ? applyHierarchyCrossFilter(
+          rec.children,
+          queries,
+          exactOnly,
+          highlightBorder,
+          ancestorMatched || selfMatch,
+        )
       : null
-    const isMatch = selfMatch || Boolean(childRes?.matched)
+    const isMatch = ancestorMatched || selfMatch || Boolean(childRes?.matched)
     if (isMatch) anyMatched = true
     const prevStyle =
       typeof rec.itemStyle === 'object' && rec.itemStyle !== null
@@ -786,7 +974,11 @@ function applyCrossFilterSelection(
       return { ...s, data: res.nodes }
     }
 
-    if ((type === 'bar' || type === 'line') && Array.isArray(s.data) && categories) {
+    if (
+      (type === 'bar' || type === 'line' || type === 'boxplot' || type === 'candlestick') &&
+      Array.isArray(s.data) &&
+      categories
+    ) {
       if (
         typeof s.itemStyle === 'object' &&
         s.itemStyle !== null &&
@@ -804,6 +996,7 @@ function applyCrossFilterSelection(
       const hasExactCat = categories.some((c) => qNorms.includes(norm(c)))
       let anyPointMatched = false
       const nextData = (s.data as unknown[]).map((pt, idx) => {
+        if (pt === '-') return pt
         const cat = categories[idx] ?? ''
         const catNorm = norm(cat)
         const catMatch = qNorms.some((qNorm) =>
@@ -862,6 +1055,26 @@ function applyCrossFilterSelection(
       return { ...s, data: nextData }
     }
 
+    if (type === 'parallel') {
+      const prevLine =
+        typeof s.lineStyle === 'object' && s.lineStyle !== null
+          ? (s.lineStyle as Record<string, unknown>)
+          : {}
+      const isMatch =
+        seriesMatched ||
+        queries.some(
+          (q) => seriesNameNorm === q || (seriesNameNorm !== '' && seriesNameNorm.includes(q)),
+        )
+      return {
+        ...s,
+        lineStyle: {
+          ...prevLine,
+          opacity: isMatch ? 1 : 0.16,
+          width: isMatch ? 3.2 : 1.5,
+        },
+      }
+    }
+
     if ((type === 'sankey' || type === 'graph') && Array.isArray(s.data)) {
       const hasExactNode = (s.data as unknown[]).some((node) => {
         if (typeof node !== 'object' || node === null) return false
@@ -910,9 +1123,14 @@ function applyCrossFilterSelection(
               typeof rec.lineStyle === 'object' && rec.lineStyle !== null
                 ? (rec.lineStyle as Record<string, unknown>)
                 : {}
+            const prevLabel =
+              typeof rec.label === 'object' && rec.label !== null
+                ? (rec.label as Record<string, unknown>)
+                : undefined
             return {
               ...rec,
               lineStyle: { ...prevLine, opacity: linkMatch ? 0.65 : 0.14 },
+              ...(prevLabel ? { label: { ...prevLabel, opacity: linkMatch ? 1 : 0.25 } } : {}),
             }
           })
         : s.links
@@ -920,13 +1138,24 @@ function applyCrossFilterSelection(
     }
 
     if (type === 'scatter' && Array.isArray(s.data)) {
+      const hasExactScatter = (s.data as unknown[]).some((pt) => {
+        if (typeof pt !== 'object' || pt === null || Array.isArray(pt)) return false
+        const nameNorm = sanitizeChartLabel((pt as Record<string, unknown>).name)
+          .trim()
+          .toLowerCase()
+        return nameNorm !== '' && queries.includes(nameNorm)
+      })
       const nextData = (s.data as unknown[]).map((pt) => {
         if (typeof pt === 'object' && pt !== null && !Array.isArray(pt)) {
           const rec = pt as Record<string, unknown>
           const nameNorm = sanitizeChartLabel(rec.name).trim().toLowerCase()
           const isMatch =
             seriesMatched ||
-            queries.some((q) => nameNorm === q || (nameNorm !== '' && nameNorm.includes(q)))
+            queries.some((q) =>
+              hasExactScatter
+                ? nameNorm === q
+                : nameNorm === q || (nameNorm !== '' && nameNorm.includes(q)),
+            )
           const prevStyle =
             typeof rec.itemStyle === 'object' && rec.itemStyle !== null
               ? (rec.itemStyle as Record<string, unknown>)
@@ -946,12 +1175,42 @@ function applyCrossFilterSelection(
     }
 
     if (type === 'heatmap' && Array.isArray(s.data)) {
-      const nextData = (s.data as unknown[]).map((pt) => {
+      const yAxisObj = Array.isArray(opt.yAxis)
+        ? (opt.yAxis[0] as Record<string, unknown> | undefined)
+        : (opt.yAxis as Record<string, unknown> | undefined)
+      const yCats =
+        yAxisObj && Array.isArray(yAxisObj.data)
+          ? (yAxisObj.data as unknown[]).map((v) => sanitizeChartLabel(v).trim().toLowerCase())
+          : []
+      const extractHeatTokens = (pt: unknown): string[] => {
+        const toks: string[] = []
         if (Array.isArray(pt) && typeof pt[0] === 'string') {
-          const nameNorm = sanitizeChartLabel(pt[0]).trim().toLowerCase()
-          const isMatch = queries.some(
-            (q) => nameNorm === q || (nameNorm !== '' && nameNorm.includes(q)),
-          )
+          toks.push(sanitizeChartLabel(pt[0]).trim().toLowerCase())
+        } else if (typeof pt === 'object' && pt !== null && !Array.isArray(pt)) {
+          const rec = pt as Record<string, unknown>
+          const n = sanitizeChartLabel(rec.name).trim().toLowerCase()
+          if (n) toks.push(n)
+          if (Array.isArray(rec.value) && typeof rec.value[1] === 'number') {
+            const yLbl = yCats[rec.value[1]]
+            if (yLbl) toks.push(yLbl)
+          }
+        }
+        return toks
+      }
+      const hasExactHeat = (s.data as unknown[]).some((pt) =>
+        extractHeatTokens(pt).some((t) => queries.includes(t)),
+      )
+      const nextData = (s.data as unknown[]).map((pt) => {
+        const toks = extractHeatTokens(pt)
+        if (toks.length === 0) return pt
+        const isMatch = toks.some((nameNorm) =>
+          queries.some((q) =>
+            hasExactHeat
+              ? nameNorm === q
+              : nameNorm === q || (nameNorm !== '' && nameNorm.includes(q)),
+          ),
+        )
+        if (Array.isArray(pt)) {
           return {
             value: pt,
             itemStyle: {
@@ -960,37 +1219,39 @@ function applyCrossFilterSelection(
             },
           }
         }
-        if (typeof pt === 'object' && pt !== null && !Array.isArray(pt)) {
-          const rec = pt as Record<string, unknown>
-          const nameNorm = sanitizeChartLabel(rec.name).trim().toLowerCase()
-          const isMatch = queries.some(
-            (q) => nameNorm === q || (nameNorm !== '' && nameNorm.includes(q)),
-          )
-          const prevStyle =
-            typeof rec.itemStyle === 'object' && rec.itemStyle !== null
-              ? (rec.itemStyle as Record<string, unknown>)
-              : {}
-          return {
-            ...rec,
-            itemStyle: {
-              ...prevStyle,
-              opacity: isMatch ? 1 : 0.28,
-              ...(isMatch ? { borderColor: highlightBorder, borderWidth: 1.5 } : {}),
-            },
-          }
+        const rec = pt as Record<string, unknown>
+        const prevStyle =
+          typeof rec.itemStyle === 'object' && rec.itemStyle !== null
+            ? (rec.itemStyle as Record<string, unknown>)
+            : {}
+        return {
+          ...rec,
+          itemStyle: {
+            ...prevStyle,
+            opacity: isMatch ? 1 : 0.28,
+            ...(isMatch ? { borderColor: highlightBorder, borderWidth: 1.5 } : {}),
+          },
         }
-        return pt
       })
       return { ...s, data: nextData }
     }
 
     if (type === 'radar' && Array.isArray(s.data)) {
+      const hasExactRadar = (s.data as unknown[]).some((pt) => {
+        if (typeof pt !== 'object' || pt === null) return false
+        const nameNorm = sanitizeChartLabel((pt as Record<string, unknown>).name)
+          .trim()
+          .toLowerCase()
+        return nameNorm !== '' && queries.includes(nameNorm)
+      })
       const nextData = (s.data as unknown[]).map((pt) => {
         if (typeof pt !== 'object' || pt === null) return pt
         const rec = pt as Record<string, unknown>
         const nameNorm = sanitizeChartLabel(rec.name).trim().toLowerCase()
-        const isMatch = queries.some(
-          (q) => nameNorm === q || (nameNorm !== '' && nameNorm.includes(q)),
+        const isMatch = queries.some((q) =>
+          hasExactRadar
+            ? nameNorm === q
+            : nameNorm === q || (nameNorm !== '' && nameNorm.includes(q)),
         )
         const prevLine =
           typeof rec.lineStyle === 'object' && rec.lineStyle !== null
@@ -1083,7 +1344,10 @@ function buildChartOptionInternal(
 ): echarts.EChartsCoreOption {
   const rows = normalizeChartRows(props.data)
   const theme = resolvePalette(dark)
-  const { xKey, yKeys } = inferFields(rows, props.xField, props.yField)
+  const { xKey, yKeys } = inferFields(rows, props.xField, props.yField, [
+    props.seriesField,
+    props.sizeField,
+  ])
   const primaryY = yKeys[0] ?? 'value'
   const isCompact = containerWidth !== undefined && containerWidth > 0 && containerWidth < 400
 
@@ -1092,10 +1356,10 @@ function buildChartOptionInternal(
     renderMode: 'richText' as const,
     confine: true,
     backgroundColor: theme.tooltipBg,
-    borderColor: theme.border,
+    borderColor: theme.tooltipBorder,
     padding: isCompact ? [5, 8] : [6, 10],
     textStyle: {
-      color: theme.textPrimary,
+      color: theme.tooltipText,
       fontSize: isCompact ? 10.5 : 12,
       width: tooltipMaxW,
       overflow: 'break' as const,
@@ -1108,6 +1372,10 @@ function buildChartOptionInternal(
       value: toNumber(r[primaryY] ?? r.value),
     }))
     const hideOuterPieLabels = isCompact || items.length > 5
+    const estFunnelW = containerWidth !== undefined && containerWidth > 0 ? containerWidth : 520
+    const funnelInsideLabelW = isCompact
+      ? Math.max(68, Math.min(96, Math.floor(estFunnelW * 0.34)))
+      : 140
     return {
       color: theme.colors,
       tooltip: {
@@ -1121,6 +1389,7 @@ function buildChartOptionInternal(
         scroll: isCompact || items.length >= 4,
         names: items.map((item) => item.name),
         textColor: theme.textSecondary,
+        containerWidth,
       }),
       series: [
         props.kind === 'pie'
@@ -1179,7 +1448,7 @@ function buildChartOptionInternal(
                       ...FILLED_SHAPE_LABEL,
                       fontSize: isCompact ? 10 : 11,
                       overflow: 'truncate',
-                      width: isCompact ? 112 : 140,
+                      width: funnelInsideLabelW,
                     }
                   : {
                       color: theme.textPrimary,
@@ -1216,7 +1485,9 @@ function buildChartOptionInternal(
     const val = toNumber(first[gaugeValKey] ?? first.value ?? 0)
     const rawMax = first.max ?? first.target
     const parsedMax = rawMax !== undefined ? toNumber(rawMax) : 100
-    const gaugeMax = parsedMax > 0 ? Math.max(parsedMax, val) : 100
+    const baseMax = parsedMax > 0 ? parsedMax : 100
+    const gaugeMax = val > baseMax ? niceUpperBound(val * 1.1) : baseMax
+    const gaugeMin = val < 0 ? -niceUpperBound(Math.abs(val) * 1.1) : 0
     const gaugeLabelKey =
       props.xField ??
       (typeof first.name === 'string'
@@ -1238,28 +1509,37 @@ function buildChartOptionInternal(
       series: [
         {
           type: 'gauge',
+          min: gaugeMin,
           max: gaugeMax,
           splitNumber: isCompact ? 5 : 10,
           radius: isCompact ? '86%' : '82%',
           progress: { show: true, width: arcWidth },
+          pointer: {
+            length: isCompact ? '48%' : '54%',
+            width: isCompact ? 4 : 5,
+          },
           axisLine: { lineStyle: { width: arcWidth, color: [[1, theme.border]] } },
-          axisTick: { lineStyle: { color: theme.border } },
-          splitLine: { lineStyle: { color: theme.textSecondary, width: 1.2 } },
+          axisTick: { distance: 2, length: 4, lineStyle: { color: theme.border } },
+          splitLine: {
+            distance: 2,
+            length: isCompact ? 7 : 9,
+            lineStyle: { color: theme.textSecondary, width: 1.2 },
+          },
           axisLabel: {
             color: theme.textSecondary,
             fontSize: isCompact ? 9 : 10,
-            distance: isCompact ? 12 : 16,
+            distance: isCompact ? 12 : 15,
           },
           detail: {
             valueAnimation: true,
             fontSize: isCompact ? 16 : 20,
             color: theme.textPrimary,
-            offsetCenter: [0, '62%'],
+            offsetCenter: [0, isCompact ? '58%' : '62%'],
           },
           title: {
             color: theme.textSecondary,
             fontSize: isCompact ? 10.5 : 12,
-            offsetCenter: [0, '88%'],
+            offsetCenter: [0, isCompact ? '86%' : '88%'],
             width: Math.max(96, Math.floor(estGaugeW * 0.7)),
             overflow: 'truncate',
           },
@@ -1348,6 +1628,7 @@ function buildChartOptionInternal(
             scroll: isCompact || radarSeriesItems.length >= 4,
             names: radarSeriesItems.map((item) => item.name),
             textColor: theme.textSecondary,
+            containerWidth,
           })
         : undefined,
       radar: {
@@ -1575,7 +1856,8 @@ function buildChartOptionInternal(
             type: 'sunburst',
             center: ['50%', '51%'],
             radius: useInnerOnly ? ['18%', '85%'] : ['18%', '70%'],
-            nodeClick: props.selected !== undefined ? false : 'rootToNode',
+            nodeClick:
+              props.interactiveSelect || props.selected !== undefined ? false : 'rootToNode',
             sort: 'desc',
             minAngle: useInnerOnly ? 16 : 10,
             emphasis: { focus: 'ancestor' },
@@ -1878,6 +2160,7 @@ function buildChartOptionInternal(
               scroll: isCompact || categories.length >= 4,
               data: categories.map((c) => c.name),
               textColor: theme.textSecondary,
+              containerWidth,
             })
           : undefined,
       series: [
@@ -1914,10 +2197,10 @@ function buildChartOptionInternal(
             textBorderWidth: 1.2,
           },
           lineStyle: {
-            color: theme.border,
-            width: 1.5,
+            color: theme.textSecondary,
+            width: 1.6,
             curveness: useCircularCompact ? 0.18 : 0.12,
-            opacity: 0.85,
+            opacity: dark ? 0.52 : 0.48,
           },
           categories: categories.length > 0 ? categories : undefined,
           data: nodes.map((n) => {
@@ -2251,6 +2534,7 @@ function buildChartOptionInternal(
             bottom: props.zoom ? 24 : 0,
             names: scatterSeries.map((s) => String(s.name ?? '')),
             textColor: theme.textSecondary,
+            containerWidth,
           })
         : undefined,
       grid: {
@@ -2513,29 +2797,41 @@ function buildChartOptionInternal(
 
     const incItems = incData.map((val, i) => {
       if (typeof val !== 'number') return val
+      const crossesZero = typeof incNegData[i] === 'number'
       const bottom = baseData[i] ?? 0
       const top = bottom + val
       const text = `+${Math.abs(stepDeltas[i] ?? val)}`
+      const styleOverride = crossesZero
+        ? { itemStyle: { color: theme.success, borderRadius: [4, 4, 0, 0] } }
+        : {}
       if (showBarLabels && overlapsRefBand(i, top, top + ySpan * 0.085)) {
         const mid = bottom + val / 2
         if (
           fitsInsideBar(text, val) &&
           !overlapsRefBand(i, mid - ySpan * 0.04, mid + ySpan * 0.04)
         ) {
-          return { value: val, label: insideHaloLabel }
+          return { value: val, ...styleOverride, label: insideHaloLabel }
         }
-        if (!overlapsRefBand(i, bottom - ySpan * 0.085, bottom - ySpan * 0.015)) {
-          return { value: val, label: { position: 'bottom' as const } }
+        if (!crossesZero && !overlapsRefBand(i, bottom - ySpan * 0.085, bottom - ySpan * 0.015)) {
+          return { value: val, ...styleOverride, label: { position: 'bottom' as const } }
         }
         if (val >= ySpan * 0.1) {
-          return { value: val, label: insideHaloLabel }
+          return { value: val, ...styleOverride, label: insideHaloLabel }
         }
       }
-      return val
+      return crossesZero ? { value: val, ...styleOverride } : val
     })
 
     const decItems = decData.map((val, i) => {
       if (typeof val !== 'number') return val
+      const crossesZero = typeof decNegData[i] === 'number'
+      if (crossesZero) {
+        return {
+          value: val,
+          itemStyle: { color: theme.danger, borderRadius: [4, 4, 0, 0] },
+          label: { show: false },
+        }
+      }
       const bottom = baseData[i] ?? 0
       const top = bottom + val
       const text = `-${Math.abs(stepDeltas[i] ?? val)}`
@@ -2566,6 +2862,7 @@ function buildChartOptionInternal(
       const onlyNeg = incData[i] === '-'
       return {
         value: val,
+        itemStyle: { color: theme.success, borderRadius: [0, 0, 4, 4] },
         label: {
           show: showBarLabels && onlyNeg,
           position: 'bottom' as const,
@@ -2577,11 +2874,11 @@ function buildChartOptionInternal(
     })
     const decNegItems = decNegData.map((val, i) => {
       if (typeof val !== 'number') return val
-      const onlyNeg = decData[i] === '-'
       return {
         value: val,
+        itemStyle: { color: theme.danger, borderRadius: [0, 0, 4, 4] },
         label: {
-          show: showBarLabels && onlyNeg,
+          show: showBarLabels,
           position: 'bottom' as const,
           color: theme.danger,
           fontSize: barLabelFontSize,
@@ -2633,6 +2930,7 @@ function buildChartOptionInternal(
         bottom: props.zoom ? 24 : 0,
         textColor: theme.textSecondary,
         data: wfLegendData,
+        containerWidth,
       }),
       dataZoom: zoomCfg,
       grid: {
@@ -2840,27 +3138,33 @@ function buildChartOptionInternal(
     const stackKey = props.stacked ? 'comboBar' : undefined
     const barFill = dark ? 'rgba(96, 165, 250, 0.40)' : 'rgba(37, 99, 235, 0.26)'
 
-    const barSeries = barKeys.map((k, idx) => ({
-      name: sanitizeChartLabel(k),
-      type: 'bar' as const,
-      yAxisIndex: 0,
-      stack: stackKey,
-      barMaxWidth: isCompact ? 20 : 28,
-      itemStyle:
-        barKeys.length === 1
-          ? {
-              color: barFill,
-              borderColor: theme.brand,
-              borderWidth: 1,
-              borderRadius: [4, 4, 0, 0],
-            }
-          : {
-              color: theme.colors[idx % theme.colors.length],
-              borderRadius: [4, 4, 0, 0],
-            },
-      markLine: lineKeys.length === 0 && idx === 0 ? refLine : undefined,
-      data: barDataList[idx] ?? [],
-    }))
+    const barSeries = barKeys.map((k, idx) => {
+      const rawArr = barDataList[idx] ?? []
+      const hasNegBar = rawArr.some((v) => v < 0)
+      return {
+        name: sanitizeChartLabel(k),
+        type: 'bar' as const,
+        yAxisIndex: 0,
+        stack: stackKey,
+        barMaxWidth: isCompact ? 20 : 28,
+        itemStyle:
+          barKeys.length === 1
+            ? {
+                color: barFill,
+                borderColor: theme.brand,
+                borderWidth: 1,
+                borderRadius: [4, 4, 0, 0],
+              }
+            : {
+                color: theme.colors[idx % theme.colors.length],
+                borderRadius: [4, 4, 0, 0],
+              },
+        markLine: lineKeys.length === 0 && idx === 0 ? refLine : undefined,
+        data: hasNegBar
+          ? rawArr.map((v) => (v < 0 ? { value: v, itemStyle: { borderRadius: [0, 0, 4, 4] } } : v))
+          : rawArr,
+      }
+    })
 
     const barKeySet = new Set(barKeys)
     const lineColorStart = barKeys.length === 1 ? 3 : barKeys.length
@@ -2881,16 +3185,47 @@ function buildChartOptionInternal(
       }
     })
 
-    const barVals = barDataList.flat()
+    const stackedComboVals = props.stacked
+      ? [
+          ...categories.map((_, i) =>
+            barDataList.reduce((acc, arr) => acc + Math.max(arr[i] ?? 0, 0), 0),
+          ),
+          ...categories.map((_, i) =>
+            barDataList.reduce((acc, arr) => acc + Math.min(arr[i] ?? 0, 0), 0),
+          ),
+        ]
+      : barDataList.flat()
     const lineVals = lineDataList.flat()
     const leftBounds =
-      lineKeys.length === 0 ? computeRefAxisBounds(barVals, props.referenceLine) : {}
+      lineKeys.length === 0 ? computeRefAxisBounds(stackedComboVals, props.referenceLine) : {}
     const rightBounds =
       lineKeys.length > 0 ? computeRefAxisBounds(lineVals, props.referenceLine) : {}
     const totalSeriesCount = barSeries.length + lineSeries.length
 
     const zoomCfg = buildZoomConfig(props.zoom, false, theme.border)
     const legendBottom = props.zoom ? (isCompact ? 26 : 24) : 0
+    const leftYAxis = {
+      type: 'value' as const,
+      ...leftBounds,
+      splitNumber: isCompact ? 3 : undefined,
+      splitLine: { lineStyle: { color: theme.border, type: 'dashed' as const } },
+      axisLabel: {
+        color: theme.textSecondary,
+        fontSize: isCompact ? 10 : 11,
+        hideOverlap: true,
+      },
+    }
+    const rightYAxis = {
+      type: 'value' as const,
+      ...rightBounds,
+      splitNumber: isCompact ? 3 : undefined,
+      splitLine: { show: false },
+      axisLabel: {
+        color: theme.textSecondary,
+        fontSize: isCompact ? 10 : 11,
+        hideOverlap: true,
+      },
+    }
     return {
       color: theme.colors,
       tooltip: { ...baseTooltip, trigger: 'axis' },
@@ -2902,6 +3237,7 @@ function buildChartOptionInternal(
         fontSize: isCompact ? 10.5 : 11.5,
         names: [...barSeries.map((s) => s.name), ...lineSeries.map((s) => s.name)],
         textColor: theme.textSecondary,
+        containerWidth,
       }),
       dataZoom: zoomCfg,
       grid: {
@@ -2934,30 +3270,7 @@ function buildChartOptionInternal(
             : {}),
         },
       },
-      yAxis: [
-        {
-          type: 'value',
-          ...leftBounds,
-          splitNumber: isCompact ? 3 : undefined,
-          splitLine: { lineStyle: { color: theme.border, type: 'dashed' } },
-          axisLabel: {
-            color: theme.textSecondary,
-            fontSize: isCompact ? 10 : 11,
-            hideOverlap: true,
-          },
-        },
-        {
-          type: 'value',
-          ...rightBounds,
-          splitNumber: isCompact ? 3 : undefined,
-          splitLine: { show: false },
-          axisLabel: {
-            color: theme.textSecondary,
-            fontSize: isCompact ? 10 : 11,
-            hideOverlap: true,
-          },
-        },
-      ],
+      yAxis: lineKeys.length > 0 ? [leftYAxis, rightYAxis] : [leftYAxis],
       series: [...barSeries, ...lineSeries],
     }
   }
@@ -2978,16 +3291,17 @@ function buildChartOptionInternal(
           )
     const effectiveDims = dimKeys.length > 0 ? dimKeys : yKeys.length > 0 ? yKeys : ['value']
     const labelField = props.seriesField ?? xKey
-    const padX = isCompact ? 26 : 44
+    const padLeft = isCompact ? 14 : 36
+    const padRight = isCompact ? 38 : 50
     const estWidth = containerWidth !== undefined && containerWidth > 0 ? containerWidth : 600
     const axisGap = Math.max(
-      36,
-      Math.floor((estWidth - padX * 2) / Math.max(1, effectiveDims.length - 1)),
+      22,
+      Math.floor((estWidth - padLeft - padRight) / Math.max(1, effectiveDims.length - 1)),
     )
     const staggerHeaders = axisGap < 96 && effectiveDims.length >= 3
     const baseMaxTitleW = staggerHeaders
-      ? Math.max(48, Math.floor(axisGap * 1.55))
-      : Math.max(42, Math.floor(axisGap * 0.82))
+      ? Math.max(40, Math.floor(axisGap * 1.45))
+      : Math.max(38, Math.floor(axisGap * 0.82))
 
     const parallelAxis = effectiveDims.map((dimKey, idx) => {
       const isEdge = effectiveDims.length > 1 && (idx === 0 || idx === effectiveDims.length - 1)
@@ -3000,7 +3314,7 @@ function buildChartOptionInternal(
               : ('center' as const)
           : ('center' as const)
       const axisTitleW =
-        isEdge && !staggerHeaders ? Math.max(42, Math.floor(axisGap * 0.6)) : baseMaxTitleW
+        isEdge && !staggerHeaders ? Math.max(38, Math.floor(axisGap * 0.6)) : baseMaxTitleW
       return {
         dim: idx,
         name: sanitizeChartLabel(dimKey),
@@ -3052,14 +3366,15 @@ function buildChartOptionInternal(
             itemHeight: 3,
             names: parallelSeries.map((s) => s.name),
             textColor: theme.textSecondary,
+            containerWidth,
           })
         : undefined,
       parallelAxis,
       parallel: {
         top: staggerHeaders ? 44 : 30,
         bottom: showPerRowLegend ? 34 : 16,
-        left: padX,
-        right: padX,
+        left: padLeft,
+        right: padRight,
         parallelAxisDefault: {
           nameGap: 10,
           nameTextStyle: {
@@ -3072,7 +3387,11 @@ function buildChartOptionInternal(
           axisLine: { lineStyle: { color: theme.border } },
           axisTick: { lineStyle: { color: theme.border } },
           splitLine: { show: false },
-          axisLabel: { color: theme.textSecondary, fontSize: 10 },
+          axisLabel: {
+            color: theme.textSecondary,
+            fontSize: isCompact ? 9.5 : 10,
+            hideOverlap: true,
+          },
         },
       },
       series: parallelSeries,
@@ -3156,7 +3475,10 @@ function buildChartOptionInternal(
     const monthFontSize = monthSlotPx < 24 ? 9 : isCompact ? 9.5 : 11
 
     const values = parsedCells.map((c) => c[1])
-    const maxVal = values.length > 0 ? Math.max(1, ...values) : 10
+    const minVal = values.length > 0 ? Math.min(0, ...values) : 0
+    const rawMax = values.length > 0 ? Math.max(...values) : 10
+    const maxVal = rawMax <= minVal ? minVal + 1 : rawMax
+    const spansMultiYear = rangeStart.slice(0, 4) !== rangeEnd.slice(0, 4)
     const emptyCellBg = dark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(17, 24, 39, 0.05)'
     const greenRamp = dark
       ? [emptyCellBg, 'rgba(52, 211, 153, 0.22)', '#10b981', '#34d399', '#6ee7b7']
@@ -3174,7 +3496,7 @@ function buildChartOptionInternal(
         },
       },
       visualMap: {
-        min: 0,
+        min: minVal,
         max: maxVal,
         calculable: false,
         orient: 'horizontal',
@@ -3198,7 +3520,13 @@ function buildChartOptionInternal(
           borderRadius: estCellW < 9 ? 1.5 : 3,
         },
         splitLine: { show: false },
-        yearLabel: { show: false },
+        yearLabel: {
+          show: spansMultiYear,
+          color: theme.textSecondary,
+          fontSize: isCompact ? 9 : 10,
+          position: 'top',
+          margin: 18,
+        },
         monthLabel: {
           color: theme.textSecondary,
           fontSize: monthFontSize,
@@ -3228,6 +3556,15 @@ function buildChartOptionInternal(
   const isHorizontal = props.kind === 'bar' && Boolean(props.horizontal)
   const stackKey = props.stacked ? 'total' : undefined
   const barRadius = isHorizontal ? [0, 4, 4, 0] : [4, 4, 0, 0]
+  const negBarRadius = isHorizontal ? [4, 0, 0, 4] : [0, 0, 4, 4]
+  const formatBarData = (vals: readonly (number | null)[]) => {
+    if (props.kind !== 'bar' || !vals.some((v) => typeof v === 'number' && v < 0)) {
+      return [...vals]
+    }
+    return vals.map((v) =>
+      typeof v === 'number' && v < 0 ? { value: v, itemStyle: { borderRadius: negBarRadius } } : v,
+    )
+  }
 
   let series: Record<string, unknown>[]
   if (props.seriesField) {
@@ -3243,19 +3580,22 @@ function buildChartOptionInternal(
       groupedSums.set(key, (groupedSums.get(key) ?? 0) + toNumber(rawVal))
     }
     const missingVal = echartsType === 'line' ? null : 0
-    series = groups.map((group) => ({
-      name: group,
-      type: echartsType,
-      smooth: echartsType === 'line',
-      stack: stackKey,
-      areaStyle: isArea ? { opacity: 0.2 } : undefined,
-      barMaxWidth: 32,
-      itemStyle: props.kind === 'bar' ? { borderRadius: barRadius } : undefined,
-      data: categories.map((cat) => {
+    series = groups.map((group) => {
+      const rawData = categories.map((cat) => {
         const key = `${group}\u0000${cat}`
         return groupedSums.has(key) ? groupedSums.get(key)! : missingVal
-      }),
-    }))
+      })
+      return {
+        name: group,
+        type: echartsType,
+        smooth: echartsType === 'line',
+        stack: stackKey,
+        areaStyle: isArea ? { opacity: 0.2 } : undefined,
+        barMaxWidth: 32,
+        itemStyle: props.kind === 'bar' ? { borderRadius: barRadius } : undefined,
+        data: formatBarData(rawData),
+      }
+    })
   } else {
     series = yKeys.map((k) => {
       let dataValues: number[]
@@ -3277,15 +3617,22 @@ function buildChartOptionInternal(
         areaStyle: isArea ? { opacity: 0.2 } : undefined,
         barMaxWidth: 32,
         itemStyle: props.kind === 'bar' ? { borderRadius: barRadius } : undefined,
-        data: dataValues,
+        data: formatBarData(dataValues),
       }
     })
+  }
+
+  const extractDatumNum = (raw: unknown): number => {
+    if (typeof raw === 'object' && raw !== null && 'value' in raw) {
+      return toNumber((raw as { value: unknown }).value)
+    }
+    return toNumber(raw)
   }
 
   const stackedPosSums = props.stacked
     ? categories.map((_, cIdx) =>
         series.reduce((sum, s) => {
-          const v = toNumber((s.data as unknown[])[cIdx])
+          const v = extractDatumNum((s.data as unknown[])[cIdx])
           return v > 0 ? sum + v : sum
         }, 0),
       )
@@ -3293,16 +3640,23 @@ function buildChartOptionInternal(
   const stackedNegSums = props.stacked
     ? categories.map((_, cIdx) =>
         series.reduce((sum, s) => {
-          const v = toNumber((s.data as unknown[])[cIdx])
+          const v = extractDatumNum((s.data as unknown[])[cIdx])
           return v < 0 ? sum + v : sum
         }, 0),
       )
     : []
+  const isNegRefLine =
+    props.referenceLine !== undefined &&
+    Number.isFinite(props.referenceLine) &&
+    props.referenceLine < 0
   const cartesianEdgeVals = props.stacked
-    ? stackedPosSums
-    : categories.map((_, cIdx) =>
-        Math.max(...series.map((s) => toNumber((s.data as unknown[])[cIdx])), 0),
-      )
+    ? isNegRefLine
+      ? stackedNegSums
+      : stackedPosSums
+    : categories.map((_, cIdx) => {
+        const colVals = series.map((s) => extractDatumNum((s.data as unknown[])[cIdx]))
+        return isNegRefLine ? Math.min(...colVals) : Math.max(...colVals)
+      })
   const cartMarkPos = isHorizontal
     ? 'insideEndTop'
     : pickMarkLinePosition(
@@ -3325,7 +3679,7 @@ function buildChartOptionInternal(
 
   const cartesianVals = props.stacked
     ? [...stackedPosSums, ...stackedNegSums]
-    : series.flatMap((s) => (s.data as unknown[]).map(toNumber))
+    : series.flatMap((s) => (s.data as unknown[]).map(extractDatumNum))
   const cartesianBounds = computeRefAxisBounds(cartesianVals, props.referenceLine)
 
   const showLegend = series.length > 1
@@ -3382,6 +3736,7 @@ function buildChartOptionInternal(
           fontSize: 11.5,
           names: series.map((s) => String(s.name ?? '')),
           textColor: theme.textSecondary,
+          containerWidth,
         })
       : undefined,
     dataZoom: zoomCfg,

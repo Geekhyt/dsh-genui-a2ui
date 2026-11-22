@@ -33,7 +33,7 @@ function normalizeObsPointer(pointer: string): string {
   return withSlash.length > 1 ? withSlash.replace(/\/+$/, '') : withSlash
 }
 
-function isPathObscured(path: string, obscured: ReadonlySet<string>): boolean {
+function isPathObscured(path: string, obscured: ReadonlySet<string>, matchParent = false): boolean {
   if (obscured.size === 0) return false
   const norm = normalizeObsPointer(path)
   for (const raw of obscured) {
@@ -43,6 +43,7 @@ function isPathObscured(path: string, obscured: ReadonlySet<string>): boolean {
     const obs = normalizeObsPointer(trimmed)
     if (obs === '/') return true
     if (norm === obs || norm.startsWith(`${obs}/`)) return true
+    if (matchParent && obs.startsWith(`${norm}/`)) return true
     if (isRelative && (norm.endsWith(obs) || norm.includes(`${obs}/`))) return true
   }
   return false
@@ -59,7 +60,11 @@ function referencesObscuredPointer(
   }
   const rec = node as Record<string, unknown>
   const rawPath = rec.path ?? rec['@path']
-  if (typeof rawPath === 'string' && rawPath.trim() !== '' && isPathObscured(rawPath, obscured)) {
+  if (
+    typeof rawPath === 'string' &&
+    rawPath.trim() !== '' &&
+    isPathObscured(rawPath, obscured, true)
+  ) {
     return true
   }
   for (const val of Object.values(rec)) {
@@ -154,7 +159,12 @@ export function sanitizePayloadObject(
 ): Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return {}
   const blocked = obscuredPointers ?? new Set<string>()
-  const clean = (node: unknown, path: string, depth: number): unknown => {
+  const clean = (
+    node: unknown,
+    path: string,
+    depth: number,
+    isSurfaceRootLevel: boolean,
+  ): unknown => {
     if (depth > 8) return undefined
     if (blocked.size > 0 && path !== '' && isPathObscured(path, blocked)) return undefined
     if (typeof node === 'string') {
@@ -165,7 +175,7 @@ export function sanitizePayloadObject(
       const limit = Math.min(node.length, MAX_ANSWER_ARRAY_LEN)
       for (let i = 0; i < limit; i++) {
         const childPath = path === '' ? `/${i}` : `${path}/${i}`
-        const next = clean(node[i], childPath, depth + 1)
+        const next = clean(node[i], childPath, depth + 1, false)
         if (next !== undefined) out.push(next)
       }
       return out
@@ -175,12 +185,11 @@ export function sanitizePayloadObject(
       let count = 0
       for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
         if (count >= MAX_ANSWER_KEYS) break
-        if (isDangerousObjectKey(k) || isSecretKey(k)) continue
+        if (isDangerousObjectKey(k) || (!isSurfaceRootLevel && isSecretKey(k))) continue
         const seg = escapeObsPointerSegment(k)
-        const childPath =
-          stripPerSurfaceRoot && depth === 0 ? '' : path === '' ? `/${seg}` : `${path}/${seg}`
+        const childPath = isSurfaceRootLevel ? '' : path === '' ? `/${seg}` : `${path}/${seg}`
         if (blocked.size > 0 && childPath !== '' && isPathObscured(childPath, blocked)) continue
-        const next = clean(v, childPath, depth + 1)
+        const next = clean(v, childPath, isSurfaceRootLevel ? depth : depth + 1, false)
         if (next !== undefined) {
           Object.defineProperty(out, k, {
             value: next,
@@ -195,7 +204,7 @@ export function sanitizePayloadObject(
     }
     return node
   }
-  return (clean(value, '', 0) as Record<string, unknown>) ?? {}
+  return (clean(value, '', 0, stripPerSurfaceRoot) as Record<string, unknown>) ?? {}
 }
 
 export type AskSettlement =
@@ -558,7 +567,16 @@ export function createAskTool(sessions: SurfaceSessions, asks: PendingAskRegistr
       }
 
       if (messages.length === 0) {
-        throw new Error('a2ui_ask: the program produced no UI messages (is `root` assigned?).')
+        const fails = sessions.recordCompileFailure(sid, 'ask')
+        if (fails > A2UI_LIMITS.maxRepairsPerTurn) {
+          sessions.clearCompileFailures(sid, 'ask')
+          throw new Error(
+            `a2ui_ask: the program produced no UI messages (is \`root\` assigned?).\nRepair limit (${A2UI_LIMITS.maxRepairsPerTurn}) reached for this turn. STOP calling a2ui_ask and ask the user concisely in plain text.`,
+          )
+        }
+        throw new Error(
+          `a2ui_ask: the program produced no UI messages (is \`root\` assigned?). Fix it and retry (${fails}/${A2UI_LIMITS.maxRepairsPerTurn}).`,
+        )
       }
 
       sessions.clearCompileFailures(sid, 'ask')

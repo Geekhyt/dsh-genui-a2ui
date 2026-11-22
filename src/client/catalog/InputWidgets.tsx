@@ -529,8 +529,11 @@ export const DshSliderImpl = defineComponent<{
           <AriaSliderOutput className={css.sliderOutput} />
         </div>
         <AriaSliderTrack className={css.sliderTrack}>
-          <div className={css.sliderFill} style={{ width: `${pct}%` }} />
-          <AriaSliderThumb className={css.sliderThumb} />
+          <div className={css.sliderFill} style={{ width: `calc((100% - 22px) * ${pct / 100})` }} />
+          <AriaSliderThumb
+            className={css.sliderThumb}
+            style={{ left: `calc(11px + (100% - 22px) * ${pct / 100})` }}
+          />
         </AriaSliderTrack>
       </AriaSlider>
       {err ? <span className={css.errorText}>{err}</span> : null}

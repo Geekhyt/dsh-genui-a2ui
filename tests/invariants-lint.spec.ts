@@ -17,8 +17,8 @@ import {
 
 const ROOT_DIR = resolve(import.meta.dirname, '..')
 
-describe('Architectural invariant linter (12 rules)', () => {
-  it('passes all 12 rules on the live repository with zero violations', () => {
+describe('Architectural invariant linter (14 rules)', () => {
+  it('passes all 14 rules on the live repository with zero violations', () => {
     const report = runAllInvariantChecks(ROOT_DIR)
     expect(report.filesScanned).toBeGreaterThan(50)
     expect(report.violations).toEqual([])
@@ -132,6 +132,24 @@ describe('Architectural invariant linter (12 rules)', () => {
       'src/client/catalog/BadSink.tsx',
     )
     expect(sinkV.filter((v) => v.rule === 'security-no-dangerous-sinks').length).toBe(3)
+
+    const tooltipV = checkTsInvariants(
+      `export const t = (theme: { tooltipBg: string; textPrimary: string }) => ({ backgroundColor: theme.tooltipBg, textStyle: { color: theme.textPrimary } })`,
+      'src/client/chunks/echarts-chunk.ts',
+    )
+    expect(tooltipV.some((v) => v.rule === 'echarts-tooltip-contrast-token')).toBe(true)
+
+    const tooltipOk = checkTsInvariants(
+      `export const t = (theme: { tooltipBg: string; tooltipText: string }) => ({ backgroundColor: theme.tooltipBg, textStyle: { color: theme.tooltipText } })`,
+      'src/client/chunks/echarts-chunk.ts',
+    )
+    expect(tooltipOk).toEqual([])
+
+    const helperJsonV = checkTsInvariants(
+      `export const ser = (v: unknown) => JSON.stringify(v)`,
+      'src/client/catalog/bad-helpers.ts',
+    )
+    expect(helperJsonV.some((v) => v.rule === 'no-raw-json-stringify-in-helpers')).toBe(true)
   })
 
   it('verifies locale key parity across locale/*.json and TypeScript message tables', () => {

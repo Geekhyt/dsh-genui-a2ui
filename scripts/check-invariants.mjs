@@ -287,6 +287,7 @@ export function checkTsInvariants(source, relPath) {
     (relPath.startsWith('src/shared/') && relPath !== 'src/shared/locale.ts') ||
     /^src\/client\/catalog\/.*-helpers\.ts$/.test(relPath)
   const isCatalogTsx = relPath.startsWith('src/client/catalog/') && relPath.endsWith('.tsx')
+  const isCatalogHelper = /^src\/client\/catalog\/.*-helpers\.ts$/.test(relPath)
   const isClientFile = relPath.startsWith('src/client/')
   const isEchartsChunk = relPath === 'src/client/chunks/echarts-chunk.ts'
 
@@ -453,7 +454,65 @@ export function checkTsInvariants(source, relPath) {
             `ECharts richText template must not embed raw HTML tags (${JSON.stringify(node.text.slice(0, 48))}).`,
           )
         }
+      } else if (ts.isObjectLiteralExpression(node)) {
+        let usesTooltipBg = false
+        let badTextColorNode = null
+        for (const prop of node.properties) {
+          if (!ts.isPropertyAssignment(prop)) continue
+          const propName = ts.isIdentifier(prop.name)
+            ? prop.name.text
+            : ts.isStringLiteral(prop.name)
+              ? prop.name.text
+              : ''
+          if (
+            propName === 'backgroundColor' &&
+            ts.isPropertyAccessExpression(prop.initializer) &&
+            prop.initializer.name.text === 'tooltipBg'
+          ) {
+            usesTooltipBg = true
+          }
+          if (propName === 'textStyle' && ts.isObjectLiteralExpression(prop.initializer)) {
+            for (const sub of prop.initializer.properties) {
+              if (!ts.isPropertyAssignment(sub)) continue
+              const subName = ts.isIdentifier(sub.name)
+                ? sub.name.text
+                : ts.isStringLiteral(sub.name)
+                  ? sub.name.text
+                  : ''
+              if (
+                subName === 'color' &&
+                ts.isPropertyAccessExpression(sub.initializer) &&
+                (sub.initializer.name.text === 'textPrimary' ||
+                  sub.initializer.name.text === 'textSecondary')
+              ) {
+                badTextColorNode = sub
+              }
+            }
+          }
+        }
+        if (usesTooltipBg && badTextColorNode !== null) {
+          report(
+            'echarts-tooltip-contrast-token',
+            badTextColorNode,
+            'ECharts tooltip with theme.tooltipBg must use contrast-verified theme.tooltipText, never theme.textPrimary/textSecondary.',
+          )
+        }
       }
+    }
+
+    if (
+      isCatalogHelper &&
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      ts.isIdentifier(node.expression.expression) &&
+      node.expression.expression.text === 'JSON' &&
+      node.expression.name.text === 'stringify'
+    ) {
+      report(
+        'no-raw-json-stringify-in-helpers',
+        node,
+        'Use safeStringifyJson from src/shared/constants.ts instead of raw JSON.stringify in catalog helpers.',
+      )
     }
 
     if (isPure && ts.isIdentifier(node) && PURE_FORBIDDEN_GLOBALS.has(node.text)) {
@@ -748,7 +807,7 @@ function runCli() {
     process.exit(1)
   }
   console.log(
-    `[check-invariants] OK: 12 architectural invariant rules verified across ${report.filesScanned} source/CSS file(s) and locale tables.`,
+    `[check-invariants] OK: 14 architectural invariant rules verified across ${report.filesScanned} source/CSS file(s) and locale tables.`,
   )
 }
 

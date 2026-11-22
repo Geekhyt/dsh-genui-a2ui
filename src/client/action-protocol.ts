@@ -1,4 +1,5 @@
 import type { ActionPayload } from '@a2ui/web_core/v1_0'
+import { isDangerousObjectKey } from '../shared/constants.ts'
 import { resolveClientLocale, SHELL_MESSAGES } from '../shared/i18n.ts'
 import { sanitizeDataModel } from './persistence.ts'
 
@@ -71,19 +72,45 @@ function formatSelectionLabel(selection: Record<string, unknown>): string | unde
   return undefined
 }
 
+export function stripActionSelectionMetadata(action: ActionPayload): ActionPayload {
+  const rawMeta = (action as { readonly metadata?: Record<string, unknown> }).metadata
+  if (!rawMeta || typeof rawMeta !== 'object') return action
+  const rawExt = rawMeta.extensions
+  if (!rawExt || typeof rawExt !== 'object' || Array.isArray(rawExt)) return action
+  if (!('dshSelection' in rawExt)) return action
+  const nextExt: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(rawExt as Record<string, unknown>)) {
+    if (k !== 'dshSelection') nextExt[k] = v
+  }
+  const nextMeta: Record<string, unknown> = { ...rawMeta }
+  if (Object.keys(nextExt).length > 0) {
+    nextMeta.extensions = nextExt
+  } else {
+    delete nextMeta.extensions
+  }
+  const nextAction = { ...(action as unknown as Record<string, unknown>) }
+  if (Object.keys(nextMeta).length > 0) {
+    nextAction.metadata = nextMeta
+  } else {
+    delete nextAction.metadata
+  }
+  return nextAction as unknown as ActionPayload
+}
+
 export function enrichActionWithSelection(action: ActionPayload): ActionPayload {
   const selection = extractClickSelection(action)
   const cleanContext = sanitizeDataModel(action.context ?? {})
+  const stripped = stripActionSelectionMetadata(action)
   if (selection === null) {
-    return { ...action, context: cleanContext }
+    return { ...stripped, context: cleanContext }
   }
   const mergedContext = 'selection' in cleanContext ? cleanContext : { ...cleanContext, selection }
   const autoMsg =
-    action.userMessage !== undefined && action.userMessage.trim() !== ''
-      ? action.userMessage
+    stripped.userMessage !== undefined && stripped.userMessage.trim() !== ''
+      ? stripped.userMessage
       : formatSelectionLabel(selection)
   return {
-    ...action,
+    ...stripped,
     ...(autoMsg !== undefined ? { userMessage: autoMsg } : {}),
     context: mergedContext,
   }
@@ -118,7 +145,33 @@ export function formatActionMessage(
   if (Object.keys(cleanContext).length > 0) {
     parts.push(`${msg.actionParamsPrefix}${JSON.stringify(cleanContext)}`)
   }
-  const cleanModels = dataModels !== undefined ? sanitizeDataModel(dataModels) : {}
+  const cleanModels: Record<string, unknown> = {}
+  if (dataModels !== undefined) {
+    for (const [key, val] of Object.entries(dataModels)) {
+      if (isDangerousObjectKey(key)) continue
+      if (typeof val === 'object' && val !== null && !Array.isArray(val)) {
+        const safeModel = sanitizeDataModel(val)
+        if (Object.keys(safeModel).length > 0) {
+          Object.defineProperty(cleanModels, key, {
+            value: safeModel,
+            enumerable: true,
+            writable: true,
+            configurable: true,
+          })
+        }
+      } else {
+        const safeFlat = sanitizeDataModel({ [key]: val })
+        if (Object.hasOwn(safeFlat, key)) {
+          Object.defineProperty(cleanModels, key, {
+            value: safeFlat[key],
+            enumerable: true,
+            writable: true,
+            configurable: true,
+          })
+        }
+      }
+    }
+  }
   if (Object.keys(cleanModels).length > 0) {
     parts.push(`${msg.actionDataModelPrefix}${JSON.stringify(cleanModels)}`)
   }

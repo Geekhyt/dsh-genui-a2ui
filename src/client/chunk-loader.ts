@@ -210,7 +210,7 @@ function resolveLiveMermaidTarget(key: string): HTMLElement | null {
   for (const getter of targets) {
     try {
       const el = getter()
-      if (el !== null) return el
+      if (el !== null && el.isConnected !== false) return el
     } catch {}
   }
   return null
@@ -357,8 +357,10 @@ export function subscribeMermaidDiagram(
     mermaidDiagramCache.delete(key)
     mermaidDiagramCache.set(key, existing)
   } else {
+    let evictedError = false
     if (existing !== undefined && existing.error !== null) {
       mermaidDiagramCache.delete(key)
+      evictedError = true
     }
     if (!mermaidInflightKeys.has(key) && !mermaidTimersByKey.has(key)) {
       const timer = setTimeout(() => {
@@ -367,6 +369,13 @@ export function subscribeMermaidDiagram(
       }, MERMAID_DEBOUNCE_MS)
       ;(timer as unknown as { unref?: () => void }).unref?.()
       mermaidTimersByKey.set(key, timer)
+    }
+    if (evictedError && set.size > 1) {
+      const siblings = new Set<() => void>()
+      for (const fn of set) {
+        if (fn !== listener) siblings.add(fn)
+      }
+      if (siblings.size > 0) notifySubscribers(siblings, 'Chunk store')
     }
   }
 

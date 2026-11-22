@@ -96,6 +96,8 @@
 
 :is(.row, .listHorizontal)
   > :is(
+    .column,
+    .listVertical,
     .card,
     .chartCard,
     .tableCard,
@@ -130,6 +132,7 @@
     .choiceGroup,
     .containerHost,
     .imageWrap:not([data-avatar="true"]),
+    [data-a2ui-modal-root],
     [data-a2ui-segmented],
     [data-a2ui-slider],
     [data-a2ui-progress]
@@ -137,6 +140,8 @@
 :is(.row, .listHorizontal)
   > *
   > :is(
+    .column,
+    .listVertical,
     .card,
     .chartCard,
     .tableCard,
@@ -171,6 +176,7 @@
     .choiceGroup,
     .containerHost,
     .imageWrap:not([data-avatar="true"]),
+    [data-a2ui-modal-root],
     [data-a2ui-segmented],
     [data-a2ui-slider],
     [data-a2ui-progress]
@@ -266,6 +272,12 @@
 
 .column > .card,
 .column > * > .card,
+.listVertical > .card,
+.listVertical > * > .card,
+:is(.row, .listHorizontal) > .card,
+:is(.row, .listHorizontal) > * > .card,
+:is(.row, .listHorizontal) > .column,
+:is(.row, .listHorizontal) > * > .column,
 .responsiveGrid > .card,
 .responsiveGrid > * > .card,
 .card[data-a2ui-weighted="true"],
@@ -610,8 +622,8 @@
 .sliderTrack {
   position: relative;
   height: 22px;
-  width: calc(100% - 22px);
-  margin-inline: 11px;
+  width: 100%;
+  margin-inline: 0;
   cursor: pointer;
 }
 
@@ -619,8 +631,8 @@
   content: "";
   position: absolute;
   top: 50%;
-  left: 0;
-  right: 0;
+  left: 11px;
+  right: 11px;
   height: 5px;
   transform: translateY(-50%);
   border-radius: 999px;
@@ -630,7 +642,7 @@
 .sliderFill {
   position: absolute;
   top: 50%;
-  left: 0;
+  left: 11px;
   height: 5px;
   transform: translateY(-50%);
   border-radius: 999px;
@@ -756,7 +768,7 @@
   border-radius: var(--dsw-radius-md, 10px);
   border: 1px solid var(--dsw-alias-border-l1, rgba(128, 128, 128, 0.18));
   background: var(--dsw-alias-bg-layer-1, rgba(128, 128, 128, 0.03));
-  min-width: 130px;
+  min-width: 0;
   overflow: hidden;
   box-sizing: border-box;
 }
@@ -1134,6 +1146,14 @@
   color: var(--dsw-alias-label-secondary, inherit);
 }
 
+.diffStatsGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 .diffStatAdd {
   font-size: 12px;
   font-weight: 600;
@@ -1228,6 +1248,7 @@
   min-width: 38px;
   padding: 1px 8px;
   text-align: right;
+  vertical-align: top;
   white-space: nowrap;
   overflow: hidden;
   user-select: none;
@@ -1260,12 +1281,14 @@
   width: 20px;
   padding: 1px 4px;
   text-align: center;
+  vertical-align: top;
   user-select: none;
   color: var(--dsw-alias-label-secondary, inherit);
 }
 
 .diffCode {
   padding: 1px 10px 1px 4px;
+  vertical-align: top;
   white-space: pre;
   color: var(--dsw-alias-label-primary, inherit);
 }
@@ -1280,6 +1303,7 @@
 
 .diffSplitCell {
   padding: 1px 10px;
+  vertical-align: top;
   white-space: pre;
   color: var(--dsw-alias-label-primary, inherit);
   border-right: 1px solid var(--dsw-alias-border-l1, rgba(128, 128, 128, 0.12));
@@ -1334,6 +1358,8 @@
   font-size: 13px;
   font-weight: 600;
   color: var(--dsw-alias-label-primary, inherit);
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .stepsVertical {
@@ -1446,6 +1472,8 @@
   font-size: 13px;
   font-weight: 600;
   color: var(--dsw-alias-label-primary, inherit);
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .stepItem[data-status="pending"] .stepItemTitle {
@@ -1460,12 +1488,17 @@
   background: var(--dsw-alias-interactive-bg-hover, rgba(128, 128, 128, 0.1));
   color: var(--dsw-alias-label-secondary, inherit);
   font-variant-numeric: tabular-nums;
+  max-width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .stepDesc {
   margin-top: 2px;
   font-size: 12px;
   color: var(--dsw-alias-label-secondary, inherit);
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .callout {
@@ -1616,6 +1649,10 @@
   .kvCell[data-kv-span="4"] {
     grid-column: span 2;
   }
+
+  .kvCell[data-kv-span-2] {
+    grid-column: span var(--kv-span-2, 1);
+  }
 }
 
 @container (max-width: 340px) {
@@ -1624,7 +1661,8 @@
   }
 
   .kvCell,
-  .kvCell[data-kv-span] {
+  .kvCell[data-kv-span],
+  .kvCell[data-kv-span-2] {
     grid-column: span 1;
   }
 }
@@ -1632,6 +1670,8 @@
 .kvLabel {
   font-size: 11.5px;
   color: var(--dsw-alias-label-tertiary, rgba(128, 128, 128, 0.85));
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .kvValue {
@@ -1766,6 +1806,8 @@
   font-size: 12.5px;
   font-weight: 600;
   color: var(--dsw-alias-label-primary, inherit);
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .fileOpenBtn {
@@ -2951,6 +2993,8 @@
   font-size: 13px;
   font-weight: 600;
   color: var(--dsw-alias-label-primary, inherit);
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .timelineList {
@@ -3057,16 +3101,22 @@
   font-size: 13px;
   font-weight: 600;
   color: var(--dsw-alias-label-primary, inherit);
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .timelineActor {
   font-size: 11.5px;
   color: var(--dsw-alias-label-tertiary, rgba(128, 128, 128, 0.82));
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .timelineDesc {
   font-size: 12.5px;
   color: var(--dsw-alias-label-secondary, rgba(128, 128, 128, 0.9));
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .timelineDetailWrap {
@@ -3093,6 +3143,7 @@
 .timelineChildSlot {
   margin-top: 4px;
   min-width: 0;
+  container-type: inline-size;
 }
 
 .kanbanBoardWrap {
@@ -3106,6 +3157,8 @@
   font-size: 13px;
   font-weight: 600;
   color: var(--dsw-alias-label-primary, inherit);
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .kanbanLanes {
@@ -3247,10 +3300,14 @@
 
 .kanbanAssignee {
   font-weight: 500;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .kanbanMeta {
   font-family: var(--dsw-font-family-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .kanbanEmpty {
@@ -3546,6 +3603,8 @@
   font-size: 13px;
   font-weight: 600;
   color: var(--dsw-alias-label-primary, inherit);
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .serviceGraphLegend {
@@ -3772,6 +3831,8 @@
 .serviceInspectorDeps {
   font-size: 11.5px;
   color: var(--dsw-alias-label-tertiary, rgba(128, 128, 128, 0.84));
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .proTableLeftGroup,
@@ -4231,6 +4292,9 @@
   font-size: 12px;
   line-height: 1.5;
   color: var(--dsw-alias-label-primary, inherit);
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .approvalAckRow {
@@ -4353,6 +4417,8 @@
   padding: 7px 12px 0;
   font-size: 12px;
   color: var(--dsw-alias-label-secondary, rgba(128, 128, 128, 0.88));
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .apiTabBar {
@@ -4675,12 +4741,17 @@
   font-size: 14px;
   font-weight: 600;
   color: var(--dsw-alias-label-primary, inherit);
+  max-width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .resultSubtitle {
   font-size: 12px;
   color: var(--dsw-alias-label-secondary, rgba(128, 128, 128, 0.88));
-  max-width: 520px;
+  max-width: min(100%, 520px);
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .resultMetaStrip {
@@ -4688,14 +4759,18 @@
   flex-wrap: wrap;
   justify-content: center;
   gap: 8px;
+  max-width: 100%;
+  min-width: 0;
   margin-top: 2px;
 }
 
 .resultMetaChip {
   display: inline-flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 5px;
   max-width: 100%;
+  min-width: 0;
   box-sizing: border-box;
   padding: 3px 9px;
   border-radius: 6px;
@@ -4708,11 +4783,15 @@
 
 .resultMetaKey {
   color: var(--dsw-alias-label-tertiary, rgba(128, 128, 128, 0.84));
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .resultMetaVal {
   font-weight: 600;
   color: var(--dsw-alias-label-primary, inherit);
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .resultChildWrap {
@@ -4827,11 +4906,14 @@
   padding: 7px 10px;
   border-radius: 8px;
   background: var(--dsw-alias-bg-layer-1, rgba(128, 128, 128, 0.04));
+  min-width: 0;
 }
 
 .entityMetricLabel {
   font-size: 11px;
   color: var(--dsw-alias-label-tertiary, rgba(128, 128, 128, 0.84));
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .entityMetricValue {
@@ -4839,6 +4921,8 @@
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--dsw-alias-label-primary, inherit);
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .entityMetricValue[data-tone="success"] {
@@ -5017,6 +5101,10 @@
   .kvCellBordered[data-kv-span="4"] {
     grid-column: span 2;
   }
+
+  .kvCellBordered[data-kv-span-2] {
+    grid-column: span var(--kv-span-2, 1);
+  }
 }
 
 @container (max-width: 480px) {
@@ -5025,7 +5113,8 @@
   }
 
   .kvCellBordered,
-  .kvCellBordered[data-kv-span] {
+  .kvCellBordered[data-kv-span],
+  .kvCellBordered[data-kv-span-2] {
     grid-column: span 1;
   }
 }
@@ -5480,6 +5569,28 @@
   color: var(--dsw-alias-label-tertiary, rgba(128, 128, 128, 0.78));
   font-size: 13px;
   flex-shrink: 0;
+}
+
+@container (max-width: 440px) {
+  .dateRangeInputs[data-enable-time="true"] {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+    padding: 6px 8px;
+  }
+
+  .dateRangeInputs[data-enable-time="true"] .dateRangeInputWrap {
+    flex: 0 0 auto;
+    width: 100%;
+  }
+
+  .dateRangeInputs[data-enable-time="true"] .dateRangeInput {
+    font-size: 11.5px;
+  }
+
+  .dateRangeInputs[data-enable-time="true"] .dateRangeArrow {
+    display: none;
+  }
 }
 
 @container (max-width: 340px) {

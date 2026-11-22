@@ -274,10 +274,22 @@ export function buildEndpointCurl(params: {
 }): string {
   const origin = normalizeSafeBaseUrl(params.baseUrl)
   const cleanedRawPath = stripCrlf(params.path)
-  const cleanPath = cleanedRawPath.startsWith('/') ? cleanedRawPath : `/${cleanedRawPath}`
+  let targetUrl: string
+  if (/^https?:\/\//i.test(cleanedRawPath)) {
+    try {
+      const parsed = new URL(cleanedRawPath)
+      targetUrl =
+        parsed.protocol === 'http:' || parsed.protocol === 'https:' ? cleanedRawPath : `${origin}/`
+    } catch {
+      targetUrl = `${origin}/`
+    }
+  } else {
+    const cleanPath = cleanedRawPath.startsWith('/') ? cleanedRawPath : `/${cleanedRawPath}`
+    targetUrl = `${origin}${cleanPath}`
+  }
   const rawMethod = typeof params.method === 'string' ? params.method.trim().toUpperCase() : 'GET'
   const safeMethod = /^[A-Z]+$/.test(rawMethod) ? rawMethod : 'GET'
-  const parts: string[] = [`curl -X ${safeMethod} ${shellEscapeSingle(`${origin}${cleanPath}`)}`]
+  const parts: string[] = [`curl -X ${safeMethod} ${shellEscapeSingle(targetUrl)}`]
 
   let hasContentType = false
   if (Array.isArray(params.headers)) {
@@ -350,6 +362,7 @@ function parseTemporalPosition(
     const h = Number.parseInt(hm[1]!, 10)
     const m = Number.parseInt(hm[2]!, 10)
     const sec = hm[3] ? Number.parseInt(hm[3], 10) : 0
+    if (h > 23 || m > 59 || sec > 59) return null
     return { numeric: h * 60 + m + sec / 60, kind: 'hhmm' }
   }
   if (/^-?\d+(?:\.\d+)?$/.test(s)) {
@@ -368,7 +381,7 @@ function parseTemporalPosition(
   return null
 }
 
-function formatTickValue(val: number, kind: 'hhmm' | 'date' | 'num'): string {
+function formatTickValue(val: number, kind: 'hhmm' | 'date' | 'num', span = 0): string {
   if (kind === 'hhmm') {
     const mins = ((Math.round(val) % 1440) + 1440) % 1440
     const hh = String(Math.floor(mins / 60)).padStart(2, '0')
@@ -377,6 +390,11 @@ function formatTickValue(val: number, kind: 'hhmm' | 'date' | 'num'): string {
   }
   if (kind === 'date') {
     const d = new Date(val)
+    if (span > 0 && span <= 86_400_000) {
+      const hh = String(d.getHours()).padStart(2, '0')
+      const mm = String(d.getMinutes()).padStart(2, '0')
+      return `${hh}:${mm}`
+    }
     const mm = String(d.getMonth() + 1).padStart(2, '0')
     const dd = String(d.getDate()).padStart(2, '0')
     return `${mm}-${dd}`
@@ -432,7 +450,7 @@ export function normalizeScheduleItems(
     const title = String(rec.title ?? rec.label ?? rec.name ?? `Task ${idx + 1}`)
     const pStart = parseTemporalPosition(rec.start)
     const pEnd = parseTemporalPosition(rec.end)
-    if (!pStart || !pEnd) return
+    if (!pStart || !pEnd || pStart.kind !== pEnd.kind) return
     const isOvernightHhmm =
       pStart.kind === 'hhmm' && pEnd.kind === 'hhmm' && pEnd.numeric < pStart.numeric
     const sNum = isOvernightHhmm ? pStart.numeric : Math.min(pStart.numeric, pEnd.numeric)
@@ -460,32 +478,36 @@ export function normalizeScheduleItems(
   if (parsed.length === 0) return { tracks: [], axisTicks: [] }
 
   const kind = parsed[0]!.kind
+  const sameKindParsed = parsed.filter((p) => p.kind === kind)
   const rangeStart =
     Array.isArray(rawRange) && rawRange.length >= 2 ? parseTemporalPosition(rawRange[0]) : null
   const rangeEnd =
     Array.isArray(rawRange) && rawRange.length >= 2 ? parseTemporalPosition(rawRange[1]) : null
+  const validRange =
+    rangeStart !== null && rangeEnd !== null && rangeStart.kind === kind && rangeEnd.kind === kind
   const rangeIsOvernightHhmm =
-    rangeStart !== null &&
-    rangeEnd !== null &&
+    validRange &&
     rangeStart.kind === 'hhmm' &&
     rangeEnd.kind === 'hhmm' &&
     rangeEnd.numeric < rangeStart.numeric
   const anyItemOvernightHhmm =
-    kind === 'hhmm' && parsed.some((p) => p.kind === 'hhmm' && p.eNum >= 1440)
+    kind === 'hhmm' && sameKindParsed.some((p) => p.kind === 'hhmm' && p.eNum >= 1440)
   let overnightAnchor: number | null = null
   if (kind === 'hhmm') {
     if (rangeIsOvernightHhmm && rangeStart) {
       overnightAnchor = rangeStart.numeric
     } else if (anyItemOvernightHhmm) {
-      const eveningStarts = parsed.filter((p) => p.sNum >= 720).map((p) => p.sNum)
-      overnightAnchor = eveningStarts.length > 0 ? Math.min(...eveningStarts) : parsed[0]!.sNum
+      const eveningStarts = sameKindParsed.filter((p) => p.sNum >= 720).map((p) => p.sNum)
+      overnightAnchor =
+        eveningStarts.length > 0 ? Math.min(...eveningStarts) : sameKindParsed[0]!.sNum
     }
   }
 
   if (overnightAnchor !== null) {
-    for (const p of parsed) {
+    const wrapCutoff = Math.min(overnightAnchor, 720)
+    for (const p of sameKindParsed) {
       if (p.kind !== 'hhmm') continue
-      if (p.sNum < overnightAnchor) {
+      if (p.sNum < wrapCutoff) {
         p.sNum += 1440
         if (p.eNum < 1440) p.eNum += 1440
       }
@@ -493,10 +515,10 @@ export function normalizeScheduleItems(
     }
   }
 
-  let minB = Math.min(...parsed.map((p) => p.sNum))
-  let maxB = Math.max(...parsed.map((p) => p.eNum))
+  let minB = Math.min(...sameKindParsed.map((p) => p.sNum))
+  let maxB = Math.max(...sameKindParsed.map((p) => p.eNum))
 
-  if (rangeStart && rangeEnd) {
+  if (validRange && rangeStart && rangeEnd) {
     const r0Num = rangeStart.numeric
     const r1Num = rangeIsOvernightHhmm ? rangeEnd.numeric + 1440 : rangeEnd.numeric
     if (r1Num > r0Num) {
@@ -506,7 +528,7 @@ export function normalizeScheduleItems(
   }
   const span = maxB > minB ? maxB - minB : 1
 
-  const tracks: NormalizedScheduleTrack[] = parsed.map((p) => {
+  const tracks: NormalizedScheduleTrack[] = sameKindParsed.map((p) => {
     const leftPct = Math.max(0, Math.min(96, ((p.sNum - minB) / span) * 100))
     const rawW = ((p.eNum - p.sNum) / span) * 100
     const widthPct = Math.max(4, Math.min(100 - leftPct, rawW))
@@ -525,15 +547,19 @@ export function normalizeScheduleItems(
     }
   })
 
-  const axisTicks = [0, 0.3333, 0.6667, 1].map((t) => formatTickValue(minB + span * t, kind))
+  const axisTicks = [0, 0.3333, 0.6667, 1].map((t) => formatTickValue(minB + span * t, kind, span))
 
   let nowPct: number | undefined
   let nowLabel: string | undefined
   if (rawNow !== undefined && rawNow !== null && String(rawNow).trim() !== '') {
     const pNow = parseTemporalPosition(rawNow)
-    if (pNow) {
+    if (pNow && pNow.kind === kind) {
       let nowNum = pNow.numeric
-      if (overnightAnchor !== null && pNow.kind === 'hhmm' && nowNum < overnightAnchor) {
+      if (
+        overnightAnchor !== null &&
+        pNow.kind === 'hhmm' &&
+        nowNum < Math.min(overnightAnchor, 720)
+      ) {
         nowNum += 1440
       }
       if (nowNum >= minB && nowNum <= maxB) {
@@ -569,6 +595,18 @@ function formatMatrixCellNumber(v: number): string {
   return String(Number(v.toFixed(2)))
 }
 
+function parseMatrixNumericCell(v: unknown): number | null {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null
+  if (typeof v === 'string') {
+    const t = v.trim()
+    if (/^[+-]?\d+(?:\.\d+)?$/.test(t)) {
+      const n = Number(t)
+      return Number.isFinite(n) ? n : null
+    }
+  }
+  return null
+}
+
 export function normalizeMatrixData(params: {
   readonly rows: unknown
   readonly columns: unknown
@@ -586,10 +624,10 @@ export function normalizeMatrixData(params: {
   for (let r = 0; r < rowLabels.length; r++) {
     const rowArr = Array.isArray(rawGrid[r]) ? (rawGrid[r] as unknown[]) : []
     for (let c = 0; c < colLabels.length; c++) {
-      const v = rowArr[c]
-      if (typeof v === 'number' && Number.isFinite(v)) {
-        if (v < minNum) minNum = v
-        if (v > maxNum) maxNum = v
+      const n = parseMatrixNumericCell(rowArr[c])
+      if (n !== null) {
+        if (n < minNum) minNum = n
+        if (n > maxNum) maxNum = n
       }
     }
   }
@@ -606,15 +644,23 @@ export function normalizeMatrixData(params: {
 
     for (let c = 0; c < colLabels.length; c++) {
       const v = rowArr[c]
-      if (v === undefined || v === null || v === '' || v === '—' || v === '-') {
+      if (
+        v === undefined ||
+        v === null ||
+        v === '' ||
+        v === '—' ||
+        v === '-' ||
+        (typeof v === 'number' && !Number.isFinite(v))
+      ) {
         rowOut.push({ kind: 'empty', display: '—', intensityPct: 0, ratio: 0 })
         continue
       }
-      if (typeof v === 'number' && Number.isFinite(v)) {
-        rowNums.push(v)
-        const ratio = maxNum === minNum ? 0.65 : (v - minNum) / numSpan
+      const parsedNum = parseMatrixNumericCell(v)
+      if (parsedNum !== null) {
+        rowNums.push(parsedNum)
+        const ratio = maxNum === minNum ? 0.65 : (parsedNum - minNum) / numSpan
         const intensityPct = Math.round(8 + ratio * 34)
-        const formatted = formatMatrixCellNumber(v)
+        const formatted = formatMatrixCellNumber(parsedNum)
         rowOut.push({
           kind: 'number',
           display: `${formatted}${unit}`,
@@ -643,7 +689,7 @@ export function normalizeMatrixData(params: {
       } else if (/^(?:warn|warning):/i.test(s)) {
         rowOut.push({
           kind: 'warn',
-          display: s.replace(/^(?:warn|warning):\s*/i, ''),
+          display: s.replace(/^(?:warn|warning):\s*/i, '') || '!',
           intensityPct: 0,
           ratio: 0,
         })
@@ -762,7 +808,11 @@ export function detectNumericColumnKeys(
     let numericHits = 0
     for (const r of rows) {
       const v = r[col.key]
-      if (v === undefined || v === null || v === '') continue
+      if (v === undefined || v === null) continue
+      if (typeof v === 'string') {
+        const t = v.trim()
+        if (t === '' || t === '—' || t === '-') continue
+      }
       nonEmpty += 1
       if (parseFormattedNumericCell(v) !== null) {
         numericHits += 1
@@ -820,7 +870,9 @@ export function computeTableNumericSummary(
     }
     if (count > 0 && nonNumericCount === 0) {
       if (allPercent) {
-        summary[col.key] = formatAvg(`${(sum / count).toFixed(1)}%`)
+        const avg = sum / count
+        const pctDigits = avg > 0 && avg < 0.1 ? 2 : 1
+        summary[col.key] = formatAvg(`${avg.toFixed(pctDigits)}%`)
       } else {
         const sign = sum < 0 ? '-' : ''
         const absVal = Math.abs(sum)
@@ -958,6 +1010,31 @@ export function filterTableRowsByField(
   return rows.filter((_, idx) => matchedIndices.has(idx))
 }
 
+function flattenTreeForCsv(
+  node: Record<string, unknown>,
+  prefix: string,
+  out: Record<string, unknown>[],
+  depth = 0,
+): void {
+  if (depth > 16 || out.length >= 1000) return
+  const name = String(node.name ?? node.label ?? '').trim()
+  const path = prefix && name ? `${prefix} / ${name}` : name || prefix
+  const children = Array.isArray(node.children) ? node.children : []
+  if (children.length === 0) {
+    out.push({
+      path,
+      name: name || path,
+      value: node.value ?? '',
+    })
+    return
+  }
+  for (const child of children) {
+    if (typeof child === 'object' && child !== null && !Array.isArray(child)) {
+      flattenTreeForCsv(child as Record<string, unknown>, path, out, depth + 1)
+    }
+  }
+}
+
 export function formatChartDataToCsv(data: unknown): string | null {
   let rows: Record<string, unknown>[] = []
   if (Array.isArray(data)) {
@@ -979,13 +1056,15 @@ export function formatChartDataToCsv(data: unknown): string | null {
         (item): item is Record<string, unknown> =>
           typeof item === 'object' && item !== null && !Array.isArray(item),
       )
+    } else if (Array.isArray(rec.children) && rec.children.length > 0) {
+      flattenTreeForCsv(rec, '', rows)
     }
   }
   if (rows.length === 0) return null
 
   const keys: string[] = []
   const seen = new Set<string>()
-  for (const row of rows.slice(0, 50)) {
+  for (const row of rows.slice(0, 500)) {
     for (const k of Object.keys(row)) {
       if (!seen.has(k)) {
         seen.add(k)

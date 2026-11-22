@@ -107,6 +107,42 @@ export class StreamingExpressSession {
     this.streamRejected = false
   }
 
+  private trySeedAndReplay(clean: string, errMsg: string, closeAfter: boolean): boolean {
+    const unseeded = extractUpdateSurfaceIds(clean).filter((id) => !this.seededUpdateIds.has(id))
+    if (
+      unseeded.length === 0 ||
+      !/not exist|not found|unknown surface|createSurface/i.test(errMsg)
+    ) {
+      return false
+    }
+    for (const id of unseeded) this.seededUpdateIds.add(id)
+    this.reset(true)
+    this.fed = clean
+    try {
+      const retryParts = this.stream.feed(clean)
+      for (const part of retryParts) {
+        if (part.type === 'a2ui' && part.a2ui.length > 0) {
+          this.messages = [...this.messages, ...part.a2ui]
+          collectSurfaceIds(part.a2ui, this.surfaceIdSet)
+        }
+      }
+      if (closeAfter) {
+        this.closed = true
+        for (const part of this.stream.close()) {
+          if (part.type === 'a2ui' && part.a2ui.length > 0) {
+            this.messages = [...this.messages, ...part.a2ui]
+            collectSurfaceIds(part.a2ui, this.surfaceIdSet)
+          }
+        }
+      }
+      this.lastError = null
+    } catch (retryErr) {
+      this.streamRejected = true
+      this.lastError = retryErr instanceof Error ? retryErr.message : String(retryErr)
+    }
+    return true
+  }
+
   advance(rawUi: string, final = false): StreamingCompileSnapshot {
     const rawClean = normalizeStreamingProgram(rawUi)
     if (rawClean === '') {
@@ -146,33 +182,13 @@ export class StreamingExpressSession {
         this.lastError = null
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
-        const unseeded = extractUpdateSurfaceIds(clean).filter(
-          (id) => !this.seededUpdateIds.has(id),
-        )
-        if (unseeded.length > 0 && /not exist|not found|unknown surface|createSurface/i.test(msg)) {
-          for (const id of unseeded) this.seededUpdateIds.add(id)
-          this.reset(true)
-          this.fed = clean
-          try {
-            const retryParts = this.stream.feed(clean)
-            for (const part of retryParts) {
-              if (part.type === 'a2ui' && part.a2ui.length > 0) {
-                this.messages = [...this.messages, ...part.a2ui]
-                collectSurfaceIds(part.a2ui, this.surfaceIdSet)
-              }
-            }
-            this.lastError = null
-          } catch (retryErr) {
-            this.streamRejected = true
-            this.lastError = retryErr instanceof Error ? retryErr.message : String(retryErr)
-          }
-        } else {
+        if (!this.trySeedAndReplay(clean, msg, final)) {
           this.streamRejected = true
           this.lastError = msg
         }
       }
     }
-    if (final && !this.closed) {
+    if (final && !this.closed && !this.streamRejected) {
       this.closed = true
       try {
         for (const part of this.stream.close()) {
@@ -182,7 +198,11 @@ export class StreamingExpressSession {
           }
         }
       } catch (err) {
-        this.lastError = err instanceof Error ? err.message : String(err)
+        const msg = err instanceof Error ? err.message : String(err)
+        if (!this.trySeedAndReplay(clean, msg, true)) {
+          this.streamRejected = true
+          this.lastError = msg
+        }
       }
     }
     return this.buildSnapshot()

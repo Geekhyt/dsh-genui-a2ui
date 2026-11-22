@@ -62,11 +62,7 @@ export interface ChartWidgetProps {
 
 function hasChartData(kind: ChartKind, data: unknown): boolean {
   if (Array.isArray(data)) {
-    return data.some(
-      (item) =>
-        (typeof item === 'object' && item !== null && !Array.isArray(item)) ||
-        (Array.isArray(item) && item.length >= 2),
-    )
+    return data.some((item) => typeof item === 'object' && item !== null && !Array.isArray(item))
   }
   if (typeof data === 'object' && data !== null) {
     const rec = data as Record<string, unknown>
@@ -91,6 +87,24 @@ function hasChartData(kind: ChartKind, data: unknown): boolean {
     }
   }
   return false
+}
+
+function isOpaqueCssColor(color: string): boolean {
+  const c = color.trim().toLowerCase()
+  if (c === '' || c === 'transparent') return false
+  const rgba = c.match(/^rgba?\(\s*[\d.]+\s*,\s*[\d.]+\s*,\s*[\d.]+\s*(?:,\s*([\d.]+)\s*)?\)$/)
+  if (rgba) {
+    if (rgba[1] === undefined) return true
+    const alpha = Number(rgba[1])
+    return Number.isFinite(alpha) && alpha >= 0.99
+  }
+  const slashAlpha = c.match(/\/\s*([\d.]+)(%?)\s*\)$/)
+  if (slashAlpha) {
+    const val = Number(slashAlpha[1])
+    const normalized = slashAlpha[2] === '%' ? val / 100 : val
+    return Number.isFinite(normalized) && normalized >= 0.99
+  }
+  return true
 }
 
 function sanitizeInlineText(input: unknown): string {
@@ -155,6 +169,8 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
   actionRef.current = action
   const onSelectChangeRef = useRef(onSelectChange)
   onSelectChangeRef.current = onSelectChange
+  const kindRef = useRef(kind)
+  kindRef.current = kind
   const xFieldRef = useRef(xField)
   xFieldRef.current = xField
   const seriesFieldRef = useRef(seriesField)
@@ -186,6 +202,10 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
     [data, exportable],
   )
 
+  const safeRawHeight =
+    typeof rawHeight === 'number' && Number.isFinite(rawHeight) ? rawHeight : 260
+  const height = Math.min(640, Math.max(140, safeRawHeight))
+
   const option = useMemo(() => {
     if (!chunk || !chartHasData) return null
     return chunk.buildChartOption(
@@ -203,7 +223,8 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
         stacked,
         horizontal,
         zoom,
-        height: rawHeight,
+        height,
+        interactiveSelect: Boolean(onSelectChange),
         selected:
           activeTokens.length === 0
             ? undefined
@@ -230,16 +251,13 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
     stacked,
     horizontal,
     zoom,
-    rawHeight,
+    height,
+    onSelectChange,
     activeTokens,
     dark,
     locale,
     containerWidth,
   ])
-
-  const safeRawHeight =
-    typeof rawHeight === 'number' && Number.isFinite(rawHeight) ? rawHeight : 260
-  const height = Math.min(640, Math.max(140, safeRawHeight))
 
   const handleContainerWidth = useCallback((nextW: number) => {
     setContainerWidth((prev) => {
@@ -279,14 +297,45 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
     const resolvedXField =
       xFieldRef.current ?? sampleKeys.find((k) => typeof sample[k] === 'string') ?? sampleKeys[0]
     const curSeriesField = seriesFieldRef.current
+    const curKind = kindRef.current
     const matchedRow = (() => {
+      if (curKind === 'parallel' && series) {
+        const keyField = curSeriesField ?? resolvedXField
+        const hit = curRows.find(
+          (r) =>
+            sanitizeChartValue((keyField ? r[keyField] : undefined) ?? r.name ?? r.model) ===
+            series,
+        )
+        if (hit !== undefined) return hit
+      }
+      if (curKind === 'heatmap' && idx !== undefined && idx >= 0 && idx < curRows.length) {
+        return curRows[idx]
+      }
+      if (curKind === 'calendar' && tupleLabel) {
+        const hit = curRows.find((r) => {
+          const d =
+            r[xFieldRef.current ?? 'date'] ??
+            r.date ??
+            r.day ??
+            (resolvedXField ? r[resolvedXField] : undefined)
+          return typeof d === 'string' && d.includes(tupleLabel)
+        })
+        if (hit !== undefined) return hit
+      }
       if (resolvedXField && label) {
         const hit = curRows.find((r) => {
-          const xMatch = sanitizeChartValue(r[resolvedXField]) === label
-          if (!xMatch) return false
+          const xVal =
+            sanitizeChartValue(r[resolvedXField]) ||
+            sanitizeChartValue(r.name) ||
+            sanitizeChartValue(r.label)
+          if (xVal !== label) return false
           if (curSeriesField && series) return sanitizeChartValue(r[curSeriesField]) === series
           return true
         })
+        if (hit !== undefined) return hit
+      }
+      if (curKind === 'radar' && curSeriesField && label) {
+        const hit = curRows.find((r) => sanitizeChartValue(r[curSeriesField]) === label)
         if (hit !== undefined) return hit
       }
       return idx !== undefined ? curRows[idx] : undefined
@@ -312,6 +361,7 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
     hostRef,
     chunk,
     option,
+    mounted: chartHasData && !loadError,
     chartKind: kind,
     dataIdentity: data,
     onPointClick: handlePointClick,
@@ -324,7 +374,7 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
     if (typeof window !== 'undefined' && hostRef.current) {
       const cardEl = hostRef.current.closest<HTMLElement>('[data-a2ui-chart]')
       const computedBg = cardEl ? window.getComputedStyle(cardEl).backgroundColor : ''
-      if (computedBg && computedBg !== 'transparent' && computedBg !== 'rgba(0, 0, 0, 0)') {
+      if (isOpaqueCssColor(computedBg)) {
         bg = computedBg
       }
     }

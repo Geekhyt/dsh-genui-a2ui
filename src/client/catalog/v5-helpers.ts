@@ -27,7 +27,11 @@ export function clampAndStepNumber(params: {
     typeof params.step === 'number' && Number.isFinite(params.step) && params.step > 0
       ? params.step
       : 1
-  const curNum = Number(params.current)
+  const isEmptyCur =
+    params.current === undefined ||
+    params.current === null ||
+    (typeof params.current === 'string' && params.current.trim() === '')
+  const curNum = isEmptyCur ? Number.NaN : Number(params.current)
   const base = Number.isFinite(curNum)
     ? curNum
     : typeof params.min === 'number' && Number.isFinite(params.min)
@@ -148,9 +152,9 @@ export function normalizeHierarchyTree(
       const label = String(rec.label ?? rec.title ?? rec.name ?? rec.value ?? `Node ${idx + 1}`)
       const hasExplicitValue =
         rec.value !== undefined && rec.value !== null && String(rec.value).trim() !== ''
-      const value = String(
-        rec.value ?? rec.id ?? rec.key ?? (parentPath ? `${parentPath}/${label}` : label),
-      )
+      const value = hasExplicitValue
+        ? String(rec.value)
+        : String(rec.id ?? rec.key ?? (parentPath ? `${parentPath}/${label}` : label))
       const id = String(rec.id ?? `${prefixId}_${idx}`)
       const breadcrumb = parentPath ? `${parentPath} / ${label}` : label
       const sharePct =
@@ -160,14 +164,22 @@ export function normalizeHierarchyTree(
             ? Math.max(0, Math.min(100, rec.pct))
             : undefined
       const children = normalizeHierarchyTree(rec.children, breadcrumb, `${id}_c`)
+      const badgeStr =
+        rec.badge !== undefined && rec.badge !== null && String(rec.badge) !== ''
+          ? String(rec.badge)
+          : undefined
+      const metricStr =
+        rec.metric !== undefined && rec.metric !== null && String(rec.metric) !== ''
+          ? String(rec.metric)
+          : undefined
       out.push({
         id,
         value,
         hasExplicitValue,
         label,
         sublabel: rec.sublabel ? String(rec.sublabel) : undefined,
-        badge: rec.badge ? String(rec.badge) : undefined,
-        metric: rec.metric ? String(rec.metric) : undefined,
+        badge: badgeStr,
+        metric: metricStr,
         sharePct,
         status: normalizeNodeStatus(rec.status ?? rec.tone),
         breadcrumb,
@@ -253,8 +265,11 @@ export interface NormalizedCheckCardOption {
 export function normalizeCheckCardOptions(raw: unknown): readonly NormalizedCheckCardOption[] {
   if (!Array.isArray(raw)) return []
   const out: NormalizedCheckCardOption[] = []
+  const seen = new Set<string>()
   raw.forEach((item, idx) => {
     if (typeof item === 'string') {
+      if (item === '' || seen.has(item)) return
+      seen.add(item)
       out.push({
         value: item,
         title: item,
@@ -267,10 +282,18 @@ export function normalizeCheckCardOptions(raw: unknown): readonly NormalizedChec
       const rec = item as Record<string, unknown>
       const title = String(rec.title ?? rec.label ?? rec.name ?? `Option ${idx + 1}`)
       const value = String(rec.value ?? rec.id ?? rec.key ?? title)
+      if (value === '' || seen.has(value)) return
+      seen.add(value)
+      const badgeVal =
+        rec.badge !== undefined && rec.badge !== null && String(rec.badge) !== ''
+          ? String(rec.badge)
+          : rec.price !== undefined && rec.price !== null && String(rec.price) !== ''
+            ? String(rec.price)
+            : undefined
       out.push({
         value,
         title,
-        badge: rec.badge ? String(rec.badge) : rec.price ? String(rec.price) : undefined,
+        badge: badgeVal,
         description: rec.description
           ? String(rec.description)
           : rec.subtitle

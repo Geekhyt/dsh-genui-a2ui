@@ -212,6 +212,8 @@ export function usePortalPopover(params: {
   }, [open, popoverRef, triggerRef])
 }
 
+const dialogFocusStack: Array<RefObject<HTMLElement | null>> = []
+
 export function useDialogFocus(open: boolean, dialogRef: RefObject<HTMLElement | null>): void {
   const prevFocusedRef = useRef<HTMLElement | null>(null)
 
@@ -227,6 +229,7 @@ export function useDialogFocus(open: boolean, dialogRef: RefObject<HTMLElement |
     }
     const active = document.activeElement
     prevFocusedRef.current = active instanceof HTMLElement ? active : null
+    dialogFocusStack.push(dialogRef)
     const dialog = dialogRef.current
     if (dialog) {
       const firstFocusable = dialog.querySelector<HTMLElement>(
@@ -236,6 +239,7 @@ export function useDialogFocus(open: boolean, dialogRef: RefObject<HTMLElement |
     }
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Tab') return
+      if (dialogFocusStack[dialogFocusStack.length - 1] !== dialogRef) return
       const root = dialogRef.current
       if (!root) return
       const focusables = Array.from(
@@ -256,6 +260,8 @@ export function useDialogFocus(open: boolean, dialogRef: RefObject<HTMLElement |
     }
     document.addEventListener('keydown', onKeyDown)
     return () => {
+      const idx = dialogFocusStack.lastIndexOf(dialogRef)
+      if (idx >= 0) dialogFocusStack.splice(idx, 1)
       document.removeEventListener('keydown', onKeyDown)
     }
   }, [open, dialogRef])
@@ -277,12 +283,22 @@ export function useEChartsMount(params: {
   readonly hostRef: RefObject<HTMLDivElement | null>
   readonly chunk: EchartsChunkModule | null
   readonly option: Record<string, unknown> | null
+  readonly mounted?: boolean | undefined
   readonly chartKind?: string | undefined
   readonly dataIdentity?: unknown
   readonly onPointClick: (event: EChartsClickParams) => void
   readonly onContainerWidth: (width: number) => void
 }): EChartsMountHandle {
-  const { hostRef, chunk, option, chartKind, dataIdentity, onPointClick, onContainerWidth } = params
+  const {
+    hostRef,
+    chunk,
+    option,
+    mounted = true,
+    chartKind,
+    dataIdentity,
+    onPointClick,
+    onContainerWidth,
+  } = params
   const chartRef = useRef<ReturnType<EchartsChunkModule['initChartInstance']> | null>(null)
   const optionRef = useRef<Record<string, unknown> | null>(option)
   optionRef.current = option
@@ -294,14 +310,15 @@ export function useEChartsMount(params: {
   onContainerWidthRef.current = onContainerWidth
 
   useIsomorphicLayoutEffect(() => {
+    if (!mounted) return
     const el = hostRef.current
     if (!el) return
     const initialW = Math.round(el.clientWidth)
     if (initialW > 0) onContainerWidthRef.current(initialW)
-  }, [chunk, hostRef])
+  }, [chunk, hostRef, mounted])
 
   useEffect(() => {
-    if (!chunk) return
+    if (!chunk || !mounted) return
     const el = hostRef.current
     if (!el) return
     let resizeRaf = 0
@@ -358,7 +375,7 @@ export function useEChartsMount(params: {
       chartRef.current?.dispose()
       chartRef.current = null
     }
-  }, [chunk, hostRef])
+  }, [chunk, hostRef, mounted])
 
   useEffect(() => {
     const inst = chartRef.current
@@ -667,4 +684,26 @@ export function useSurfaceStoreSync(sync: () => void, deps: readonly unknown[]):
   useIsomorphicLayoutEffect(() => {
     syncRef.current()
   }, deps)
+}
+
+export function useElementWidth(ref: RefObject<HTMLElement | null>): number {
+  const [width, setWidth] = useState(0)
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const sync = () => {
+      const next = Math.round(el.clientWidth)
+      if (next > 0) setWidth((prev) => (prev === next ? prev : next))
+    }
+    sync()
+    if (typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(sync)
+    ro.observe(el)
+    return () => {
+      ro.disconnect()
+    }
+  }, [ref])
+
+  return width
 }

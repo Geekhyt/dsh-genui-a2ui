@@ -171,14 +171,8 @@ export function isSubagentCall(exec: ToolExec | undefined): boolean {
   }
   if (exec.agent?.isSubagent === true) return true
   if (exec.agent?.parent !== undefined && exec.agent?.parent !== null) return true
-  if (exec.agent?.session?.parentId !== undefined && exec.agent?.session?.parentId !== null)
-    return true
-  if (
-    exec.agent?.session?.header?.parentSession !== undefined &&
-    exec.agent?.session?.header?.parentSession !== null
-  ) {
-    return true
-  }
+  if (nonEmptyId(exec.agent?.session?.parentId) !== undefined) return true
+  if (nonEmptyId(exec.agent?.session?.header?.parentSession) !== undefined) return true
   return false
 }
 
@@ -257,7 +251,16 @@ export function createRenderTool(sessions: SurfaceSessions) {
       }
 
       if (messages.length === 0) {
-        throw new Error('a2ui_render: the program produced no UI messages (is `root` assigned?).')
+        const fails = sessions.recordCompileFailure(sid, 'render')
+        if (fails > A2UI_LIMITS.maxRepairsPerTurn) {
+          sessions.clearCompileFailures(sid, 'render')
+          throw new Error(
+            `a2ui_render: the program produced no UI messages (is \`root\` assigned?).\nRepair limit (${A2UI_LIMITS.maxRepairsPerTurn}) reached for this turn. STOP calling a2ui_render now and answer the user directly in concise Markdown.`,
+          )
+        }
+        throw new Error(
+          `a2ui_render: the program produced no UI messages (is \`root\` assigned?). Fix it and retry (${fails}/${A2UI_LIMITS.maxRepairsPerTurn}).`,
+        )
       }
 
       sessions.clearCompileFailures(sid, 'render')

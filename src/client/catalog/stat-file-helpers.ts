@@ -49,16 +49,18 @@ export function buildSparklineGeometry(
   height = 26,
   pad = 3,
 ): SparklineGeometry | null {
-  if (values.length < 2) return null
-  const min = Math.min(...values)
-  const max = Math.max(...values)
+  const finite = values.filter(Number.isFinite)
+  if (finite.length < 2) return null
+  const min = Math.min(...finite)
+  const max = Math.max(...finite)
   const span = max - min
+  const hasFiniteSpan = Number.isFinite(span) && span > 0
   const innerW = Math.max(1, width - pad * 2)
   const innerH = Math.max(1, height - pad * 2)
 
-  const coords = values.map((v, idx) => {
-    const x = pad + (idx / (values.length - 1)) * innerW
-    const y = span === 0 ? height / 2 : pad + innerH - ((v - min) / span) * innerH
+  const coords = finite.map((v, idx) => {
+    const x = pad + (idx / (finite.length - 1)) * innerW
+    const y = !hasFiniteSpan ? height / 2 : pad + innerH - ((v - min) / span) * innerH
     return [Number(x.toFixed(2)), Number(y.toFixed(2))] as const
   })
 
@@ -111,7 +113,10 @@ export function normalizeFileEntries(rawItems: unknown): NormalizedFileEntry[] {
   const out: NormalizedFileEntry[] = []
   for (const item of rawItems) {
     if (typeof item === 'string') {
-      const normalizedSlashes = item.replace(/\\/g, '/').trim()
+      const normalizedSlashes = item
+        .replace(/\\/g, '/')
+        .replace(/^(?:\.\/)+/, '')
+        .trim()
       const isAbs = normalizedSlashes.startsWith('/')
       const body = normalizedSlashes.replace(/^\/+|\/+$/g, '').trim()
       if (body !== '') {

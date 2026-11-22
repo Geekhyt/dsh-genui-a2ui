@@ -657,6 +657,7 @@ export const DshDateRangeImpl = defineComponent<{
       <div
         className={css.dateRangeInputs}
         data-disabled={readOnly ? 'true' : 'false'}
+        data-enable-time={enableTime ? 'true' : undefined}
         aria-invalid={showError || undefined}
       >
         <NativeDateField

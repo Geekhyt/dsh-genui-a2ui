@@ -155,7 +155,12 @@ function splitTrailingLineComment(line: string): { code: string; comment: string
   while (i < line.length) {
     const ch = line[i]
     if (ch === '#' || (ch === '-' && line[i + 1] === '-') || (ch === '/' && line[i + 1] === '/')) {
-      return { code: line.slice(0, i), comment: line.slice(i) }
+      const nl = line.indexOf('\n', i)
+      if (nl === -1) {
+        return { code: line.slice(0, i), comment: line.slice(i) }
+      }
+      i = nl + 1
+      continue
     }
     const skipped = scanStringOrComment(line, i)
     if (skipped !== -1) {
@@ -225,9 +230,30 @@ function transformConcatChunk(chunk: string, kvSep: '=' | ':', depth: number): s
 
 function transformConcatRhs(rhs: string, depth: number): string {
   if (depth >= MAX_PREPROCESS_DEPTH) return rhs
-  const lead = /^\s*/.exec(rhs)?.[0] ?? ''
-  const trail = /\s*$/.exec(rhs)?.[0] ?? ''
-  const core = rhs.trim()
+  let leadEnd = 0
+  while (leadEnd < rhs.length) {
+    if (/\s/.test(rhs[leadEnd]!)) {
+      leadEnd += 1
+      continue
+    }
+    const ch = rhs[leadEnd]
+    if (
+      ch === '#' ||
+      (ch === '-' && rhs[leadEnd + 1] === '-') ||
+      (ch === '/' && (rhs[leadEnd + 1] === '/' || rhs[leadEnd + 1] === '*'))
+    ) {
+      const skipped = scanStringOrComment(rhs, leadEnd)
+      if (skipped !== -1) {
+        leadEnd = skipped
+        continue
+      }
+    }
+    break
+  }
+  const lead = rhs.slice(0, leadEnd)
+  const rest = rhs.slice(leadEnd)
+  const trail = /\s*$/.exec(rest)?.[0] ?? ''
+  const core = rest.slice(0, rest.length - trail.length)
   if (core === '') return rhs
 
   const withInner = rewriteInnerBracketsForConcat(core, depth)
@@ -609,6 +635,9 @@ function inlineSingleCalcCall(
     for (const [targetKey, subVal] of pendingEntries) {
       mergedVars[targetKey] = subVal
     }
+    for (const c of refConstants) {
+      outerBuiltins.add(c)
+    }
 
     const renamedSub = replaceFormulaIdents(refCalc.expr, renameMap)
     const wrappedSub =
@@ -640,7 +669,7 @@ function rewriteInlineCalcsInStatement(
   calcDefs: ReadonlyMap<string, CalcDef>,
   nextAlias: () => number,
 ): string {
-  if (!stmt.includes('calc(') || calcDefs.size === 0) return stmt
+  if (!stmt.includes('calc(')) return stmt
   const brackets = buildBracketMap(stmt)
   let out = ''
   let i = 0
@@ -756,22 +785,27 @@ function rewriteDateRangeCallArgs(inner: string): string {
 
   let changed = false
   const nextArgs = args.map((arg) => {
-    const lead = /^\s*/.exec(arg)?.[0] ?? ''
-    const trail = /\s*$/.exec(arg)?.[0] ?? ''
-    const trimmed = arg.trim()
+    const { code: argCode, comment: argComment } = splitTrailingLineComment(arg)
+    const lead = /^\s*/.exec(argCode)?.[0] ?? ''
+    const trail = /\s*$/.exec(argCode)?.[0] ?? ''
+    const trimmed = argCode.trim()
     if (!trimmed.startsWith('?')) return arg
     const afterQ = trimmed.slice(1).trimStart()
+    if (afterQ === 'required') {
+      changed = true
+      return `${lead}?and([required(${startExpr}), required(${endExpr})])${trail}${argComment}`
+    }
     if (!afterQ.startsWith('required(') || !afterQ.endsWith(')')) return arg
     const bMap = buildBracketMap(afterQ)
     if (bMap[8] !== afterQ.length - 1) return arg
     const reqArgs = splitTopLevel(afterQ.slice(9, -1), ',').filter((a) => a.trim() !== '')
     if (reqArgs.length === 0) {
       changed = true
-      return `${lead}?and([required(${startExpr}), required(${endExpr})])${trail}`
+      return `${lead}?and([required(${startExpr}), required(${endExpr})])${trail}${argComment}`
     }
     if (reqArgs.length === 1 && parseJsonStringLiteral(reqArgs[0]!.trim()) !== null) {
       changed = true
-      return `${lead}?and([required(${startExpr}), required(${endExpr})], ${reqArgs[0]!.trim()})${trail}`
+      return `${lead}?and([required(${startExpr}), required(${endExpr})], ${reqArgs[0]!.trim()})${trail}${argComment}`
     }
     return arg
   })
@@ -809,6 +843,8 @@ export function extractUpdateSurfaceIds(cleanedUi: string): string[] {
   if (!cleanedUi.includes('surface(')) return []
   const brackets = buildBracketMap(cleanedUi)
   const ids: string[] = []
+  const seenUpdate = new Set<string>()
+  const createdIds = new Set<string>()
   let i = 0
   while (i < cleanedUi.length) {
     const skipped = scanStringOrComment(cleanedUi, i)
@@ -837,8 +873,15 @@ export function extractUpdateSurfaceIds(cleanedUi: string): string[] {
             surfaceId = parseJsonStringLiteral(arg)
           }
         }
-        if (isUpdate && surfaceId !== null && surfaceId !== '') {
-          ids.push(surfaceId)
+        if (surfaceId !== null && surfaceId !== '') {
+          if (isUpdate) {
+            if (!createdIds.has(surfaceId) && !seenUpdate.has(surfaceId)) {
+              seenUpdate.add(surfaceId)
+              ids.push(surfaceId)
+            }
+          } else {
+            createdIds.add(surfaceId)
+          }
         }
         i = closeIdx + 1
         continue

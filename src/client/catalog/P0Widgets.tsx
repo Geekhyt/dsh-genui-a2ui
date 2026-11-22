@@ -63,8 +63,10 @@ export const DshDiffViewImpl = defineComponent<{
           {title ? <span className={css.diffTitle}>{title}</span> : null}
           <FileOpenChip filePath={props.filePath} line={props.line} />
           {props.language ? <span className={css.diffLang}>{props.language}</span> : null}
-          <span className={css.diffStatAdd}>+{diff.added}</span>
-          <span className={css.diffStatDel}>-{diff.removed}</span>
+          <span className={css.diffStatsGroup}>
+            <span className={css.diffStatAdd}>+{diff.added}</span>
+            <span className={css.diffStatDel}>-{diff.removed}</span>
+          </span>
         </div>
         <div className={css.diffActions}>
           <div className={css.diffModeSwitch} role="group" aria-label={msg.diffModeGroup}>
@@ -313,33 +315,36 @@ export const DshKeyValueImpl = defineComponent<{
     markCopiedIdx(idx)
   }
 
-  const entrySpans = useMemo(() => {
+  const computeSpansForCols = (targetCols: number): number[] => {
     const spans = new Array<number>(entries.length).fill(1)
     let cursor = 0
     for (let idx = 0; idx < entries.length; idx++) {
       const entry = entries[idx]!
       const explicitSpan = entry.span
-        ? Math.min(cols, Math.max(1, Math.trunc(entry.span)))
+        ? Math.min(targetCols, Math.max(1, Math.trunc(entry.span)))
         : undefined
       if (explicitSpan !== undefined) {
-        if (cursor > 0 && cursor + explicitSpan > cols && idx > 0) {
-          spans[idx - 1] = (spans[idx - 1] ?? 1) + (cols - cursor)
+        if (cursor > 0 && cursor + explicitSpan > targetCols && idx > 0) {
+          spans[idx - 1] = (spans[idx - 1] ?? 1) + (targetCols - cursor)
           cursor = 0
         }
         spans[idx] = explicitSpan
-        cursor = (cursor + explicitSpan) % cols
+        cursor = (cursor + explicitSpan) % targetCols
         continue
       }
       if (idx === entries.length - 1) {
-        const remaining = cols - cursor
+        const remaining = targetCols - cursor
         spans[idx] = Math.max(remaining, 1)
         continue
       }
       spans[idx] = 1
-      cursor = (cursor + 1) % cols
+      cursor = (cursor + 1) % targetCols
     }
     return spans
-  }, [entries, cols])
+  }
+
+  const entrySpans = useMemo(() => computeSpansForCols(cols), [entries, cols])
+  const entrySpans2 = useMemo(() => computeSpansForCols(Math.min(cols, 2)), [entries, cols])
 
   return (
     <div
@@ -357,12 +362,21 @@ export const DshKeyValueImpl = defineComponent<{
       >
         {entries.map((entry, idx) => {
           const spanCols = entrySpans[idx] ?? 1
+          const spanCols2 = entrySpans2[idx] ?? 1
+          const cellStyle =
+            spanCols > 1 || spanCols2 > 1
+              ? ({
+                  ...(spanCols > 1 ? { '--kv-span': spanCols } : {}),
+                  ...(spanCols2 !== spanCols ? { '--kv-span-2': spanCols2 } : {}),
+                } as CSSProperties)
+              : undefined
           return (
             <div
               key={`${entry.label}-${idx}`}
               className={bordered ? css.kvCellBordered : css.kvCell}
               data-kv-span={spanCols > 1 ? String(spanCols) : undefined}
-              style={spanCols > 1 ? ({ '--kv-span': spanCols } as CSSProperties) : undefined}
+              data-kv-span-2={spanCols2 !== spanCols ? String(spanCols2) : undefined}
+              style={cellStyle}
             >
               <dt className={bordered ? css.kvLabelBordered : css.kvLabel}>{entry.label}</dt>
               <dd

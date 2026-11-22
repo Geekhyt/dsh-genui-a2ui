@@ -1,5 +1,5 @@
 import type { ActionDispatchOptions } from '@a2ui/web_core/v1_0'
-import { useContext, useDeferredValue, useId, useMemo, useState } from 'react'
+import { useContext, useDeferredValue, useId, useMemo, useRef, useState } from 'react'
 import {
   ComparisonApi,
   KanbanApi,
@@ -9,7 +9,7 @@ import {
   SourceListApi,
   TimelineApi,
 } from '../../shared/catalog-schema.ts'
-import { useTransientFlag } from '../dom-hooks.ts'
+import { useElementWidth, useTransientFlag } from '../dom-hooks.ts'
 import { useRuntimeMessages } from '../i18n.ts'
 import {
   DshButton,
@@ -958,6 +958,8 @@ export const DshServiceGraphImpl = defineComponent<{
     () => buildServiceGraphLayout(props.nodes, props.edges, direction),
     [props.nodes, props.edges, direction],
   )
+  const viewportRef = useRef<HTMLDivElement | null>(null)
+  const viewportW = useElementWidth(viewportRef)
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
   const canAct = !readOnly && typeof props.action === 'function'
   const title = props.title !== undefined && props.title !== null ? String(props.title) : ''
@@ -977,6 +979,12 @@ export const DshServiceGraphImpl = defineComponent<{
   }, [layout.nodes])
 
   if (layout.nodes.length === 0) return null
+
+  const availW = viewportW > 8 ? viewportW - 4 : 0
+  const fitScale =
+    availW > 0 && layout.width > availW && availW / layout.width >= 0.72 ? availW / layout.width : 1
+  const scaledW = Math.floor(layout.width * fitScale)
+  const scaledH = Math.ceil(layout.height * fitScale)
 
   const statusText = (s: ServiceHealthStatus) =>
     s === 'error'
@@ -1014,125 +1022,141 @@ export const DshServiceGraphImpl = defineComponent<{
         </div>
       </div>
 
-      <div className={css.serviceGraphViewport}>
+      <div ref={viewportRef} className={css.serviceGraphViewport}>
         <div
-          className={css.serviceGraphCanvas}
-          style={{ width: layout.width, height: layout.height }}
+          style={{
+            width: scaledW,
+            height: scaledH,
+            margin: '0 auto',
+            overflow: 'hidden',
+          }}
         >
-          <svg
-            width={layout.width}
-            height={layout.height}
-            viewBox={`0 0 ${layout.width} ${layout.height}`}
-            className={css.serviceGraphSvg}
-            aria-hidden="true"
+          <div
+            className={css.serviceGraphCanvas}
+            style={{
+              width: layout.width,
+              height: layout.height,
+              margin: 0,
+              ...(fitScale < 1
+                ? { transform: `scale(${fitScale})`, transformOrigin: 'top left' }
+                : {}),
+            }}
           >
-            <defs>
-              {(['healthy', 'warning', 'error'] as const).map((st) => (
-                <marker
-                  key={st}
-                  id={`${markerPrefix}-arrow-${st}`}
-                  viewBox="0 0 10 10"
-                  refX="8.5"
-                  refY="5"
-                  markerWidth="6"
-                  markerHeight="6"
-                  orient="auto-start-reverse"
-                >
-                  <path
-                    d="M 0 1.5 L 9 5 L 0 8.5 z"
-                    className={css.serviceEdgeArrow}
-                    data-status={st}
-                  />
-                </marker>
-              ))}
-            </defs>
-            {layout.edges.map((edge) => {
-              const isHighlighted =
-                activeNode !== null && (edge.from === activeNode.id || edge.to === activeNode.id)
-              return (
-                <path
-                  key={edge.id}
-                  d={edge.pathD}
-                  fill="none"
-                  className={css.serviceEdgePath}
-                  data-status={edge.status}
-                  data-highlight={isHighlighted ? 'true' : 'false'}
-                  markerEnd={`url(#${markerPrefix}-arrow-${edge.status})`}
-                />
-              )
-            })}
-          </svg>
-
-          {layout.nodes.map((node) => {
-            const isSelected = activeNode?.id === node.id
-            return (
-              <button
-                key={node.id}
-                type="button"
-                className={css.serviceNodeBox}
-                data-status={node.status}
-                data-selected={isSelected ? 'true' : 'false'}
-                style={{
-                  left: node.x,
-                  top: node.y,
-                  width: node.width,
-                  height: node.height,
-                }}
-                onClick={() => setSelectedNodeId(node.id)}
-              >
-                <span className={css.serviceNodeTop}>
-                  <span className={css.serviceNodeDot} data-status={node.status} />
-                  <span className={css.serviceNodeName} title={node.label}>
-                    {node.label}
-                  </span>
-                </span>
-                {node.metric || node.sublabel || node.group ? (
-                  <span className={css.serviceNodeBottom}>
-                    {node.sublabel || node.group ? (
-                      <span className={css.serviceNodeSub} title={node.sublabel || node.group}>
-                        {node.sublabel || node.group}
-                      </span>
-                    ) : null}
-                    {node.metric ? (
-                      <span className={css.serviceNodeMetric}>{node.metric}</span>
-                    ) : null}
-                  </span>
-                ) : null}
-              </button>
-            )
-          })}
-
-          {layout.edges.some((e) => Boolean(e.label)) ? (
             <svg
               width={layout.width}
               height={layout.height}
               viewBox={`0 0 ${layout.width} ${layout.height}`}
-              className={css.serviceGraphLabelSvg}
+              className={css.serviceGraphSvg}
               aria-hidden="true"
             >
-              {layout.edges.map((edge) =>
-                edge.label ? (
-                  <g key={edge.id} transform={`translate(${edge.labelX}, ${edge.labelY})`}>
-                    <rect
-                      x={-edge.labelWidth / 2}
-                      y={-9}
-                      width={edge.labelWidth}
-                      height={18}
-                      rx={5}
-                      className={css.serviceEdgeLabelBg}
+              <defs>
+                {(['healthy', 'warning', 'error'] as const).map((st) => (
+                  <marker
+                    key={st}
+                    id={`${markerPrefix}-arrow-${st}`}
+                    viewBox="0 0 10 10"
+                    refX="8.5"
+                    refY="5"
+                    markerWidth="6"
+                    markerHeight="6"
+                    orient="auto-start-reverse"
+                  >
+                    <path
+                      d="M 0 1.5 L 9 5 L 0 8.5 z"
+                      className={css.serviceEdgeArrow}
+                      data-status={st}
                     />
-                    <text
-                      textAnchor="middle"
-                      dominantBaseline="central"
-                      className={css.serviceEdgeLabelText}
-                    >
-                      {edge.label}
-                    </text>
-                  </g>
-                ) : null,
-              )}
+                  </marker>
+                ))}
+              </defs>
+              {layout.edges.map((edge) => {
+                const isHighlighted =
+                  activeNode !== null && (edge.from === activeNode.id || edge.to === activeNode.id)
+                return (
+                  <path
+                    key={edge.id}
+                    d={edge.pathD}
+                    fill="none"
+                    className={css.serviceEdgePath}
+                    data-status={edge.status}
+                    data-highlight={isHighlighted ? 'true' : 'false'}
+                    markerEnd={`url(#${markerPrefix}-arrow-${edge.status})`}
+                  />
+                )
+              })}
             </svg>
-          ) : null}
+
+            {layout.nodes.map((node) => {
+              const isSelected = activeNode?.id === node.id
+              return (
+                <button
+                  key={node.id}
+                  type="button"
+                  className={css.serviceNodeBox}
+                  data-status={node.status}
+                  data-selected={isSelected ? 'true' : 'false'}
+                  style={{
+                    left: node.x,
+                    top: node.y,
+                    width: node.width,
+                    height: node.height,
+                  }}
+                  onClick={() => setSelectedNodeId(node.id)}
+                >
+                  <span className={css.serviceNodeTop}>
+                    <span className={css.serviceNodeDot} data-status={node.status} />
+                    <span className={css.serviceNodeName} title={node.label}>
+                      {node.label}
+                    </span>
+                  </span>
+                  {node.metric || node.sublabel || node.group ? (
+                    <span className={css.serviceNodeBottom}>
+                      {node.sublabel || node.group ? (
+                        <span className={css.serviceNodeSub} title={node.sublabel || node.group}>
+                          {node.sublabel || node.group}
+                        </span>
+                      ) : null}
+                      {node.metric ? (
+                        <span className={css.serviceNodeMetric}>{node.metric}</span>
+                      ) : null}
+                    </span>
+                  ) : null}
+                </button>
+              )
+            })}
+
+            {layout.edges.some((e) => Boolean(e.label)) ? (
+              <svg
+                width={layout.width}
+                height={layout.height}
+                viewBox={`0 0 ${layout.width} ${layout.height}`}
+                className={css.serviceGraphLabelSvg}
+                aria-hidden="true"
+              >
+                {layout.edges.map((edge) =>
+                  edge.label ? (
+                    <g key={edge.id} transform={`translate(${edge.labelX}, ${edge.labelY})`}>
+                      <rect
+                        x={-edge.labelWidth / 2}
+                        y={-9}
+                        width={edge.labelWidth}
+                        height={18}
+                        rx={5}
+                        className={css.serviceEdgeLabelBg}
+                      />
+                      <text
+                        textAnchor="middle"
+                        dominantBaseline="central"
+                        className={css.serviceEdgeLabelText}
+                      >
+                        {edge.label}
+                      </text>
+                    </g>
+                  ) : null,
+                )}
+              </svg>
+            ) : null}
+          </div>
         </div>
       </div>
 

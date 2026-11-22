@@ -97,9 +97,12 @@ export function normalizeComparisonData(
   readonly rows: readonly NormalizedComparisonRow[]
 } {
   const options: NormalizedComparisonOption[] = []
+  const seenKeys = new Set<string>()
   if (Array.isArray(rawOptions)) {
     rawOptions.forEach((item, idx) => {
       if (typeof item === 'string') {
+        if (seenKeys.has(item)) return
+        seenKeys.add(item)
         options.push({
           key: item,
           title: item,
@@ -111,6 +114,8 @@ export function normalizeComparisonData(
       if (typeof item === 'object' && item !== null) {
         const rec = item as Record<string, unknown>
         const key = String(rec.key ?? rec.id ?? rec.value ?? `opt_${idx}`)
+        if (seenKeys.has(key)) return
+        seenKeys.add(key)
         const title = String(rec.title ?? rec.label ?? rec.name ?? key)
         options.push({
           key,
@@ -138,7 +143,9 @@ export function normalizeComparisonData(
           : rec
       const cells: Record<string, ParsedComparisonCell> = {}
       for (const opt of options) {
-        cells[opt.key] = parseComparisonCell(valSource[opt.key])
+        cells[opt.key] = parseComparisonCell(
+          Object.hasOwn(valSource, opt.key) ? valSource[opt.key] : undefined,
+        )
       }
       rows.push({ label, cells })
     }
@@ -395,7 +402,7 @@ export function normalizeSourceItems(raw: unknown): readonly NormalizedSourceIte
 
     items.push({
       id: String(rec.id ?? `src_${idx}`),
-      index: idx + 1,
+      index: items.length + 1,
       title,
       url,
       domain,
@@ -431,6 +438,14 @@ export interface MetricRingGeometry {
   readonly stackUnit: boolean
 }
 
+function formatHighPrecisionBelowHundred(val: number): string {
+  const d3 = Number(val.toFixed(3))
+  if (d3 < 100) return d3.toString()
+  const d4 = Number(val.toFixed(4))
+  if (d4 < 100) return d4.toString()
+  return (Math.floor(val * 10_000) / 10_000).toString()
+}
+
 export function computeMetricRingGeometry(params: {
   readonly value: unknown
   readonly max?: number | undefined
@@ -457,18 +472,18 @@ export function computeMetricRingGeometry(params: {
   const displayNumber = Number.isInteger(safeVal)
     ? String(safeVal)
     : safeVal > 99.9 && safeVal < 100
-      ? Number(safeVal.toFixed(3)).toString()
+      ? formatHighPrecisionBelowHundred(safeVal)
       : Number(safeVal.toFixed(2)).toString()
 
   const resolvedUnit = params.unit !== undefined ? params.unit : max === 100 ? '%' : ''
-  const innerClearDiameter = Math.max(28, radius * 2 - strokeWidth - 8)
+  const innerClearDiameter = Math.max(26, radius * 2 - strokeWidth - 10)
   let numEmUnits = 0
   for (const ch of displayNumber) {
-    numEmUnits += (ch.codePointAt(0) ?? 0) > 0xff ? 1.05 : 0.62
+    numEmUnits += (ch.codePointAt(0) ?? 0) > 0xff ? 1.05 : ch === '.' ? 0.34 : 0.68
   }
   let unitEmUnits = 0
   for (const ch of resolvedUnit) {
-    unitEmUnits += (ch.codePointAt(0) ?? 0) > 0xff ? 0.78 : 0.48
+    unitEmUnits += (ch.codePointAt(0) ?? 0) > 0xff ? 0.78 : ch === '%' ? 0.78 : 0.5
   }
   const inlineEmUnits = numEmUnits + (resolvedUnit ? 0.1 + unitEmUnits : 0)
   const stackUnit =
@@ -478,15 +493,15 @@ export function computeMetricRingGeometry(params: {
   const maxFitFont = stackUnit
     ? innerClearDiameter / Math.max(1.6, numEmUnits)
     : innerClearDiameter / Math.max(1.6, inlineEmUnits)
-  const numberFontSize = Number(
-    Math.max(stackUnit ? 9 : 10, Math.min(size * 0.2, maxFitFont)).toFixed(1),
-  )
+  const minFont = displayNumber.length >= 6 ? 6.6 : stackUnit ? 8 : 10
+  const numberFontSize = Number(Math.max(minFont, Math.min(size * 0.2, maxFitFont)).toFixed(1))
   const maxUnitFit = resolvedUnit
     ? (innerClearDiameter * 0.88) / Math.max(1, unitEmUnits)
     : numberFontSize * 0.66
+  const minUnitFont = displayNumber.length >= 6 ? 6.2 : 7.5
   const unitFontSize = Number(
     Math.max(
-      7.5,
+      minUnitFont,
       Math.min(numberFontSize * 0.68, stackUnit ? maxUnitFit : numberFontSize * 0.66),
     ).toFixed(1),
   )
@@ -548,9 +563,9 @@ export function estimateEdgeLabelWidth(label: string | undefined): number {
   if (!label) return 0
   let units = 0
   for (const ch of label) {
-    units += (ch.codePointAt(0) ?? 0) > 0xff ? 11.5 : 6.6
+    units += (ch.codePointAt(0) ?? 0) > 0xff ? 10.4 : 6.0
   }
-  return Math.max(44, Math.ceil(units + 16))
+  return Math.max(40, Math.ceil(units + 12))
 }
 
 export interface ServiceGraphLayout {
@@ -782,11 +797,12 @@ export function buildServiceGraphLayout(
   const maxNodeWCap = maxRank <= 2 ? 182 : 156
   const estimateNodeIdealW = (n: (typeof parsedNodes)[number]): number => {
     const topW = 34 + estimateInlineTextPx(n.label, 7.6, 12.6)
+    const subText = n.sublabel ?? n.group
     const bottomW =
-      18 +
-      estimateInlineTextPx(n.sublabel, 5.8, 10.6) +
-      (n.sublabel && n.metric ? 6 : 0) +
-      estimateInlineTextPx(n.metric, 6.0, 10.6)
+      24 +
+      estimateInlineTextPx(subText, 6.3, 11.2) +
+      (subText && n.metric ? 8 : 0) +
+      estimateInlineTextPx(n.metric, 6.5, 11.2)
     return Math.max(118, Math.min(maxNodeWCap, Math.ceil(Math.max(topW, bottomW))))
   }
 
@@ -925,6 +941,13 @@ export function buildServiceGraphLayout(
   const globalMaxNodeRight = Math.max(...draftNodes.map((n) => n.x + n.width))
   let backEdgeIdx = 0
   let skipEdgeIdx = 0
+  let tbRightCorridorIdx = 0
+  const pairTotals = new Map<string, number>()
+  for (const pe of parsedEdges) {
+    const pk = `${pe.from}->${pe.to}`
+    pairTotals.set(pk, (pairTotals.get(pk) ?? 0) + 1)
+  }
+  const pairSeen = new Map<string, number>()
 
   interface DraftEdge {
     id: string
@@ -957,6 +980,11 @@ export function buildServiceGraphLayout(
     const rFrom = rankOf.get(e.from) ?? 0
     const rTo = rankOf.get(e.to) ?? 0
     const labelW = estimateEdgeLabelWidth(e.label)
+    const pairKey = `${e.from}->${e.to}`
+    const totalParallel = pairTotals.get(pairKey) ?? 1
+    const parallelIdx = pairSeen.get(pairKey) ?? 0
+    pairSeen.set(pairKey, parallelIdx + 1)
+    const parallelOffset = totalParallel > 1 ? (parallelIdx - (totalParallel - 1) / 2) * 14 : 0
 
     let sx: number
     let sy: number
@@ -971,9 +999,9 @@ export function buildServiceGraphLayout(
       if (isBack) {
         if (rFrom === rTo) {
           sx = src.x + src.width
-          sy = src.y + src.height / 2
+          sy = src.y + src.height / 2 + parallelOffset
           tx = dst.x + dst.width
-          ty = dst.y + dst.height / 2
+          ty = dst.y + dst.height / 2 + parallelOffset
           const apexX =
             Math.max(src.x + src.width, dst.x + dst.width) +
             Math.max(36, labelW / 2 + 16) +
@@ -983,9 +1011,9 @@ export function buildServiceGraphLayout(
           cy1 = sy
           cy2 = ty
         } else {
-          sx = src.x + src.width / 2
+          sx = src.x + src.width / 2 + parallelOffset
           sy = src.y
-          tx = dst.x + dst.width / 2
+          tx = dst.x + dst.width / 2 + parallelOffset
           ty = dst.y
           const apexY = globalMinNodeY - (26 + backEdgeIdx * 24)
           cx1 = sx
@@ -996,14 +1024,14 @@ export function buildServiceGraphLayout(
         backEdgeIdx += 1
       } else {
         sx = src.x + src.width
-        sy = src.y + src.height / 2
+        sy = src.y + src.height / 2 + parallelOffset
         tx = dst.x
-        ty = dst.y + dst.height / 2
+        ty = dst.y + dst.height / 2 + parallelOffset
         const dx = Math.max(28, Math.abs(tx - sx) * 0.48)
         cx1 = sx + dx
-        cy1 = sy
+        cy1 = sy + parallelOffset
         cx2 = tx - dx
-        cy2 = ty
+        cy2 = ty + parallelOffset
 
         if (rTo - rFrom > 1) {
           const midNodes = draftNodes.filter((m) => {
@@ -1023,8 +1051,12 @@ export function buildServiceGraphLayout(
             }),
           )
           if (hitsMidNode && midNodes.length > 0) {
-            const maxMidBottom = Math.max(...midNodes.map((m) => m.y + m.height))
-            const apexY = maxMidBottom + 24 + skipEdgeIdx * 24
+            const maxBottom = Math.max(
+              src.y + src.height,
+              dst.y + dst.height,
+              ...midNodes.map((m) => m.y + m.height),
+            )
+            const apexY = maxBottom + 24 + skipEdgeIdx * 24
             cy1 = (apexY - 0.125 * (sy + ty)) / 0.75
             cy2 = cy1
             skipEdgeIdx += 1
@@ -1033,24 +1065,25 @@ export function buildServiceGraphLayout(
       }
     } else if (isBack) {
       sx = src.x + src.width
-      sy = src.y + src.height / 2
+      sy = src.y + src.height / 2 + parallelOffset
       tx = dst.x + dst.width
-      ty = dst.y + dst.height / 2
-      const apexX = globalMaxNodeRight + Math.max(36, labelW / 2 + 16) + backEdgeIdx * 28
+      ty = dst.y + dst.height / 2 + parallelOffset
+      const apexX = globalMaxNodeRight + Math.max(36, labelW / 2 + 16) + tbRightCorridorIdx * 28
       cx1 = (apexX - 0.125 * (sx + tx)) / 0.75
       cx2 = cx1
       cy1 = sy
       cy2 = ty
       backEdgeIdx += 1
+      tbRightCorridorIdx += 1
     } else {
-      sx = src.x + src.width / 2
+      sx = src.x + src.width / 2 + parallelOffset
       sy = src.y + src.height
-      tx = dst.x + dst.width / 2
+      tx = dst.x + dst.width / 2 + parallelOffset
       ty = dst.y
       const dy = Math.max(24, Math.abs(ty - sy) * 0.48)
-      cx1 = sx
+      cx1 = sx + parallelOffset
       cy1 = sy + dy
-      cx2 = tx
+      cx2 = tx + parallelOffset
       cy2 = ty - dy
 
       if (rTo - rFrom > 1) {
@@ -1072,16 +1105,22 @@ export function buildServiceGraphLayout(
         )
         if (hitsMidNode && midNodes.length > 0) {
           sx = src.x + src.width
-          sy = src.y + src.height / 2
+          sy = src.y + src.height / 2 + parallelOffset
           tx = dst.x + dst.width
-          ty = dst.y + dst.height / 2
-          const maxMidRight = Math.max(...midNodes.map((m) => m.x + m.width))
-          const apexX = maxMidRight + Math.max(34, labelW / 2 + 14) + skipEdgeIdx * 28
+          ty = dst.y + dst.height / 2 + parallelOffset
+          const maxRight = Math.max(
+            globalMaxNodeRight,
+            src.x + src.width,
+            dst.x + dst.width,
+            ...midNodes.map((m) => m.x + m.width),
+          )
+          const apexX = maxRight + Math.max(34, labelW / 2 + 14) + tbRightCorridorIdx * 28
           cx1 = (apexX - 0.125 * (sx + tx)) / 0.75
           cx2 = cx1
           cy1 = sy
           cy2 = ty
           skipEdgeIdx += 1
+          tbRightCorridorIdx += 1
         }
       }
     }

@@ -1,3 +1,4 @@
+import { safeStringifyJson } from '../../shared/constants.ts'
 import { RUNTIME_MESSAGES, resolveClientLocale, type UiLocale } from '../../shared/i18n.ts'
 import type { TagTone } from '../ui/primitives.tsx'
 
@@ -166,7 +167,8 @@ export function normalizeStepItems(
       ? Math.trunc(currentRaw)
       : undefined
 
-  return rawItems.map((entry, idx) => {
+  const filtered = rawItems.filter((entry) => entry !== null && entry !== undefined)
+  return filtered.map((entry, idx) => {
     if (typeof entry === 'string' || typeof entry === 'number') {
       const derived: StepStatus =
         currentIdx === undefined
@@ -247,20 +249,25 @@ const VALID_TAG_TONES = new Set<string>([
 
 export function normalizeKeyValueItems(raw: unknown, defaultCopyable = false): NormalizedKvItem[] {
   if (Array.isArray(raw)) {
-    return raw.map((item, idx) => {
-      if (typeof item !== 'object' || item === null) {
-        return {
+    const out: NormalizedKvItem[] = []
+    raw.forEach((item, idx) => {
+      if (item === null || item === undefined || Array.isArray(item)) return
+      if (typeof item !== 'object') {
+        out.push({
           label: `#${idx + 1}`,
-          value: String(item ?? ''),
+          value: String(item),
           copyable: defaultCopyable,
           mono: false,
-        }
+        })
+        return
       }
       const rec = item as Record<string, unknown>
       const label = String(rec.label ?? rec.key ?? rec.name ?? `#${idx + 1}`)
       const rawVal = rec.value ?? rec.val ?? ''
       const value =
-        typeof rawVal === 'object' && rawVal !== null ? JSON.stringify(rawVal) : String(rawVal)
+        typeof rawVal === 'object' && rawVal !== null
+          ? safeStringifyJson(rawVal, 0)
+          : String(rawVal)
       const toneStr =
         typeof rec.tone === 'string' && VALID_TAG_TONES.has(rec.tone)
           ? (rec.tone as TagTone)
@@ -269,20 +276,21 @@ export function normalizeKeyValueItems(raw: unknown, defaultCopyable = false): N
         typeof rec.span === 'number' && Number.isFinite(rec.span) && rec.span >= 1
           ? Math.min(4, Math.trunc(rec.span))
           : undefined
-      return {
+      out.push({
         label,
         value,
         ...(toneStr !== undefined ? { tone: toneStr } : {}),
         ...(spanNum !== undefined ? { span: spanNum } : {}),
         copyable: typeof rec.copyable === 'boolean' ? rec.copyable : defaultCopyable,
         mono: Boolean(rec.mono),
-      }
+      })
     })
+    return out
   }
   if (typeof raw === 'object' && raw !== null) {
     return Object.entries(raw as Record<string, unknown>).map(([k, v]) => ({
       label: k,
-      value: typeof v === 'object' && v !== null ? JSON.stringify(v) : String(v ?? ''),
+      value: typeof v === 'object' && v !== null ? safeStringifyJson(v, 0) : String(v ?? ''),
       copyable: defaultCopyable,
       mono: false,
     }))

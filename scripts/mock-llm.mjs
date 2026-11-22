@@ -1597,6 +1597,200 @@ export const SHOWCASE_COMBO_AUDIT_V046_CHARTS_MERMAID_UI = [
   ']))',
 ].join('\n')
 
+export const SHOWCASE_COMBO_AUDIT_V048_LAYOUT_OVERLAYS_UI = [
+  'surface("combo_v048_layout_overlays")',
+  '$/plainSel = "hz"',
+  '$/searchSel = "canary"',
+  '$/multiSel = ["cn-hz", "cn-sh"]',
+  '$/treeSel = "prod/gateway"',
+  '$/dtStart = "2026-11-22T09:00"',
+  '$/dtEnd = "2026-11-22T18:30"',
+  '$/dashRows = [',
+  '  { svc: "gateway-edge", qps: 1420, p99: "18.4 ms", errRate: "0.02%" },',
+  '  { svc: "billing-core", qps: "-", p99: "—", errRate: "0.00%" },',
+  '  { svc: "search-ranker", qps: 860, p99: "42.1 ms", errRate: "0.14%" },',
+  '  { svc: "vector-index", qps: 2150, p99: "11.2 ms", errRate: "0.01%" }',
+  ']',
+  '$/hiddenBar = [',
+  '  { region: "华东", qps: 620 },',
+  '  { region: "华北", qps: 480 },',
+  '  { region: "华南", qps: 390 }',
+  ']',
+  '$/modalMermaid = "flowchart LR\\n  A[\\"Modal 入口\\"] --> B[\\"Mermaid 全屏\\"]\\n  B --> C[\\"LIFO Esc 栈\\"]"',
+  '$/tabMermaid = "flowchart LR\\n  T1[\\"隐藏 Tab 2\\"] --> T2[\\"折叠 Accordion\\"]\\n  T2 --> T3[\\"展开自测宽\\"]"',
+  'root = Card(Column([',
+  '  Text("### 组合实测 33：无权重 Column / 长 Token / Timeline 嵌套 / 隐藏 Tab+Accordion / Modal 嵌套全浮层与 Mermaid 全屏"),',
+  '  Row([',
+  '    Column([',
+  '      EntityHeader(',
+  '        title="prod-cn-hangzhou-inference-gateway-primary-cluster-v4",',
+  '        subtitle="https://ops.internal.example.com/clusters/prod-cn-hangzhou-inference-gateway-v4/overview",',
+  '        status="healthy",',
+  '        statusLabel="运行中",',
+  '        badge="Tier-0",',
+  '        metrics=[',
+  '          { label: "物理集群标识", value: "us-east-1-prod-gpu-cluster-01" },',
+  '          { label: "实时吞吐", value: "12,480 req/s", tone: "success" }',
+  '        ]',
+  '      ),',
+  '      ApprovalCard(',
+  '        title="高危路由切换审批",',
+  '        summary="长 URL 影响范围换行测试",',
+  '        severity="high",',
+  '        scope="prod-cn-hangzhou-inference-gateway-v4",',
+  '        impacts=[',
+  '          "影响连接串：postgres://prod-rds-cluster-primary-01.internal.example.com:5432/billing_ledger_v4_partitioned",',
+  '          "影响节点：kube-system/ingress-nginx-controller-prod-canary-7f8d9c6b5d-xk92m"',
+  '        ],',
+  '        confirmLabel="我已核验长连接串不会溢出卡片边界",',
+  '        approveAction=Event("approve_v048"),',
+  '        rejectAction=Event("reject_v048")',
+  '      )',
+  '    ]),',
+  '    Column([',
+  '      Result(',
+  '        status="warning",',
+  '        title="CanaryRolloutVerificationThresholdExceeded_20261122_ClusterHZ01",',
+  '        subtitle="追踪地址：https://trace.internal.example.com/spans/8f9a1b2c3d4e5f6a7b8c9d0e1f2a3b4c",',
+  '        meta=[',
+  '          { label: "TraceID", value: "tr_8f9a1b2c3d4e5f6a7b8c9d0e1f2a3b4c" },',
+  '          { label: "Cluster", value: "prod-cn-hz-primary-01" }',
+  '        ]',
+  '      ),',
+  '      KeyValue([',
+  '        { label: "部署批次", value: "REL-20261122" },',
+  '        { label: "发布区域", value: "cn-hz-az1" },',
+  '        { label: "变更人", value: "sre-oncall" },',
+  '        { label: "完整工单号", value: "CHG-20261122-INFRA-9981-PROD" }',
+  '      ], title="3 列 4 项 KeyValue（防 2 列空洞）", columns=3, bordered=true)',
+  '    ])',
+  '  ]),',
+  '  Timeline([',
+  '    {',
+  '      time: "10:00",',
+  '      title: "Timeline 子容器嵌套 Grid(Stat + Schedule) 压测",',
+  '      status: "info",',
+  '      actor: "release-bot-automation-pipeline",',
+  '      child: Grid([',
+  '        Stat("灰度流量占比", "25%", delta="+15%", trend="up", caption="目标 100%"),',
+  '        Schedule([',
+  '          { title: "预检快照", start: "10:00", end: "10:45", status: "done", owner: "@DBA" },',
+  '          { title: "流量放量", start: "10:45", end: "12:00", status: "active", progress: 60, owner: "@SRE" }',
+  '        ], title="Timeline 内嵌排期", range=["10:00", "12:30"], now="11:20")',
+  '      ], columns=2, gap="sm")',
+  '    }',
+  '  ], title="Timeline 嵌套容器查询校验", badge="v0.4.8"),',
+  '  Tabs([',
+  '    {',
+  '      title: "默认 Tab（带占位符 ProTable）",',
+  '      child: Table(',
+  '        $/dashRows,',
+  '        columns=[',
+  '          { key: "svc", label: "服务" },',
+  '          { key: "qps", label: "QPS", sortable: true },',
+  '          { key: "p99", label: "P99 延迟", sortable: true },',
+  '          { key: "errRate", label: "错误率", sortable: true }',
+  '        ],',
+  '        title="含 - / — 占位符数值列排序与汇总检验",',
+  '        searchable=true,',
+  '        selectable=true,',
+  '        showSummary=true,',
+  '        pageSize=3',
+  '      )',
+  '    },',
+  '    {',
+  '      title: "隐藏 Tab 2（嵌套折叠图谱）",',
+  '      child: Accordion([',
+  '        {',
+  '          title: "点击展开隐藏 Mermaid + ECharts 组合",',
+  '          subtitle: "验证双层隐藏容器展开后的自测宽与渲染",',
+  '          child: Grid([',
+  '            Mermaid($/tabMermaid, title="Tab2+Accordion 内 Mermaid"),',
+  '            Chart("bar", $/hiddenBar, title="Tab2+Accordion 内 Bar", xField="region", yField="qps", height=200)',
+  '          ], columns=2, gap="md")',
+  '        }',
+  '      ])',
+  '    }',
+  '  ]),',
+  '  Modal(',
+  '    Button(Text("打开全浮层叠加压测 Modal（Select/MultiSelect/TreeSelect/DateRange/Mermaid）"), action=Event("open_v048_modal"), variant="primary"),',
+  '    Column([',
+  '      Text("#### Modal 内嵌套浮层 Z-Index 与 Escape LIFO 实测"),',
+  '      Row([',
+  '        Select("普通 Select (DshMenu)", [{ value: "hz", label: "杭州主集群" }, { value: "sh", label: "上海双活" }, { value: "bj", label: "北京容灾" }], $/plainSel),',
+  '        Select("可搜索 Select (Portal)", [{ value: "canary", label: "Canary 10%", description: "低风险灰度" }, { value: "full", label: "Full 100%", description: "全量切流" }], $/searchSel, searchable=true)',
+  '      ]),',
+  '      Row([',
+  '        MultiSelect("多选区域 (Portal)", [{ value: "cn-hz", label: "华东1" }, { value: "cn-sh", label: "华东2" }, { value: "cn-bj", label: "华北2" }], $/multiSel),',
+  '        TreeSelect("树选目标 (Portal)", [{ label: "生产集群", children: [{ label: "网关", value: "prod/gateway" }, { label: "计费", value: "prod/billing" }] }], $/treeSel)',
+  '      ]),',
+  '      DateRange("Modal 内带时间 DateRange (enableTime=true)", start=$/dtStart, end=$/dtEnd, enableTime=true),',
+  '      Mermaid($/modalMermaid, title="Modal 内 Mermaid（点击全屏验证 Z-Index 与 Esc LIFO）")',
+  '    ])',
+  '  )',
+  ']))',
+].join('\n')
+
+export const SHOWCASE_COMBO_AUDIT_V048_CHARTS_INTERACTIVE_UI = [
+  'surface("combo_v048_charts_interactive")',
+  '$/showDynChart = false',
+  '$/dynRows = [',
+  '  { name: "推理网关", latency: 24 },',
+  '  { name: "风控评分", latency: 68 },',
+  '  { name: "向量检索", latency: 41 }',
+  ']',
+  '$/emptyRows = []',
+  '$/negBars = [',
+  '  { name: "冷存迁移", delta: -100 },',
+  '  { name: "日志压缩", delta: -85 },',
+  '  { name: "闲置回收", delta: -80 }',
+  ']',
+  '$/parallelSix = [',
+  '  { model: "V3-0324", throughput: 94, latency: 18, cost: 12, context: 128, accuracy: 91, stability: 99 },',
+  '  { model: "R1-0528", throughput: 68, latency: 42, cost: 28, context: 128, accuracy: 96, stability: 98 },',
+  '  { model: "Lite-Q", throughput: 140, latency: 9, cost: 5, context: 64, accuracy: 82, stability: 99 }',
+  ']',
+  '$/sunTree = [',
+  '  { name: "计算层", children: [{ name: "R1 集群", value: 42 }, { name: "V3 集群", value: 35 }] },',
+  '  { name: "存储层", children: [{ name: "TiKV", value: 15 }, { name: "Milvus", value: 18 }] }',
+  ']',
+  '$/sunSel = ""',
+  '$/boxRows = [',
+  '  { pool: "HZ-A", min: 10, q1: 18, median: 26, q3: 38, max: 54 },',
+  '  { pool: "SH-B", min: 14, q1: 22, median: 32, q3: 45, max: 66 },',
+  '  { pool: "BJ-C", min: 8, q1: 15, median: 21, q3: 30, max: 44 }',
+  ']',
+  '$/boxSel = ""',
+  '$/graphNodes = [',
+  '  { id: "gw", label: "API Gateway", group: "edge-proxy", metric: "2.4k RPS", status: "healthy" },',
+  '  { id: "chk", label: "Checkout API", group: "core-order", metric: "P99 184ms", status: "warning" },',
+  '  { id: "frd", label: "Fraud Scorer · TiKV", group: "risk-engine", metric: "P99 142ms", status: "error" }',
+  ']',
+  '$/graphEdges = [',
+  '  { from: "gw", to: "chk", label: "HTTP 200", status: "healthy" },',
+  '  { from: "chk", to: "frd", label: "region #19 慢读", status: "error" },',
+  '  { from: "gw", to: "frd", label: "直连回退", status: "warning" }',
+  ']',
+  'root = Card(Column([',
+  '  Text("### 组合实测 34：动态空→有图表挂载 / 全负值参考线 / 6维平行坐标 / 层次交叉筛选 / 高精度圆环 / 拓扑跳边"),',
+  '  Switch("切换动态图表数据（验证 false→true→false→true 不白屏）", $/showDynChart, description="初始为空数组，打开后应立即渲染柱状图"),',
+  '  Chart("bar", cond($/showDynChart, $/dynRows, $/emptyRows), title="动态数据柱状图（含 Light Tooltip 悬停检验）", xField="name", yField="latency", height=200),',
+  '  Grid([',
+  '    Chart("bar", $/negBars, title="全负值柱图 + 负参考线(-79)", xField="name", yField="delta", referenceLine=-79, referenceLabel="基线 -79", height=210),',
+  '    Chart("parallel", $/parallelSix, title="276px 6 维平行坐标防重叠", height=210)',
+  '  ], columns=2, gap="md"),',
+  '  Grid([',
+  '    Chart("treemap", $/sunTree, title="Treemap 父级联动测试", selected=$/sunSel, height=210),',
+  '    Chart("boxplot", $/boxRows, title="Boxplot 交叉筛选高亮测试", xField="pool", selected=$/boxSel, height=210)',
+  '  ], columns=2, gap="md"),',
+  '  Grid([',
+  '    MetricRing("极端 SLA 精度", 99.9997, max=100, unit="%", sublabel="不应舍入为 100%", size=64, tone="success"),',
+  '    MetricRing("大数窄圆环", 1234567, max=2000000, unit="req/s", sublabel="64px 防文字碰圈", size=64, tone="brand")',
+  '  ], columns=2, gap="md"),',
+  '  ServiceGraph($/graphNodes, $/graphEdges, title="3 节点 + group 标签 + 跨层跳边拓扑（LR 防裁切）", direction="LR")',
+  ']))',
+].join('\n')
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 function extractText(content) {
@@ -1895,6 +2089,8 @@ export function startMockLlmServer(port = PORT) {
       const isShowcase30 = /\bshowcase-30\b|combo-v046-layout/i.test(userText)
       const isShowcase31 = /\bshowcase-31\b|combo-v046-forms/i.test(userText)
       const isShowcase32 = /\bshowcase-32\b|combo-v046-charts/i.test(userText)
+      const isShowcase33 = /\bshowcase-33\b|combo-v048-layout/i.test(userText)
+      const isShowcase34 = /\bshowcase-34\b|combo-v048-charts/i.test(userText)
       const isDashboard = /dashboard|看板/i.test(userText)
       const isAsk = /ask|向导|部署/i.test(userText)
       const isDock = /dock|工作台|监控/i.test(userText)
@@ -2134,6 +2330,20 @@ export function startMockLlmServer(port = PORT) {
           })
           return
         }
+        if (isShowcase33) {
+          await streamToolCall(res, model, 'a2ui_render', {
+            title: '深度组合审计 33：无权重 Column / 隐藏嵌套 / Modal 全浮层与 LIFO Esc',
+            ui: SHOWCASE_COMBO_AUDIT_V048_LAYOUT_OVERLAYS_UI,
+          })
+          return
+        }
+        if (isShowcase34) {
+          await streamToolCall(res, model, 'a2ui_render', {
+            title: '深度组合审计 34：动态挂载 / 负值参考线 / 6维平行坐标 / 层次联动 / 拓扑跳边',
+            ui: SHOWCASE_COMBO_AUDIT_V048_CHARTS_INTERACTIVE_UI,
+          })
+          return
+        }
         if (userText.includes('[a2ui-action]')) {
           if (userText.includes('surface="analytics"') || userText.includes('action="boost_q2"')) {
             await streamToolCall(res, model, 'a2ui_render', {
@@ -2212,7 +2422,7 @@ export function startMockLlmServer(port = PORT) {
         return
       }
 
-      if (isAsk && lastToolText.trim().startsWith('{')) {
+      if ((isAsk || isShowcase4) && lastToolText.trim().startsWith('{')) {
         let askRes = null
         try {
           askRes = JSON.parse(lastToolText)
@@ -2221,10 +2431,18 @@ export function startMockLlmServer(port = PORT) {
         }
         if (askRes && typeof askRes === 'object') {
           if (askRes.status === 'skipped') {
-            await streamTextReply(res, model, '您已跳过本次交互确认，未执行任何发布变更。')
+            await streamTextReply(res, model, '您已跳过本次交互确认，未执行任何变更。')
             return
           }
           if (askRes.status === 'answered') {
+            if (isShowcase4) {
+              await streamTextReply(
+                res,
+                model,
+                '已收到您的双栏 Diff 审核放行指令，正在将分包加载降级保护补丁写入工作区。',
+              )
+              return
+            }
             const ctx = askRes.context ?? {}
             const envStr = Array.isArray(ctx.env) ? ctx.env.join(', ') : String(ctx.env ?? 'canary')
             const pods = ctx.replicas ?? 4
@@ -2291,17 +2509,37 @@ export function startMockLlmServer(port = PORT) {
                                                         ? '已渲染 P2 交叉筛选与一键导出验证台：点击任意柱状图/饼图扇区或表格行即可 0ms 本地双向联动筛选，并支持一键下载 PNG 与复制 CSV。'
                                                         : isShowcase26
                                                           ? '已渲染 v0.4.2 视觉与交互修复对照台（Matrix colorScale="auto"、306px LogViewer 详情按钮、琥珀对比度与暗色日期选择器）。'
-                                                          : userText.includes('[a2ui-action]')
-                                                            ? '已根据您的操作实时增量刷新界面数据模型。'
-                                                            : isDock
-                                                              ? '已将 CI/CD 发布流水线监控面板固定在输入框上方的常驻工作台（Dock），后续轮次将继续实时原地刷新。'
-                                                              : isInline
-                                                                ? '已在工具步骤流内嵌渲染诊断摘要。'
-                                                                : isDashboard
-                                                                  ? '已为您生成 2026 区域经营交互看板（示例数据），可切换图表、搜索排序明细表或一键调整预测情景。'
-                                                                  : userText.includes('test-error')
-                                                                    ? '初稿校验触发编译器诊断自愈，已自动将非法组件修正为标准组件并完成渲染。'
-                                                                    : '已为您准备好餐厅预订交互卡片，您可直接在下方调整人数、口味或包间选项后点击确认。'
+                                                          : isShowcase27
+                                                            ? '已渲染 v0.4.4 组合布局审计台（306px DiffView Split、无权重并排容器、长词换行与响应式网格）。'
+                                                            : isShowcase28
+                                                              ? '已渲染 v0.4.4 图表与 Mermaid 组合审计台（双主题 Gantt 刻度、Mindmap 与多色 Pie）。'
+                                                              : isShowcase29 || isShowcase29Dock
+                                                                ? '已渲染 v0.4.5 Dock 边界滑块与底部上弹浮层核验台（0%/100% 滑块防裁切与 Dock Popover 定位）。'
+                                                                : isShowcase30
+                                                                  ? '已渲染 v0.4.6 布局组合压测台（跨组件嵌套与窄容器响应式断点）。'
+                                                                  : isShowcase31
+                                                                    ? '已渲染 v0.4.6 表单与浮层组合压测台（DateRange / MultiSelect / TreeSelect / NumberInput）。'
+                                                                    : isShowcase32
+                                                                      ? '已渲染 v0.4.6 负值瀑布图、Funnel 窄卡标签与 Mermaid 双主题对比度压测台。'
+                                                                      : isShowcase33
+                                                                        ? '已渲染 v0.4.8 无权重 Column 并排、长 Token 防溢出、含占位符数值表格、隐藏 Tab+Accordion 懒渲染与 Modal 浮层栈真机实测台。'
+                                                                        : isShowcase34
+                                                                          ? '已渲染 v0.4.8 动态空->非空 ECharts 挂载、全负值柱图、276px 6 维平行坐标、64px 极端精度圆环与 3 节点 LR 拓扑真机实测台。'
+                                                                          : userText.includes(
+                                                                                '[a2ui-action]',
+                                                                              )
+                                                                            ? '已根据您的操作实时增量刷新界面数据模型。'
+                                                                            : isDock
+                                                                              ? '已将 CI/CD 发布流水线监控面板固定在输入框上方的常驻工作台（Dock），后续轮次将继续实时原地刷新。'
+                                                                              : isInline
+                                                                                ? '已在工具步骤流内嵌渲染诊断摘要。'
+                                                                                : isDashboard
+                                                                                  ? '已为您生成 2026 区域经营交互看板（示例数据），可切换图表、搜索排序明细表或一键调整预测情景。'
+                                                                                  : userText.includes(
+                                                                                        'test-error',
+                                                                                      )
+                                                                                    ? '初稿校验触发编译器诊断自愈，已自动将非法组件修正为标准组件并完成渲染。'
+                                                                                    : '已为您准备好餐厅预订交互卡片，您可直接在下方调整人数、口味或包间选项后点击确认。'
       await streamTextReply(res, model, reply)
       return
     }

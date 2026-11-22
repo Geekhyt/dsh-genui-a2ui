@@ -40,6 +40,8 @@ export const ALL_SHOWCASES = [
   'showcase-30',
   'showcase-31',
   'showcase-32',
+  'showcase-33',
+  'showcase-34',
 ]
 
 export const DEFAULT_AUDIT_SHOWCASES = [
@@ -48,9 +50,12 @@ export const DEFAULT_AUDIT_SHOWCASES = [
   'showcase-22',
   'showcase-23',
   'showcase-24',
+  'showcase-29',
   'showcase-30',
   'showcase-31',
   'showcase-32',
+  'showcase-33',
+  'showcase-34',
 ]
 
 export const SCREENSHOT_SHOWCASE_MAP = {
