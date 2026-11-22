@@ -1,12 +1,12 @@
 import type { ActionPayload } from '@a2ui/web_core/v1_0'
 import { memo, useCallback, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import type { AskAnswerInput } from '../shared/wire-types.ts'
+import type { AskAnswerInput } from '../../shared/wire-types.ts'
 import dockCss from './DockView.module.css'
-import type { WorkspaceFileOpener } from './file-opener.tsx'
-import { useShellMessages } from './i18n.ts'
+import type { WorkspaceFileOpener } from '../file-opener.tsx'
+import { useShellMessages } from '../i18n.ts'
 import { LazySurfaceGroupView, useLazyStreamingExpress } from './LazySurfaceGroupView.tsx'
-import { computeMessagesFingerprint, removeSurfaceDraft } from './persistence.ts'
-import css from './SurfaceView.module.css'
+import { computeMessagesFingerprint, removeSurfaceDraft } from '../persistence.ts'
+import css from '../SurfaceView.module.css'
 import type { ChatExternalStore, ToolViewOwnerProps } from './ToolView.tsx'
 import {
   buildReplayMessagesForSurfaceCall,
@@ -14,7 +14,7 @@ import {
   parseAskMeta,
   resolveActiveAskCall,
 } from './turn-surfaces.ts'
-import { DshAppsIcon, DshButton, DshDisclosureRow } from './ui/primitives.tsx'
+import { DshAppsIcon, DshButton, DshDisclosureRow } from '../ui/primitives.tsx'
 
 export interface A2uiAskDockViewProps {
   readonly sessionId?: string | undefined

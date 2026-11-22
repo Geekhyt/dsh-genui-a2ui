@@ -4,8 +4,8 @@ import {
   normalizePlacement,
   RENDER_TOOL,
   type SurfacePlacement,
-} from '../shared/constants.ts'
-import type { AskMeta, RenderMeta } from '../shared/wire-types.ts'
+} from '../../shared/constants.ts'
+import type { AskMeta, RenderMeta } from '../../shared/wire-types.ts'
 
 export const A2UI_SURFACE_NODE_KIND = 'a2ui-surface'
 

@@ -21,21 +21,21 @@ import {
   useState,
   useSyncExternalStore,
 } from 'react'
-import { isDangerousObjectKey } from '../shared/constants.ts'
-import { enrichActionWithSelection, formatActionMessage } from './action-protocol.ts'
-import { DSH_CLIENT_CATALOGS } from './catalog/index.ts'
+import { isDangerousObjectKey } from '../../shared/constants.ts'
+import { enrichActionWithSelection, formatActionMessage } from '../action-protocol.ts'
+import { DSH_CLIENT_CATALOGS } from '../catalog/index.ts'
 import {
   type SurfaceActionStatus,
   SurfaceActionStatusContext,
   SurfaceReadOnlyContext,
   SurfaceValidationContext,
   type SurfaceValidationContextValue,
-} from './catalog/widget-helpers.tsx'
-import { useStreamingHeightStabilizer, useSurfaceStoreSync } from './dom-hooks.ts'
+} from '../catalog/widget-helpers.tsx'
+import { useStreamingHeightStabilizer, useSurfaceStoreSync } from '../dom-hooks.ts'
 import { ErrorBoundary } from './ErrorBoundary.tsx'
-import { FileOpenContext, type WorkspaceFileOpener } from './file-opener.tsx'
-import { useRuntimeMessages } from './i18n.ts'
-import { notifySubscribers } from './notify.ts'
+import { FileOpenContext, type WorkspaceFileOpener } from '../file-opener.tsx'
+import { useRuntimeMessages } from '../i18n.ts'
+import { notifySubscribers } from '../notify.ts'
 import {
   computeMessagesFingerprint,
   escapeJsonPointerSegment,
@@ -45,10 +45,10 @@ import {
   removeSurfaceDraft,
   sanitizeDataModel,
   saveSurfaceDraft,
-} from './persistence.ts'
-import css from './SurfaceView.module.css'
-import { useDarkTheme } from './theme.ts'
-import { DshMarkdown, DshTextShimmer } from './ui/primitives.tsx'
+} from '../persistence.ts'
+import css from '../SurfaceView.module.css'
+import { useDarkTheme } from '../theme.ts'
+import { DshMarkdown, DshTextShimmer } from '../ui/primitives.tsx'
 
 const ACTION_COOLDOWN_MS = 450
 const EMPTY_SURFACES: readonly SurfaceModel<ReactCatalogComponent>[] = Object.freeze([])

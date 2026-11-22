@@ -220,13 +220,11 @@ function mermaidCacheKey(code: string, dark: boolean): string {
   return `${dark ? '1' : '0'}::${code}`
 }
 
-function storeMermaidSnapshot(key: string, snapshot: MermaidDiagramSnapshot): void {
-  mermaidDiagramCache.delete(key)
-  mermaidDiagramCache.set(key, Object.freeze(snapshot))
+function trimIdleMermaidCache(protectedKey?: string): void {
   while (mermaidDiagramCache.size > MAX_MERMAID_CACHE_ENTRIES) {
     let victim: string | undefined
     for (const candidate of mermaidDiagramCache.keys()) {
-      if (candidate === key) continue
+      if (candidate === protectedKey) continue
       if ((mermaidListenersByKey.get(candidate)?.size ?? 0) === 0) {
         victim = candidate
         break
@@ -235,6 +233,12 @@ function storeMermaidSnapshot(key: string, snapshot: MermaidDiagramSnapshot): vo
     if (victim === undefined) break
     mermaidDiagramCache.delete(victim)
   }
+}
+
+function storeMermaidSnapshot(key: string, snapshot: MermaidDiagramSnapshot): void {
+  mermaidDiagramCache.delete(key)
+  mermaidDiagramCache.set(key, Object.freeze(snapshot))
+  trimIdleMermaidCache(key)
   const listeners = mermaidListenersByKey.get(key)
   if (listeners) notifySubscribers(listeners, 'Chunk store')
 }
@@ -385,6 +389,9 @@ export function subscribeMermaidDiagram(
       const cached = mermaidDiagramCache.get(key)
       if (cached !== undefined && cached.error !== null) {
         mermaidDiagramCache.delete(key)
+      }
+      if (mermaidDiagramCache.size > MAX_MERMAID_CACHE_ENTRIES) {
+        trimIdleMermaidCache()
       }
     }
   }

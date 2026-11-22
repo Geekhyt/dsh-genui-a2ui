@@ -102,13 +102,13 @@ import {
 import { buildChartOption } from '../src/client/chunks/echarts-chunk.ts'
 import { repairMermaidSource } from '../src/client/mermaid-safe.ts'
 import { escapeJsonPointerSegment, sanitizeDataModel } from '../src/client/persistence.ts'
-import { SurfaceSessionStore } from '../src/client/SurfaceView.tsx'
+import { SurfaceSessionStore } from '../src/client/runtime/SurfaceView.tsx'
 import {
   A2UI_SURFACE_NODE_KIND,
   buildReplayMessagesForSurfaceCall,
   type ChatTargetSnapshot,
   resolveTurnTailBatch,
-} from '../src/client/turn-surfaces.ts'
+} from '../src/client/shell/turn-surfaces.ts'
 import { DshTooltip } from '../src/client/ui/primitives.tsx'
 import {
   collectObscuredContextPointersFromMessages,

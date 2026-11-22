@@ -1,18 +1,18 @@
 import { memo, useCallback, useMemo, useState, useSyncExternalStore } from 'react'
 import css from './DockView.module.css'
-import type { WorkspaceFileOpener } from './file-opener.tsx'
-import { useShellMessages } from './i18n.ts'
+import type { WorkspaceFileOpener } from '../file-opener.tsx'
+import { useShellMessages } from '../i18n.ts'
 import { LazySurfaceGroupView } from './LazySurfaceGroupView.tsx'
 import {
   dismissDockAtSeq,
   getDockUiState,
   setDockCollapsed,
   subscribeDockUi,
-} from './persistence.ts'
-import type { SurfaceActionCallback } from './SurfaceView.tsx'
+} from '../persistence.ts'
+import type { SurfaceActionCallback } from '../runtime/SurfaceView.tsx'
 import type { ChatExternalStore } from './ToolView.tsx'
 import { resolveDockBatch } from './turn-surfaces.ts'
-import { DshAppsIcon, DshChevronDownIcon, DshChevronUpIcon } from './ui/primitives.tsx'
+import { DshAppsIcon, DshChevronDownIcon, DshChevronUpIcon } from '../ui/primitives.tsx'
 
 export interface A2uiDockViewProps {
   readonly sessionId?: string | undefined

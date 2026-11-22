@@ -1,6 +1,6 @@
 {
   "name": "dsh-genui-a2ui",
-  "version": "0.4.6",
+  "version": "0.4.7",
   "description": "Google A2UI 1.0 Generative UI plugin for DeepSeek Harness — stream 57 native interactive components, 19 chart types, Mermaid diagrams, 0ms simulators, and approval gates inline in chat.",
   "license": "MIT",
   "author": "Geekhyt",
@@ -70,13 +70,18 @@
   "scripts": {
     "build": "node --no-warnings ./node_modules/tsdown/dist/run.mjs --config-loader native",
     "prepack": "npm run build",
-    "lint": "biome lint . && node scripts/check-no-comments.mjs",
+    "lint": "biome lint . && node scripts/check-no-comments.mjs && node scripts/check-invariants.mjs",
     "format": "biome format --write .",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "check:comments": "node scripts/check-no-comments.mjs",
+    "check:invariants": "node scripts/check-invariants.mjs",
+    "check:bundle": "node scripts/check-bundle-budget.mjs",
     "check:host-api": "node scripts/check-host-api.mjs",
+    "verify:tla": "node scripts/verify-tla.mjs",
     "eval:llm": "node --no-warnings --use-env-proxy --experimental-transform-types scripts/eval-llm.mjs",
+    "eval:check": "node --no-warnings --use-env-proxy --experimental-transform-types scripts/eval-llm.mjs --mode=mock --check-thresholds",
+    "qa:visual": "node scripts/visual-qa-bot.mjs",
     "dev:env": "node scripts/dev-env.mjs",
     "dev:mock": "node scripts/mock-llm.mjs"
   },

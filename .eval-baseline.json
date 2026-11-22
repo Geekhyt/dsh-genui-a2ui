@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "mock": {
+    "minRoutingAccuracyPct": 100,
+    "minFirstPassCompileRatePct": 85,
+    "minFinalCompileRatePct": 100,
+    "minSelfRepairRecoveryPct": 100,
+    "maxScopedAvgPromptTokens": 7500,
+    "minScopedTokenSavingsPct": 60,
+    "minUniqueComponentsUsed": 57
+  },
+  "live": {
+    "minRoutingAccuracyPct": 90,
+    "minFirstPassCompileRatePct": 70,
+    "minFinalCompileRatePct": 90,
+    "minSelfRepairRecoveryPct": 60,
+    "maxScopedAvgPromptTokens": 8500,
+    "minScopedTokenSavingsPct": 50,
+    "minUniqueComponentsUsed": 35
+  }
+}

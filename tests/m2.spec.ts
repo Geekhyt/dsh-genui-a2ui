@@ -22,7 +22,7 @@ import {
   resolveActiveAskCall,
   resolveDockBatch,
   resolveTurnTailBatch,
-} from '../src/client/turn-surfaces.ts'
+} from '../src/client/shell/turn-surfaces.ts'
 import { createAskTool, PendingAskRegistry } from '../src/host/ask-tool.ts'
 import { createGenerator, SurfaceSessions } from '../src/host/generator.ts'
 import { createRenderTool } from '../src/host/render-tool.ts'

@@ -1,5 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
-import { RUNTIME_MESSAGES, resolveClientLocale } from '../shared/i18n.ts'
+import { RUNTIME_MESSAGES, resolveClientLocale } from '../../shared/i18n.ts'
 
 export interface ErrorBoundaryProps {
   readonly label?: string

@@ -1,10 +1,10 @@
 import { memo, useCallback, useMemo, useState, useSyncExternalStore } from 'react'
-import { normalizePlacement } from '../shared/constants.ts'
-import { parseFileTarget, type WorkspaceFileOpener } from './file-opener.tsx'
-import { useShellMessages } from './i18n.ts'
+import { normalizePlacement } from '../../shared/constants.ts'
+import { parseFileTarget, type WorkspaceFileOpener } from '../file-opener.tsx'
+import { useShellMessages } from '../i18n.ts'
 import { LazySurfaceGroupView, useLazyStreamingExpress } from './LazySurfaceGroupView.tsx'
-import css from './SurfaceView.module.css'
-import type { SurfaceActionCallback } from './SurfaceView.tsx'
+import css from '../SurfaceView.module.css'
+import type { SurfaceActionCallback } from '../runtime/SurfaceView.tsx'
 import {
   buildReplayMessagesForSurfaceCall,
   type ChatTargetSnapshot,
@@ -12,7 +12,7 @@ import {
   isTurnClosedForCall,
   parseRenderMeta,
 } from './turn-surfaces.ts'
-import { DshAppsIcon, DshDisclosureRow } from './ui/primitives.tsx'
+import { DshAppsIcon, DshDisclosureRow } from '../ui/primitives.tsx'
 
 export interface PartialArgsReader {
   text(key: string): string | undefined

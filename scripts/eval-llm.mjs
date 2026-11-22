@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import {
   aggregateEvalSummary,
@@ -51,9 +51,13 @@ function parseArgs(argv) {
     jsonOut: '',
     htmlOut: '',
     dryRun: false,
+    checkThresholds: false,
+    baselinePath: resolve(import.meta.dirname, '..', '.eval-baseline.json'),
   }
   for (const arg of argv) {
     if (arg === '--dry-run') opts.dryRun = true
+    else if (arg === '--check-thresholds') opts.checkThresholds = true
+    else if (arg.startsWith('--baseline=')) opts.baselinePath = resolve(arg.slice(11))
     else if (arg.startsWith('--mode=')) opts.mode = arg.slice(7)
     else if (arg.startsWith('--strategy=')) opts.strategy = arg.slice(11)
     else if (arg.startsWith('--model=')) opts.model = arg.slice(8)
@@ -777,6 +781,59 @@ export function renderEvalHtmlReport(summaries) {
 </html>`
 }
 
+export function evaluateEvalThresholds(summaries, baseline, mode = 'mock') {
+  const limits = baseline?.[mode]
+  if (!limits || typeof limits !== 'object') {
+    return { ok: false, violations: [`Missing "${mode}" threshold section in eval baseline.`] }
+  }
+  const violations = []
+  const scoped = summaries.find((s) => s.strategy === 'scoped') ?? summaries[0]
+  const monolithic = summaries.find((s) => s.strategy === 'monolithic')
+  if (!scoped) {
+    return { ok: false, violations: ['No evaluation summary produced.'] }
+  }
+  if (scoped.routingAccuracyPct < limits.minRoutingAccuracyPct) {
+    violations.push(
+      `routingAccuracyPct ${scoped.routingAccuracyPct}% < ${limits.minRoutingAccuracyPct}%`,
+    )
+  }
+  if (scoped.firstPassCompileRatePct < limits.minFirstPassCompileRatePct) {
+    violations.push(
+      `firstPassCompileRatePct ${scoped.firstPassCompileRatePct}% < ${limits.minFirstPassCompileRatePct}%`,
+    )
+  }
+  if (scoped.finalCompileRatePct < limits.minFinalCompileRatePct) {
+    violations.push(
+      `finalCompileRatePct ${scoped.finalCompileRatePct}% < ${limits.minFinalCompileRatePct}%`,
+    )
+  }
+  if (scoped.selfRepairRecoveryPct < limits.minSelfRepairRecoveryPct) {
+    violations.push(
+      `selfRepairRecoveryPct ${scoped.selfRepairRecoveryPct}% < ${limits.minSelfRepairRecoveryPct}%`,
+    )
+  }
+  if (scoped.avgPromptTokens > limits.maxScopedAvgPromptTokens) {
+    violations.push(
+      `scoped avgPromptTokens ${scoped.avgPromptTokens} > ${limits.maxScopedAvgPromptTokens}`,
+    )
+  }
+  if (scoped.uniqueComponentsUsed < limits.minUniqueComponentsUsed) {
+    violations.push(
+      `uniqueComponentsUsed ${scoped.uniqueComponentsUsed} < ${limits.minUniqueComponentsUsed}`,
+    )
+  }
+  if (monolithic && monolithic.avgPromptTokens > 0) {
+    const savingsPct =
+      Math.round(
+        ((monolithic.avgPromptTokens - scoped.avgPromptTokens) / monolithic.avgPromptTokens) * 1000,
+      ) / 10
+    if (savingsPct < limits.minScopedTokenSavingsPct) {
+      violations.push(`scoped token savings ${savingsPct}% < ${limits.minScopedTokenSavingsPct}%`)
+    }
+  }
+  return { ok: violations.length === 0, violations }
+}
+
 async function main() {
   const opts = parseArgs(process.argv.slice(2))
   const cases = (
@@ -852,6 +909,21 @@ async function main() {
     mkdirSync(dirname(p), { recursive: true })
     writeFileSync(p, renderEvalHtmlReport(summaries), 'utf8')
     console.log(`[eval-llm] Wrote HTML report to ${p}`)
+  }
+
+  if (opts.checkThresholds) {
+    if (!existsSync(opts.baselinePath)) {
+      console.error(`[eval-llm] Baseline file not found: ${opts.baselinePath}`)
+      process.exit(1)
+    }
+    const baseline = JSON.parse(readFileSync(opts.baselinePath, 'utf8'))
+    const gate = evaluateEvalThresholds(summaries, baseline, opts.mode)
+    if (!gate.ok) {
+      console.error(`[eval-llm] Threshold check FAILED (${gate.violations.length} violation(s)):`)
+      for (const v of gate.violations) console.error(`  - ${v}`)
+      process.exit(1)
+    }
+    console.log(`[eval-llm] OK: all ${opts.mode} KPI thresholds satisfied (${opts.baselinePath}).`)
   }
 }
 

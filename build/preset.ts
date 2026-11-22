@@ -1,8 +1,9 @@
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { readFile, utimes } from 'node:fs/promises'
 import { builtinModules, createRequire } from 'node:module'
 import { dirname, isAbsolute, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { gzipSync } from 'node:zlib'
 import { transform } from 'lightningcss'
 import type { UserConfig } from 'tsdown'
 import { PLATFORM_MODULES } from './web-platform.ts'
@@ -21,6 +22,46 @@ const RUNTIME_CHUNK_ONLY =
   /^(@a2ui\/(web_core|react|agent)|antlr4ng|@tanstack\/react-table|react-aria-components)(\/|$)/
 
 const MAX_MAIN_CLIENT_BYTES = 100 * 1024
+
+interface BundleBudgetFile {
+  readonly gzipLevel?: number
+  readonly chunks?: Readonly<
+    Record<string, { readonly maxRawBytes: number; readonly maxGzipBytes: number }>
+  >
+}
+
+const BUNDLE_BUDGET_PATH = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  '../.bundle-budget.json',
+)
+const BUNDLE_BUDGET: BundleBudgetFile | null = existsSync(BUNDLE_BUDGET_PATH)
+  ? (JSON.parse(readFileSync(BUNDLE_BUDGET_PATH, 'utf8')) as BundleBudgetFile)
+  : null
+
+function assertChunkBudget(relFile: string, code: string): void {
+  if (BUILD_MODE !== 'production') return
+  const buf = Buffer.from(code, 'utf8')
+  const rawBytes = buf.length
+  if (relFile === 'lib/client.js' && rawBytes >= MAX_MAIN_CLIENT_BYTES) {
+    throw new Error(
+      `client bundle size gate: lib/client.js is ${rawBytes} bytes (>= ${MAX_MAIN_CLIENT_BYTES} bytes limit)`,
+    )
+  }
+  const limit = BUNDLE_BUDGET?.chunks?.[relFile]
+  if (!limit) return
+  const gzipLevel = BUNDLE_BUDGET?.gzipLevel ?? 9
+  const gzipBytes = gzipSync(buf, { level: gzipLevel }).length
+  if (rawBytes > limit.maxRawBytes) {
+    throw new Error(
+      `bundle budget gate: ${relFile} raw ${rawBytes} B > ${limit.maxRawBytes} B (.bundle-budget.json)`,
+    )
+  }
+  if (gzipBytes > limit.maxGzipBytes) {
+    throw new Error(
+      `bundle budget gate: ${relFile} gzip ${gzipBytes} B > ${limit.maxGzipBytes} B (.bundle-budget.json)`,
+    )
+  }
+}
 
 const localRequire = createRequire(import.meta.url)
 const uuidPkgDir = dirname(localRequire.resolve('uuid/package.json'))
@@ -84,6 +125,25 @@ function hostConfig(id: string, extraExternal: readonly (string | RegExp)[]): Us
         return true
       },
     },
+    plugins: [
+      {
+        name: 'dsh-host-bundle-budget',
+        generateBundle(
+          _options: unknown,
+          bundle: Record<string, { type?: string; fileName?: string; code?: string }>,
+        ) {
+          for (const item of Object.values(bundle)) {
+            if (
+              item.type === 'chunk' &&
+              item.fileName === 'index.js' &&
+              typeof item.code === 'string'
+            ) {
+              assertChunkBudget('lib/index.js', item.code)
+            }
+          }
+        },
+      },
+    ],
   }
 }
 
@@ -191,6 +251,7 @@ function clientChunkConfig(
                 item.code.trim(),
                 'return module.exports; } });',
               ].join('\n')
+              assertChunkBudget(`lib/${chunkFileName}`, item.code)
             } else if (item.type === 'chunk') {
               throw new Error(
                 `client chunk "${chunkFileName}" emitted unexpected split sub-chunk "${item.fileName}"; DSH chunks must be 100% self-contained`,
@@ -259,12 +320,7 @@ function clientConfig(id: string): UserConfig {
                 item.code.trim(),
                 'return module.exports; } });',
               ].join('\n')
-              const bytes = Buffer.byteLength(item.code, 'utf8')
-              if (bytes >= MAX_MAIN_CLIENT_BYTES) {
-                throw new Error(
-                  `client bundle size gate: lib/client.js is ${bytes} bytes (>= ${MAX_MAIN_CLIENT_BYTES} bytes limit)`,
-                )
-              }
+              assertChunkBudget('lib/client.js', item.code)
             } else if (item.type === 'chunk') {
               throw new Error(
                 `client entry emitted unexpected unsplit chunk "${item.fileName}"; lazy chunks must load via require.async("./client.<name>.js")`,

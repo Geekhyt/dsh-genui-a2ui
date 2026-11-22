@@ -59,13 +59,16 @@ import { filterTableRowsByField } from '../src/client/catalog/v4-helpers.ts'
 import { isWritableProp, weightStyle } from '../src/client/catalog/widget-helpers.tsx'
 import { buildChartOption } from '../src/client/chunks/echarts-chunk.ts'
 import { prepareMermaidSvg, repairMermaidSource } from '../src/client/mermaid-safe.ts'
-import { normalizeStreamingProgram, StreamingExpressSession } from '../src/client/streaming.ts'
+import {
+  normalizeStreamingProgram,
+  StreamingExpressSession,
+} from '../src/client/runtime/streaming.ts'
 import {
   A2UI_SURFACE_NODE_KIND,
   type ChatTargetSnapshot,
   resolveDockBatch,
   resolveTurnTailBatch,
-} from '../src/client/turn-surfaces.ts'
+} from '../src/client/shell/turn-surfaces.ts'
 import { SurfaceSessions } from '../src/host/generator.ts'
 import { AccordionApi, CheckCardApi } from '../src/shared/catalog-schema.ts'
 import { isSecretKey } from '../src/shared/constants.ts'
@@ -452,7 +455,10 @@ describe('Generalized Multi-Component Composition & Runtime Fixes', () => {
       resolve(__dirname, '../src/client/catalog/Catalog.module.css'),
       'utf8',
     )
-    const dockCss = readFileSync(resolve(__dirname, '../src/client/DockView.module.css'), 'utf8')
+    const dockCss = readFileSync(
+      resolve(__dirname, '../src/client/shell/DockView.module.css'),
+      'utf8',
+    )
     const surfaceCss = readFileSync(
       resolve(__dirname, '../src/client/SurfaceView.module.css'),
       'utf8',

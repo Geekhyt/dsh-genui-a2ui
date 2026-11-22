@@ -5,10 +5,10 @@ import {
   A2UI_ACTION_NODE_ID,
   A2uiActionUserChip,
   a2uiActionUserTextRule,
-} from './ActionUserChip.tsx'
-import { A2uiAskDockView, A2uiAskToolView } from './AskToolView.tsx'
+} from './shell/ActionUserChip.tsx'
+import { A2uiAskDockView, A2uiAskToolView } from './shell/AskToolView.tsx'
 import { getLoadedRuntimeChunk } from './chunk-loader.ts'
-import { A2uiDockView } from './DockView.tsx'
+import { A2uiDockView } from './shell/DockView.tsx'
 import {
   fileAddressFor,
   isPathWithinWorkspace,
@@ -17,17 +17,17 @@ import {
   type WorkspaceFileOpener,
 } from './file-opener.tsx'
 import { publishCommandNotice, setA2uiEnabled, setFallbackDefaultEnabled } from './persistence.ts'
-import type { SurfaceActionCallback } from './SurfaceView.tsx'
+import type { SurfaceActionCallback } from './runtime/SurfaceView.tsx'
 import { mountPluginCssSheets, unmountPluginCssSheets } from './style-lifecycle.ts'
-import { A2uiTierControl } from './TierControl.tsx'
-import { A2uiToolView, type ChatExternalStore } from './ToolView.tsx'
-import { A2uiTurnTailView } from './TurnTailView.tsx'
+import { A2uiTierControl } from './shell/TierControl.tsx'
+import { A2uiToolView, type ChatExternalStore } from './shell/ToolView.tsx'
+import { A2uiTurnTailView } from './shell/TurnTailView.tsx'
 import {
   a2uiSurfaceNodeDefinition,
   isChatTimelineActive,
   parseA2uiEnabledFromStatusText,
   resolveLatestA2uiCommandState,
-} from './turn-surfaces.ts'
+} from './shell/turn-surfaces.ts'
 
 export const inject = ['slots', 'sessions', 'uiConversation']
 

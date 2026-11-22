@@ -60,7 +60,7 @@ import {
   normalizeSourceItems,
   parseComparisonCell,
 } from '../src/client/catalog/v3-helpers.ts'
-import { SurfaceGroupView } from '../src/client/SurfaceView.tsx'
+import { SurfaceGroupView } from '../src/client/runtime/SurfaceView.tsx'
 import { createGenerator, SurfaceSessions } from '../src/host/generator.ts'
 import { DSH_COMPONENT_APIS, dshSchemaCatalog } from '../src/shared/catalog-schema.ts'
 

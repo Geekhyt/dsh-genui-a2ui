@@ -15,6 +15,7 @@
 | [ADR-0005](./ADR-0005-p0-skill-compaction-and-express-lowering.md) | P0 四域 Skill 压缩、引号安全 Express 降糖与同构 `calc()` 引擎 | 已采纳 |
 | [ADR-0006](./ADR-0006-security-boundaries-and-sanitization.md) | 安全边界：Mermaid 严格净化、`openUrl` 手势门禁、凭据脱敏与 CSV 防注入 | 已采纳 |
 | [ADR-0007](./ADR-0007-narrow-container-layout-and-echarts-collision.md) | 306px/276px 窄容器适配、ECharts 防碰撞与 0ms 跨组件联动匹配 | 已采纳 |
+| [ADR-0008](./ADR-0008-formal-verification-and-invariants.md) | TLA+ 并发状态机形式化验证、路径语义分层、12 条静态不变量门禁与 5 分片包体棘轮 | 已采纳 |
 
 ## 关联追踪
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { StreamingExpressSession } from '../src/client/streaming.ts'
+import { StreamingExpressSession } from '../src/client/runtime/streaming.ts'
 
 describe('StreamingExpressSession', () => {
   it('progressively emits createSurface and update messages as an unwrapped ui string grows', () => {

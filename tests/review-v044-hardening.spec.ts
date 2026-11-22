@@ -49,8 +49,8 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => ({
   IconCheckOutlineRegular: undefined,
   IconWarningOutlineRegular: undefined,
 }))
-import { A2uiActionUserChip } from '../src/client/ActionUserChip.tsx'
-import { A2uiAskDockView, A2uiAskToolView } from '../src/client/AskToolView.tsx'
+import { A2uiActionUserChip } from '../src/client/shell/ActionUserChip.tsx'
+import { A2uiAskDockView, A2uiAskToolView } from '../src/client/shell/AskToolView.tsx'
 import { formatActionMessage, matchA2uiActionUserText } from '../src/client/action-protocol.ts'
 import { DSH_REACT_COMPONENTS } from '../src/client/catalog/BasicWidgets.tsx'
 import { namespaceSvgIds } from '../src/client/catalog/ExtendedWidgets.tsx'
@@ -84,8 +84,8 @@ import {
   cleanupA2uiRuntimeStyles,
   ensureA2uiRuntimeStyles,
 } from '../src/client/chunks/runtime-chunk.ts'
-import { A2uiDockView } from '../src/client/DockView.tsx'
-import { ErrorBoundary } from '../src/client/ErrorBoundary.tsx'
+import { A2uiDockView } from '../src/client/shell/DockView.tsx'
+import { ErrorBoundary } from '../src/client/runtime/ErrorBoundary.tsx'
 import { isPathWithinWorkspace, parseFileTarget } from '../src/client/file-opener.tsx'
 import {
   assertSafeSvg,
@@ -93,9 +93,9 @@ import {
   stripUnsafeDirectives,
 } from '../src/client/mermaid-safe.ts'
 import { isPointerObscured, isPointerObscuredOrParent } from '../src/client/persistence.ts'
-import { A2uiTierControl } from '../src/client/TierControl.tsx'
-import { A2uiToolView } from '../src/client/ToolView.tsx'
-import { A2uiTurnTailView } from '../src/client/TurnTailView.tsx'
+import { A2uiTierControl } from '../src/client/shell/TierControl.tsx'
+import { A2uiToolView } from '../src/client/shell/ToolView.tsx'
+import { A2uiTurnTailView } from '../src/client/shell/TurnTailView.tsx'
 import { collectObscuredPointersFromMessages, PendingAskRegistry } from '../src/host/ask-tool.ts'
 import { isSubagentCall } from '../src/host/render-tool.ts'
 import { evaluateCalcExpression } from '../src/shared/calc-engine.ts'

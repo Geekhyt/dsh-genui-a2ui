@@ -53,8 +53,11 @@ import {
   setDockCollapsed,
   subscribeDockUi,
 } from '../src/client/persistence.ts'
-import { collectObscuredPointers, readSanitizedDataModels } from '../src/client/SurfaceView.tsx'
-import { StreamingExpressSession } from '../src/client/streaming.ts'
+import {
+  collectObscuredPointers,
+  readSanitizedDataModels,
+} from '../src/client/runtime/SurfaceView.tsx'
+import { StreamingExpressSession } from '../src/client/runtime/streaming.ts'
 import { readArgs, resetRenderArgsWarningForTests } from '../src/host/render-tool.ts'
 import { writePersistedEnabled } from '../src/index.ts'
 

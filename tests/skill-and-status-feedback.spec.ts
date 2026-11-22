@@ -46,7 +46,7 @@ import {
   getCommandNotice,
   resetPersistenceForTests,
 } from '../src/client/persistence.ts'
-import { type ChatTargetSnapshot, isChatTimelineActive } from '../src/client/turn-surfaces.ts'
+import { type ChatTargetSnapshot, isChatTimelineActive } from '../src/client/shell/turn-surfaces.ts'
 import {
   A2UI_SYSTEM_GUIDANCE,
   apply as applyHost,

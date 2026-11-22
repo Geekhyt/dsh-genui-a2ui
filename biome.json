@@ -87,6 +87,52 @@
           }
         }
       }
+    },
+    {
+      "includes": ["src/client/shell/**", "src/client/index.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "react": {
+                    "importNames": ["useEffect", "useLayoutEffect"],
+                    "message": "Shell components must not use useEffect/useLayoutEffect; isolate DOM effects in src/client/dom-hooks.ts."
+                  },
+                  "@a2ui/react": "Cold-boot shell (lib/client.js) must never import @a2ui/react; load runtime lazily via src/client/chunk-loader.ts.",
+                  "echarts": "Cold-boot shell (lib/client.js) must never import echarts; load via client.echarts.js.",
+                  "mermaid": "Cold-boot shell (lib/client.js) must never import mermaid; load via client.mermaid.js.",
+                  "@tanstack/react-table": "Cold-boot shell (lib/client.js) must stay lightweight; keep table runtime in client.runtime.js.",
+                  "react-aria-components": "Cold-boot shell (lib/client.js) must stay lightweight; keep widget runtime in client.runtime.js.",
+                  "zod": "Cold-boot shell (lib/client.js) must never import zod."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/shared/**", "src/client/catalog/*-helpers.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "react": "Pure shared/helper modules must remain framework-free and deterministic (no React imports).",
+                  "react-dom": "Pure shared/helper modules must remain framework-free and deterministic (no ReactDOM imports).",
+                  "echarts": "Pure shared/helper modules must not import echarts directly.",
+                  "mermaid": "Pure shared/helper modules must not import mermaid directly."
+                }
+              }
+            }
+          }
+        }
+      }
     }
   ]
 }

@@ -2,6 +2,28 @@
 
 All notable changes to `dsh-genui-a2ui` are documented in this file.
 
+## [0.4.7] - 2026-11-22
+
+### Added
+- **TLA+ Formal Verification for 4 Concurrent State Machines (`specs/*.tla`, `scripts/verify-tla.mjs`, `docs/adr/ADR-0008-formal-verification-and-invariants.md`, `tests/formal-specs.spec.ts`)**:
+  - Added formal specifications and TLC configurations for `AskLifecycle`, `ChunkAndMermaidCache`, `SurfaceTurnLifecycle`, and `OverlayEscapeStack`, verified exhaustively via TLC (`8,215` distinct states / `43,102` transitions, `0` errors) and exposed via `npm run verify:tla`.
+- **12-Rule AST & CSS Architectural Invariant Gate (`scripts/check-invariants.mjs`, `tests/invariants-lint.spec.ts`)**:
+  - Wired 12 static invariants into `npm run lint` and CI (`css-no-container-self-query`, `css-media-requires-container`, `no-weight-full-width-override`, `shell-runtime-boundary`, `pure-module-isolation`, `no-useeffect-outside-dom-hooks`, `no-direct-localstorage`, `no-direct-window-keydown`, `no-raw-native-date-input`, `no-html-in-echarts-richtext`, `security-no-dangerous-sinks`, and `locale-key-parity`).
+- **5-Chunk Raw + Gzip Bundle Budget Ratchet (`.bundle-budget.json`, `scripts/check-bundle-budget.mjs`, `build/preset.ts`)**:
+  - Enforced both raw and gzip (level 9) size limits across all 5 build outputs (`lib/index.js`, `lib/client.js`, `lib/client.runtime.js`, `lib/client.echarts.js`, `lib/client.mermaid.js`) during `npm run build` and `npm run check:bundle`, with `--ratchet` monotonic tightening.
+- **Deterministic Streaming Replay, Linear Fuzzing, `240px` Regression & Eval KPI Gate (`tests/deterministic-replay-fuzz.spec.ts`, `.eval-baseline.json`, `scripts/eval-llm.mjs`)**:
+  - Added seeded random token-chunk streaming equivalence tests across all exported showcases, deterministic multi-turn `update`/`deleteSurface`/partial-supersede replay, 200+ adversarial linear-time compiler/security fuzz cases, `240px` ultra-narrow ECharts/MetricRing assertions, and `npm run eval:check` threshold gating.
+- **Zero-Dependency Headless Chrome CDP Visual QA & Screenshot Bot (`scripts/visual-qa-bot.mjs`)**:
+  - Added `npm run qa:visual` (and `--screenshots` for `screenshots.json`) using Node 24 native WebSocket + Chrome Headless CDP to run isolated Dark & Light 4-point DOM geometry audits automatically.
+
+### Fixed
+- **Mermaid Unmount Oversized-Cache Leak Caught by TLC (`src/client/chunk-loader.ts`)**:
+  - Extracted shared `trimIdleMermaidCache()` and invoked it on zero-subscriber unmount when `mermaidDiagramCache.size > MAX_MERMAID_CACHE_ENTRIES`, resolving the 8-step `BoundedIdleCache` counterexample found by TLC when `> 64` diagrams mount simultaneously and subsequently unmount.
+
+### Changed
+- **Context-Encoded Shell vs Runtime Directory Split (`src/client/shell/`, `src/client/runtime/`, `biome.json`, `AGENTS.md`, `.github/workflows/ci.yml`, `.github/workflows/release.yml`)**:
+  - Separated cold-boot shell modules into `src/client/shell/` and lazy runtime modules into `src/client/runtime/` with path-scoped Biome `noRestrictedImports` overrides and expanded CI/release verification gates (**33 suites / 182 tests** passing, `lib/client.js = 69.69 kB / 19.62 kB gzip`, `0` Biome/Lint/Comments/TS diagnostics, `check:host-api` green).
+
 ## [0.4.6] - 2026-11-22
 
 ### Fixed

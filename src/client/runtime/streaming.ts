@@ -1,6 +1,9 @@
 import { type AgentToRendererMessage, ExpressParser } from '@a2ui/agent'
-import { dshSchemaCatalog } from '../shared/catalog-schema.ts'
-import { extractUpdateSurfaceIds, preprocessExpressProgram } from '../shared/express-preprocess.ts'
+import { dshSchemaCatalog } from '../../shared/catalog-schema.ts'
+import {
+  extractUpdateSurfaceIds,
+  preprocessExpressProgram,
+} from '../../shared/express-preprocess.ts'
 
 const LEADING_WRAP_RE = /^\s*(?:<a2ui>\s*|```[\w-]*[ \t]*\r?\n)/i
 const TRAILING_WRAP_RE = /(?:\s*<\/a2ui>|\r?\n?[ \t]*```)\s*$/i

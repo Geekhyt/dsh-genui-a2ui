@@ -66,10 +66,10 @@ import {
   saveSurfaceDraft,
   setA2uiEnabled,
 } from '../src/client/persistence.ts'
-import { SurfaceGroupView, SurfaceSessionStore } from '../src/client/SurfaceView.tsx'
-import { A2uiTierControl } from '../src/client/TierControl.tsx'
+import { SurfaceGroupView, SurfaceSessionStore } from '../src/client/runtime/SurfaceView.tsx'
+import { A2uiTierControl } from '../src/client/shell/TierControl.tsx'
 import { subscribeDarkTheme } from '../src/client/theme.ts'
-import type { ChatTargetSnapshot } from '../src/client/turn-surfaces.ts'
+import type { ChatTargetSnapshot } from '../src/client/shell/turn-surfaces.ts'
 import { createGenerator, SurfaceSessions } from '../src/host/generator.ts'
 
 const ROOT_DIR = resolve(import.meta.dirname, '..')

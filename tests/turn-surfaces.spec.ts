@@ -6,7 +6,7 @@ import {
   isTurnClosedForCall,
   parseRenderMeta,
   resolveTurnTailBatch,
-} from '../src/client/turn-surfaces.ts'
+} from '../src/client/shell/turn-surfaces.ts'
 
 describe('turn-surfaces projection', () => {
   it('projects a2ui_render tool/call + tool/result into hidden chat nodes and replays cross-turn updates', () => {

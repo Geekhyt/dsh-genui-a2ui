@@ -56,8 +56,17 @@ jobs:
       - name: Build Host & 4-Chunk Client Bundles
         run: npm run build
 
-      - name: Run Test Suite (including Bundle Size Gate)
+      - name: Verify 5-Chunk Bundle Budget (Raw + Gzip)
+        run: npm run check:bundle
+
+      - name: Verify TLA+ Specifications
+        run: npm run verify:tla
+
+      - name: Run Test Suite (including Bundle, Invariants & Deterministic Replay)
         run: npm test
+
+      - name: Verify Offline Eval KPI Thresholds
+        run: npm run eval:check
 
       - name: Verify npm Tarball Contents
         run: npm pack --dry-run --ignore-scripts

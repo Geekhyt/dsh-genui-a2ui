@@ -2,12 +2,16 @@
 
 These rules apply to all changes in this repository (components, ECharts kinds, styles, host compiler, and tests).
 
-## 1. Architecture & Bundle Hard Gates
+## 1. Architecture, Path Boundaries & Bundle Hard Gates
 
-- **Zero `useEffect` / `useLayoutEffect` in `.tsx` components**: Derive state in render, subscribe with `useSyncExternalStore`, or isolate imperative DOM / ECharts / Mermaid bindings inside `src/client/dom-hooks.ts` (enforced by Biome & `tests/react-best-practices.spec.ts`).
-- **Four-chunk lazy loading budget**:
-  - `lib/client.js` cold-boot shell must stay `< 100 kB` (target `~60 kB`) and must never pull in `@a2ui/react`, ECharts, or Mermaid.
-  - `lib/client.runtime.js` must not import ECharts or Mermaid directly; load them dynamically via `src/client/chunk-loader.ts`.
+- **Zero `useEffect` / `useLayoutEffect` in `.tsx` components**: Derive state in render, subscribe with `useSyncExternalStore`, or isolate imperative DOM / ECharts / Mermaid bindings inside `src/client/dom-hooks.ts` (enforced by Biome, `scripts/check-invariants.mjs`, and `tests/react-best-practices.spec.ts`).
+- **Context-encoded directory boundaries** (enforced by `biome.json` overrides & `scripts/check-invariants.mjs`):
+  - `src/client/shell/` + `src/client/index.ts` = cold-boot shell (`lib/client.js`). Must NEVER value-import `src/client/runtime/`, `src/client/catalog/`, `src/client/chunks/`, `@a2ui/*`, `echarts`, `mermaid`, `@tanstack/react-table`, `react-aria-components`, or `zod`.
+  - `src/client/runtime/` = lazy runtime (`lib/client.runtime.js`). Must not import ECharts or Mermaid directly; load them dynamically via `src/client/chunk-loader.ts`.
+  - `src/shared/` (except `locale.ts`) & `src/client/catalog/*-helpers.ts` = pure deterministic modules. Must NEVER import React/ECharts/Mermaid or read `window`/`document`/`localStorage`.
+- **5-chunk raw + gzip bundle budget ratchet**: `.bundle-budget.json` gates all 5 build outputs (`lib/index.js`, `lib/client.js`, `lib/client.runtime.js`, `lib/client.echarts.js`, `lib/client.mermaid.js`) on both raw and gzip bytes during `npm run build` and `npm run check:bundle`. Cold-boot `lib/client.js` must stay `< 100 kB` raw (ratcheted tightly below 85 kB raw / 24 kB gzip).
+- **Issue → Lint Rule flywheel**: Whenever fixing a recurring class of bug (CSS layout, security sink, storage/escape bypass, locale drift, ECharts richText HTML), add a static check to `scripts/check-invariants.mjs` (`npm run lint`) alongside regression tests.
+- **TLA+ formal verification for concurrent state machines**: Changes to `src/host/ask-tool.ts`, `src/client/chunk-loader.ts`, `src/client/shell/turn-surfaces.ts`, `src/client/runtime/SurfaceView.tsx`, `src/client/runtime/streaming.ts`, or `src/client/dom-hooks.ts` must keep `specs/*.tla` in sync and pass `npm run verify:tla` (load `.agents/skills/formal-verify/SKILL.md`).
 - **Host-native Light DOM only**: No Shadow DOM, no `iframe`, no undocumented Electron IPC or private DOM selectors. Use `--dsw-*` tokens and official DSH slots/primitives (`npm run check:host-api` must pass).
 
 ## 2. 306px-First Component Layout Contract
@@ -44,9 +48,9 @@ DeepSeek Harness desktop chat column is ~`691px` wide; two-column card grids giv
 
 ## 5. Mandatory Verification Before Shipping
 
-1. **Automated unit & build gates** (all must pass with 0 errors/warnings):
+1. **Automated unit, invariant, formal & build gates** (all must pass with 0 errors/warnings):
    ```bash
-   npm run format && npm run lint && npm run typecheck && npm run build && npm test && npm run check:host-api
+   npm run format && npm run lint && npm run typecheck && npm run build && npm run check:bundle && npm test && npm run eval:check && npm run check:host-api && npm run verify:tla
    ```
-2. **Add narrow-width regression tests**: Any new chart kind or geometric helper must add `containerWidth = 276` / narrow-size assertions in `tests/tier1-echarts.spec.ts` or `tests/v3-components.spec.ts`.
-3. **Live DSH Visual QA (for any UI / CSS / chart change)**: Verify in real DeepSeek Harness Web (`node scripts/dev-env.mjs serve`) across **Dark and Light modes** at `1360×900` inside two-column (`306px`) compositions. Load the `dsh-a2ui-visual-qa` skill for the exact runbook and DOM geometry audit checklist.
+2. **Add narrow-width & deterministic replay regression tests**: Any new chart kind or geometric helper must add `containerWidth = 276` / `240` assertions in `tests/tier1-echarts.spec.ts`, `tests/v3-components.spec.ts`, or `tests/deterministic-replay-fuzz.spec.ts`.
+3. **Live DSH Visual QA (for any UI / CSS / chart change)**: Run `npm run qa:visual` (headless Chrome CDP geometry audit across Dark & Light modes at `1360×900`, or `npm run qa:visual -- --screenshots` to refresh `screenshots.json`) and visually inspect key screenshots in real DeepSeek Harness Web (`node scripts/dev-env.mjs serve`). Load the `dsh-a2ui-visual-qa` skill for the exact runbook and DOM geometry audit checklist.

@@ -66,8 +66,8 @@ import {
   setA2uiEnabled,
   setDockCollapsed,
 } from '../src/client/persistence.ts'
-import { readSanitizedDataModels, SurfaceSessionStore } from '../src/client/SurfaceView.tsx'
-import { StreamingExpressSession } from '../src/client/streaming.ts'
+import { readSanitizedDataModels, SurfaceSessionStore } from '../src/client/runtime/SurfaceView.tsx'
+import { StreamingExpressSession } from '../src/client/runtime/streaming.ts'
 import { PendingAskRegistry, sanitizePayloadObject } from '../src/host/ask-tool.ts'
 import { createGenerator, SurfaceSessions } from '../src/host/generator.ts'
 import { apply } from '../src/index.ts'

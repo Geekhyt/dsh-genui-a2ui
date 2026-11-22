@@ -5,9 +5,9 @@ import {
   a2uiActionUserTextRule,
   matchA2uiActionUserText,
   type ParsedA2uiActionData,
-} from './action-protocol.ts'
-import { useShellMessages } from './i18n.ts'
-import { DshCheckIcon, DshChevronDownIcon, DshChevronUpIcon } from './ui/primitives.tsx'
+} from '../action-protocol.ts'
+import { useShellMessages } from '../i18n.ts'
+import { DshCheckIcon, DshChevronDownIcon, DshChevronUpIcon } from '../ui/primitives.tsx'
 
 export {
   A2UI_ACTION_NODE_ID,

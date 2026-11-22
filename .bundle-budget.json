@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "gzipLevel": 9,
+  "chunks": {
+    "lib/index.js": {
+      "maxRawBytes": 820000,
+      "maxGzipBytes": 230000
+    },
+    "lib/client.js": {
+      "maxRawBytes": 85000,
+      "maxGzipBytes": 24000
+    },
+    "lib/client.runtime.js": {
+      "maxRawBytes": 1480000,
+      "maxGzipBytes": 395000
+    },
+    "lib/client.echarts.js": {
+      "maxRawBytes": 940000,
+      "maxGzipBytes": 315000
+    },
+    "lib/client.mermaid.js": {
+      "maxRawBytes": 3700000,
+      "maxGzipBytes": 1000000
+    }
+  }
+}

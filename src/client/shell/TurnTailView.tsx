@@ -1,8 +1,8 @@
 import { memo, useCallback, useMemo, useSyncExternalStore } from 'react'
-import type { WorkspaceFileOpener } from './file-opener.tsx'
-import { useShellMessages } from './i18n.ts'
+import type { WorkspaceFileOpener } from '../file-opener.tsx'
+import { useShellMessages } from '../i18n.ts'
 import { LazySurfaceGroupView } from './LazySurfaceGroupView.tsx'
-import type { SurfaceActionCallback } from './SurfaceView.tsx'
+import type { SurfaceActionCallback } from '../runtime/SurfaceView.tsx'
 import type { ChatExternalStore } from './ToolView.tsx'
 import { resolveTurnTailBatch } from './turn-surfaces.ts'
 

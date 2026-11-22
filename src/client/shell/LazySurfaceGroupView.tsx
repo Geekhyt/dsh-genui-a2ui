@@ -7,11 +7,11 @@ import {
   type RuntimeChunkSnapshot,
   retryRuntimeChunk,
   subscribeRuntimeChunk,
-} from './chunk-loader.ts'
-import { useShellMessages } from './i18n.ts'
-import css from './SurfaceView.module.css'
-import type { SurfaceGroupViewProps } from './SurfaceView.tsx'
-import type { StreamingCompileSnapshot, StreamingExpressSession } from './streaming.ts'
+} from '../chunk-loader.ts'
+import { useShellMessages } from '../i18n.ts'
+import css from '../SurfaceView.module.css'
+import type { SurfaceGroupViewProps } from '../runtime/SurfaceView.tsx'
+import type { StreamingCompileSnapshot, StreamingExpressSession } from '../runtime/streaming.ts'
 
 const SKELETON_BLOCK = <div className={css.skeletonBlock} />
 

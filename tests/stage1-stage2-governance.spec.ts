@@ -13,7 +13,7 @@ import {
   computeLt,
   DSH_FUNCTIONS,
 } from '../src/client/catalog/functions.ts'
-import { StreamingExpressSession } from '../src/client/streaming.ts'
+import { StreamingExpressSession } from '../src/client/runtime/streaming.ts'
 import {
   A2UI_SURFACE_NODE_KIND,
   type ChatTargetSnapshot,
@@ -21,7 +21,7 @@ import {
   resolveDockBatch,
   resolveLatestA2uiCommandState,
   resolveTurnTailBatch,
-} from '../src/client/turn-surfaces.ts'
+} from '../src/client/shell/turn-surfaces.ts'
 import { createGenerator, SurfaceSessions } from '../src/host/generator.ts'
 import { apply, GOLDEN_CALCULATOR_EXAMPLE } from '../src/index.ts'
 import { validateCalcExpression } from '../src/shared/calc-engine.ts'

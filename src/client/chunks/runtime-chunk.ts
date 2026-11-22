@@ -64,5 +64,5 @@ export {
   type SurfaceActionCallback,
   SurfaceGroupView,
   type SurfaceGroupViewProps,
-} from '../SurfaceView.tsx'
-export { type StreamingCompileSnapshot, StreamingExpressSession } from '../streaming.ts'
+} from '../runtime/SurfaceView.tsx'
+export { type StreamingCompileSnapshot, StreamingExpressSession } from '../runtime/streaming.ts'

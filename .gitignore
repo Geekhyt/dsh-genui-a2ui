@@ -1,6 +1,7 @@
 node_modules/
 lib/
 .dsh-dev/
+.tla-cache/
 .agents/
 *.log
 .DS_Store

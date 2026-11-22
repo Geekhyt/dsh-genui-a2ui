@@ -1,5 +1,5 @@
 import { memo, useCallback, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import { useShellMessages } from './i18n.ts'
+import { useShellMessages } from '../i18n.ts'
 import {
   dismissCommandNotice,
   getA2uiEnabled,
@@ -9,11 +9,11 @@ import {
   setA2uiEnabled,
   subscribeA2uiEnabled,
   subscribeCommandNotice,
-} from './persistence.ts'
+} from '../persistence.ts'
 import css from './TierControl.module.css'
 import type { ChatExternalStore } from './ToolView.tsx'
 import { isChatTimelineActive, resolveLatestA2uiCommandState } from './turn-surfaces.ts'
-import { DshAppsIcon, DshToast, DshTooltip, DshWarningIcon } from './ui/primitives.tsx'
+import { DshAppsIcon, DshToast, DshTooltip, DshWarningIcon } from '../ui/primitives.tsx'
 
 export interface A2uiTierControlProps {
   readonly sessionId?: string | undefined
