@@ -141,6 +141,31 @@ export function useEscapeKey(active: boolean, onEscape: () => void): void {
   }, [active])
 }
 
+const FOCUSABLE_SELECTOR =
+  'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])'
+
+function isVisibleFocusable(el: HTMLElement): boolean {
+  if (el.hasAttribute('hidden') || el.getAttribute('aria-hidden') === 'true') return false
+  if (typeof window !== 'undefined' && typeof window.getComputedStyle === 'function') {
+    const cs = window.getComputedStyle(el)
+    if (cs.display === 'none' || cs.visibility === 'hidden') return false
+  }
+  return true
+}
+
+function focusTriggerSafely(trigger: HTMLElement): void {
+  if (isTriggerClippedOut(trigger)) return
+  const candidate =
+    trigger.tabIndex >= 0 || trigger.matches(FOCUSABLE_SELECTOR)
+      ? trigger
+      : trigger.querySelector<HTMLElement>(FOCUSABLE_SELECTOR)
+  try {
+    candidate?.focus({ preventScroll: true })
+  } catch {
+    candidate?.focus?.()
+  }
+}
+
 export function usePortalPopover(params: {
   readonly open: boolean
   readonly triggerRef: RefObject<HTMLElement | null>
@@ -158,13 +183,31 @@ export function usePortalPopover(params: {
   useEffect(() => {
     if (open) {
       wasOpenRef.current = true
+      if (typeof document !== 'undefined') {
+        const pop = popoverRef.current
+        if (pop && !pop.contains(document.activeElement)) {
+          const searchField = pop.querySelector<HTMLElement>(
+            'input:not(:disabled), textarea:not(:disabled)',
+          )
+          const firstOption =
+            searchField ??
+            pop.querySelector<HTMLElement>(
+              '[aria-selected="true"]:not(:disabled), [role="option"]:not(:disabled), [role="menuitem"]:not(:disabled), [role="treeitem"]:not(:disabled)',
+            )
+          try {
+            firstOption?.focus({ preventScroll: true })
+          } catch {
+            firstOption?.focus?.()
+          }
+        }
+      }
     } else if (wasOpenRef.current) {
       wasOpenRef.current = false
       const trigger = triggerRef.current
       if (trigger && typeof document !== 'undefined') {
         const active = document.activeElement
         if (active === null || active === document.body || popoverRef.current?.contains(active)) {
-          trigger.focus?.()
+          focusTriggerSafely(trigger)
         }
       }
     }
@@ -220,11 +263,6 @@ export function useDialogFocus(open: boolean, dialogRef: RefObject<HTMLElement |
   useEffect(() => {
     if (typeof document === 'undefined') return
     if (!open) {
-      const prev = prevFocusedRef.current
-      prevFocusedRef.current = null
-      if (prev?.isConnected) {
-        prev.focus?.()
-      }
       return
     }
     const active = document.activeElement
@@ -232,28 +270,34 @@ export function useDialogFocus(open: boolean, dialogRef: RefObject<HTMLElement |
     dialogFocusStack.push(dialogRef)
     const dialog = dialogRef.current
     if (dialog) {
-      const firstFocusable = dialog.querySelector<HTMLElement>(
-        'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
-      )
-      ;(firstFocusable ?? dialog).focus?.()
+      const focusables = Array.from(
+        dialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
+      ).filter(isVisibleFocusable)
+      ;(focusables[0] ?? dialog).focus?.()
     }
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Tab') return
       if (dialogFocusStack[dialogFocusStack.length - 1] !== dialogRef) return
       const root = dialogRef.current
       if (!root) return
-      const focusables = Array.from(
-        root.querySelectorAll<HTMLElement>(
-          'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
-        ),
+      const focusables = Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
+        isVisibleFocusable,
       )
-      if (focusables.length === 0) return
+      if (focusables.length === 0) {
+        e.preventDefault()
+        root.focus?.()
+        return
+      }
       const first = focusables[0]!
       const last = focusables[focusables.length - 1]!
-      if (e.shiftKey && document.activeElement === first) {
+      const cur = document.activeElement
+      if (!cur || cur === root || !root.contains(cur)) {
+        e.preventDefault()
+        ;(e.shiftKey ? last : first).focus()
+      } else if (e.shiftKey && cur === first) {
         e.preventDefault()
         last.focus()
-      } else if (!e.shiftKey && document.activeElement === last) {
+      } else if (!e.shiftKey && cur === last) {
         e.preventDefault()
         first.focus()
       }
@@ -263,6 +307,18 @@ export function useDialogFocus(open: boolean, dialogRef: RefObject<HTMLElement |
       const idx = dialogFocusStack.lastIndexOf(dialogRef)
       if (idx >= 0) dialogFocusStack.splice(idx, 1)
       document.removeEventListener('keydown', onKeyDown)
+      const prev = prevFocusedRef.current
+      prevFocusedRef.current = null
+      if (prev?.isConnected) {
+        try {
+          prev.focus({ preventScroll: true })
+        } catch {
+          prev.focus?.()
+        }
+      } else {
+        const topDialog = dialogFocusStack[dialogFocusStack.length - 1]?.current
+        topDialog?.focus?.()
+      }
     }
   }, [open, dialogRef])
 }
@@ -271,6 +327,7 @@ export interface EChartsClickParams {
   readonly name?: unknown
   readonly seriesName?: unknown
   readonly value?: unknown
+  readonly data?: unknown
   readonly dataIndex?: unknown
   readonly dataType?: unknown
 }

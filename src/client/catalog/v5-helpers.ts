@@ -1,5 +1,9 @@
 import { formatLocalDateValue, parseLocalDateAnchor } from '../../shared/temporal.ts'
-import { type NormalizedSelectOption, normalizeSelectOptions } from './v3-helpers.ts'
+import {
+  makeUniqueIdFactory,
+  type NormalizedSelectOption,
+  normalizeSelectOptions,
+} from './v3-helpers.ts'
 
 export function decimalPlacesOf(step: number): number {
   if (!Number.isFinite(step)) return 0
@@ -65,10 +69,15 @@ export function normalizeMultiSelectMergedOptions(
 
 export function computeDateRangeSpanDays(startStr: string, endStr: string): number | null {
   if (!startStr || !endStr) return null
-  const s = Date.parse(startStr.slice(0, 10))
-  const e = Date.parse(endStr.slice(0, 10))
-  if (Number.isNaN(s) || Number.isNaN(e) || e < s) return null
-  const diffDays = Math.round((e - s) / 86_400_000) + 1
+  const sDate = Date.parse(startStr.slice(0, 10))
+  const eDate = Date.parse(endStr.slice(0, 10))
+  if (Number.isNaN(sDate) || Number.isNaN(eDate) || eDate < sDate) return null
+  if (startStr.length > 10 && endStr.length > 10) {
+    const sFull = parseLocalDateAnchor(startStr).getTime()
+    const eFull = parseLocalDateAnchor(endStr).getTime()
+    if (!Number.isNaN(sFull) && !Number.isNaN(eFull) && eFull < sFull) return null
+  }
+  const diffDays = Math.round((eDate - sDate) / 86_400_000) + 1
   return Math.max(1, diffDays)
 }
 
@@ -90,9 +99,9 @@ export function buildDatePresetRange(
     endObj.getFullYear(),
     endObj.getMonth(),
     endObj.getDate() - Math.max(0, days - 1),
-    endObj.getHours(),
-    endObj.getMinutes(),
-    endObj.getSeconds(),
+    enableTime ? 0 : endObj.getHours(),
+    enableTime ? 0 : endObj.getMinutes(),
+    0,
   )
   return {
     start: formatLocalDateValue(startObj, enableTime),
@@ -131,6 +140,7 @@ export function normalizeHierarchyTree(
   rawNodes: unknown,
   parentPath = '',
   prefixId = 'n',
+  nextId: (raw: string) => string = makeUniqueIdFactory(),
 ): readonly NormalizedHierarchyNode[] {
   if (!Array.isArray(rawNodes)) return []
   const out: NormalizedHierarchyNode[] = []
@@ -138,7 +148,7 @@ export function normalizeHierarchyTree(
     if (typeof item === 'string') {
       const bc = parentPath ? `${parentPath} / ${item}` : item
       out.push({
-        id: `${prefixId}_${idx}`,
+        id: nextId(`${prefixId}_${idx}`),
         value: item,
         label: item,
         status: 'neutral',
@@ -156,7 +166,7 @@ export function normalizeHierarchyTree(
       const value = hasExplicitValue
         ? String(rec.value)
         : String(rec.id ?? rec.key ?? (parentPath ? `${parentPath}/${label}` : label))
-      const id = String(rec.id ?? `${prefixId}_${idx}`)
+      const id = nextId(String(rec.id ?? `${prefixId}_${idx}`))
       const breadcrumb = parentPath ? `${parentPath} / ${label}` : label
       const sharePct =
         typeof rec.sharePct === 'number' && Number.isFinite(rec.sharePct)
@@ -169,7 +179,7 @@ export function normalizeHierarchyTree(
         typeof rawOffset === 'number' && Number.isFinite(rawOffset)
           ? Math.max(0, Math.min(97, rawOffset))
           : undefined
-      const children = normalizeHierarchyTree(rec.children, breadcrumb, `${id}_c`)
+      const children = normalizeHierarchyTree(rec.children, breadcrumb, `${id}_c`, nextId)
       const badgeStr =
         rec.badge !== undefined && rec.badge !== null && String(rec.badge) !== ''
           ? String(rec.badge)

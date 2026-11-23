@@ -104,6 +104,11 @@ export const DshRangeSliderImpl = defineComponent<{
   const fillLeft = `calc(${state.startPct}% + ${(9 - 0.18 * state.startPct).toFixed(2)}px)`
   const fillRight = `calc(${100 - state.endPct}% + ${(9 - 0.18 * (100 - state.endPct)).toFixed(2)}px)`
 
+  const rawStartNum = typeof startVal === 'number' ? startVal : Number(startVal)
+  const rawEndNum = typeof endVal === 'number' ? endVal : Number(endVal)
+  const wasInverted =
+    Number.isFinite(rawStartNum) && Number.isFinite(rawEndNum) && rawStartNum > rawEndNum
+
   return (
     <div
       className={`${css.field} ${css.rangeSliderField}`}
@@ -131,6 +136,7 @@ export const DshRangeSliderImpl = defineComponent<{
           step={state.step}
           value={state.start}
           disabled={readOnly}
+          aria-invalid={showError || undefined}
           aria-label={label ? `${label} ${msg.rangeSliderStartAria}` : msg.rangeSliderStartAria}
           style={{ zIndex: state.startPct > 85 ? 4 : 2 }}
           onChange={(e) => {
@@ -139,6 +145,7 @@ export const DshRangeSliderImpl = defineComponent<{
             const next = Number(e.target.value)
             if (Number.isFinite(next)) {
               commitStart(Math.min(next, state.end))
+              if (wasInverted) commitEnd(state.end)
             }
           }}
         />
@@ -150,6 +157,7 @@ export const DshRangeSliderImpl = defineComponent<{
           step={state.step}
           value={state.end}
           disabled={readOnly}
+          aria-invalid={showError || undefined}
           aria-label={label ? `${label} ${msg.rangeSliderEndAria}` : msg.rangeSliderEndAria}
           style={{ zIndex: 3 }}
           onChange={(e) => {
@@ -158,6 +166,7 @@ export const DshRangeSliderImpl = defineComponent<{
             const next = Number(e.target.value)
             if (Number.isFinite(next)) {
               commitEnd(Math.max(next, state.start))
+              if (wasInverted) commitStart(state.start)
             }
           }}
         />
@@ -200,15 +209,28 @@ export const DshChecklistImpl = defineComponent<{
     [props.value],
   )
   const seedCheckedIds = externalCheckedIds ?? defaultCheckedIds
+  const itemIds = useMemo(() => items.map((it) => it.id), [items])
   const [localChecked, setLocalChecked] = useState<readonly string[]>(seedCheckedIds)
   const [prevSeedChecked, setPrevSeedChecked] = useState<readonly string[]>(seedCheckedIds)
-  if (
-    !hasWritableValue &&
-    (externalCheckedIds !== null || !touched) &&
-    !areExternalValuesEqual(prevSeedChecked, seedCheckedIds)
-  ) {
-    setPrevSeedChecked(seedCheckedIds)
-    setLocalChecked(seedCheckedIds)
+  const [prevItemIds, setPrevItemIds] = useState<readonly string[]>(itemIds)
+  if (!hasWritableValue) {
+    if (
+      (externalCheckedIds !== null || !touched) &&
+      !areExternalValuesEqual(prevSeedChecked, seedCheckedIds)
+    ) {
+      setPrevSeedChecked(seedCheckedIds)
+      setPrevItemIds(itemIds)
+      setLocalChecked(seedCheckedIds)
+    } else if (externalCheckedIds === null && !areExternalValuesEqual(prevItemIds, itemIds)) {
+      const validSet = new Set(itemIds)
+      const prevSet = new Set(prevItemIds)
+      const kept = localChecked.filter((id) => validSet.has(id))
+      const keptSet = new Set(kept)
+      const addedDefaults = defaultCheckedIds.filter((id) => !prevSet.has(id) && !keptSet.has(id))
+      setPrevItemIds(itemIds)
+      setPrevSeedChecked(seedCheckedIds)
+      setLocalChecked([...kept, ...addedDefaults])
+    }
   }
 
   const activeCheckedList = hasWritableValue
@@ -333,6 +355,7 @@ export const DshChecklistImpl = defineComponent<{
               variant="primary"
               size="sm"
               disabled={readOnly || blockedByRequired}
+              aria-disabled={props.isValid === false || undefined}
               onClick={handleAction}
             >
               {props.actionLabel ? String(props.actionLabel) : msg.defaultActionCta}
@@ -421,18 +444,21 @@ export const DshSortableListImpl = defineComponent<{
                 draggable={!readOnly}
                 data-dragging={dragIdx === idx ? 'true' : 'false'}
                 data-over={overIdx === idx && dragIdx !== idx ? 'true' : 'false'}
-                onDragStart={() => {
-                  if (!readOnly) setDragIdx(idx)
+                onDragStart={(e) => {
+                  if (readOnly) return
+                  e.dataTransfer?.setData('text/plain', String(idx))
+                  if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'
+                  setDragIdx(idx)
                 }}
                 onDragOver={(e) => {
-                  if (readOnly) return
+                  if (readOnly || dragIdx === null) return
                   e.preventDefault()
                   if (overIdx !== idx) setOverIdx(idx)
                 }}
                 onDrop={(e) => {
-                  if (readOnly) return
+                  if (readOnly || dragIdx === null) return
                   e.preventDefault()
-                  if (dragIdx !== null && dragIdx !== idx) {
+                  if (dragIdx !== idx) {
                     commitMove(dragIdx, idx)
                   }
                   setDragIdx(null)
@@ -513,24 +539,49 @@ export const DshKvEditorImpl = defineComponent<{
     readonly rows: readonly KvDraftRow[]
     readonly nextId: number
     readonly lastExtSnap: string
-    readonly lastCommitSnap: string | null
+    readonly pendingSnaps: readonly string[]
   }>(() => ({
     rows: propRows.map((r, idx) => ({ ...r, id: idx + 1 })),
     nextId: propRows.length + 1,
     lastExtSnap: extSnap,
-    lastCommitSnap: null,
+    pendingSnaps: [],
   }))
   if (draftState.lastExtSnap !== extSnap) {
-    if (draftState.lastCommitSnap !== null && extSnap === draftState.lastCommitSnap) {
-      setDraftState((prev) => ({ ...prev, lastExtSnap: extSnap, lastCommitSnap: null }))
+    const matchIdx = draftState.pendingSnaps.indexOf(extSnap)
+    if (matchIdx >= 0) {
+      setDraftState((prev) => ({
+        ...prev,
+        lastExtSnap: extSnap,
+        pendingSnaps: prev.pendingSnaps.slice(matchIdx + 1),
+      }))
     } else {
       let idCursor = draftState.nextId
-      const synced = propRows.map((r) => ({ ...r, id: idCursor++ }))
+      const usedPrevIds = new Set<number>()
+      const synced = propRows.map((r, idx) => {
+        const prevAtIdx = draftState.rows[idx]
+        if (prevAtIdx && !usedPrevIds.has(prevAtIdx.id) && prevAtIdx.key === r.key) {
+          usedPrevIds.add(prevAtIdx.id)
+          return { ...r, id: prevAtIdx.id }
+        }
+        const prevByKey =
+          r.key !== ''
+            ? draftState.rows.find((p) => p.key === r.key && !usedPrevIds.has(p.id))
+            : undefined
+        if (prevByKey) {
+          usedPrevIds.add(prevByKey.id)
+          return { ...r, id: prevByKey.id }
+        }
+        if (prevAtIdx && !usedPrevIds.has(prevAtIdx.id)) {
+          usedPrevIds.add(prevAtIdx.id)
+          return { ...r, id: prevAtIdx.id }
+        }
+        return { ...r, id: idCursor++ }
+      })
       setDraftState({
         rows: synced,
         nextId: idCursor,
         lastExtSnap: extSnap,
-        lastCommitSnap: null,
+        pendingSnaps: [],
       })
     }
   }
@@ -577,13 +628,23 @@ export const DshKvEditorImpl = defineComponent<{
         })
       }
       const snap = serializeKvSnapshot(obj)
-      setDraftState((prev) => ({ ...prev, rows: normalized, nextId, lastCommitSnap: snap }))
+      setDraftState((prev) => ({
+        ...prev,
+        rows: normalized,
+        nextId,
+        pendingSnaps: [...prev.pendingSnaps.slice(-15), snap],
+      }))
       props.setItems?.(obj)
       return
     }
     const arr = normalized.map((r) => ({ key: r.key, value: r.value }))
     const snap = serializeKvSnapshot(arr)
-    setDraftState((prev) => ({ ...prev, rows: normalized, nextId, lastCommitSnap: snap }))
+    setDraftState((prev) => ({
+      ...prev,
+      rows: normalized,
+      nextId,
+      pendingSnaps: [...prev.pendingSnaps.slice(-15), snap],
+    }))
     props.setItems?.(arr)
   }
 
@@ -648,6 +709,7 @@ export const DshKvEditorImpl = defineComponent<{
                   className={css.kvEditorInput}
                   value={row.key}
                   disabled={readOnly}
+                  aria-invalid={showError || undefined}
                   placeholder={keyPlaceholder}
                   aria-label={`${keyLabel} #${idx + 1}`}
                   onChange={(e) => {
@@ -663,6 +725,7 @@ export const DshKvEditorImpl = defineComponent<{
                   className={css.kvEditorInput}
                   value={row.value}
                   disabled={readOnly}
+                  aria-invalid={showError || undefined}
                   placeholder={valuePlaceholder}
                   aria-label={`${valueLabel} #${idx + 1}`}
                   onChange={(e) => {
@@ -742,9 +805,9 @@ export const DshRatingImpl = defineComponent<{
     typeof props.max === 'number' && Number.isFinite(props.max)
       ? Math.max(3, Math.min(10, Math.trunc(props.max)))
       : 5
-  const allowHalf = Boolean(props.allowHalf)
-  const score = clampRatingScore(rawVal, max, allowHalf)
   const variant = props.variant === 'scale' ? 'scale' : 'star'
+  const allowHalf = variant === 'star' && Boolean(props.allowHalf)
+  const score = clampRatingScore(rawVal, max, allowHalf)
   const labels = useMemo(() => normalizeRatingLabels(props.labels), [props.labels])
   const label = props.label !== undefined && props.label !== null ? String(props.label) : ''
   const showError = !readOnly && (touched || submitAttempted) && props.isValid === false
@@ -798,13 +861,14 @@ export const DshRatingImpl = defineComponent<{
             const halfVal = idx + 0.5
             const fill: 'full' | 'half' | 'empty' =
               score >= fullVal ? 'full' : allowHalf && score >= halfVal ? 'half' : 'empty'
+            const isHalfChecked = allowHalf && score === halfVal
             return (
               <button
                 key={fullVal}
                 type="button"
                 role="radio"
-                aria-checked={score === fullVal || (allowHalf && score === halfVal)}
-                aria-label={msg.ratingScoreOf(fullVal, max)}
+                aria-checked={score === fullVal || isHalfChecked}
+                aria-label={msg.ratingScoreOf(isHalfChecked ? halfVal : fullVal, max)}
                 disabled={readOnly}
                 className={css.ratingStarBtn}
                 data-filled={fill !== 'empty' ? 'true' : 'false'}
@@ -842,6 +906,7 @@ export const DshImageCompareImpl = defineComponent<{
   const initialPos = clampImageComparePosition(props.initialPosition)
   const [prevInit, setPrevInit] = useState(initialPos)
   const [pos, setPos] = useState(initialPos)
+  const [brokenSrcs, setBrokenSrcs] = useState<ReadonlySet<string>>(() => new Set())
   if (prevInit !== initialPos) {
     setPrevInit(initialPos)
     setPos(initialPos)
@@ -850,6 +915,16 @@ export const DshImageCompareImpl = defineComponent<{
   if (!isSafeImageUrl(props.beforeUrl) || !isSafeImageUrl(props.afterUrl)) return null
   const beforeSrc = String(props.beforeUrl)
   const afterSrc = String(props.afterUrl)
+  const markBroken = (src: string) => {
+    setBrokenSrcs((prev) => {
+      if (prev.has(src)) return prev
+      const next = new Set(prev)
+      next.add(src)
+      return next
+    })
+  }
+  const beforeFailed = brokenSrcs.has(beforeSrc)
+  const afterFailed = brokenSrcs.has(afterSrc)
   const beforeLabel = props.beforeLabel ? String(props.beforeLabel) : msg.imageCompareDefaultBefore
   const afterLabel = props.afterLabel ? String(props.afterLabel) : msg.imageCompareDefaultAfter
   const title = props.title !== undefined && props.title !== null ? String(props.title) : ''
@@ -871,21 +946,35 @@ export const DshImageCompareImpl = defineComponent<{
         </div>
       ) : null}
       <div className={css.imageCompareStage} style={{ minHeight: height }}>
-        <img
-          src={afterSrc}
-          alt={afterLabel}
-          className={css.imageCompareImg}
-          loading="lazy"
-          draggable={false}
-        />
-        <div className={css.imageCompareOverlay} style={{ clipPath: `inset(0 ${100 - pos}% 0 0)` }}>
+        {afterFailed ? (
+          <div className={css.emptyCell} style={{ minHeight: height }}>
+            {afterLabel}
+          </div>
+        ) : (
           <img
-            src={beforeSrc}
-            alt={beforeLabel}
+            src={afterSrc}
+            alt={afterLabel}
             className={css.imageCompareImg}
             loading="lazy"
             draggable={false}
+            onError={() => markBroken(afterSrc)}
           />
+        )}
+        <div className={css.imageCompareOverlay} style={{ clipPath: `inset(0 ${100 - pos}% 0 0)` }}>
+          {beforeFailed ? (
+            <div className={css.emptyCell} style={{ minHeight: height }}>
+              {beforeLabel}
+            </div>
+          ) : (
+            <img
+              src={beforeSrc}
+              alt={beforeLabel}
+              className={css.imageCompareImg}
+              loading="lazy"
+              draggable={false}
+              onError={() => markBroken(beforeSrc)}
+            />
+          )}
         </div>
         <span className={`${css.imageCompareBadge} ${css.imageCompareBadgeLeft}`}>
           {beforeLabel}
@@ -990,17 +1079,28 @@ export const DshAnnotationTextImpl = defineComponent<{
                 }
                 const ann = seg.annotation
                 const markEl = clickable ? (
-                  <button
-                    type="button"
+                  <mark
+                    role="button"
+                    tabIndex={0}
                     className={`${css.annotationMark} ${css.annotationMarkBtn}`}
                     data-tone={ann.tone}
                     onClick={() => triggerSpan(ann)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        triggerSpan(ann)
+                      }
+                    }}
                   >
                     <span>{ann.text}</span>
                     {ann.label ? <span className={css.annotationMarkTag}>{ann.label}</span> : null}
-                  </button>
+                  </mark>
                 ) : (
-                  <mark className={css.annotationMark} data-tone={ann.tone}>
+                  <mark
+                    className={css.annotationMark}
+                    data-tone={ann.tone}
+                    tabIndex={ann.note || ann.sourceId ? 0 : undefined}
+                  >
                     <span>{ann.text}</span>
                     {ann.label ? <span className={css.annotationMarkTag}>{ann.label}</span> : null}
                   </mark>

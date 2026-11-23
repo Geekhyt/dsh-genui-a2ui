@@ -1,4 +1,5 @@
 import { isSecretKey, safeStringifyJson } from '../../shared/constants.ts'
+import { makeUniqueIdFactory } from './v3-helpers.ts'
 
 export interface ClampedRangeState {
   readonly min: number
@@ -79,13 +80,12 @@ export interface NormalizedChecklistItem {
 export function normalizeChecklistItems(raw: unknown): readonly NormalizedChecklistItem[] {
   if (!Array.isArray(raw)) return []
   const out: NormalizedChecklistItem[] = []
-  const seen = new Set<string>()
+  const nextId = makeUniqueIdFactory()
   raw.forEach((entry, idx) => {
     if (typeof entry === 'string') {
       const label = entry.trim()
       if (!label) return
-      const id = `chk_${idx}`
-      seen.add(id)
+      const id = nextId(`chk_${idx}`)
       out.push({
         id,
         label,
@@ -99,9 +99,8 @@ export function normalizeChecklistItems(raw: unknown): readonly NormalizedCheckl
     const rec = entry as Record<string, unknown>
     const label = String(rec.label ?? rec.title ?? rec.text ?? '').trim()
     if (!label) return
-    let id = String(rec.id ?? rec.key ?? `chk_${idx}`).trim() || `chk_${idx}`
-    if (seen.has(id)) id = `${id}_${idx}`
-    seen.add(id)
+    const rawId = String(rec.id ?? rec.key ?? `chk_${idx}`).trim() || `chk_${idx}`
+    const id = nextId(rawId)
     const desc =
       rec.description !== undefined &&
       rec.description !== null &&

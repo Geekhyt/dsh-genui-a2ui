@@ -6,12 +6,29 @@ import {
 } from '../../shared/express-preprocess.ts'
 
 const LEADING_WRAP_RE = /^\s*(?:<a2ui>\s*|```[\w-]*[ \t]*\r?\n)/i
-const TRAILING_WRAP_RE = /(?:\s*<\/a2ui>|\r?\n?[ \t]*```)\s*$/i
+
+function stripTrailingWrap(raw: string): string {
+  const trimmed = raw.trimEnd()
+  if (trimmed.length >= 7 && trimmed.slice(-7).toLowerCase() === '</a2ui>') {
+    return trimmed.slice(0, -7).trimEnd()
+  }
+  if (trimmed.endsWith('```')) {
+    const beforeFence = trimmed.slice(0, -3)
+    let i = beforeFence.length
+    while (i > 0 && (beforeFence[i - 1] === ' ' || beforeFence[i - 1] === '\t')) i -= 1
+    if (i > 0 && beforeFence[i - 1] === '\n') {
+      i -= 1
+      if (i > 0 && beforeFence[i - 1] === '\r') i -= 1
+    }
+    return beforeFence.slice(0, i)
+  }
+  return raw
+}
 
 export function normalizeStreamingProgram(raw: string): string {
   let out = raw
   for (let pass = 0; pass < 3; pass++) {
-    const next = out.replace(LEADING_WRAP_RE, '').replace(TRAILING_WRAP_RE, '')
+    const next = stripTrailingWrap(out.replace(LEADING_WRAP_RE, ''))
     if (next === out) break
     out = next
   }
@@ -162,7 +179,13 @@ export class StreamingExpressSession {
         clean = rawClean
       }
     }
+    let savedMessages: readonly AgentToRendererMessage[] | null = null
+    let savedSurfaceIds: Set<string> | null = null
     if (this.streamRejected || !clean.startsWith(this.fed) || (this.closed && clean !== this.fed)) {
+      if (this.messages.length > 0) {
+        savedMessages = this.messages
+        savedSurfaceIds = new Set(this.surfaceIdSet)
+      }
       const sameUpdateTargets = extractUpdateSurfaceIds(clean).some((id) =>
         this.seededUpdateIds.has(id),
       )
@@ -185,6 +208,11 @@ export class StreamingExpressSession {
         if (!this.trySeedAndReplay(clean, msg, final)) {
           this.streamRejected = true
           this.lastError = msg
+        }
+        if (this.messages.length === 0 && savedMessages !== null && savedSurfaceIds !== null) {
+          this.messages = [...savedMessages]
+          this.surfaceIdSet.clear()
+          for (const id of savedSurfaceIds) this.surfaceIdSet.add(id)
         }
       }
     }

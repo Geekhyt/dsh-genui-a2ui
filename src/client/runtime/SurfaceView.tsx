@@ -30,6 +30,7 @@ import {
   isScrubbableNumericSecret,
   recordSecretPrimitive,
   referencesObscuredPointer,
+  resolveTemplateObscuredPointers,
   scrubSecretString,
 } from '../../shared/redaction.ts'
 import { enrichActionWithSelection, formatActionMessage } from '../action-protocol.ts'
@@ -60,6 +61,7 @@ import { DshMarkdown, DshTextShimmer } from '../ui/primitives.tsx'
 
 const ACTION_COOLDOWN_MS = 450
 const EMPTY_SURFACES: readonly SurfaceModel<ReactCatalogComponent>[] = Object.freeze([])
+const EMPTY_STORE_SNAPSHOT = Object.freeze({ surfaces: EMPTY_SURFACES, generation: 0 })
 
 const SKELETON_KPI_ROW = (
   <div className={css.skeletonKpiRow}>
@@ -91,15 +93,19 @@ export function collectObscuredPointers(
       )
       return null
     }
-    for (const [, comp] of entries) {
-      if (comp.type === 'TextField' && comp.properties?.variant === 'obscured') {
-        const ptr = extractBindingPointer(comp.properties?.value)
-        if (ptr !== null) pointers.add(ptr)
-      } else if (comp.type === 'KvEditor') {
+    const componentRecords: Record<string, unknown>[] = []
+    for (const [id, comp] of entries) {
+      componentRecords.push({
+        ...(typeof comp.properties === 'object' && comp.properties !== null ? comp.properties : {}),
+        id,
+        component: comp.type,
+      })
+      if (comp.type === 'KvEditor') {
         const ptr = extractBindingPointer(comp.properties?.items)
         if (ptr !== null) kvPointers.add(ptr)
       }
     }
+    resolveTemplateObscuredPointers(componentRecords, pointers)
     if (kvPointers.size > 0) {
       const scratchExact = new Set<string>()
       const scratchSub = new Set<string>()
@@ -118,6 +124,38 @@ export function collectObscuredPointers(
   return pointers
 }
 
+function scrubSanitizedTree(
+  node: unknown,
+  blockedExact: ReadonlySet<string>,
+  blockedSubstrings: ReadonlySet<string>,
+  depth = 0,
+): unknown {
+  if (depth > 8 || node === null || node === undefined) return node
+  if (typeof node === 'string') {
+    return scrubSecretString(node, blockedExact, blockedSubstrings)
+  }
+  if (typeof node === 'number' && isScrubbableNumericSecret(node, blockedExact)) {
+    return undefined
+  }
+  if (Array.isArray(node)) {
+    const out: unknown[] = []
+    for (const item of node) {
+      const next = scrubSanitizedTree(item, blockedExact, blockedSubstrings, depth + 1)
+      if (next !== undefined) out.push(next)
+    }
+    return out
+  }
+  if (typeof node === 'object') {
+    const out: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
+      const next = scrubSanitizedTree(v, blockedExact, blockedSubstrings, depth + 1)
+      if (next !== undefined) out[k] = next
+    }
+    return out
+  }
+  return node
+}
+
 export function readSanitizedDataModels(
   processor: MessageProcessor<ReactCatalogComponent>,
   visibleSurfaceIds?: ReadonlySet<string>,
@@ -128,7 +166,21 @@ export function readSanitizedDataModels(
     const obscured = collectObscuredPointers(surface)
     if (obscured === null) continue
     const raw = surface.dataModel.get('/')
-    const cleaned = sanitizeDataModel(raw, obscured)
+    let cleaned = sanitizeDataModel(raw, obscured)
+    if (obscured.size > 0) {
+      const { blockedExact, blockedSubstrings, failed } = collectBlockedSecretValues(
+        surface,
+        obscured,
+      )
+      if (failed) continue
+      if (blockedExact.size > 0 || blockedSubstrings.size > 0) {
+        const scrubbed = scrubSanitizedTree(cleaned, blockedExact, blockedSubstrings)
+        cleaned =
+          typeof scrubbed === 'object' && scrubbed !== null && !Array.isArray(scrubbed)
+            ? (scrubbed as Record<string, unknown>)
+            : {}
+      }
+    }
     if (Object.keys(cleaned).length > 0) {
       result[surface.id] = cleaned
     }
@@ -354,10 +406,12 @@ export function sanitizeActionPayloadForSurface(
   action: ActionPayload,
 ): ActionPayload {
   if (surface === undefined) {
-    return enrichActionWithSelection({
-      ...action,
-      context: sanitizeDataModel(action.context ?? {}),
-    })
+    const enriched = enrichActionWithSelection({ ...action, context: {} })
+    return {
+      ...enriched,
+      context: {},
+      ...(enriched.userMessage !== undefined ? { userMessage: undefined } : {}),
+    }
   }
   const state = resolveSurfaceRedactionState(surface)
   if (state === null) {
@@ -434,10 +488,15 @@ export class SurfaceSessionStore {
   private visibleSurfaceIds: ReadonlySet<string> | undefined = undefined
 
   private surfacesSnapshot: readonly SurfaceModel<ReactCatalogComponent>[] = []
+  private storeSnapshot: {
+    readonly surfaces: readonly SurfaceModel<ReactCatalogComponent>[]
+    readonly generation: number
+  } = { surfaces: EMPTY_SURFACES, generation: 0 }
   private appliedCount = 0
   private appliedPrefix: readonly AgentToRendererMessage[] = []
   private mutatingModel = false
   private lastActionAt = 0
+  private actionInFlight = false
   private actionSeq = 0
   private lastActionOk = true
   private _generation = 0
@@ -450,7 +509,7 @@ export class SurfaceSessionStore {
   >()
   private readonly pendingDraftWrites = new Map<
     string,
-    { timer: ReturnType<typeof setTimeout>; flush: () => void }
+    { surfaceId: string; timer: ReturnType<typeof setTimeout>; flush: () => void }
   >()
   private readonly lastDraftWriteAt = new Map<string, number>()
 
@@ -470,12 +529,13 @@ export class SurfaceSessionStore {
           return
         }
         const now = Date.now()
-        if (now - this.lastActionAt < ACTION_COOLDOWN_MS) {
+        if (this.actionInFlight || now - this.lastActionAt < ACTION_COOLDOWN_MS) {
           this.actionSeq += 1
           this.lastActionOk = false
           return
         }
         this.lastActionAt = now
+        this.actionInFlight = true
 
         const dataModels = readSanitizedDataModels(this.processor, this.visibleSurfaceIds)
         const targetSurface = this.processor.getSurfaces().get(action.surfaceId)
@@ -498,6 +558,8 @@ export class SurfaceSessionStore {
           this.lastActionAt = 0
           this.actionSeq += 1
           this.lastActionOk = false
+        } finally {
+          this.actionInFlight = false
         }
       },
       {
@@ -517,6 +579,20 @@ export class SurfaceSessionStore {
     return this._generation
   }
 
+  readonly getSnapshot = (): {
+    readonly surfaces: readonly SurfaceModel<ReactCatalogComponent>[]
+    readonly generation: number
+  } => {
+    return this.storeSnapshot
+  }
+
+  readonly getServerSnapshot = (): {
+    readonly surfaces: readonly SurfaceModel<ReactCatalogComponent>[]
+    readonly generation: number
+  } => {
+    return EMPTY_STORE_SNAPSHOT
+  }
+
   readonly getSurfaces = (): readonly SurfaceModel<ReactCatalogComponent>[] => {
     return this.surfacesSnapshot
   }
@@ -527,13 +603,16 @@ export class SurfaceSessionStore {
 
   private refreshSurfacesSnapshot(): boolean {
     const next = [...this.processor.getSurfaces().values()]
-    if (
+    const listSame =
       next.length === this.surfacesSnapshot.length &&
       next.every((s, idx) => s === this.surfacesSnapshot[idx])
-    ) {
+    if (listSame && this.storeSnapshot.generation === this._generation) {
       return false
     }
-    this.surfacesSnapshot = next
+    if (!listSame) {
+      this.surfacesSnapshot = next
+    }
+    this.storeSnapshot = { surfaces: this.surfacesSnapshot, generation: this._generation }
     return true
   }
 
@@ -546,6 +625,16 @@ export class SurfaceSessionStore {
     const key = `${sid}::${surface.id}::${fp}`
     const commit = () => {
       this.pendingDraftWrites.delete(key)
+      if (
+        this.readOnly ||
+        this.streaming ||
+        this.readOnlySurfaceIds?.has(surface.id) ||
+        this.sessionId !== sid ||
+        this.fingerprint !== fp ||
+        this.processor.getSurfaces().get(surface.id) !== surface
+      ) {
+        return
+      }
       this.lastDraftWriteAt.set(key, Date.now())
       const obscured = collectObscuredPointers(surface)
       if (obscured === null) return
@@ -562,7 +651,7 @@ export class SurfaceSessionStore {
     const delay = Math.max(16, 280 - (now - lastAt))
     const timer = setTimeout(commit, delay)
     ;(timer as unknown as { unref?: () => void }).unref?.()
-    this.pendingDraftWrites.set(key, { timer, flush: commit })
+    this.pendingDraftWrites.set(key, { surfaceId: surface.id, timer, flush: commit })
   }
 
   private flushPendingDraftWrites(): void {
@@ -574,11 +663,20 @@ export class SurfaceSessionStore {
     }
   }
 
-  private cancelPendingDraftWrites(): void {
-    for (const entry of this.pendingDraftWrites.values()) {
-      clearTimeout(entry.timer)
+  private cancelPendingDraftWrites(targetSurfaceId?: string): void {
+    if (targetSurfaceId === undefined) {
+      for (const entry of this.pendingDraftWrites.values()) {
+        clearTimeout(entry.timer)
+      }
+      this.pendingDraftWrites.clear()
+      return
     }
-    this.pendingDraftWrites.clear()
+    for (const [key, entry] of this.pendingDraftWrites) {
+      if (entry.surfaceId === targetSurfaceId) {
+        clearTimeout(entry.timer)
+        this.pendingDraftWrites.delete(key)
+      }
+    }
   }
 
   private syncDraftSubscriptions(): void {
@@ -586,6 +684,7 @@ export class SurfaceSessionStore {
     const activeSet = new Set(this.processor.getSurfaces().values())
     for (const [surf, sub] of this.draftSubs) {
       if (!activeSet.has(surf)) {
+        this.cancelPendingDraftWrites(surf.id)
         sub.unsubscribe()
         this.draftSubs.delete(surf)
       }
@@ -611,7 +710,11 @@ export class SurfaceSessionStore {
   }
 
   private clearDraftSubscriptions(): void {
-    this.flushPendingDraftWrites()
+    if (this.readOnly) {
+      this.cancelPendingDraftWrites()
+    } else {
+      this.flushPendingDraftWrites()
+    }
     for (const sub of this.draftSubs.values()) {
       sub.unsubscribe()
     }
@@ -632,6 +735,13 @@ export class SurfaceSessionStore {
       readonly notify?: boolean | undefined
     },
   ): void {
+    if (options.readOnly) {
+      this.cancelPendingDraftWrites()
+    } else if (options.readOnlySurfaceIds !== undefined) {
+      for (const roId of options.readOnlySurfaceIds) {
+        this.cancelPendingDraftWrites(roId)
+      }
+    }
     this.streaming = options.streaming
     this.readOnly = options.readOnly
     this.readOnlySurfaceIds = options.readOnlySurfaceIds
@@ -665,16 +775,19 @@ export class SurfaceSessionStore {
 
         const slice = messages.slice(this.appliedCount)
         if (slice.length > 0) {
-          if (
-            isExtension &&
-            prevCount > 0 &&
-            slice.some(
-              (m) =>
-                typeof m === 'object' &&
-                m !== null &&
-                ('updateComponents' in m || 'createSurface' in m),
-            )
-          ) {
+          for (const m of slice) {
+            if (typeof m === 'object' && m !== null && 'deleteSurface' in m) {
+              const delId = (m as { deleteSurface?: { surfaceId?: unknown } }).deleteSurface
+                ?.surfaceId
+              if (typeof delId === 'string' && delId !== '') {
+                this.cancelPendingDraftWrites(delId)
+                if (!options.skipDraftIo && options.sessionId && options.fingerprint) {
+                  removeSurfaceDraft(options.sessionId, delId, options.fingerprint)
+                }
+              }
+            }
+          }
+          if (isExtension && prevCount > 0) {
             this._generation += 1
           }
           this.processor.processMessagesWithErrors(slice as unknown as ProcessableMessage[])
@@ -826,10 +939,16 @@ export const SurfaceGroupView = memo(function SurfaceGroupView({
     onAction,
   ])
 
-  const surfaces = useSyncExternalStore(store.subscribe, store.getSurfaces, store.getServerSurfaces)
+  const storeSnap = useSyncExternalStore(
+    store.subscribe,
+    store.getSnapshot,
+    store.getServerSnapshot,
+  )
+  const surfaces = storeSnap.surfaces
+  const storeGeneration = storeSnap.generation
 
   const [attemptedGeneration, setAttemptedGeneration] = useState(-1)
-  const submitAttempted = attemptedGeneration === store.generation
+  const submitAttempted = attemptedGeneration === storeGeneration
 
   const markSubmitAttempted = useCallback(() => {
     setAttemptedGeneration(store.generation)
@@ -935,7 +1054,7 @@ export const SurfaceGroupView = memo(function SurfaceGroupView({
                       const body = (
                         <ErrorBoundary
                           key={surface.id}
-                          resetKey={`${store.generation}:${streaming ? 1 : 0}:${messages.length}`}
+                          resetKey={`${storeGeneration}:${streaming ? 1 : 0}`}
                           label={msg.surfaceRenderFailed(surface.id)}
                         >
                           <A2uiSurface surface={surface} />

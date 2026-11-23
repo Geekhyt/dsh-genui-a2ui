@@ -278,6 +278,7 @@ export const DshTabsImpl = defineComponent<{
 
   if (tabs.length !== prevTabCount) {
     setPrevTabCount(tabs.length)
+    if (activeIdx !== safeIdx) setActiveIdx(safeIdx)
     if (tabs.length > 0) {
       const pruned = new Set<number>()
       for (const idx of visitedIndices) {

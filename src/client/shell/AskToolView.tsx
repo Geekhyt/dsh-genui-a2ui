@@ -53,12 +53,14 @@ export const A2uiAskDockView = memo(function A2uiAskDockView({
   const chatSnapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 
   const activeAsk = useMemo(() => resolveActiveAskCall(chatSnapshot), [chatSnapshot])
+  const activeCallId = activeAsk?.callId ?? ''
+  const compositeCallKey = activeCallId !== '' ? `${sessionId ?? ''}::${activeCallId}` : ''
 
   const streamingSnapshot = useLazyStreamingExpress(
     activeAsk !== null,
     activeAsk?.ui ?? '',
     activeAsk?.phase === 'start',
-    activeAsk?.callId ?? 'ask',
+    compositeCallKey || 'ask',
   )
 
   const liveVisibleIds = useMemo(() => {
@@ -82,13 +84,12 @@ export const A2uiAskDockView = memo(function A2uiAskDockView({
     [activeAskSeq, chatSnapshot, streamingSnapshot],
   )
 
-  const activeCallId = activeAsk?.callId ?? ''
   const draftSessionId =
     sessionId && activeCallId ? `${sessionId}::ask::${activeCallId}` : undefined
   const inFlightCallIdRef = useRef<string | null>(null)
-  const submitting = activeCallId !== '' && submittingCallId === activeCallId
+  const submitting = compositeCallKey !== '' && submittingCallId === compositeCallKey
   const submitError =
-    activeCallId !== '' && errorState?.callId === activeCallId ? errorState.message : null
+    compositeCallKey !== '' && errorState?.callId === compositeCallKey ? errorState.message : null
 
   const clearAskDrafts = useCallback(() => {
     if (!draftSessionId || !liveVisibleIds || liveMessages.length === 0) return
@@ -107,14 +108,15 @@ export const A2uiAskDockView = memo(function A2uiAskDockView({
       if (
         !activeCallId ||
         submitting ||
-        inFlightCallIdRef.current === activeCallId ||
+        inFlightCallIdRef.current === compositeCallKey ||
         submitAskAnswer === undefined
       ) {
         return Promise.resolve(false)
       }
       const targetCallId = activeCallId
-      inFlightCallIdRef.current = targetCallId
-      setSubmittingCallId(targetCallId)
+      const targetKey = compositeCallKey
+      inFlightCallIdRef.current = targetKey
+      setSubmittingCallId(targetKey)
       setErrorState(null)
       return submitAskAnswer({
         callId: targetCallId,
@@ -126,70 +128,71 @@ export const A2uiAskDockView = memo(function A2uiAskDockView({
         dataModels,
       }).then(
         (ok) => {
-          if (inFlightCallIdRef.current === targetCallId) {
+          if (inFlightCallIdRef.current === targetKey) {
             inFlightCallIdRef.current = null
           }
           if (ok) {
             clearAskDrafts()
             return true
           }
-          setSubmittingCallId((prev) => (prev === targetCallId ? null : prev))
-          setErrorState({ callId: targetCallId, message: msg.askSubmitRetry })
+          setSubmittingCallId((prev) => (prev === targetKey ? null : prev))
+          setErrorState({ callId: targetKey, message: msg.askSubmitRetry })
           return false
         },
         (err: unknown) => {
-          if (inFlightCallIdRef.current === targetCallId) {
+          if (inFlightCallIdRef.current === targetKey) {
             inFlightCallIdRef.current = null
           }
-          setSubmittingCallId((prev) => (prev === targetCallId ? null : prev))
+          setSubmittingCallId((prev) => (prev === targetKey ? null : prev))
           setErrorState({
-            callId: targetCallId,
+            callId: targetKey,
             message: err instanceof Error ? err.message : msg.askSubmitFailed,
           })
           return false
         },
       )
     },
-    [activeCallId, clearAskDrafts, msg, submitAskAnswer, submitting],
+    [activeCallId, clearAskDrafts, compositeCallKey, msg, submitAskAnswer, submitting],
   )
 
   const handleSkip = useCallback(() => {
     if (
       !activeCallId ||
       submitting ||
-      inFlightCallIdRef.current === activeCallId ||
+      inFlightCallIdRef.current === compositeCallKey ||
       submitAskAnswer === undefined
     ) {
       return
     }
     const targetCallId = activeCallId
-    inFlightCallIdRef.current = targetCallId
-    setSubmittingCallId(targetCallId)
+    const targetKey = compositeCallKey
+    inFlightCallIdRef.current = targetKey
+    setSubmittingCallId(targetKey)
     setErrorState(null)
     void submitAskAnswer({ callId: targetCallId, skipped: true }).then(
       (ok) => {
-        if (inFlightCallIdRef.current === targetCallId) {
+        if (inFlightCallIdRef.current === targetKey) {
           inFlightCallIdRef.current = null
         }
         if (ok) {
           clearAskDrafts()
           return
         }
-        setSubmittingCallId((prev) => (prev === targetCallId ? null : prev))
-        setErrorState({ callId: targetCallId, message: msg.askSkipRetry })
+        setSubmittingCallId((prev) => (prev === targetKey ? null : prev))
+        setErrorState({ callId: targetKey, message: msg.askSkipRetry })
       },
       (err: unknown) => {
-        if (inFlightCallIdRef.current === targetCallId) {
+        if (inFlightCallIdRef.current === targetKey) {
           inFlightCallIdRef.current = null
         }
-        setSubmittingCallId((prev) => (prev === targetCallId ? null : prev))
+        setSubmittingCallId((prev) => (prev === targetKey ? null : prev))
         setErrorState({
-          callId: targetCallId,
+          callId: targetKey,
           message: err instanceof Error ? err.message : msg.askSkipFailed,
         })
       },
     )
-  }, [activeCallId, clearAskDrafts, msg, submitAskAnswer, submitting])
+  }, [activeCallId, clearAskDrafts, compositeCallKey, msg, submitAskAnswer, submitting])
 
   if (activeAsk === null) return null
 
@@ -230,7 +233,7 @@ export const A2uiAskDockView = memo(function A2uiAskDockView({
       </div>
       <div className={dockCss.body} style={{ maxHeight: 'min(480px, 56vh)' }}>
         <LazySurfaceGroupView
-          key={activeCallId}
+          key={compositeCallKey}
           messages={liveMessages}
           visibleSurfaceIds={liveVisibleIds}
           sessionId={draftSessionId}

@@ -438,6 +438,8 @@
   font-size: 12.5px;
   font-weight: 500;
   color: var(--dsw-alias-label-secondary, inherit);
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .errorText {
@@ -622,15 +624,19 @@
 
 .sliderHeader {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 4px 8px;
+  min-width: 0;
 }
 
 .sliderOutput {
   font-size: 12px;
   font-variant-numeric: tabular-nums;
   font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
   color: var(--dsw-alias-label-primary, inherit);
 }
 
@@ -940,12 +946,6 @@
   .td {
     padding: 6px 7px;
   }
-
-  .proExpandCell,
-  .proCheckCell {
-    padding-left: 4px;
-    padding-right: 4px;
-  }
 }
 
 .emptyCell {
@@ -961,6 +961,7 @@
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 8px;
+  margin-top: auto;
   padding: 8px 12px;
   border-top: 1px solid var(--dsw-alias-border-l1, rgba(128, 128, 128, 0.16));
   font-size: 12px;
@@ -1863,6 +1864,8 @@
   align-items: center;
   gap: 5px;
   max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   padding: 2px 8px;
   border-radius: 6px;
   border: 1px solid var(--dsw-alias-border-l1, rgba(128, 128, 128, 0.22));
@@ -2155,34 +2158,6 @@
   min-width: 0;
 }
 
-@container (max-width: 360px) {
-  .mermaidToolbar {
-    padding: 6px 8px;
-    gap: 6px;
-  }
-
-  .mermaidZoomBtn,
-  .mermaidZoomReadout,
-  .mermaidZoomFitBtn {
-    padding: 2px 5px;
-    font-size: 10.5px;
-  }
-
-  .mermaidZoomReadout {
-    min-width: 38px;
-  }
-
-  .mermaidBody g[class~="grid"] > g[class~="tick"]:nth-of-type(even) text {
-    display: none;
-  }
-}
-
-@container (max-width: 720px) {
-  .mermaidBody g[class~="grid"] > g[class~="tick"]:nth-of-type(even) text {
-    display: none;
-  }
-}
-
 .mermaidToolbar {
   display: flex;
   align-items: center;
@@ -2307,6 +2282,44 @@
 .mermaidZoomFitBtn:hover {
   background: var(--dsw-alias-interactive-bg-hover, rgba(128, 128, 128, 0.12));
   color: var(--dsw-alias-label-primary, inherit);
+}
+
+@container (max-width: 360px) {
+  .mermaidToolbar {
+    padding: 6px 8px;
+    gap: 5px;
+  }
+
+  .mermaidToolbar .diffActions {
+    gap: 4px;
+  }
+
+  .mermaidZoomBtn,
+  .mermaidZoomReadout,
+  .mermaidZoomFitBtn {
+    padding: 2px 4px;
+    font-size: 10px;
+  }
+
+  .mermaidZoomReadout {
+    min-width: 34px;
+  }
+
+  .mermaidToolbar .diffModeBtn,
+  .mermaidToolbar .diffCopyBtn {
+    padding: 2px 6px;
+    font-size: 10px;
+  }
+
+  .mermaidBody g[class~="grid"] > g[class~="tick"]:nth-of-type(even) text {
+    display: none;
+  }
+}
+
+@container (max-width: 720px) {
+  .mermaidBody g[class~="grid"] > g[class~="tick"]:nth-of-type(even) text {
+    display: none;
+  }
 }
 
 .mermaidZoomBtn:disabled {
@@ -3750,7 +3763,7 @@
 .serviceEdgeLabelText {
   font-size: 10px;
   font-family: var(--dsw-font-family-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
-  fill: var(--dsw-alias-label-secondary, #9ca3af);
+  fill: var(--dsw-alias-label-secondary, light-dark(#4b5563, #9ca3af));
 }
 
 .serviceNodeBox {
@@ -4375,6 +4388,7 @@
   justify-content: flex-end;
   flex-wrap: wrap;
   gap: 8px;
+  margin-top: auto;
 }
 
 .apiCard {
@@ -4385,6 +4399,7 @@
   background: var(--dsw-alias-bg-layer-1, transparent);
   overflow: hidden;
   min-width: 0;
+  container-type: inline-size;
 }
 
 .apiHeader {
@@ -4533,6 +4548,38 @@
   color: var(--dsw-alias-label-secondary, inherit);
 }
 
+@container (max-width: 390px) {
+  .apiParamTable,
+  .apiParamTable tbody {
+    display: block;
+    width: 100%;
+  }
+
+  .apiParamTable tr {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 2px 8px;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--dsw-alias-border-l1, rgba(128, 128, 128, 0.1));
+  }
+
+  .apiParamTable td {
+    padding: 0;
+    border-bottom: none;
+  }
+
+  .apiParamLoc {
+    width: auto;
+  }
+
+  .apiParamDesc {
+    flex: 1 0 100%;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+}
+
 .scheduleCard {
   display: flex;
   flex-direction: column;
@@ -4584,6 +4631,17 @@
   }
 }
 
+.scheduleAxisTicks {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--dsw-font-family-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--dsw-alias-label-tertiary, rgba(128, 128, 128, 0.84));
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--dsw-alias-border-l1, rgba(128, 128, 128, 0.14));
+}
+
 @container (max-width: 440px) {
   .scheduleAxisRow {
     grid-template-columns: minmax(0, 1fr);
@@ -4602,17 +4660,6 @@
   .scheduleAxisTicks {
     font-size: 10px;
   }
-}
-
-.scheduleAxisTicks {
-  display: flex;
-  justify-content: space-between;
-  font-family: var(--dsw-font-family-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-  color: var(--dsw-alias-label-tertiary, rgba(128, 128, 128, 0.84));
-  padding-bottom: 4px;
-  border-bottom: 1px solid var(--dsw-alias-border-l1, rgba(128, 128, 128, 0.14));
 }
 
 .scheduleTrackList {
@@ -4684,6 +4731,8 @@
 
 .scheduleBar[data-status="done"] {
   background: var(--dsw-alias-state-success-primary, #10b981);
+  color: #052e16;
+  font-weight: 600;
 }
 
 .scheduleBar[data-status="warning"] {
@@ -4774,6 +4823,7 @@
 
 .resultEmblem[data-status="success"] {
   background: var(--dsw-alias-state-success-primary, #10b981);
+  color: #052e16;
 }
 
 .resultEmblem[data-status="warning"] {
@@ -4935,6 +4985,12 @@
   flex-shrink: 0;
   background: var(--dsw-alias-bg-layer-3, rgba(128, 128, 128, 0.14));
   color: var(--dsw-alias-label-primary, inherit);
+}
+
+.entityStatusPill[data-status="warning"] {
+  background: color-mix(in srgb, var(--dsw-alias-state-warn-primary, #f59e0b) 16%, transparent);
+  border-color: color-mix(in srgb, var(--dsw-alias-state-warn-primary, #f59e0b) 40%, transparent);
+  color: var(--dsw-alias-state-warn-label, light-dark(#92400e, #fcd34d));
 }
 
 .entitySubtitle {
@@ -6904,17 +6960,6 @@
   display: block;
 }
 
-@container (max-width: 360px) {
-  .imageCompareImg {
-    object-fit: contain;
-  }
-
-  .imageCompareBadge {
-    font-size: 10.5px;
-    padding: 2px 7px;
-  }
-}
-
 .imageCompareOverlay {
   position: absolute;
   inset: 0;
@@ -6937,6 +6982,17 @@
   pointer-events: none;
   z-index: 3;
   white-space: nowrap;
+}
+
+@container (max-width: 360px) {
+  .imageCompareImg {
+    object-fit: contain;
+  }
+
+  .imageCompareBadge {
+    font-size: 10.5px;
+    padding: 2px 7px;
+  }
 }
 
 .imageCompareBadgeLeft {
@@ -7080,6 +7136,8 @@
   display: inline;
   padding: 1px 4px;
   border-radius: 4px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
   background: color-mix(in srgb, var(--dsw-alias-state-business-primary, #3b82f6) 18%, transparent);
   border-bottom: 2px solid var(--dsw-alias-state-business-primary, #3b82f6);
   color: var(--dsw-alias-label-primary, inherit);
@@ -7106,6 +7164,8 @@
 }
 
 .annotationMarkBtn {
+  display: inline;
+  text-align: inherit;
   border-top: none;
   border-left: none;
   border-right: none;

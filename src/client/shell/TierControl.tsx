@@ -30,12 +30,10 @@ export const A2uiTierControl = memo(function A2uiTierControl({
   chatStore,
   syncHostEnabled,
 }: A2uiTierControlProps) {
-  const [busyState, setBusyState] = useState<{
-    readonly sessionId: string | undefined
-    readonly reqId: number
-  } | null>(null)
-  const reqSeqRef = useRef(0)
-  const busy = busyState !== null && busyState.sessionId === sessionId
+  const [busyBySession, setBusyBySession] = useState<Readonly<Record<string, number>>>({})
+  const reqSeqBySessionRef = useRef<Map<string, number>>(new Map())
+  const sessionKey = sessionId ?? '__global__'
+  const busy = Object.hasOwn(busyBySession, sessionKey)
 
   const getPersistedEnabled = useCallback(() => getA2uiEnabled(sessionId), [sessionId])
   useSyncExternalStore<boolean>(subscribeA2uiEnabled, getPersistedEnabled, getPersistedEnabled)
@@ -77,26 +75,33 @@ export const A2uiTierControl = memo(function A2uiTierControl({
     const prev = enabled
     const next = !prev
     const targetSessionId = sessionId
+    const targetKey = targetSessionId ?? '__global__'
     const cmdSeq = latestCommand?.seq
-    setA2uiEnabled(targetSessionId, next, cmdSeq)
+    setA2uiEnabled(targetSessionId, next, cmdSeq, true)
     if (!syncHostEnabled) return
-    const reqId = ++reqSeqRef.current
-    setBusyState({ sessionId: targetSessionId, reqId })
+    const reqId = (reqSeqBySessionRef.current.get(targetKey) ?? 0) + 1
+    reqSeqBySessionRef.current.set(targetKey, reqId)
+    setBusyBySession((cur) => ({ ...cur, [targetKey]: reqId }))
     void syncHostEnabled(next)
       .then(
         (ok) => {
-          if (!ok && reqSeqRef.current === reqId) {
-            setA2uiEnabled(targetSessionId, prev, cmdSeq)
+          if (!ok && reqSeqBySessionRef.current.get(targetKey) === reqId) {
+            setA2uiEnabled(targetSessionId, prev, cmdSeq, false)
           }
         },
         () => {
-          if (reqSeqRef.current === reqId) {
-            setA2uiEnabled(targetSessionId, prev, cmdSeq)
+          if (reqSeqBySessionRef.current.get(targetKey) === reqId) {
+            setA2uiEnabled(targetSessionId, prev, cmdSeq, false)
           }
         },
       )
       .finally(() => {
-        setBusyState((cur) => (cur !== null && cur.reqId === reqId ? null : cur))
+        setBusyBySession((cur) => {
+          if (cur[targetKey] !== reqId) return cur
+          const copy = { ...cur }
+          delete copy[targetKey]
+          return copy
+        })
       })
   }, [enabled, latestCommand?.seq, sessionId, syncHostEnabled])
 

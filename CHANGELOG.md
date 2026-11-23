@@ -2,6 +2,32 @@
 
 All notable changes to `dsh-genui-a2ui` are documented in this file.
 
+## [0.5.3] - 2026-11-23
+
+### Added
+- **2 New Architectural Invariant Rules (`scripts/check-invariants.mjs`, `tests/invariants-lint.spec.ts`)**:
+  - Added Rule #18 (`css-no-shadowed-container-query`, statically rejecting `@container` blocks placed earlier in the stylesheet than matching base rules) and Rule #19 (`no-catastrophic-trailing-ws-regex`, blocking O(N²) trailing-whitespace regex patterns in `src/`), expanding the static invariant gate from **17 → 19 rules**.
+- **Comprehensive Audit Showcases & Regression Suite (`scripts/mock-llm.mjs`, `scripts/mock-llm.d.mts`, `scripts/visual-qa-bot.mjs`, `tests/comprehensive-audit-v053.spec.ts`)**:
+  - Added `showcase-40` (sub-100 `bullet` & 5-point `radialBar`, 7-item `276px` `radialBar`, right-tail `histogram` markLine, auto-numeric `scatter` without `xField`, signed negative `stackMode="percent"`, multi-year `calendar`, first-row-null `parallel`, 3-level `sunburst`, and high-offset `dumbbell`) and `showcase-41` (16 restored standard A2UI icons, decimal `Slider`, literal `CheckCard`, `warning` dots on `EntityHeader`/`Tree`/`Tracker`, `306px` `ApiEndpoint`, clickable inline `AnnotationText`, overnight-past-noon `Schedule`, `SourceList` URL+action, and `ProTable` null-last descending sort).
+  - Fixed `visual-qa-bot.mjs` SVG selector blind spot and horizontal scroll-container awareness, and expanded `DEFAULT_AUDIT_SHOWCASES` to cover **64/64 components and 26/26 chart kinds** by default (**84/84** Dark & Light passes across all 42 showcases).
+
+### Fixed
+- **Security Redaction, Host Compiler Isolation & ReDoS Protection (`src/shared/{constants,redaction,temporal,express-preprocess}.ts`, `src/host/{ask-tool,generator,eval-suite}.ts`, `src/index.ts`)**:
+  - Extended `isSecretKey` to match plural `*_tokens` and algorithm/format/version-qualified `*_key` names; added balanced-brace recursive `${...}` interpolation extraction and wildcard template path matching (e.g. `/tokens/*/token`) so template secrets redact accurately without over-redacting sibling fields.
+  - Replaced flat `sessionId::callId` keys in `PendingAskRegistry` with nested `Map<sessionId, Map<callId, PendingEntry>>`, tracked cumulative per-session redaction across `update=true` turns, eliminated O(N²) trailing-whitespace regexes in `express-preprocess.ts` and `streaming.ts`, rejected non-plain `calc` var containers, and added strict calendar round-trip validation (rejecting `2026-02-31`) plus 2-digit timezone offset support (`+08`) in `temporal.ts`.
+- **Client Runtime Lifecycle, Mermaid Sandbox & Overlay Hardening (`src/client/{mermaid-safe,persistence,chunk-loader,dom-hooks,index}.ts`, `mermaid-chunk.ts`, `runtime/{SurfaceView,streaming}.ts`, `shell/*`, `ui/primitives.tsx`)**:
+  - Hardened Mermaid SVG/CSS sanitization against namespace-prefixed SVG tags (`<svg:script>`), comment-obfuscated `url()`, nested CSS `{}`/`@keyframes`, and quote-sensitive inline styles; enforced workspace boundary checks on absolute `openFile` targets in `ToolView.tsx`.
+  - Added message referential identity checks to `turnTailMemo`/`dockMemo`, `storeGeneration`-keyed `ErrorBoundary` auto-reset, zombie draft timer/delete guards, `actionInFlight` serialization, `DshMenu` viewport clamping & keyboard navigation, and native amber `'warning'` status dot support in `DshStateDot`.
+- **64 Catalog Widgets & Deterministic Helpers (`src/client/catalog/{icons,InputWidgets,TableWidget,AntdParityWidgets,NextGenWidgets,EnterpriseWidgets,OpsAndInsightWidgets,P0Widgets,ExtendedWidgets,LayoutWidgets}.tsx`, `v3~v6-helpers.ts`)**:
+  - Restored all **16** missing standard A2UI icons in `icons.tsx` (achieving **59/59** schema icon parity), added decimal auto-step & endpoint snapping on `Slider`, wired `CheckCard` to `useWritablePropState` with `role="group"`/`aria-pressed`, normalized missing values (`null`/`undefined`/`NaN`/`""`/`"-"`/`"—"`) to `undefined` in `TableWidget` `accessorFn` so `sortUndefined: 'last'` pins empty rows to the bottom in both asc and desc sorts, rendered clickable `AnnotationText` with inline `<mark role="button">`, preserved action buttons alongside URL links in `SourceList`, fixed overnight-past-noon `Schedule` wrapping and `placeOutside` heuristics, and unified duplicate-ID deduplication via `makeUniqueIdFactory()` across 6 catalog helpers.
+- **26-Kind ECharts 6 `276px` Compact Contract (`src/client/chunks/echarts-chunk.ts`, `src/client/catalog/EChartsWidget.tsx`)**:
+  - Generalized `niceUpperBound` (`norm <= 1`), sub-100 explicit `bullet`/`radialBar` scales, `pickVerticalMarkLineAlign()` edge-clamping (`histogram`, `scatter` `referenceX`, horizontal `bar`), 7-item compact `radialBar` spacing, auto-numeric `scatter` inference, signed negative `stackMode="percent"`, 16-row union `parallel` dim inference with right-axis inset & single-dim fallback, multi-year `calendar` top margin & diverging negative ramp, contiguous 3-level `sunburst` rings, unified `dumbbell` brand dots & high-offset dynamic baseline, outward circular `graph` label placement, custom `heatmap` Y-axis tooltips & `(x, y)` dedup, and `rawValue` unwrapping on negative-baseline click events.
+- **CSS Cascade Integrity, `306px` Container Queries & Contrast (`Catalog.module.css`, `SurfaceView.module.css`, `TierControl.module.css`)**:
+  - Reordered all 4 shadowed `@container` blocks strictly after their base rules (restoring single-row compact Mermaid toolbars at `306px`), added `container-type: inline-size` with `<= 390px` stacked param cards on `.apiCard`, enforced `box-sizing: border-box; min-width: 0` on `.fileOpenBtn`, boosted dark-on-green contrast (`#052e16`) on completed `Schedule` bars and success emblems, and added `white-space: nowrap; flex-shrink: 0` to badges and toolbar triggers.
+
+### Changed
+- Verified full automated & live release gate: **37 suites / 226 tests**, **19/19** architectural invariants, **0** comments, **4/4** TLA+ formal specs, **5/5** bundle budgets (`lib/client.js = 70.57 kB / 19.95 kB gzip`), `eval:check` (`31/31`, `64/64` components), `check:host-api`, **17/17** live DeepSeek Harness interactive E2E assertions (`0` console/page errors), and **84/84** full-showcase Dark & Light DOM geometry passes (`overflow=0 wrap=0 clip=0 errs=0`).
+
 ## [0.5.2] - 2026-11-23
 
 ### Fixed

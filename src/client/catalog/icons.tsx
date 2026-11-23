@@ -53,7 +53,31 @@ const ICON_PATHS: Record<string, string> = {
   play: 'M7 5l12 7-12 7V5z',
   pause: 'M8 5h3v14H8V5zM13 5h3v14h-3V5z',
   stop: 'M6 6h12v12H6V6z',
+  attachFile:
+    'M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48',
+  camera:
+    'M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2v11zM12 17a4 4 0 100-8 4 4 0 000 8z',
+  fastForward: 'M13 19l9-7-9-7v14zM2 19l9-7-9-7v14z',
+  favoriteOff:
+    'M12 20s-7-4.4-9-8.8A5.2 5.2 0 0112 6a5.2 5.2 0 019 5.2c0 1.4-.5 2.7-1.3 3.9M3 3l18 18',
+  notificationsOff:
+    'M13.7 20a2 2 0 01-3.4 0M18.6 18.6H3s3-1 3-8a6 6 0 01.7-2.8M10.3 5.2A6 6 0 0118 11c0 1.3.2 2.4.5 3.3M3 3l18 18',
+  photo:
+    'M5 4h14a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2zM8.5 10a1.5 1.5 0 100-3 1.5 1.5 0 000 3zM21 15l-5-5L5 20',
+  print:
+    'M6 9V3h12v6M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v7H6v-7z',
+  rewind: 'M11 19l-9-7 9-7v14zM22 19l-9-7 9-7v14z',
+  skipNext: 'M5 4l10 8-10 8V4zM19 5v14',
+  skipPrevious: 'M19 20L9 12l10-8v16zM5 19V5',
+  starHalf: 'M12 3v14.8L6.2 20.9l1.1-6.5L2.6 9.8l6.5-.9L12 3z',
+  starOff: 'M8.3 8.3L2.6 9.8l4.7 4.6-1.1 6.5L12 17.8l3.7 2M12 3l2.9 5.9 6.5.9-3.1 3M3 3l18 18',
+  volumeDown: 'M11 5L6 9H2v6h4l5 4V5zM15.5 8.5a5 5 0 010 7',
+  volumeMute: 'M11 5L6 9H2v6h4l5 4V5z',
+  volumeOff: 'M11 5L6 9H2v6h4l5 4V5zM22 9l-6 6M16 9l6 6',
+  volumeUp: 'M11 5L6 9H2v6h4l5 4V5zM15.5 8.5a5 5 0 010 7M19.1 5a10 10 0 010 14',
 }
+
+export const CATALOG_ICON_NAMES: readonly string[] = Object.keys(ICON_PATHS)
 
 export function renderCatalogIcon(
   nameProp: unknown,

@@ -369,6 +369,9 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
         })
         if (hit !== undefined) return hit
       }
+      if (curKind === 'histogram') {
+        return undefined
+      }
       if (curKind === 'radar' && curSeriesField && label) {
         const hit = curRows.find((r) => sanitizeChartValue(r[curSeriesField]) === label)
         if (hit !== undefined) return hit
@@ -376,6 +379,14 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
       return idx !== undefined ? curRows[idx] : undefined
     })()
     const row = matchedRow
+    const rawDataVal =
+      typeof params?.data === 'object' &&
+      params.data !== null &&
+      !Array.isArray(params.data) &&
+      'rawValue' in params.data
+        ? (params.data as { rawValue?: unknown }).rawValue
+        : undefined
+    const effectiveVal = rawDataVal !== undefined ? rawDataVal : params?.value
     void actionRef.current({
       metadata: {
         extensions: {
@@ -383,7 +394,7 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
             source: 'chart',
             ...(label ? { label } : {}),
             ...(series ? { series } : {}),
-            ...(params?.value !== undefined ? { value: params.value } : {}),
+            ...(effectiveVal !== undefined ? { value: effectiveVal } : {}),
             ...(idx !== undefined ? { index: idx } : {}),
             ...(row !== undefined ? { row } : {}),
           },

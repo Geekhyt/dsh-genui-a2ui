@@ -228,7 +228,7 @@ export const DshNumberInputImpl = defineComponent<{
                 }
                 return
               }
-              const parsed = Number.parseFloat(trimmed)
+              const parsed = Number(trimmed)
               let clamped = Number.isFinite(parsed) ? parsed : safeVal
               if (safeMin !== undefined) clamped = Math.max(safeMin, clamped)
               if (safeMax !== undefined) clamped = Math.min(safeMax, clamped)
@@ -330,7 +330,10 @@ export const DshMultiSelectImpl = defineComponent<{
   )
 
   const selected = useMemo(
-    () => (Array.isArray(rawSelected) ? rawSelected.map(String).filter(Boolean) : []),
+    () =>
+      Array.isArray(rawSelected)
+        ? Array.from(new Set(rawSelected.map(String).filter(Boolean)))
+        : [],
     [rawSelected],
   )
   const selectedSet = useMemo(() => new Set(selected), [selected])
@@ -657,15 +660,19 @@ export const DshDateRangeImpl = defineComponent<{
             { days: 7, text: msg.dateRangePreset7d },
             { days: 30, text: msg.dateRangePreset30d },
             { days: 90, text: msg.dateRangePreset90d },
-          ].map((p) => (
-            <DshPill
-              key={p.days}
-              active={p.days === 1 ? isTodaySelected : spanDays === p.days}
-              onClick={() => applyPreset(p.days)}
-            >
-              {p.text}
-            </DshPill>
-          ))}
+          ].map((p) => {
+            const active = p.days === 1 ? isTodaySelected : spanDays === p.days
+            return (
+              <DshPill
+                key={p.days}
+                active={active}
+                aria-pressed={active}
+                onClick={() => applyPreset(p.days)}
+              >
+                {p.text}
+              </DshPill>
+            )
+          })}
         </div>
       ) : null}
 
@@ -673,7 +680,6 @@ export const DshDateRangeImpl = defineComponent<{
         className={css.dateRangeInputs}
         data-disabled={readOnly ? 'true' : 'false'}
         data-enable-time={enableTime ? 'true' : undefined}
-        aria-invalid={showError || undefined}
       >
         <NativeDateField
           type={inputType}
@@ -681,6 +687,7 @@ export const DshDateRangeImpl = defineComponent<{
           value={normStart}
           disabled={readOnly}
           ariaLabel={msg.dateRangeStartAria}
+          ariaInvalid={showError || undefined}
           wrapClassName={css.dateRangeInputWrap}
           inputClassName={css.dateRangeInput}
           buttonClassName={css.dateRangePickerBtn}
@@ -704,6 +711,7 @@ export const DshDateRangeImpl = defineComponent<{
           value={normEnd}
           disabled={readOnly}
           ariaLabel={msg.dateRangeEndAria}
+          ariaInvalid={showError || undefined}
           wrapClassName={css.dateRangeInputWrap}
           inputClassName={css.dateRangeInput}
           buttonClassName={css.dateRangePickerBtn}
@@ -749,6 +757,7 @@ function TreeSelectOptionBranch(props: {
             type="button"
             className={css.treeCaretBtn}
             disabled={forceExpanded}
+            aria-label={node.label}
             aria-expanded={isOpen}
             onClick={(e) => {
               e.stopPropagation()
@@ -994,21 +1003,32 @@ export const DshCheckCardImpl = defineComponent<{
 
   const options = useMemo(() => normalizeCheckCardOptions(props.options), [props.options])
   const hasWritableValue = isWritableProp(context, 'value', props.setValue)
-  const isPromptMode = typeof props.action === 'function' && !hasWritableValue
-  const isFormBound = !isPromptMode && hasWritableValue
+  const hasInitialLiteralValue =
+    props.value !== undefined &&
+    props.value !== null &&
+    (Array.isArray(props.value) ? props.value.length > 0 : String(props.value) !== '')
+  const isPromptMode =
+    typeof props.action === 'function' && !hasWritableValue && !hasInitialLiteralValue
+  const isFormBound = !isPromptMode
   const multiple = Boolean(props.multiple)
+  const [selectedVal, commitSelectedVal] = useWritablePropState<unknown>(
+    context,
+    'value',
+    props.value,
+    props.setValue as ((next: unknown) => void) | undefined,
+  )
   const cols =
     typeof props.columns === 'number' && props.columns >= 1 && props.columns <= 4
       ? Math.trunc(props.columns)
       : Math.min(3, Math.max(1, options.length))
 
   const selectedSet = useMemo(() => {
-    if (Array.isArray(props.value)) return new Set(props.value.map(String))
-    if (props.value !== undefined && props.value !== null && String(props.value) !== '') {
-      return new Set([String(props.value)])
+    if (Array.isArray(selectedVal)) return new Set(selectedVal.map(String))
+    if (selectedVal !== undefined && selectedVal !== null && String(selectedVal) !== '') {
+      return new Set([String(selectedVal)])
     }
     return new Set<string>()
-  }, [props.value])
+  }, [selectedVal])
 
   if (options.length === 0) return null
 
@@ -1025,13 +1045,13 @@ export const DshCheckCardImpl = defineComponent<{
         const next = selectedSet.has(opt.value)
           ? cur.filter((v) => v !== opt.value)
           : [...cur, opt.value]
-        props.setValue?.(next)
+        commitSelectedVal(next)
       } else {
-        props.setValue?.(opt.value)
+        commitSelectedVal(opt.value)
       }
     }
     if (typeof props.action === 'function') {
-      if (!isFormBound && props.isValid === false) {
+      if (props.isValid === false) {
         markSubmitAttempted()
         return
       }
@@ -1073,6 +1093,8 @@ export const DshCheckCardImpl = defineComponent<{
 
       <div
         className={css.checkCardGrid}
+        role="group"
+        aria-label={label || undefined}
         data-columns={String(cols)}
         style={{ '--a2ui-grid-cols': cols } as CSSProperties}
       >
@@ -1084,6 +1106,7 @@ export const DshCheckCardImpl = defineComponent<{
               type="button"
               disabled={readOnly}
               className={css.checkCardItem}
+              aria-pressed={isPromptMode ? undefined : checked}
               data-checked={checked ? 'true' : 'false'}
               data-prompt={isPromptMode ? 'true' : 'false'}
               onClick={() => handleCardClick(opt)}
@@ -1140,7 +1163,7 @@ function GeneralTreeBranch(props: {
     node.status === 'healthy'
       ? 'done'
       : node.status === 'warning'
-        ? 'ongoing'
+        ? 'warning'
         : node.status === 'error'
           ? 'error'
           : null
@@ -1331,7 +1354,7 @@ export const DshTreeImpl = defineComponent<{
               expandedDepth={expandedDepth}
               treeMode={treeMode}
               toggledMap={toggledMap}
-              forceExpandAll={deferredQuery.trim() !== ''}
+              forceExpandAll={searchActive}
               onToggle={toggleBranch}
               onSelect={
                 canAct

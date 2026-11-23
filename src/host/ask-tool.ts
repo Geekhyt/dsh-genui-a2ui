@@ -13,6 +13,7 @@ import {
   isScrubbableNumericSecret,
   normalizePointerPath,
   referencesObscuredPointer,
+  resolveTemplateObscuredPointers,
   scrubSecretString,
 } from '../shared/redaction.ts'
 import type { AskAnswerInput, AskMeta } from '../shared/wire-types.ts'
@@ -135,17 +136,20 @@ function collectKvEditorPointersFromMessages(
 
 export function collectObscuredPointersFromMessages(
   messages: readonly AgentToRendererMessage[],
+  extraKvPointers?: ReadonlySet<string>,
 ): Set<string> {
   const obscured = new Set<string>()
   const kvPointers = collectKvEditorPointersFromMessages(messages)
-  const inspectComponents = (list: unknown) => {
+  if (extraKvPointers) {
+    for (const ptr of extraKvPointers) kvPointers.add(ptr)
+  }
+  const allComponents: Record<string, unknown>[] = []
+  const collectComponents = (list: unknown) => {
     if (!Array.isArray(list)) return
     for (const item of list) {
-      if (typeof item !== 'object' || item === null) continue
-      const rec = item as Record<string, unknown>
-      if (rec.component !== 'TextField' || rec.variant !== 'obscured') continue
-      const p = extractBindingPointer(rec.value)
-      if (p !== null) obscured.add(p)
+      if (typeof item === 'object' && item !== null) {
+        allComponents.push(item as Record<string, unknown>)
+      }
     }
   }
   const inspectDataModel = (dmPath: string, dmValue: unknown) => {
@@ -158,6 +162,30 @@ export function collectObscuredPointersFromMessages(
         if (val !== undefined) {
           collectKvSecretsFromValue(val, normKv, obscured, new Set(), new Set())
         }
+      } else if (normKv.startsWith(`${dmPath}/`)) {
+        const suffix = normKv.slice(dmPath.length)
+        const val = getValueAtPointer(dmValue, suffix)
+        if (val !== undefined) {
+          collectKvSecretsFromValue(val, normKv, obscured, new Set(), new Set())
+        }
+      } else if (dmPath.startsWith(`${normKv}/`)) {
+        const relParts = dmPath.slice(normKv.length + 1).split('/')
+        const firstSeg = relParts[0]?.replace(/~1/g, '/').replace(/~0/g, '~') ?? ''
+        if (firstSeg !== '' && isSecretKey(firstSeg)) {
+          obscured.add(dmPath)
+        } else if (
+          typeof dmValue === 'object' &&
+          dmValue !== null &&
+          !Array.isArray(dmValue) &&
+          relParts.length === 1
+        ) {
+          const rec = dmValue as Record<string, unknown>
+          const k =
+            typeof rec.key === 'string' ? rec.key : typeof rec.name === 'string' ? rec.name : ''
+          if (k !== '' && isSecretKey(k)) {
+            obscured.add(`${dmPath}/value`)
+          }
+        }
       }
     }
   }
@@ -165,13 +193,13 @@ export function collectObscuredPointersFromMessages(
     const rec = msg as unknown as Record<string, unknown>
     if (rec.createSurface && typeof rec.createSurface === 'object') {
       const cs = rec.createSurface as Record<string, unknown>
-      inspectComponents(cs.components)
+      collectComponents(cs.components)
       if (kvPointers.size > 0 && cs.dataModel !== undefined) {
         inspectDataModel('/', cs.dataModel)
       }
     }
     if (rec.updateComponents && typeof rec.updateComponents === 'object') {
-      inspectComponents((rec.updateComponents as Record<string, unknown>).components)
+      collectComponents((rec.updateComponents as Record<string, unknown>).components)
     }
     if (kvPointers.size > 0 && rec.updateDataModel && typeof rec.updateDataModel === 'object') {
       const dm = rec.updateDataModel as { path?: unknown; value?: unknown }
@@ -179,6 +207,7 @@ export function collectObscuredPointersFromMessages(
       inspectDataModel(dmPath, dm.value)
     }
   }
+  resolveTemplateObscuredPointers(allComponents, obscured)
   return obscured
 }
 
@@ -296,20 +325,25 @@ interface PendingEntry {
 }
 
 export class PendingAskRegistry {
-  private readonly entries = new Map<string, PendingEntry>()
+  private readonly entriesBySession = new Map<string, Map<string, PendingEntry>>()
 
-  private keyOf(sessionId: string, callId: string): string {
-    return `${sessionId}::${callId}`
+  private removeEntry(sessionId: string, callId: string, expected?: PendingEntry): void {
+    const sessionMap = this.entriesBySession.get(sessionId)
+    if (!sessionMap) return
+    if (expected !== undefined && sessionMap.get(callId) !== expected) return
+    sessionMap.delete(callId)
+    if (sessionMap.size === 0) {
+      this.entriesBySession.delete(sessionId)
+    }
   }
 
   hasPending(sessionId: string, callId?: string): boolean {
+    const sessionMap = this.entriesBySession.get(sessionId)
+    if (!sessionMap || sessionMap.size === 0) return false
     if (callId !== undefined && callId !== '') {
-      return this.entries.has(this.keyOf(sessionId, callId))
+      return sessionMap.has(callId)
     }
-    for (const entry of this.entries.values()) {
-      if (entry.sessionId === sessionId) return true
-    }
-    return false
+    return true
   }
 
   wait(options: {
@@ -335,17 +369,27 @@ export class PendingAskRegistry {
       return Promise.reject(reason instanceof Error ? reason : new Error('a2ui_ask aborted'))
     }
 
-    const mapKey = this.keyOf(sessionId, callId)
-    const existing = this.entries.get(mapKey)
+    let sessionMap = this.entriesBySession.get(sessionId)
+    if (!sessionMap) {
+      sessionMap = new Map<string, PendingEntry>()
+      this.entriesBySession.set(sessionId, sessionMap)
+    }
+    const existing = sessionMap.get(callId)
     if (existing !== undefined) {
       existing.reject(new Error(`a2ui_ask "${callId}" superseded by a newer call`))
+      sessionMap = this.entriesBySession.get(sessionId)
+      if (!sessionMap) {
+        sessionMap = new Map<string, PendingEntry>()
+        this.entriesBySession.set(sessionId, sessionMap)
+      }
     }
 
     return new Promise<AskSettlement>((resolve, reject) => {
       let timer: ReturnType<typeof setTimeout> | undefined
+      let entryRef: PendingEntry | undefined
       const onAbort = () => {
         cleanup()
-        this.entries.delete(mapKey)
+        this.removeEntry(sessionId, callId, entryRef)
         const reason = signal?.reason
         reject(reason instanceof Error ? reason : new Error('a2ui_ask cancelled'))
       }
@@ -361,14 +405,14 @@ export class PendingAskRegistry {
       if (timeoutSeconds !== -1) {
         timer = setTimeout(() => {
           cleanup()
-          this.entries.delete(mapKey)
+          this.removeEntry(sessionId, callId, entryRef)
           resolve({ status: 'timed_out' })
         }, timeoutSeconds * 1000)
       }
 
       signal?.addEventListener('abort', onAbort, { once: true })
 
-      this.entries.set(mapKey, {
+      const entry: PendingEntry = {
         sessionId,
         callId,
         defaultSurfaceId,
@@ -376,30 +420,33 @@ export class PendingAskRegistry {
         obscuredContextPointers: obscuredContextPointers ?? obscuredPointers ?? new Set<string>(),
         resolve: (settlement) => {
           cleanup()
-          this.entries.delete(mapKey)
+          this.removeEntry(sessionId, callId, entry)
           resolve(settlement)
         },
         reject: (err) => {
           cleanup()
-          this.entries.delete(mapKey)
+          this.removeEntry(sessionId, callId, entry)
           reject(err)
         },
         cleanup,
-      })
+      }
+      entryRef = entry
+      sessionMap.set(callId, entry)
     })
   }
 
   settle(sessionId: string, input: AskAnswerInput): boolean {
+    const sessionMap = this.entriesBySession.get(sessionId)
+    if (!sessionMap || sessionMap.size === 0) return false
     const callIdProvided =
       input.callId !== undefined && input.callId !== null && input.callId !== ''
     let target: PendingEntry | undefined
     if (callIdProvided) {
       if (typeof input.callId === 'string' && input.callId.trim() !== '') {
-        target = this.entries.get(this.keyOf(sessionId, input.callId.trim()))
+        target = sessionMap.get(input.callId.trim())
       }
-    } else {
-      const candidates = [...this.entries.values()].filter((e) => e.sessionId === sessionId)
-      if (candidates.length === 1) target = candidates[0]
+    } else if (sessionMap.size === 1) {
+      target = sessionMap.values().next().value
     }
     if (target === undefined) return false
 
@@ -418,6 +465,13 @@ export class PendingAskRegistry {
       blockedExact,
       blockedSubstrings,
       true,
+    )
+    collectSecretsFromNode(
+      input.context,
+      target.obscuredContextPointers,
+      blockedExact,
+      blockedSubstrings,
+      false,
     )
     const rawUserMessage = trimCap(input.userMessage, 4_000)
     const scrubbedUserMessage =
@@ -438,25 +492,36 @@ export class PendingAskRegistry {
         blockedExact,
         blockedSubstrings,
       ),
-      dataModels: sanitizePayloadObject(input.dataModels, target.obscuredPointers, true),
+      dataModels: sanitizePayloadObject(
+        input.dataModels,
+        target.obscuredPointers,
+        true,
+        blockedExact,
+        blockedSubstrings,
+      ),
     })
     return true
   }
 
   forgetSession(sessionId: string): void {
-    for (const [key, entry] of this.entries.entries()) {
-      if (entry.sessionId === sessionId) {
-        entry.cleanup()
-        this.entries.delete(key)
-        entry.reject(new Error(`session "${sessionId}" disposed`))
-      }
+    const sessionMap = this.entriesBySession.get(sessionId)
+    if (!sessionMap) return
+    const entries = [...sessionMap.values()]
+    this.entriesBySession.delete(sessionId)
+    for (const entry of entries) {
+      entry.cleanup()
+      entry.reject(new Error(`session "${sessionId}" disposed`))
     }
   }
 
   disposeAll(): void {
-    for (const [key, entry] of this.entries.entries()) {
+    const allEntries: PendingEntry[] = []
+    for (const sessionMap of this.entriesBySession.values()) {
+      for (const entry of sessionMap.values()) allEntries.push(entry)
+    }
+    this.entriesBySession.clear()
+    for (const entry of allEntries) {
       entry.cleanup()
-      this.entries.delete(key)
       entry.reject(new Error('dsh-genui-a2ui plugin disposed'))
     }
   }
@@ -650,7 +715,12 @@ export function createAskTool(sessions: SurfaceSessions, asks: PendingAskRegistr
 
       sessions.clearCompileFailures(sid, 'ask')
       const surfaceIds = surfaceIdsOf(messages)
-      const obscuredPointers = collectObscuredPointersFromMessages(messages)
+      const sessionRedaction = sessions.getSessionRedactionState(sid, surfaceIds)
+      const obscuredPointers = collectObscuredPointersFromMessages(
+        messages,
+        sessionRedaction.kvPointers,
+      )
+      for (const p of sessionRedaction.obscuredPointers) obscuredPointers.add(p)
       const obscuredContextPointers = collectObscuredContextPointersFromMessages(
         messages,
         obscuredPointers,

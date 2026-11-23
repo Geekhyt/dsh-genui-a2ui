@@ -261,6 +261,7 @@ function startMermaidRender(key: string, code: string, dark: boolean): void {
           }
           return
         }
+        if ((mermaidListenersByKey.get(key)?.size ?? 0) === 0) return
         storeMermaidSnapshot(key, {
           svg: renderedSvg,
           error: null,

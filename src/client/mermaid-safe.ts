@@ -17,7 +17,7 @@ export const ALLOWED_MERMAID_KINDS = [
 ] as const
 
 const FORBIDDEN_SVG_TAG_RE =
-  /<(?:script|iframe|object|embed|applet|meta|base|animate|animateTransform|animateMotion|set|image|feImage)\b/i
+  /<(?:[a-z][a-z0-9._-]*:)?(?:script|iframe|object|embed|applet|meta|base|animate|animateTransform|animateMotion|set|image|feImage)\b/i
 
 const TAG_EVENT_HANDLER_RE = /<(?:"[^"]*"|'[^']*'|[^'">])*\bon[a-z]+\s*=/i
 
@@ -25,7 +25,8 @@ const OBFUSCATED_URI_RE =
   /(?:javascript|vbscript)\s*:|data\s*:\s*(?:text\/html|image\/svg\+xml|application\/xhtml\+xml)/i
 
 const TAG_OPEN_RE = /<(?:"[^"]*"|'[^']*'|[^'">])*>/g
-const STYLE_BLOCK_RE = /<style\b[^>]*>([\s\S]*?)<\/style>/gi
+const STYLE_BLOCK_RE =
+  /<(?:[a-z][a-z0-9._-]*:)?style\b(?:"[^"]*"|'[^']*'|[^'">])*>([\s\S]*?)<\/(?:[a-z][a-z0-9._-]*:)?style\s*>/gi
 
 const NAMED_ENTITY_MAP: Record<string, string> = {
   colon: ':',
@@ -87,8 +88,8 @@ export function assertSafeSvg(svg: string): void {
 const EXTERNAL_HREF_RE = /\b(?:xlink:)?href\s*=\s*(?:"([^"]*)"|'([^']*)')/gi
 
 export function isSafeStaticSvgImage(svg: string): boolean {
-  if (!/<svg\b/i.test(svg)) return false
-  if (/<foreignObject\b|<use\b|<a\b|<style\b/i.test(svg)) return false
+  if (!/<(?:[a-z][a-z0-9._-]*:)?svg\b/i.test(svg)) return false
+  if (/<(?:[a-z][a-z0-9._-]*:)?(?:foreignObject|use|a|style)\b/i.test(svg)) return false
   try {
     assertSafeSvg(svg)
   } catch {

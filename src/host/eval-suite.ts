@@ -459,6 +459,7 @@ export function classifyCompileError(errorMessage: string): CompileErrorBucket {
   }
   if (
     msg.includes('exceeds maximum') ||
+    msg.includes('exceeds limit') ||
     msg.includes('too many') ||
     msg.includes('payload is too large')
   ) {

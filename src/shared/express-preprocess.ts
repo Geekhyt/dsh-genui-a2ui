@@ -228,42 +228,132 @@ function transformConcatChunk(chunk: string, kvSep: '=' | ':', depth: number): s
   return transformConcatRhs(chunk, depth)
 }
 
-function transformConcatRhs(rhs: string, depth: number): string {
-  if (depth >= MAX_PREPROCESS_DEPTH) return rhs
-  let leadEnd = 0
-  while (leadEnd < rhs.length) {
-    if (/\s/.test(rhs[leadEnd]!)) {
-      leadEnd += 1
+function isWsCharCode(code: number): boolean {
+  return (
+    code === 32 ||
+    code === 9 ||
+    code === 10 ||
+    code === 13 ||
+    code === 12 ||
+    code === 11 ||
+    code === 160 ||
+    code === 65279
+  )
+}
+
+function splitTrailingWhitespace(src: string): { head: string; trail: string } {
+  let end = src.length
+  while (end > 0 && isWsCharCode(src.charCodeAt(end - 1))) {
+    end -= 1
+  }
+  return { head: src.slice(0, end), trail: src.slice(end) }
+}
+
+function splitLeadingWsAndComments(src: string): { lead: string; rest: string } {
+  let i = 0
+  while (i < src.length) {
+    if (isWsCharCode(src.charCodeAt(i))) {
+      i += 1
       continue
     }
-    const ch = rhs[leadEnd]
+    const ch = src[i]
     if (
       ch === '#' ||
-      (ch === '-' && rhs[leadEnd + 1] === '-') ||
-      (ch === '/' && (rhs[leadEnd + 1] === '/' || rhs[leadEnd + 1] === '*'))
+      (ch === '-' && src[i + 1] === '-') ||
+      (ch === '/' && (src[i + 1] === '/' || src[i + 1] === '*'))
     ) {
-      const skipped = scanStringOrComment(rhs, leadEnd)
+      const skipped = scanStringOrComment(src, i)
       if (skipped !== -1) {
-        leadEnd = skipped
+        i = skipped
         continue
       }
     }
     break
   }
-  const lead = rhs.slice(0, leadEnd)
-  const rest = rhs.slice(leadEnd)
-  const trail = /\s*$/.exec(rest)?.[0] ?? ''
-  const core = rest.slice(0, rest.length - trail.length)
+  return { lead: src.slice(0, i), rest: src.slice(i) }
+}
+
+function stripAllComments(src: string): string {
+  let out = ''
+  let i = 0
+  while (i < src.length) {
+    const ch = src[i]
+    if (
+      ch === '#' ||
+      (ch === '-' && src[i + 1] === '-') ||
+      (ch === '/' && (src[i + 1] === '/' || src[i + 1] === '*'))
+    ) {
+      const skipped = scanStringOrComment(src, i)
+      if (skipped !== -1) {
+        if (ch === '/' && src[i + 1] === '*') {
+          out += ' '
+        }
+        i = skipped
+        continue
+      }
+    }
+    const skipped = scanStringOrComment(src, i)
+    if (skipped !== -1) {
+      out += src.slice(i, skipped)
+      i = skipped
+      continue
+    }
+    out += ch!
+    i += 1
+  }
+  return out
+}
+
+function splitEdgeWsAndComments(src: string): { lead: string; core: string; trail: string } {
+  const { lead, rest } = splitLeadingWsAndComments(src)
+  let lastCodeEnd = 0
+  let i = 0
+  while (i < rest.length) {
+    if (isWsCharCode(rest.charCodeAt(i))) {
+      i += 1
+      continue
+    }
+    const ch = rest[i]
+    if (
+      ch === '#' ||
+      (ch === '-' && rest[i + 1] === '-') ||
+      (ch === '/' && (rest[i + 1] === '/' || rest[i + 1] === '*'))
+    ) {
+      const skipped = scanStringOrComment(rest, i)
+      if (skipped !== -1) {
+        i = skipped
+        continue
+      }
+    }
+    const skipped = scanStringOrComment(rest, i)
+    if (skipped !== -1) {
+      i = skipped
+      lastCodeEnd = i
+      continue
+    }
+    i += 1
+    lastCodeEnd = i
+  }
+  return {
+    lead,
+    core: rest.slice(0, lastCodeEnd),
+    trail: rest.slice(lastCodeEnd),
+  }
+}
+
+function transformConcatRhs(rhs: string, depth: number): string {
+  if (depth >= MAX_PREPROCESS_DEPTH) return rhs
+  const { lead, core, trail } = splitEdgeWsAndComments(rhs)
   if (core === '') return rhs
 
   const withInner = rewriteInnerBracketsForConcat(core, depth)
   const terms = splitTopLevel(withInner, '+')
   if (
     terms.length >= 2 &&
-    terms.every((t) => t.trim().length > 0) &&
-    terms.some((t) => isStringLikeConcatTerm(t))
+    terms.every((t) => stripAllComments(t).trim().length > 0) &&
+    terms.some((t) => isStringLikeConcatTerm(stripAllComments(t)))
   ) {
-    return `${lead}concat([${terms.map((t) => t.trim()).join(', ')}])${trail}`
+    return `${lead}concat([${terms.map((t) => stripAllComments(t).trim()).join(', ')}])${trail}`
   }
   return `${lead}${withInner}${trail}`
 }
@@ -293,7 +383,7 @@ function isStaticScalarLiteral(expr: string): boolean {
 function isNonCanonicalNumericString(str: string): boolean {
   const trimmed = str.trim()
   if (trimmed === '') return false
-  if (!/^[+-]?(?:\d[\d,]*\.?\d*|\.\d+)$/.test(trimmed)) return false
+  if (!/^[+-]?(?:\d[\d,]*(?:\.\d*)?|\.\d+)$/.test(trimmed)) return false
   const cleaned = trimmed.replace(/,/g, '')
   const num = Number(cleaned)
   if (!Number.isFinite(num)) return false
@@ -312,7 +402,9 @@ function parseJsonStringLiteral(literal: string): string | null {
   }
 }
 
-function parseEqLiteralCall(expr: string): { keyExpr: string; matchKey: string } | null {
+function parseEqLiteralCall(
+  expr: string,
+): { keyExpr: string; matchKey: string; decodedKey: string } | null {
   const t = expr.trim()
   if (!t.startsWith('eq(') || !t.endsWith(')')) return null
   const brackets = buildBracketMap(t)
@@ -330,7 +422,7 @@ function parseEqLiteralCall(expr: string): { keyExpr: string; matchKey: string }
     !bStr.startsWith('@') &&
     !isNonCanonicalNumericString(bStr)
   ) {
-    return { keyExpr: a, matchKey: b }
+    return { keyExpr: a, matchKey: b, decodedKey: bStr }
   }
   if (
     aStr !== null &&
@@ -339,7 +431,7 @@ function parseEqLiteralCall(expr: string): { keyExpr: string; matchKey: string }
     !aStr.startsWith('@') &&
     !isNonCanonicalNumericString(aStr)
   ) {
-    return { keyExpr: b, matchKey: a }
+    return { keyExpr: b, matchKey: a, decodedKey: aStr }
   }
   return null
 }
@@ -361,8 +453,8 @@ function tryFoldCondChain(condCall: string): string | null {
     if (!eqInfo || !isStaticScalarLiteral(truthy)) break
     if (sharedKey !== null && sharedKey !== eqInfo.keyExpr) break
     sharedKey = eqInfo.keyExpr
-    if (!seenKeys.has(eqInfo.matchKey)) {
-      seenKeys.add(eqInfo.matchKey)
+    if (!seenKeys.has(eqInfo.decodedKey)) {
+      seenKeys.add(eqInfo.decodedKey)
       entries.push([eqInfo.matchKey, truthy])
     }
     cur = falsy
@@ -433,7 +525,7 @@ function parseDecimalsLiteral(arg: string | null): {
 }
 
 function parseSimpleObjectLiteral(src: string): Record<string, string> | null {
-  const t = src.trim()
+  const t = stripAllComments(src).trim()
   if (!t.startsWith('{') || !t.endsWith('}')) return null
   const brackets = buildBracketMap(t)
   if (brackets[0] !== t.length - 1) return null
@@ -447,7 +539,7 @@ function parseSimpleObjectLiteral(src: string): Record<string, string> | null {
     const rawKey = entry.slice(0, colonIdx).trim()
     const key = rawKey.replace(/^["']|["']$/g, '')
     if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) || isDangerousObjectKey(key)) return null
-    const val = entry.slice(colonIdx + 1).trim()
+    const val = stripAllComments(entry.slice(colonIdx + 1)).trim()
     if (val === '') return null
     out[key] = val
   }
@@ -720,7 +812,12 @@ export function flattenChainedCalc(ui: string): string {
 
   const outStmts = stmts.map((stmt) => {
     const { code, comment } = splitTrailingLineComment(stmt)
-    const trimmed = code.trim()
+    const trimmed = stripAllComments(code).trim()
+    if (/^(?:surface|deleteSurface)\s*\(/.test(trimmed)) {
+      localMaps.clear()
+      calcDefs.clear()
+      return stmt
+    }
     const assignMatch = /^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*([\s\S]+)$/.exec(trimmed)
     if (!assignMatch) {
       return `${rewriteInlineCalcsInStatement(code, localMaps, calcDefs, nextAlias)}${comment}`
@@ -733,7 +830,9 @@ export function flattenChainedCalc(ui: string): string {
     if (objMap !== null) {
       calcDefs.delete(varName)
       const rewrittenCode = rewriteInlineCalcsInStatement(code, localMaps, calcDefs, nextAlias)
-      const rewrittenMatch = /^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*([\s\S]+)$/.exec(rewrittenCode.trim())
+      const rewrittenMatch = /^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*([\s\S]+)$/.exec(
+        stripAllComments(rewrittenCode).trim(),
+      )
       const nextObjMap =
         rewrittenMatch !== null ? (parseSimpleObjectLiteral(rewrittenMatch[2]!) ?? objMap) : objMap
       localMaps.set(varName, nextObjMap)
@@ -753,7 +852,7 @@ export function flattenChainedCalc(ui: string): string {
     if (!inlined.didInline) return stmt
 
     const lead = /^\s*/.exec(code)?.[0] ?? ''
-    const trailSpace = /\s*$/.exec(code)?.[0] ?? ''
+    const { trail: trailSpace } = splitTrailingWhitespace(code)
     return `${lead}${varName} = ${inlined.rewritten}${comment ? `${trailSpace}${comment}` : ''}`
   })
 
@@ -788,7 +887,7 @@ function rewriteNonValueShorthandCallArgs(inner: string, spec: ShorthandCheckSpe
   const positional: string[] = []
 
   for (const arg of args) {
-    const trimmed = arg.trim()
+    const trimmed = stripAllComments(arg).trim()
     if (trimmed === '' || trimmed.startsWith('?')) continue
     const eqIdx = findTopLevelChar(trimmed, '=')
     if (eqIdx !== -1 && trimmed[eqIdx + 1] !== '=' && !/[!<>]/.test(trimmed[eqIdx - 1] ?? '')) {
@@ -819,27 +918,27 @@ function rewriteNonValueShorthandCallArgs(inner: string, spec: ShorthandCheckSpe
 
   let changed = false
   const nextArgs = args.map((arg) => {
-    const { code: argCode, comment: argComment } = splitTrailingLineComment(arg)
-    const lead = /^\s*/.exec(argCode)?.[0] ?? ''
-    const trail = /\s*$/.exec(argCode)?.[0] ?? ''
-    const trimmed = argCode.trim()
+    const { lead, core, trail } = splitEdgeWsAndComments(arg)
+    const trimmed = stripAllComments(core).trim()
     if (!trimmed.startsWith('?')) return arg
     const afterQ = trimmed.slice(1).trimStart()
     if (afterQ === 'required') {
       changed = true
-      return `${lead}${buildRequiredCheck()}${trail}${argComment}`
+      return `${lead}${buildRequiredCheck()}${trail}`
     }
     if (!afterQ.startsWith('required(') || !afterQ.endsWith(')')) return arg
     const bMap = buildBracketMap(afterQ)
     if (bMap[8] !== afterQ.length - 1) return arg
-    const reqArgs = splitTopLevel(afterQ.slice(9, -1), ',').filter((a) => a.trim() !== '')
+    const reqArgs = splitTopLevel(afterQ.slice(9, -1), ',')
+      .map((a) => stripAllComments(a).trim())
+      .filter((a) => a !== '')
     if (reqArgs.length === 0) {
       changed = true
-      return `${lead}${buildRequiredCheck()}${trail}${argComment}`
+      return `${lead}${buildRequiredCheck()}${trail}`
     }
-    if (reqArgs.length === 1 && parseJsonStringLiteral(reqArgs[0]!.trim()) !== null) {
+    if (reqArgs.length === 1 && parseJsonStringLiteral(reqArgs[0]!) !== null) {
       changed = true
-      return `${lead}${buildRequiredCheck(reqArgs[0]!.trim())}${trail}${argComment}`
+      return `${lead}${buildRequiredCheck(reqArgs[0]!)}${trail}`
     }
     return arg
   })

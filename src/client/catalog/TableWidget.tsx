@@ -365,9 +365,19 @@ export const TableWidget = memo(function TableWidget({
 
   const inferredCols = useMemo<readonly TableColumnInput[]>(() => {
     if (Array.isArray(explicitCols) && explicitCols.length > 0) {
-      const valid = explicitCols.filter((c): c is TableColumnInput =>
-        Boolean(c && typeof c === 'object' && typeof c.key === 'string' && c.key.trim() !== ''),
-      )
+      const seenKeys = new Set<string>()
+      const valid: TableColumnInput[] = []
+      for (const c of explicitCols) {
+        if (!c || typeof c !== 'object' || typeof c.key !== 'string') continue
+        const key = c.key.trim()
+        if (key === '' || seenKeys.has(key)) continue
+        seenKeys.add(key)
+        valid.push({
+          ...c,
+          key,
+          label: c.label !== undefined && c.label !== null ? String(c.label) : key,
+        })
+      }
       if (valid.length > 0) return valid
     }
     const keys = new Set<string>()
@@ -440,15 +450,31 @@ export const TableWidget = memo(function TableWidget({
             })
           const align = col.align ?? (isNumeric ? 'right' : 'left')
           const colMax = barMaxByCol.get(col.key) ?? 100
-          return columnHelper.accessor((row) => row[col.key], {
-            id: col.key,
-            header: col.label,
-            enableSorting: col.format === 'sparkline' ? false : col.sortable !== false,
-            sortUndefined: 'last',
-            sortFn: rawNumber ? 'basic' : isNumeric ? 'formattedNumeric' : 'alphanumeric',
-            meta: { align, isNumeric, wrapProse },
-            cell: (info) => renderFormattedTableCell(info.getValue(), col.format, colMax, msg),
-          })
+          const isEmptySortableCell = (val: unknown): boolean => {
+            if (val === null || val === undefined) return true
+            if (typeof val === 'number') return !Number.isFinite(val)
+            if (typeof val === 'string') {
+              const t = val.trim()
+              return t === '' || t === '-' || t === '—' || t === '–' || t === 'N/A'
+            }
+            return false
+          }
+          return columnHelper.accessor(
+            (row) => {
+              const v = row[col.key]
+              return isEmptySortableCell(v) ? undefined : v
+            },
+            {
+              id: col.key,
+              header: String(col.label ?? col.key),
+              enableSorting: col.format === 'sparkline' ? false : col.sortable !== false,
+              sortUndefined: 'last',
+              sortFn: rawNumber ? 'basic' : isNumeric ? 'formattedNumeric' : 'alphanumeric',
+              meta: { align, isNumeric, wrapProse },
+              cell: (info) =>
+                renderFormattedTableCell(info.row.original[col.key], col.format, colMax, msg),
+            },
+          )
         }),
       ),
     [inferredCols, numericKeySet, normalizedData, msg, barMaxByCol],

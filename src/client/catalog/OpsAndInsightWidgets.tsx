@@ -10,6 +10,7 @@ import {
   TimelineApi,
 } from '../../shared/catalog-schema.ts'
 import { useElementWidth, useTransientFlag } from '../dom-hooks.ts'
+import { parseFileTarget } from '../file-opener.tsx'
 import { useRuntimeMessages } from '../i18n.ts'
 import {
   DshButton,
@@ -111,6 +112,7 @@ export const DshComparisonImpl = defineComponent<{
     [props.options, props.rows],
   )
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
+  const selectSeqRef = useRef(0)
   const activeSelectedKey =
     selectedKey !== null && options.some((o) => o.key === selectedKey) ? selectedKey : null
   const canAct = !readOnly && Boolean(runAction)
@@ -120,6 +122,8 @@ export const DshComparisonImpl = defineComponent<{
 
   const handleSelectOption = (opt: (typeof options)[number]) => {
     if (!canAct || !runAction) return
+    const prevKey = activeSelectedKey
+    const seq = ++selectSeqRef.current
     setSelectedKey(opt.key)
     void runAction({
       metadata: {
@@ -134,7 +138,7 @@ export const DshComparisonImpl = defineComponent<{
         },
       },
     }).then((ok) => {
-      if (!ok) setSelectedKey(null)
+      if (!ok && selectSeqRef.current === seq) setSelectedKey(prevKey)
     })
   }
 
@@ -371,7 +375,12 @@ export const DshLogViewerImpl = defineComponent<{
               const labelText =
                 lv === 'all' ? `${msg.logAllLevels} (${count})` : `${lv.toUpperCase()} (${count})`
               return (
-                <DshPill key={lv} active={levelFilter === lv} onClick={() => setLevelFilter(lv)}>
+                <DshPill
+                  key={lv}
+                  active={levelFilter === lv}
+                  aria-pressed={levelFilter === lv}
+                  onClick={() => setLevelFilter(lv)}
+                >
                   {labelText}
                 </DshPill>
               )
@@ -394,7 +403,10 @@ export const DshLogViewerImpl = defineComponent<{
           <div className={css.emptyCell}>{msg.logEmpty}</div>
         ) : (
           filtered.map((entry) => {
-            const hasExtra = entry.detail !== '' || Boolean(entry.filePath) || canAct
+            const hasValidFile = Boolean(
+              entry.filePath && parseFileTarget(entry.filePath, entry.line) !== null,
+            )
+            const hasExtra = entry.detail !== '' || hasValidFile || canAct
             const expanded = expandedIds.has(entry.id)
             return (
               <div
@@ -573,6 +585,7 @@ export const DshTimelineImpl = defineComponent<{
                     <button
                       type="button"
                       className={css.logDetailToggle}
+                      aria-expanded={detailOpen}
                       onClick={() => toggleDetail(idx)}
                     >
                       {detailOpen ? msg.timelineCollapseDetail : msg.timelineExpandDetail}
@@ -797,6 +810,29 @@ export const DshSourceListImpl = defineComponent<{
                 ) : (
                   <span className={css.sourceTitleStatic}>{item.title}</span>
                 )}
+                {item.url && canAct ? (
+                  <button
+                    type="button"
+                    className={css.diffCopyBtn}
+                    onClick={() => {
+                      void runAction?.({
+                        metadata: {
+                          extensions: {
+                            dshSelection: {
+                              source: 'sourceList',
+                              label: item.title,
+                              series: item.domain,
+                              url: item.url,
+                              item: item.raw,
+                            },
+                          },
+                        },
+                      })
+                    }}
+                  >
+                    {msg.defaultActionCta}
+                  </button>
+                ) : null}
                 {item.badge ? <DshTag tone="info">{item.badge}</DshTag> : null}
                 {item.scorePercent !== undefined ? (
                   <span
@@ -841,7 +877,9 @@ export const DshMetricRingImpl = defineComponent<{
   const maxVal =
     typeof props.max === 'number' && Number.isFinite(props.max) && props.max > 0 ? props.max : 100
   const rawMetricNum = Number(props.value)
-  const safeAriaNow = Number.isFinite(rawMetricNum) ? rawMetricNum : 0
+  const safeAriaNow = Number.isFinite(rawMetricNum)
+    ? Math.max(0, Math.min(maxVal, rawMetricNum))
+    : 0
   const unit =
     props.unit !== undefined && props.unit !== null ? String(props.unit) : maxVal === 100 ? '%' : ''
   const geom = useMemo(
@@ -1083,6 +1121,7 @@ export const DshServiceGraphImpl = defineComponent<{
                   key={node.id}
                   type="button"
                   className={css.serviceNodeBox}
+                  aria-pressed={isSelected}
                   data-status={node.status}
                   data-selected={isSelected ? 'true' : 'false'}
                   style={{

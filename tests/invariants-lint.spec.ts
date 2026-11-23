@@ -18,8 +18,8 @@ import {
 
 const ROOT_DIR = resolve(import.meta.dirname, '..')
 
-describe('Architectural invariant linter (17 rules)', () => {
-  it('passes all 17 rules on the live repository with zero violations', () => {
+describe('Architectural invariant linter (19 rules)', () => {
+  it('passes all 19 rules on the live repository with zero violations', () => {
     const report = runAllInvariantChecks(ROOT_DIR)
     expect(report.filesScanned).toBeGreaterThan(50)
     expect(report.violations).toEqual([])
@@ -171,6 +171,24 @@ describe('Architectural invariant linter (17 rules)', () => {
     )
     expect(cssKeyV.some((v) => v.rule === 'css-module-key-exists')).toBe(true)
     expect(cssKeyV).toHaveLength(1)
+
+    const shadowedCssV = checkCssInvariants(
+      `@container (max-width: 360px) { .bar { padding: 2px 4px; } }\n.bar { padding: 4px 10px; }`,
+      'src/client/catalog/Shadowed.module.css',
+    )
+    expect(shadowedCssV.some((v) => v.rule === 'css-no-shadowed-container-query')).toBe(true)
+
+    const properOrderCssOk = checkCssInvariants(
+      `.bar { padding: 4px 10px; }\n@container (max-width: 360px) { .bar { padding: 2px 4px; } }`,
+      'src/client/catalog/Ordered.module.css',
+    )
+    expect(properOrderCssOk).toEqual([])
+
+    const redosV = checkTsInvariants(
+      `export const trimTrail = (s: string) => s.replace(/\\s*$/, '')`,
+      'src/shared/bad-regex.ts',
+    )
+    expect(redosV.some((v) => v.rule === 'no-catastrophic-trailing-ws-regex')).toBe(true)
   })
 
   it('verifies locale key parity across locale/*.json and TypeScript message tables', () => {

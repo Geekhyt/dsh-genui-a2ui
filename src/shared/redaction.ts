@@ -11,6 +11,28 @@ export function normalizePointerPath(pointer: string): string {
   return withSlash.length > 1 ? withSlash.replace(/\/+$/, '') : withSlash
 }
 
+function matchesWildcardPointer(norm: string, obs: string, matchParent: boolean): boolean {
+  const normSegs = norm.slice(1).split('/')
+  const obsSegs = obs.slice(1).split('/')
+  if (normSegs.length >= obsSegs.length) {
+    let ok = true
+    for (let i = 0; i < obsSegs.length; i++) {
+      if (obsSegs[i] !== '*' && obsSegs[i] !== normSegs[i]) {
+        ok = false
+        break
+      }
+    }
+    if (ok) return true
+  }
+  if (matchParent && normSegs.length < obsSegs.length) {
+    for (let i = 0; i < normSegs.length; i++) {
+      if (obsSegs[i] !== '*' && obsSegs[i] !== normSegs[i]) return false
+    }
+    return true
+  }
+  return false
+}
+
 export function isPointerObscured(
   pointer: string,
   obscuredPointers: ReadonlySet<string>,
@@ -25,6 +47,7 @@ export function isPointerObscured(
     const isRelative = !trimmed.startsWith('/')
     const obs = normalizePointerPath(trimmed)
     if (obs === '/') return true
+    if (obs.includes('/*') && matchesWildcardPointer(norm, obs, matchParent)) return true
     if (norm === obs || norm.startsWith(`${obs}/`)) return true
     if (matchParent && obs.startsWith(`${norm}/`)) return true
     if (isRelative && (norm.endsWith(obs) || norm.includes(`${obs}/`))) return true
@@ -46,23 +69,231 @@ export function extractBindingPointer(raw: unknown): string | null {
   return typeof p === 'string' && p.trim() !== '' ? p.trim() : null
 }
 
-const INTERP_POINTER_RE = /\$\{([^}]+)\}/g
+export function extractRawBindingPointer(raw: unknown): string | null {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return null
+  const rec = raw as { path?: unknown; '@path'?: unknown }
+  const p = rec.path ?? rec['@path']
+  return typeof p === 'string' ? p.trim() : null
+}
 
-export function extractInterpolatedPointers(text: string): readonly string[] {
-  if (!text.includes('${')) return []
-  const out: string[] = []
-  INTERP_POINTER_RE.lastIndex = 0
-  let m = INTERP_POINTER_RE.exec(text)
-  while (m !== null) {
-    const inner = (m[1] ?? '').trim()
-    if (inner.startsWith('/') || inner.startsWith('$/')) {
-      out.push(inner.startsWith('$/') ? inner.slice(1) : inner)
-    } else if (/^[A-Za-z_][A-Za-z0-9_/-]*$/.test(inner)) {
-      out.push(inner)
+const INTERP_TOKEN_RE = /(?:\$\/[^\s,():"'{}[\]]+|\/[^\s,():"'{}[\]]+|[^\s,():"'{}[\]]+)/gu
+
+function scanExpressionPointers(expr: string, out: string[], depth: number): boolean {
+  if (depth > 8) {
+    out.push('/')
+    return false
+  }
+  const trimmed = expr.trim()
+  if (trimmed === '') return true
+  if (trimmed.includes('${')) {
+    const nested = extractInterpolatedPointers(trimmed, depth + 1)
+    for (const p of nested) out.push(p)
+  }
+  let i = 0
+  while (i < trimmed.length) {
+    const ch = trimmed[i]!
+    if (ch === '"' || ch === "'") {
+      const quote = ch
+      let j = i + 1
+      let strVal = ''
+      while (j < trimmed.length) {
+        if (trimmed[j] === '\\' && j + 1 < trimmed.length) {
+          strVal += trimmed[j + 1]!
+          j += 2
+          continue
+        }
+        if (trimmed[j] === quote) break
+        strVal += trimmed[j]!
+        j += 1
+      }
+      if (j >= trimmed.length) {
+        out.push('/')
+        return false
+      }
+      if (strVal.includes('${')) {
+        for (const p of extractInterpolatedPointers(strVal, depth + 1)) out.push(p)
+      }
+      i = j + 1
+      continue
     }
-    m = INTERP_POINTER_RE.exec(text)
+    if (ch === '$' && trimmed[i + 1] === '{') {
+      i += 2
+      continue
+    }
+    if (/\s/.test(ch) || ch === ',' || ch === '(' || ch === ')' || ch === ':' || ch === '}') {
+      i += 1
+      continue
+    }
+    INTERP_TOKEN_RE.lastIndex = i
+    const m = INTERP_TOKEN_RE.exec(trimmed)
+    if (!m || m.index !== i) {
+      i += 1
+      continue
+    }
+    const token = m[0]!
+    const nextNonWsIdx = (() => {
+      let k = i + token.length
+      while (k < trimmed.length && /\s/.test(trimmed[k]!)) k += 1
+      return k
+    })()
+    const nextCh = trimmed[nextNonWsIdx]
+    i += token.length
+    if (nextCh === '(' || nextCh === ':') {
+      continue
+    }
+    if (
+      token === 'true' ||
+      token === 'false' ||
+      token === 'null' ||
+      /^[+-]?\d+(?:\.\d+)?$/.test(token)
+    ) {
+      continue
+    }
+    if (token.startsWith('$/')) {
+      out.push(token.slice(1))
+    } else if (token.startsWith('/')) {
+      out.push(token)
+    } else {
+      out.push(token)
+      if (token.includes('.')) {
+        out.push(token.replace(/\./g, '/'))
+      }
+    }
+  }
+  return true
+}
+
+export function extractInterpolatedPointers(text: string, depth = 0): readonly string[] {
+  if (!text.includes('${')) return []
+  if (depth > 8) return ['/']
+  const out: string[] = []
+  let i = 0
+  while (i < text.length) {
+    const start = text.indexOf('${', i)
+    if (start === -1) break
+    let j = start + 2
+    let braceDepth = 1
+    let inQuote: string | null = null
+    while (j < text.length && braceDepth > 0) {
+      const ch = text[j]!
+      if (inQuote !== null) {
+        if (ch === '\\' && j + 1 < text.length) {
+          j += 2
+          continue
+        }
+        if (ch === inQuote) inQuote = null
+        j += 1
+        continue
+      }
+      if (ch === '"' || ch === "'") {
+        inQuote = ch
+        j += 1
+        continue
+      }
+      if (ch === '{') braceDepth += 1
+      else if (ch === '}') braceDepth -= 1
+      j += 1
+    }
+    if (braceDepth !== 0) {
+      out.push('/')
+      break
+    }
+    const inner = text.slice(start + 2, j - 1)
+    scanExpressionPointers(inner, out, depth + 1)
+    i = j
   }
   return out
+}
+
+function collectChildComponentIds(comp: Record<string, unknown>, outIds: string[]): void {
+  const pushStr = (v: unknown) => {
+    if (typeof v === 'string' && v !== '') outIds.push(v)
+  }
+  pushStr(comp.child)
+  pushStr(comp.trigger)
+  pushStr(comp.content)
+  if (Array.isArray(comp.children)) {
+    for (const c of comp.children) pushStr(c)
+  }
+  if (Array.isArray(comp.tabs)) {
+    for (const tab of comp.tabs) {
+      if (typeof tab === 'object' && tab !== null) {
+        pushStr((tab as Record<string, unknown>).child)
+      }
+    }
+  }
+  if (Array.isArray(comp.items)) {
+    for (const item of comp.items) {
+      if (typeof item === 'object' && item !== null) {
+        pushStr((item as Record<string, unknown>).child)
+      }
+    }
+  }
+}
+
+export function resolveTemplateObscuredPointers(
+  components: readonly Record<string, unknown>[],
+  outObscured: Set<string>,
+): void {
+  const byId = new Map<string, Record<string, unknown>>()
+  for (const comp of components) {
+    if (typeof comp.id === 'string' && comp.id !== '') {
+      byId.set(comp.id, comp)
+    }
+  }
+  const templatePathByCompId = new Map<string, Set<string>>()
+  const markTemplateSubtree = (rootId: string, tplPath: string) => {
+    const visited = new Set<string>()
+    const stack = [rootId]
+    while (stack.length > 0) {
+      const id = stack.pop()!
+      if (visited.has(id)) continue
+      visited.add(id)
+      let paths = templatePathByCompId.get(id)
+      if (!paths) {
+        paths = new Set<string>()
+        templatePathByCompId.set(id, paths)
+      }
+      paths.add(tplPath)
+      const comp = byId.get(id)
+      if (!comp) continue
+      const childIds: string[] = []
+      collectChildComponentIds(comp, childIds)
+      for (const cid of childIds) stack.push(cid)
+    }
+  }
+
+  for (const comp of components) {
+    const children = comp.children
+    if (typeof children === 'object' && children !== null && !Array.isArray(children)) {
+      const rec = children as Record<string, unknown>
+      const tplPath = typeof rec.path === 'string' ? rec.path.trim() : ''
+      const tplCompId = typeof rec.componentId === 'string' ? rec.componentId.trim() : ''
+      if (tplPath !== '' && tplCompId !== '') {
+        markTemplateSubtree(tplCompId, normalizePointerPath(tplPath))
+      }
+    }
+  }
+
+  for (const comp of components) {
+    if (comp.component !== 'TextField' || comp.variant !== 'obscured') continue
+    const rawPtr = extractRawBindingPointer(comp.value)
+    if (rawPtr === null) continue
+    if (rawPtr.startsWith('/')) {
+      outObscured.add(normalizePointerPath(rawPtr))
+      continue
+    }
+    const id = typeof comp.id === 'string' ? comp.id : ''
+    const tplPaths = id !== '' ? templatePathByCompId.get(id) : undefined
+    if (tplPaths && tplPaths.size > 0) {
+      for (const tp of tplPaths) {
+        const cleanRel = rawPtr.replace(/^\/+/, '')
+        outObscured.add(cleanRel === '' ? tp : `${tp}/*/${cleanRel}`)
+      }
+    } else {
+      outObscured.add(rawPtr === '' ? '/' : normalizePointerPath(rawPtr))
+    }
+  }
 }
 
 export function isBindingExpression(node: unknown): boolean {
@@ -126,8 +357,11 @@ export function recordSecretPrimitive(
   if (typeof v === 'string') {
     const trimmed = v.trim()
     if (trimmed === '' || BENIGN_SECRET_SENTINELS.has(trimmed.toLowerCase())) return
-    if (allowShortExact ? v.length >= 3 : v.length >= 4) outExact.add(v)
+    const minExact = allowShortExact ? 3 : 4
+    if (v.length >= minExact) outExact.add(v)
+    if (trimmed.length >= minExact) outExact.add(trimmed)
     if (v.length >= 4) outSubstrings.add(v)
+    if (trimmed.length >= 4) outSubstrings.add(trimmed)
   } else if (typeof v === 'number' && Number.isFinite(v)) {
     const s = String(v)
     if (s.length >= 6) {
@@ -182,17 +416,24 @@ export function collectSecretsFromNode(
   outSubstrings: Set<string>,
   stripPerSurfaceRoot = false,
 ): void {
-  const walk = (node: unknown, path: string, depth: number, isSurfaceRoot: boolean) => {
+  const walk = (
+    node: unknown,
+    path: string,
+    depth: number,
+    isSurfaceRoot: boolean,
+    withinSecret: boolean,
+  ) => {
     if (depth > 8 || node === null || node === undefined) return
     if (typeof node === 'string' || typeof node === 'number') {
-      if (path !== '' && isPointerObscuredOrParent(path, obscuredPointers)) {
-        recordSecretPrimitive(node, outExact, outSubstrings, true)
+      const explicitObscured = path !== '' && isPointerObscured(path, obscuredPointers, false)
+      if (explicitObscured || withinSecret) {
+        recordSecretPrimitive(node, outExact, outSubstrings, explicitObscured)
       }
       return
     }
     if (Array.isArray(node)) {
       for (let i = 0; i < node.length; i++) {
-        walk(node[i], path === '' ? `/${i}` : `${path}/${i}`, depth + 1, false)
+        walk(node[i], path === '' ? `/${i}` : `${path}/${i}`, depth + 1, false, withinSecret)
       }
       return
     }
@@ -202,20 +443,19 @@ export function collectSecretsFromNode(
         !isSurfaceRoot &&
         ((typeof rec.key === 'string' && isSecretKey(rec.key)) ||
           (typeof rec.name === 'string' && isSecretKey(rec.name)))
-      if (isKvSecret) {
-        recordSecretPrimitive(rec.value, outExact, outSubstrings, false)
-      }
       for (const [k, v] of Object.entries(rec)) {
-        if (!isSurfaceRoot && isSecretKey(k)) {
+        const childSecret =
+          withinSecret || (!isSurfaceRoot && (isSecretKey(k) || (isKvSecret && k === 'value')))
+        if (childSecret && (typeof v === 'string' || typeof v === 'number')) {
           recordSecretPrimitive(v, outExact, outSubstrings, false)
         }
         const seg = escapeJsonPointerSegment(k)
         const nextPath = isSurfaceRoot ? '' : path === '' ? `/${seg}` : `${path}/${seg}`
-        walk(v, nextPath, isSurfaceRoot ? depth : depth + 1, false)
+        walk(v, nextPath, isSurfaceRoot ? depth : depth + 1, false, childSecret)
       }
     }
   }
-  walk(root, '', 0, stripPerSurfaceRoot)
+  walk(root, '', 0, stripPerSurfaceRoot, false)
 }
 
 export function scrubSecretString(
@@ -224,9 +464,13 @@ export function scrubSecretString(
   blockedSubstrings: ReadonlySet<string>,
 ): string | undefined {
   if (blockedExact.has(input)) return undefined
+  if (blockedSubstrings.size === 0) return input
+  const sorted = [...blockedSubstrings]
+    .filter((s) => s.length >= 4)
+    .sort((a, b) => b.length - a.length)
   let out = input
-  for (const secret of blockedSubstrings) {
-    if (secret.length >= 4 && out.includes(secret)) {
+  for (const secret of sorted) {
+    if (out.includes(secret)) {
       out = out.split(secret).join('[REDACTED]')
     }
   }

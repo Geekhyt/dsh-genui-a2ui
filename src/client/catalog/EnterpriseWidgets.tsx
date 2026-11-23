@@ -117,7 +117,7 @@ export const DshTrackerImpl = defineComponent<{
 
   const hasError = slices.some((s) => s.status === 'error')
   const hasWarn = !hasError && slices.some((s) => s.status === 'warning')
-  const overallState = hasError ? 'error' : hasWarn ? 'ongoing' : 'done'
+  const overallState = hasError ? 'error' : hasWarn ? 'warning' : 'done'
 
   const statusText = (s: TrackerSliceStatus) =>
     s === 'error'
@@ -735,9 +735,19 @@ export const DshScheduleImpl = defineComponent<{
               estLabelPx += (ch.codePointAt(0) ?? 0) > 0xff ? 11.2 : 6.4
             }
             const minPctForInside = Math.min(82, Math.ceil(estLabelPx / 2.4))
-            const placeOutside = tr.widthPct < minPctForInside
-            const spaceRightPct = 100 - (tr.leftPct + tr.widthPct)
+            const spaceRightPct = Math.max(0, 100 - (tr.leftPct + tr.widthPct))
+            const maxOutsidePct = Math.max(spaceRightPct, tr.leftPct)
+            const placeOutside = tr.widthPct < minPctForInside && maxOutsidePct > tr.widthPct
             const placeOutsideRight = spaceRightPct >= tr.leftPct
+            const barTitle = `${tr.title}: ${tr.startLabel} – ${tr.endLabel}${tr.progress !== undefined ? ` (${tr.progress}%)` : ''}${tr.note ? ` · ${tr.note}` : ''}`
+            const barContent = (
+              <>
+                {tr.progress !== undefined && tr.progress > 0 && tr.progress < 100 ? (
+                  <span className={css.scheduleBarProgress} style={{ width: `${tr.progress}%` }} />
+                ) : null}
+                {!placeOutside ? <span className={css.scheduleBarText}>{barLabel}</span> : null}
+              </>
+            )
 
             return (
               <div key={tr.id} className={css.scheduleRow}>
@@ -753,42 +763,44 @@ export const DshScheduleImpl = defineComponent<{
                       aria-hidden="true"
                     />
                   ) : null}
-                  <button
-                    type="button"
-                    disabled={!canAct}
-                    className={css.scheduleBar}
-                    data-status={tr.status}
-                    data-clickable={canAct ? 'true' : 'false'}
-                    data-narrow={placeOutside ? 'true' : 'false'}
-                    style={{ left: `${tr.leftPct}%`, width: `${tr.widthPct}%` }}
-                    title={`${tr.title}: ${tr.startLabel} – ${tr.endLabel}${tr.progress !== undefined ? ` (${tr.progress}%)` : ''}${tr.note ? ` · ${tr.note}` : ''}`}
-                    onClick={
-                      canAct
-                        ? () => {
-                            void runAction?.({
-                              metadata: {
-                                extensions: {
-                                  dshSelection: {
-                                    source: 'schedule',
-                                    label: tr.title,
-                                    value: `${tr.startLabel} – ${tr.endLabel}`,
-                                    track: tr.raw,
-                                  },
-                                },
+                  {canAct ? (
+                    <button
+                      type="button"
+                      className={css.scheduleBar}
+                      data-status={tr.status}
+                      data-clickable="true"
+                      data-narrow={placeOutside ? 'true' : 'false'}
+                      style={{ left: `${tr.leftPct}%`, width: `${tr.widthPct}%` }}
+                      title={barTitle}
+                      onClick={() => {
+                        void runAction?.({
+                          metadata: {
+                            extensions: {
+                              dshSelection: {
+                                source: 'schedule',
+                                label: tr.title,
+                                value: `${tr.startLabel} – ${tr.endLabel}`,
+                                track: tr.raw,
                               },
-                            })
-                          }
-                        : undefined
-                    }
-                  >
-                    {tr.progress !== undefined && tr.progress > 0 && tr.progress < 100 ? (
-                      <span
-                        className={css.scheduleBarProgress}
-                        style={{ width: `${tr.progress}%` }}
-                      />
-                    ) : null}
-                    {!placeOutside ? <span className={css.scheduleBarText}>{barLabel}</span> : null}
-                  </button>
+                            },
+                          },
+                        })
+                      }}
+                    >
+                      {barContent}
+                    </button>
+                  ) : (
+                    <div
+                      className={css.scheduleBar}
+                      data-status={tr.status}
+                      data-clickable="false"
+                      data-narrow={placeOutside ? 'true' : 'false'}
+                      style={{ left: `${tr.leftPct}%`, width: `${tr.widthPct}%` }}
+                      title={barTitle}
+                    >
+                      {barContent}
+                    </div>
+                  )}
                   {placeOutside ? (
                     <span
                       className={css.scheduleBarOutsideLabel}
@@ -937,8 +949,8 @@ export const DshEntityHeaderImpl = defineComponent<{
     props.statusLabel !== undefined && props.statusLabel !== null ? String(props.statusLabel) : ''
   const monogram =
     props.avatarText !== undefined && props.avatarText !== null && String(props.avatarText) !== ''
-      ? String(props.avatarText).slice(0, 3)
-      : title.trim().slice(0, 2).toUpperCase()
+      ? [...String(props.avatarText)].slice(0, 3).join('')
+      : [...title.trim()].slice(0, 2).join('').toUpperCase()
 
   const tags = useMemo(
     () => (Array.isArray(props.tags) ? props.tags.map(String).filter(Boolean) : []),
@@ -949,16 +961,18 @@ export const DshEntityHeaderImpl = defineComponent<{
     [props.metrics],
   )
 
-  const dotState: 'done' | 'ongoing' | 'error' | 'pending' | null =
+  const dotState: 'done' | 'ongoing' | 'warning' | 'error' | 'pending' | null =
     props.status === 'healthy'
       ? 'done'
-      : props.status === 'ongoing' || props.status === 'warning'
-        ? 'ongoing'
-        : props.status === 'error'
-          ? 'error'
-          : props.status === 'offline'
-            ? 'pending'
-            : null
+      : props.status === 'warning'
+        ? 'warning'
+        : props.status === 'ongoing'
+          ? 'ongoing'
+          : props.status === 'error'
+            ? 'error'
+            : props.status === 'offline'
+              ? 'pending'
+              : null
 
   const canAct = !readOnly && Boolean(runAction)
   const rawCtaLabel =

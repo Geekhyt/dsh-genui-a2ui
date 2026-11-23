@@ -1,3 +1,26 @@
+import { isDangerousObjectKey } from '../../shared/constants.ts'
+
+export function makeUniqueIdFactory(): (rawId: string) => string {
+  const seen = new Map<string, number>()
+  return (rawId: string): string => {
+    const base = rawId.trim() || 'item'
+    const count = seen.get(base)
+    if (count === undefined) {
+      seen.set(base, 1)
+      return base
+    }
+    let next = count + 1
+    let candidate = `${base}_${next}`
+    while (seen.has(candidate)) {
+      next += 1
+      candidate = `${base}_${next}`
+    }
+    seen.set(base, next)
+    seen.set(candidate, 1)
+    return candidate
+  }
+}
+
 export interface NormalizedSelectOption {
   readonly value: string
   readonly label: string
@@ -141,8 +164,9 @@ export function normalizeComparisonData(
         typeof rec.values === 'object' && rec.values !== null && !Array.isArray(rec.values)
           ? (rec.values as Record<string, unknown>)
           : rec
-      const cells: Record<string, ParsedComparisonCell> = {}
+      const cells = Object.create(null) as Record<string, ParsedComparisonCell>
       for (const opt of options) {
+        if (isDangerousObjectKey(opt.key)) continue
         cells[opt.key] = parseComparisonCell(
           Object.hasOwn(valSource, opt.key) ? valSource[opt.key] : undefined,
         )
@@ -190,11 +214,12 @@ export function normalizeLogEntries(raw: unknown): readonly NormalizedLogEntry[]
         : []
 
   const out: NormalizedLogEntry[] = []
+  const nextId = makeUniqueIdFactory()
   list.forEach((item, idx) => {
     if (typeof item === 'string') {
       const m = RAW_LOG_RE.exec(item)
       out.push({
-        id: `log_${idx}`,
+        id: nextId(`log_${idx}`),
         time: m?.[1] ?? '',
         level: normalizeLogLevel(m?.[2]),
         service: m?.[3] ?? '',
@@ -214,7 +239,7 @@ export function normalizeLogEntries(raw: unknown): readonly NormalizedLogEntry[]
             ? Number.parseInt(rec.line.trim(), 10)
             : undefined
       out.push({
-        id: String(rec.id ?? `log_${idx}`),
+        id: nextId(String(rec.id ?? `log_${idx}`)),
         time: rec.time !== undefined && rec.time !== null ? String(rec.time) : '',
         level: normalizeLogLevel(rec.level ?? rec.severity),
         service:
@@ -289,10 +314,12 @@ function normalizeKanbanPriority(raw: unknown): KanbanPriority | undefined {
 export function normalizeKanbanColumns(raw: unknown): readonly NormalizedKanbanColumn[] {
   if (!Array.isArray(raw)) return []
   const cols: NormalizedKanbanColumn[] = []
+  const nextColId = makeUniqueIdFactory()
+  const nextCardId = makeUniqueIdFactory()
   raw.forEach((colItem, colIdx) => {
     if (typeof colItem !== 'object' || colItem === null) return
     const rec = colItem as Record<string, unknown>
-    const colId = String(rec.id ?? rec.key ?? `col_${colIdx}`)
+    const colId = nextColId(String(rec.id ?? rec.key ?? `col_${colIdx}`))
     const title = String(rec.title ?? rec.label ?? rec.name ?? colId)
     const rawCards = Array.isArray(rec.cards)
       ? rec.cards
@@ -303,7 +330,7 @@ export function normalizeKanbanColumns(raw: unknown): readonly NormalizedKanbanC
     rawCards.forEach((cItem, cIdx) => {
       if (typeof cItem === 'string') {
         cards.push({
-          id: `${colId}_card_${cIdx}`,
+          id: nextCardId(`${colId}_card_${cIdx}`),
           title: cItem,
           raw: { title: cItem },
         })
@@ -314,7 +341,7 @@ export function normalizeKanbanColumns(raw: unknown): readonly NormalizedKanbanC
         const cardTitle = String(crec.title ?? crec.label ?? crec.name ?? '')
         if (!cardTitle) return
         cards.push({
-          id: String(crec.id ?? `${colId}_card_${cIdx}`),
+          id: nextCardId(String(crec.id ?? `${colId}_card_${cIdx}`)),
           title: cardTitle,
           description: crec.description ? String(crec.description) : undefined,
           priority: normalizeKanbanPriority(crec.priority),
@@ -367,6 +394,7 @@ function extractSafeHostname(urlStr: string): string {
 export function normalizeSourceItems(raw: unknown): readonly NormalizedSourceItem[] {
   if (!Array.isArray(raw)) return []
   const items: NormalizedSourceItem[] = []
+  const nextId = makeUniqueIdFactory()
   raw.forEach((entry, idx) => {
     if (typeof entry !== 'object' || entry === null) return
     const rec = entry as Record<string, unknown>
@@ -401,7 +429,7 @@ export function normalizeSourceItems(raw: unknown): readonly NormalizedSourceIte
     }
 
     items.push({
-      id: String(rec.id ?? `src_${idx}`),
+      id: nextId(String(rec.id ?? `src_${idx}`)),
       index: items.length + 1,
       title,
       url,

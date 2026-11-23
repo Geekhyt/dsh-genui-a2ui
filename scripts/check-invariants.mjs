@@ -21,6 +21,7 @@ const PURE_FORBIDDEN_PACKAGES = new Set(['react', 'react-dom', 'echarts', 'merma
 const PURE_FORBIDDEN_GLOBALS = new Set(['window', 'document', 'localStorage', 'sessionStorage'])
 const HTML_IN_RICHTEXT_RE = /<\s*(?:br|strong|div|span|table|tr|td|th|b|i|p|ul|li)\b/i
 const RAW_DATE_TYPES = new Set(['date', 'time', 'datetime-local'])
+const CATASTROPHIC_TRAILING_WS_RE = /\\s[*+]\$\/[a-z]*$/
 
 function getScriptKind(filePath) {
   const ext = extname(filePath)
@@ -133,6 +134,28 @@ function extractCssBlocks(cssText) {
   const containerQueriedClasses = new Set()
   const containerSelfQueries = []
   const mediaWidthRules = []
+  const shadowedResponsiveRules = []
+
+  const extractDeclaredProps = (declBody) => {
+    const props = new Set()
+    for (const part of declBody.split(';')) {
+      const colonIdx = part.indexOf(':')
+      if (colonIdx <= 0) continue
+      const prop = part.slice(0, colonIdx).trim().toLowerCase()
+      if (/^[a-z-]+$/.test(prop)) props.add(prop)
+    }
+    return props
+  }
+
+  const findOverlappingProp = (responsiveProps, baseProps) => {
+    for (const rp of responsiveProps) {
+      if (baseProps.has(rp)) return rp
+      for (const bp of baseProps) {
+        if (rp.startsWith(`${bp}-`) || bp.startsWith(`${rp}-`)) return `${rp}/${bp}`
+      }
+    }
+    return null
+  }
 
   const lineAt = (idx) => cssText.slice(0, idx).split('\n').length
 
@@ -205,9 +228,11 @@ function extractCssBlocks(cssText) {
     }
   }
 
+  const responsiveDeclByClass = new Map()
   for (const rule of topRules) {
     if (rule.header.startsWith('@container')) {
-      for (const m of rule.body.matchAll(/([^{}]+)\{[^{}]*\}/g)) {
+      for (const m of rule.body.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+        const declProps = extractDeclaredProps(m[2] ?? '')
         for (const item of extractSelectorClasses(m[1])) {
           containerQueriedClasses.add(item.cls)
           if (containerHosts.has(item.cls)) {
@@ -217,26 +242,77 @@ function extractCssBlocks(cssText) {
               cls: item.cls,
             })
           }
+          if (/^\.[A-Za-z0-9_-]+$/.test(item.selector) && declProps.size > 0) {
+            const list = responsiveDeclByClass.get(item.cls) ?? []
+            list.push({ line: rule.startLine, header: rule.header, props: declProps })
+            responsiveDeclByClass.set(item.cls, list)
+          }
         }
       }
     } else if (rule.header.startsWith('@media') && /\b(?:max|min)-width\b/.test(rule.header)) {
       const classes = []
-      for (const m of rule.body.matchAll(/([^{}]+)\{[^{}]*\}/g)) {
+      for (const m of rule.body.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+        const declProps = extractDeclaredProps(m[2] ?? '')
         for (const item of extractSelectorClasses(m[1])) {
           classes.push(item)
+          if (/^\.[A-Za-z0-9_-]+$/.test(item.selector) && declProps.size > 0) {
+            const list = responsiveDeclByClass.get(item.cls) ?? []
+            list.push({ line: rule.startLine, header: rule.header, props: declProps })
+            responsiveDeclByClass.set(item.cls, list)
+          }
         }
       }
       mediaWidthRules.push({ line: rule.startLine, header: rule.header, classes })
+    } else if (!rule.header.startsWith('@')) {
+      const baseProps = extractDeclaredProps(rule.body)
+      if (baseProps.size > 0) {
+        for (const sel of rule.header.split(',')) {
+          const m = /^\.([A-Za-z0-9_-]+)$/.exec(sel.trim())
+          if (!m) continue
+          const priorList = responsiveDeclByClass.get(m[1])
+          if (!priorList) continue
+          for (const prior of priorList) {
+            const overlap = findOverlappingProp(prior.props, baseProps)
+            if (overlap) {
+              shadowedResponsiveRules.push({
+                line: prior.line,
+                laterLine: rule.startLine,
+                cls: m[1],
+                header: prior.header,
+                prop: overlap,
+              })
+            }
+          }
+        }
+      }
     }
   }
 
-  return { containerQueriedClasses, containerSelfQueries, mediaWidthRules }
+  return {
+    containerQueriedClasses,
+    containerSelfQueries,
+    mediaWidthRules,
+    shadowedResponsiveRules,
+  }
 }
 
 export function checkCssInvariants(source, relPath) {
   const violations = []
-  const { containerQueriedClasses, containerSelfQueries, mediaWidthRules } =
-    extractCssBlocks(source)
+  const {
+    containerQueriedClasses,
+    containerSelfQueries,
+    mediaWidthRules,
+    shadowedResponsiveRules,
+  } = extractCssBlocks(source)
+
+  for (const sr of shadowedResponsiveRules) {
+    violations.push({
+      rule: 'css-no-shadowed-container-query',
+      file: relPath,
+      line: sr.line,
+      message: `${sr.header} overrides ".${sr.cls}" (${sr.prop}) before its base rule at line ${sr.laterLine}; move the responsive block after the base rule.`,
+    })
+  }
 
   for (const sq of containerSelfQueries) {
     violations.push({
@@ -698,6 +774,17 @@ export function checkTsInvariants(source, relPath) {
       }
     }
 
+    if (ts.isRegularExpressionLiteral(node)) {
+      const rawRe = node.text
+      if (!rawRe.startsWith('/^') && CATASTROPHIC_TRAILING_WS_RE.test(rawRe)) {
+        report(
+          'no-catastrophic-trailing-ws-regex',
+          node,
+          `Unanchored trailing whitespace regex ${rawRe} can exhibit O(N^2) backtracking; use trimEnd() or a linear backward scan.`,
+        )
+      }
+    }
+
     ts.forEachChild(node, visit)
   }
 
@@ -944,7 +1031,7 @@ function runCli() {
     process.exit(1)
   }
   console.log(
-    `[check-invariants] OK: 17 architectural invariant rules verified across ${report.filesScanned} source/CSS file(s) and locale tables.`,
+    `[check-invariants] OK: 19 architectural invariant rules verified across ${report.filesScanned} source/CSS file(s) and locale tables.`,
   )
 }
 

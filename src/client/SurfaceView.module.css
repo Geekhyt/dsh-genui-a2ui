@@ -97,6 +97,8 @@
 
 .badge {
   flex: none;
+  white-space: nowrap;
+  flex-shrink: 0;
   font-size: 11px;
   padding: 1px 6px;
   border-radius: var(--dsw-radius-sm, 4px);
@@ -106,6 +108,8 @@
 
 .badgeAccent {
   flex: none;
+  white-space: nowrap;
+  flex-shrink: 0;
   font-size: 11px;
   font-weight: 500;
   padding: 2px 8px;
@@ -260,6 +264,8 @@
   padding: 2px 0;
   font: inherit;
   font-size: 12px;
+  white-space: nowrap;
+  flex-shrink: 0;
   color: var(--dsw-alias-link, #4d6bfe);
   cursor: pointer;
 }

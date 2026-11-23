@@ -256,6 +256,7 @@ export function DshTextFieldView({
         <DshInput
           id={fieldId}
           type={inputType}
+          step={isNumber ? 'any' : undefined}
           autoComplete="off"
           value={isNumber && focused ? draft : val}
           placeholder={placeholder}
@@ -383,17 +384,20 @@ export const DshChoicePickerImpl = defineComponent<{
     [rawSelected],
   )
   const selectedSet = useMemo(() => new Set(selected), [selected])
-  const options = useMemo(
-    () =>
-      Array.isArray(props.options)
-        ? props.options
-            .filter((o): o is { readonly label?: unknown; readonly value?: unknown } =>
-              Boolean(o && typeof o === 'object'),
-            )
-            .map((o) => ({ label: o.label, value: String(o.value ?? '') }))
-        : [],
-    [props.options],
-  )
+  const options = useMemo(() => {
+    if (!Array.isArray(props.options)) return []
+    const out: Array<{ readonly label?: unknown; readonly value: string }> = []
+    const seen = new Set<string>()
+    for (const o of props.options) {
+      if (!o || typeof o !== 'object') continue
+      const rec = o as { readonly label?: unknown; readonly value?: unknown }
+      const val = String(rec.value ?? '')
+      if (seen.has(val)) continue
+      seen.add(val)
+      out.push({ label: rec.label, value: val })
+    }
+    return out
+  }, [props.options])
   const filtered = useMemo(() => {
     const q = deferredQuery.trim().toLowerCase()
     if (!props.filterable || q === '') return options
@@ -447,6 +451,7 @@ export const DshChoicePickerImpl = defineComponent<{
             <DshPill
               key={opt.value}
               active={selectedSet.has(opt.value)}
+              aria-pressed={selectedSet.has(opt.value)}
               disabled={readOnly}
               onClick={() => toggleOption(opt.value)}
             >
@@ -514,13 +519,15 @@ export const DshSliderImpl = defineComponent<{
   const min = typeof props.min === 'number' && Number.isFinite(props.min) ? props.min : 0
   const rawMax = typeof props.max === 'number' && Number.isFinite(props.max) ? props.max : 100
   const max = rawMax > min ? rawMax : min + 1
+  const span = max - min
+  const fallbackStep = span <= 1 ? Math.max(1e-6, Number((span / 100).toPrecision(2))) : 1
   const step =
     typeof props.steps === 'number' && Number.isFinite(props.steps) && props.steps > 0
-      ? Number(((max - min) / props.steps).toFixed(6))
-      : 1
+      ? Math.max(1e-9, span / props.steps)
+      : fallbackStep
   const rawVal = Number(sliderVal ?? min)
   const value = Number.isFinite(rawVal) ? Math.min(max, Math.max(min, rawVal)) : min
-  const pct = ((value - min) / (max - min)) * 100
+  const pct = ((value - min) / span) * 100
   const label = props.label ? String(props.label) : ''
   const showError = !readOnly && (touched || submitAttempted) && props.isValid === false
   const err = showError ? props.validationErrors?.[0] : undefined
@@ -539,8 +546,12 @@ export const DshSliderImpl = defineComponent<{
           if (readOnly) return
           setTouched(true)
           const raw = Array.isArray(next) ? (next[0] ?? min) : next
-          const cleaned = Number.isFinite(raw) ? Number(raw.toFixed(6)) : min
-          commitValue(cleaned)
+          const snapped = Number.isFinite(raw)
+            ? Math.abs(raw - max) <= step * 0.25
+              ? max
+              : Number(raw.toFixed(6))
+            : min
+          commitValue(Math.min(max, Math.max(min, snapped)))
         }}
       >
         <div className={css.sliderHeader}>

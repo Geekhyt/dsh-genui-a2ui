@@ -47,10 +47,16 @@ export const ALL_SHOWCASES = [
   'showcase-37',
   'showcase-38',
   'showcase-39',
+  'showcase-40',
+  'showcase-41',
 ]
 
 export const DEFAULT_AUDIT_SHOWCASES = [
+  'showcase-2',
+  'showcase-5',
   'showcase-16',
+  'showcase-17',
+  'showcase-20',
   'showcase-21',
   'showcase-22',
   'showcase-23',
@@ -66,6 +72,8 @@ export const DEFAULT_AUDIT_SHOWCASES = [
   'showcase-37',
   'showcase-38',
   'showcase-39',
+  'showcase-40',
+  'showcase-41',
 ]
 
 export const SCREENSHOT_SHOWCASE_MAP = {
@@ -156,20 +164,42 @@ export function buildDomGeometryAuditExpression() {
       }
     }
 
-    const surfaces = [...document.querySelectorAll('[class*="surfaceRoot"], [class*="surfaceCard"], [class*="chartCard"]')];
+    const surfaces = [
+      ...document.querySelectorAll(
+        '[class*="surfaceStack"], [class*="chartCard"], [class*="mermaidCard"], [class*="metricRingCard"], [class*="serviceGraphCard"], [data-a2ui-chart], [data-a2ui-mermaid]',
+      ),
+    ];
+    const seenViz = new Set();
     for (const host of surfaces) {
       const hostRect = host.getBoundingClientRect();
       if (hostRect.width <= 0 || hostRect.height <= 0) continue;
       for (const viz of host.querySelectorAll('canvas, svg')) {
+        if (seenViz.has(viz)) continue;
+        seenViz.add(viz);
         const vRect = viz.getBoundingClientRect();
         if (viz.tagName === 'CANVAS') canvasCount += 1;
-        else svgCount += 1;
+        else if (vRect.width >= 32 || vRect.height >= 32) svgCount += 1;
         if (vRect.width <= 0 || vRect.height <= 0) continue;
-        if (vRect.right > hostRect.right + 4) {
+        const clipHost =
+          viz.closest('[class*="chartCard"], [class*="mermaidCard"], [class*="metricRingCard"], [class*="serviceGraphCard"], [class*="surfaceStack"]') ||
+          host;
+        let insideScrollX = false;
+        let cur = viz.parentElement;
+        while (cur && cur !== clipHost) {
+          const cs = getComputedStyle(cur);
+          if (cs.overflowX === 'auto' || cs.overflowX === 'scroll') {
+            insideScrollX = true;
+            break;
+          }
+          cur = cur.parentElement;
+        }
+        if (insideScrollX) continue;
+        const cRect = clipHost.getBoundingClientRect();
+        if (vRect.right > cRect.right + 4) {
           clippingViolations.push({
             tag: viz.tagName,
             vizRight: Math.round(vRect.right),
-            hostRight: Math.round(hostRect.right),
+            hostRight: Math.round(cRect.right),
           });
         }
       }

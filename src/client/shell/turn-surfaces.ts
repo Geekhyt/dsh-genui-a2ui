@@ -466,7 +466,12 @@ export function resolveTurnTailBatch(
   const memoKey = `${firstCallId}::${turnNumber}`
   const sig = `${latestSeq}|${superseded ? 1 : 0}|${allSuperseded ? 1 : 0}|${[...supersededSurfaceIds].join(',')}|${messages.length}|${[...visibleSurfaceIds].join(',')}|${lastTitle ?? ''}`
   const prev = turnTailMemo.get(memoKey)
-  if (prev !== undefined && prev.sig === sig) {
+  if (
+    prev !== undefined &&
+    prev.sig === sig &&
+    prev.batch.messages.length === messages.length &&
+    prev.batch.messages.every((m, idx) => m === messages[idx])
+  ) {
     turnTailMemo.delete(memoKey)
     turnTailMemo.set(memoKey, prev)
     targetSnapMap.set(turnNumber, prev.batch)
@@ -525,14 +530,30 @@ export function resolveDockBatch(snapshot: ChatTargetSnapshot | undefined): Dock
     if (call.placement === 'dock') {
       for (const id of call.surfaceIds) dockedIds.add(id)
     }
+    let updatedExistingDocked = call.placement === 'dock'
     for (const msg of call.messages) {
       const del = (msg as { deleteSurface?: { surfaceId?: unknown } }).deleteSurface
       if (del && typeof del.surfaceId === 'string') {
         dockedIds.delete(del.surfaceId)
+        continue
+      }
+      const created = (msg as { createSurface?: { surfaceId?: unknown } }).createSurface
+      if (created && typeof created.surfaceId === 'string') {
+        if (call.placement === 'dock') {
+          dockedIds.add(created.surfaceId)
+          updatedExistingDocked = true
+        }
+        continue
+      }
+      const sid = extractSurfaceIds([msg])[0] ?? null
+      if (sid !== null && dockedIds.has(sid)) {
+        updatedExistingDocked = true
       }
     }
-    if (call.title !== null) lastTitle = call.title
-    if (call.seq > latestSeq) latestSeq = call.seq
+    if (updatedExistingDocked) {
+      if (call.title !== null) lastTitle = call.title
+      if (call.seq > latestSeq) latestSeq = call.seq
+    }
   }
 
   if (dockedIds.size === 0) {
@@ -547,7 +568,12 @@ export function resolveDockBatch(snapshot: ChatTargetSnapshot | undefined): Dock
   const memoKey = allCalls[0]?.callId ?? 'dock'
   const sig = `${memoKey}::${latestSeq}|${messages.length}|${[...dockedIds].join(',')}|${lastTitle ?? ''}`
   const prev = dockMemoByKey.get(memoKey)
-  if (prev !== undefined && prev.sig === sig) {
+  if (
+    prev !== undefined &&
+    prev.sig === sig &&
+    prev.batch.messages.length === messages.length &&
+    prev.batch.messages.every((m, idx) => m === messages[idx])
+  ) {
     dockMemoByKey.delete(memoKey)
     dockMemoByKey.set(memoKey, prev)
     dockBySnapshot.set(snapshot, prev.batch)

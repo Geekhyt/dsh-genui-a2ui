@@ -145,7 +145,16 @@ export const DshAccordionImpl = defineComponent<{
       if (idx >= 0 && idx < items.length) prunedVisited.add(idx)
     }
     for (const idx of nextOpen) prunedVisited.add(idx)
-    if (prunedVisited.size !== visitedSet.size) {
+    let visitedChanged = prunedVisited.size !== visitedSet.size
+    if (!visitedChanged) {
+      for (const idx of prunedVisited) {
+        if (!visitedSet.has(idx)) {
+          visitedChanged = true
+          break
+        }
+      }
+    }
+    if (visitedChanged) {
       setVisitedSet(prunedVisited)
     }
   }
@@ -675,6 +684,13 @@ export function DshMermaidView({ props }: { props: MermaidWidgetProps }) {
   const applyZoomAtPoint = useCallback(
     (nextPct: number, inDialog: boolean, clientX?: number, clientY?: number) => {
       const clamped = clampMermaidZoom(nextPct)
+      const curMode = inDialog
+        ? zoomStateRef.current.dialogZoomMode
+        : zoomStateRef.current.inlineZoomMode
+      const curManual = inDialog
+        ? zoomStateRef.current.dialogManualPct
+        : zoomStateRef.current.inlineManualPct
+      if (curMode === 'manual' && curManual === clamped) return
       const viewport = inDialog ? dialogViewportRef.current : inlineViewportRef.current
       const stage = inDialog ? dialogStageRef.current : inlineStageRef.current
       const targetEl = stage?.querySelector('svg') ?? stage
@@ -928,6 +944,7 @@ export function DshMermaidView({ props }: { props: MermaidWidgetProps }) {
               <button
                 type="button"
                 className={css.mermaidZoomFitBtn}
+                aria-pressed={activeMode === 'fit'}
                 data-active={activeMode === 'fit' ? 'true' : 'false'}
                 aria-label={msg.mermaidZoomFitAria}
                 title={msg.mermaidZoomFitTitle}
@@ -941,6 +958,7 @@ export function DshMermaidView({ props }: { props: MermaidWidgetProps }) {
             <button
               type="button"
               className={css.diffModeBtn}
+              aria-pressed={viewMode === 'diagram'}
               data-active={viewMode === 'diagram' ? 'true' : 'false'}
               onClick={() => setViewMode('diagram')}
             >
@@ -949,6 +967,7 @@ export function DshMermaidView({ props }: { props: MermaidWidgetProps }) {
             <button
               type="button"
               className={css.diffModeBtn}
+              aria-pressed={viewMode === 'source'}
               data-active={viewMode === 'source' ? 'true' : 'false'}
               onClick={() => setViewMode('source')}
             >

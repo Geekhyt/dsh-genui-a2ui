@@ -15,6 +15,7 @@ import {
   forwardRef,
   type InputHTMLAttributes,
   isValidElement,
+  type KeyboardEvent as ReactKeyboardEvent,
   type ReactElement,
   type ReactNode,
   useCallback,
@@ -294,6 +295,8 @@ export function DshPill(
         background: active ? 'var(--dsw-alias-state-business-primary, #3b82f6)' : 'transparent',
         color: active ? 'var(--dsw-alias-label-primary-inverted, #fff)' : 'inherit',
         cursor: 'pointer',
+        whiteSpace: 'nowrap',
+        flexShrink: 0,
         ...style,
       }}
       {...rest}
@@ -965,15 +968,24 @@ export function DshToast(props: {
 function computeFallbackMenuBox(
   anchorEl: HTMLElement | null,
   side: 'top' | 'bottom',
-): { left: number; top?: number; bottom?: number; maxHeight: number } {
+): {
+  left: number
+  top?: number
+  bottom?: number
+  maxHeight: number
+  minWidth: number
+  maxWidth: number
+} {
   if (typeof window === 'undefined' || !anchorEl) {
-    return { left: 16, top: 64, maxHeight: 280 }
+    return { left: 16, top: 64, maxHeight: 280, minWidth: 180, maxWidth: 340 }
   }
   const rect = anchorEl.getBoundingClientRect()
   const vw = window.innerWidth || 1024
   const vh = window.innerHeight || 768
-  const menuW = Math.max(180, Math.round(rect.width))
+  const maxAllowedW = Math.max(160, Math.min(360, vw - 16))
+  const menuW = Math.min(maxAllowedW, Math.max(180, Math.round(rect.width)))
   const left = Math.max(8, Math.min(Math.round(rect.left), vw - menuW - 8))
+  const maxWidth = Math.max(160, Math.min(maxAllowedW, vw - left - 8))
   const spaceBelow = Math.max(0, vh - rect.bottom - 12)
   const spaceAbove = Math.max(0, rect.top - 12)
   const preferTop = side === 'top' || (spaceBelow < 180 && spaceAbove > spaceBelow)
@@ -982,12 +994,16 @@ function computeFallbackMenuBox(
       left,
       bottom: Math.max(8, Math.round(vh - rect.top + 6)),
       maxHeight: Math.min(280, Math.floor(spaceAbove)),
+      minWidth: menuW,
+      maxWidth,
     }
   }
   return {
     left,
-    top: Math.min(vh - 80, Math.round(rect.bottom + 6)),
+    top: Math.max(8, Math.min(vh - 80, Math.round(rect.bottom + 6))),
     maxHeight: Math.max(80, Math.min(280, Math.floor(spaceBelow))),
+    minWidth: menuW,
+    maxWidth,
   }
 }
 
@@ -1004,15 +1020,23 @@ export function DshMenu(props: {
   const anchorWrapRef = useRef<HTMLSpanElement | null>(null)
   const menuPopoverRef = useRef<HTMLDivElement | null>(null)
   const resolvedSide = props.side ?? 'top'
-  const [menuBox, setMenuBox] = useState<{
-    left: number
-    top?: number
-    bottom?: number
-    maxHeight: number
+  const [menuBoxState, setMenuBoxState] = useState<{
+    openSession: number
+    box: ReturnType<typeof computeFallbackMenuBox>
   } | null>(null)
+  const openSessionRef = useRef(0)
+  const prevOpenRef = useRef(false)
+  if (props.open && !prevOpenRef.current) {
+    openSessionRef.current += 1
+  }
+  prevOpenRef.current = props.open
+  const currentOpenSession = openSessionRef.current
 
   const repositionMenu = useCallback(() => {
-    setMenuBox(computeFallbackMenuBox(anchorWrapRef.current, resolvedSide))
+    setMenuBoxState({
+      openSession: openSessionRef.current,
+      box: computeFallbackMenuBox(anchorWrapRef.current, resolvedSide),
+    })
   }, [resolvedSide])
 
   usePortalPopover({
@@ -1039,7 +1063,29 @@ export function DshMenu(props: {
   }
 
   const menuStyle =
-    props.open && menuBox ? menuBox : computeFallbackMenuBox(anchorWrapRef.current, resolvedSide)
+    props.open && menuBoxState?.openSession === currentOpenSession
+      ? menuBoxState.box
+      : computeFallbackMenuBox(anchorWrapRef.current, resolvedSide)
+
+  const handleMenuKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    const keys = ['ArrowDown', 'ArrowUp', 'Home', 'End']
+    if (!keys.includes(e.key)) return
+    const items = Array.from(
+      menuPopoverRef.current?.querySelectorAll<HTMLButtonElement>(
+        'button[role="menuitem"]:not(:disabled)',
+      ) ?? [],
+    )
+    if (items.length === 0) return
+    e.preventDefault()
+    const curIdx = items.indexOf(document.activeElement as HTMLButtonElement)
+    let nextIdx = 0
+    if (e.key === 'ArrowDown') nextIdx = curIdx < 0 ? 0 : (curIdx + 1) % items.length
+    else if (e.key === 'ArrowUp')
+      nextIdx = curIdx < 0 ? items.length - 1 : (curIdx - 1 + items.length) % items.length
+    else if (e.key === 'Home') nextIdx = 0
+    else if (e.key === 'End') nextIdx = items.length - 1
+    items[nextIdx]?.focus()
+  }
 
   return (
     <span ref={anchorWrapRef} style={{ position: 'relative', display: 'inline-flex' }}>
@@ -1062,12 +1108,11 @@ export function DshMenu(props: {
                 ref={menuPopoverRef}
                 role="menu"
                 onClick={(e) => e.stopPropagation()}
+                onKeyDown={handleMenuKeyDown}
                 style={{
                   position: 'fixed',
                   ...menuStyle,
                   zIndex: 'var(--a2ui-z-popover, 1100)',
-                  minWidth: 180,
-                  maxWidth: 'calc(100vw - 16px)',
                   overflowY: 'auto',
                   padding: 4,
                   borderRadius: 'var(--dsw-radius-md, 10px)',
@@ -1088,6 +1133,7 @@ export function DshMenu(props: {
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
+                      gap: 8,
                       width: '100%',
                       padding: '6px 10px',
                       border: 'none',
@@ -1098,10 +1144,20 @@ export function DshMenu(props: {
                           : 'transparent',
                       color: 'var(--dsw-alias-label-primary, inherit)',
                       fontSize: 13,
+                      textAlign: 'left',
                       cursor: 'pointer',
                     }}
                   >
-                    <span>{item.label}</span>
+                    <span
+                      style={{
+                        minWidth: 0,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {item.label}
+                    </span>
                     {item.id === props.selectedId ? <DshCheckIcon size={12} /> : null}
                   </button>
                 ))}
@@ -1214,23 +1270,32 @@ export function DshAppsIcon({ size = 14 }: { size?: number }) {
 }
 
 export function DshStateDot(props: {
-  state: 'done' | 'ongoing' | 'error' | 'pending'
+  state: 'done' | 'ongoing' | 'warning' | 'error' | 'pending'
   size?: number | undefined
   appearance?: 'dot' | 'step' | undefined
   className?: string | undefined
 }) {
-  if (hasComponent(raw.StateDot)) {
-    return <HostPrimitives.StateDot {...props} />
+  if (props.state !== 'warning' && hasComponent(raw.StateDot)) {
+    return (
+      <HostPrimitives.StateDot
+        state={props.state}
+        size={props.size}
+        appearance={props.appearance}
+        className={props.className}
+      />
+    )
   }
   const sz = props.size ?? 8
   const bg =
     props.state === 'done'
       ? 'var(--dsw-alias-state-success-primary, #10b981)'
-      : props.state === 'error'
-        ? 'var(--dsw-alias-state-error-primary, #ef4444)'
-        : props.state === 'ongoing'
-          ? 'var(--dsw-alias-brand-primary, #4d6bfe)'
-          : 'var(--dsw-alias-label-tertiary, #9ca3af)'
+      : props.state === 'warning'
+        ? 'var(--dsw-alias-state-warn-primary, #f59e0b)'
+        : props.state === 'error'
+          ? 'var(--dsw-alias-state-error-primary, #ef4444)'
+          : props.state === 'ongoing'
+            ? 'var(--dsw-alias-brand-primary, #4d6bfe)'
+            : 'var(--dsw-alias-label-tertiary, #9ca3af)'
   return (
     <span
       className={props.className}

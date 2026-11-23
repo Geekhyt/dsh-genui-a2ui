@@ -427,7 +427,7 @@ export function apply(ctx: Context, config: Config = {}): void {
     if (options?.scope !== undefined) {
       return isEnabledForStep({ agent: options.scope as ToolExec['agent'] })
     }
-    return sessions.isEnabled('default')
+    return sessions.getDefaultEnabled()
   }
 
   let syncSkillCatalog: () => void = () => {}
@@ -469,7 +469,7 @@ export function apply(ctx: Context, config: Config = {}): void {
     skillCtx.effect(() => {
       let disposeRegistered: (() => void) | undefined
       const syncFallback = () => {
-        if (sessions.isEnabled('default')) {
+        if (sessions.getDefaultEnabled()) {
           if (disposeRegistered === undefined) {
             disposeRegistered = skills.register({
               name: SKILL_NAME,

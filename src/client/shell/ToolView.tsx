@@ -1,6 +1,10 @@
 import { memo, useCallback, useMemo, useState, useSyncExternalStore } from 'react'
 import { normalizePlacement } from '../../shared/constants.ts'
-import { parseFileTarget, type WorkspaceFileOpener } from '../file-opener.tsx'
+import {
+  isAbsoluteWorkspacePath,
+  parseFileTarget,
+  type WorkspaceFileOpener,
+} from '../file-opener.tsx'
 import { useShellMessages } from '../i18n.ts'
 import { LazySurfaceGroupView, useLazyStreamingExpress } from './LazySurfaceGroupView.tsx'
 import css from '../SurfaceView.module.css'
@@ -66,7 +70,15 @@ export const A2uiToolView = memo(function A2uiToolView({
       return (rawPath: string, explicitLine?: number) => {
         const target = parseFileTarget(rawPath, explicitLine)
         if (!target) return
-        void openFile(target.path, target.line !== undefined ? { line: target.line } : undefined)
+        if (isAbsoluteWorkspacePath(target.path)) {
+          openWorkspaceFile?.(target.path, target.line)
+          return
+        }
+        try {
+          void Promise.resolve(
+            openFile(target.path, target.line !== undefined ? { line: target.line } : undefined),
+          ).catch(() => {})
+        } catch {}
       }
     }
     return openWorkspaceFile

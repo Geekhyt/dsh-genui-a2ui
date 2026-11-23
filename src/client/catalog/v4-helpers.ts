@@ -1,5 +1,6 @@
 import { safeStringifyJson } from '../../shared/constants.ts'
 import { parseLocalDateAnchor } from '../../shared/temporal.ts'
+import { makeUniqueIdFactory } from './v3-helpers.ts'
 
 export type TrackerSliceStatus = 'ok' | 'warning' | 'error' | 'unknown'
 export type TrackerSegmentTone = 'brand' | 'success' | 'warning' | 'danger' | 'neutral'
@@ -41,10 +42,11 @@ function normalizeSliceStatus(raw: unknown): TrackerSliceStatus {
 export function normalizeTrackerSlices(raw: unknown): readonly NormalizedTrackerSlice[] {
   if (!Array.isArray(raw)) return []
   const out: NormalizedTrackerSlice[] = []
+  const nextId = makeUniqueIdFactory()
   raw.forEach((item, idx) => {
     if (typeof item === 'string') {
       out.push({
-        id: `sl_${idx}`,
+        id: nextId(`sl_${idx}`),
         label: `#${idx + 1}`,
         status: normalizeSliceStatus(item),
         note: '',
@@ -54,7 +56,7 @@ export function normalizeTrackerSlices(raw: unknown): readonly NormalizedTracker
     if (typeof item === 'object' && item !== null) {
       const rec = item as Record<string, unknown>
       out.push({
-        id: String(rec.id ?? `sl_${idx}`),
+        id: nextId(String(rec.id ?? `sl_${idx}`)),
         label: String(rec.label ?? rec.time ?? rec.date ?? `#${idx + 1}`),
         status: normalizeSliceStatus(rec.status ?? rec.state ?? rec.tone),
         note:
@@ -74,6 +76,7 @@ export function normalizeTrackerSlices(raw: unknown): readonly NormalizedTracker
 export function normalizeCategorySegments(raw: unknown): readonly NormalizedCategorySegment[] {
   if (!Array.isArray(raw)) return []
   const temp: Array<{ id: string; label: string; value: number; tone: TrackerSegmentTone }> = []
+  const nextId = makeUniqueIdFactory()
   raw.forEach((item, idx) => {
     if (typeof item !== 'object' || item === null) return
     const rec = item as Record<string, unknown>
@@ -89,7 +92,7 @@ export function normalizeCategorySegments(raw: unknown): readonly NormalizedCate
         ? rawTone
         : DEFAULT_SEGMENT_TONES[idx % DEFAULT_SEGMENT_TONES.length]!
     temp.push({
-      id: String(rec.id ?? `seg_${idx}`),
+      id: nextId(String(rec.id ?? `seg_${idx}`)),
       label: String(rec.label ?? rec.name ?? `Item ${idx + 1}`),
       value: val,
       tone,
@@ -115,8 +118,13 @@ export interface NormalizedTerminalStep {
 export function normalizeTerminalCommands(raw: unknown): readonly NormalizedTerminalStep[] {
   if (typeof raw === 'string') {
     const lines = raw.split(/\r?\n/)
+    const hasPromptPrefix = lines.some((l) => {
+      const t = l.trim()
+      return t.startsWith('$ ') || t.startsWith('> ')
+    })
     const steps: NormalizedTerminalStep[] = []
     let curCmd = ''
+    let curComment = ''
     let curOut: string[] = []
     const flush = () => {
       if (curCmd) {
@@ -125,21 +133,35 @@ export function normalizeTerminalCommands(raw: unknown): readonly NormalizedTerm
           cmd: curCmd,
           output: curOut.join('\n').trim(),
           stderr: '',
+          ...(curComment ? { comment: curComment } : {}),
         })
         curCmd = ''
+        curComment = ''
         curOut = []
       }
     }
     for (const line of lines) {
       const trimmed = line.trim()
       if (!trimmed) continue
-      if (trimmed.startsWith('$ ') || trimmed.startsWith('> ')) {
+      if (hasPromptPrefix) {
+        if (trimmed.startsWith('$ ') || trimmed.startsWith('> ')) {
+          flush()
+          curCmd = trimmed.slice(2).trim()
+        } else if (!curCmd && trimmed.startsWith('#')) {
+          const text = trimmed.replace(/^#+\s*/, '')
+          curComment = curComment ? `${curComment} ${text}` : text
+        } else if (!curCmd) {
+          curCmd = trimmed
+        } else {
+          curOut.push(line)
+        }
+      } else if (trimmed.startsWith('#')) {
         flush()
-        curCmd = trimmed.slice(2).trim()
-      } else if (!curCmd) {
-        curCmd = trimmed
+        const text = trimmed.replace(/^#+\s*/, '')
+        curComment = curComment ? `${curComment} ${text}` : text
       } else {
-        curOut.push(line)
+        flush()
+        curCmd = trimmed
       }
     }
     flush()
@@ -147,10 +169,11 @@ export function normalizeTerminalCommands(raw: unknown): readonly NormalizedTerm
   }
   if (!Array.isArray(raw)) return []
   const out: NormalizedTerminalStep[] = []
+  const nextId = makeUniqueIdFactory()
   raw.forEach((item, idx) => {
     if (typeof item === 'string') {
       const clean = item.trim().replace(/^\$\s+/, '')
-      if (clean) out.push({ id: `cmd_${idx}`, cmd: clean, output: '', stderr: '' })
+      if (clean) out.push({ id: nextId(`cmd_${idx}`), cmd: clean, output: '', stderr: '' })
       return
     }
     if (typeof item === 'object' && item !== null) {
@@ -164,7 +187,7 @@ export function normalizeTerminalCommands(raw: unknown): readonly NormalizedTerm
           ? Math.trunc(rec.exitCode)
           : undefined
       out.push({
-        id: String(rec.id ?? `cmd_${idx}`),
+        id: nextId(String(rec.id ?? `cmd_${idx}`)),
         cmd,
         output: rec.output !== undefined && rec.output !== null ? String(rec.output) : '',
         stderr: rec.stderr !== undefined && rec.stderr !== null ? String(rec.stderr) : '',
@@ -193,7 +216,7 @@ export function tokenizeEndpointPath(path: string): readonly RouteToken[] {
   const parts = path.split(/(\{[^}]+\}|:[a-zA-Z_][a-zA-Z0-9_]*)/g).filter(Boolean)
   return parts.map((text) => ({
     text,
-    isParam: text.startsWith('{') || text.startsWith(':'),
+    isParam: /^\{[^}]+\}$/.test(text) || /^:[a-zA-Z_][a-zA-Z0-9_]*$/.test(text),
   }))
 }
 
@@ -444,6 +467,7 @@ export function normalizeScheduleItems(
     raw: Record<string, unknown>
   }> = []
 
+  const nextId = makeUniqueIdFactory()
   rawItems.forEach((entry, idx) => {
     if (typeof entry !== 'object' || entry === null) return
     const rec = entry as Record<string, unknown>
@@ -460,7 +484,7 @@ export function normalizeScheduleItems(
         ? Math.max(0, Math.min(100, Math.round(rec.progress)))
         : undefined
     parsed.push({
-      id: String(rec.id ?? `sched_${idx}`),
+      id: nextId(String(rec.id ?? `sched_${idx}`)),
       title,
       startLabel: String(rec.start),
       endLabel: String(rec.end),
@@ -504,7 +528,10 @@ export function normalizeScheduleItems(
   }
 
   if (overnightAnchor !== null) {
-    const wrapCutoff = Math.min(overnightAnchor, 720)
+    const wrapCutoff =
+      rangeIsOvernightHhmm && rangeEnd
+        ? Math.min(overnightAnchor, Math.max(720, rangeEnd.numeric + 1))
+        : Math.min(overnightAnchor, 720)
     for (const p of sameKindParsed) {
       if (p.kind !== 'hhmm') continue
       if (p.sNum < wrapCutoff) {
@@ -632,7 +659,9 @@ export function normalizeMatrixData(params: {
     }
   }
   const hasRange = Number.isFinite(minNum) && Number.isFinite(maxNum)
-  const numSpan = hasRange && maxNum > minNum ? maxNum - minNum : 1
+  const rawSpan = hasRange && maxNum > minNum ? maxNum - minNum : 1
+  const scaledSpan = !Number.isFinite(rawSpan) ? maxNum / 2 - minNum / 2 : 0
+  const numSpan = Number.isFinite(rawSpan) && rawSpan > 0 ? rawSpan : 1
 
   const cells: NormalizedMatrixCell[][] = []
   const rowSummaries: string[] = []
@@ -658,7 +687,13 @@ export function normalizeMatrixData(params: {
       const parsedNum = parseMatrixNumericCell(v)
       if (parsedNum !== null) {
         rowNums.push(parsedNum)
-        const ratio = maxNum === minNum ? 0.65 : (parsedNum - minNum) / numSpan
+        const rawRatio =
+          maxNum === minNum
+            ? 0.65
+            : scaledSpan > 0
+              ? (parsedNum / 2 - minNum / 2) / scaledSpan
+              : (parsedNum - minNum) / numSpan
+        const ratio = Number.isFinite(rawRatio) ? Math.max(0, Math.min(1, rawRatio)) : 0.65
         const intensityPct = Math.round(8 + ratio * 34)
         const formatted = formatMatrixCellNumber(parsedNum)
         rowOut.push({
@@ -1067,10 +1102,17 @@ function flattenTreeForCsv(
 export function formatChartDataToCsv(data: unknown): string | null {
   let rows: Record<string, unknown>[] = []
   if (Array.isArray(data)) {
-    rows = data.filter(
+    const objects = data.filter(
       (item): item is Record<string, unknown> =>
         typeof item === 'object' && item !== null && !Array.isArray(item),
     )
+    if (objects.some((item) => Array.isArray(item.children) && item.children.length > 0)) {
+      for (const node of objects) {
+        flattenTreeForCsv(node, '', rows)
+      }
+    } else {
+      rows = objects
+    }
     if (rows.length === 0) {
       const nums = data.filter(
         (item): item is number => typeof item === 'number' && Number.isFinite(item),
@@ -1095,6 +1137,8 @@ export function formatChartDataToCsv(data: unknown): string | null {
       )
     } else if (Array.isArray(rec.children) && rec.children.length > 0) {
       flattenTreeForCsv(rec, '', rows)
+    } else if (Object.keys(rec).length > 0) {
+      rows = [rec]
     }
   }
   if (rows.length === 0) return null

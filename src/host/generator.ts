@@ -14,6 +14,13 @@ import {
 type SchemaCatalogInput = ConstructorParameters<typeof CatalogConfig>[0]
 
 import { validateCalcExpression } from '../shared/calc-engine.ts'
+import { isSecretKey } from '../shared/constants.ts'
+import {
+  collectKvSecretsFromValue,
+  extractBindingPointer,
+  normalizePointerPath,
+  resolveTemplateObscuredPointers,
+} from '../shared/redaction.ts'
 import { A2UI_LIMITS, ASK_TOOL, dshSchemaCatalog, RENDER_TOOL } from '../shared/catalog-schema.ts'
 import {
   desugarExpressConcat,
@@ -204,6 +211,11 @@ function validateCalcCallsInNode(node: unknown): void {
         if (!isDynamicBindingObject(varsRec)) {
           providedVars = new Set<string>(Object.keys(varsRec))
         }
+      } else {
+        throw new A2uiError(
+          `Invalid calc() formula "${args.expr}": vars must be an object map or $/path binding.`,
+          'VALIDATION_ERROR',
+        )
       }
       const err = validateCalcExpression(args.expr, providedVars)
       if (err !== null) {
@@ -366,16 +378,48 @@ function touchMapLru<K, V>(map: Map<K, V>, key: K, value: V, limit: number): voi
   }
 }
 
+interface SurfaceRedactionRecord {
+  readonly obscuredPointers: Set<string>
+  readonly kvPointers: Set<string>
+  readonly componentsById: Map<string, Record<string, unknown>>
+}
+
+function getAtPointerLocal(root: unknown, pointer: string): unknown {
+  const norm = normalizePointerPath(pointer)
+  if (norm === '/') return root
+  const parts = norm.slice(1).split('/')
+  let cur: unknown = root
+  for (const rawSeg of parts) {
+    if (cur === null || cur === undefined || typeof cur !== 'object') return undefined
+    const seg = rawSeg.replace(/~1/g, '/').replace(/~0/g, '~')
+    if (Array.isArray(cur)) {
+      const idx = Number(seg)
+      if (!Number.isInteger(idx) || idx < 0 || idx >= cur.length) return undefined
+      cur = cur[idx]
+    } else {
+      const rec = cur as Record<string, unknown>
+      if (!Object.hasOwn(rec, seg)) return undefined
+      cur = rec[seg]
+    }
+  }
+  return cur
+}
+
 export class SurfaceSessions {
   private readonly states = new Map<string, RendererState>()
   private readonly enabledBySession = new Map<string, boolean>()
   private readonly failuresBySession = new Map<string, { render: number; ask: number }>()
+  private readonly redactionBySession = new Map<string, Map<string, SurfaceRedactionRecord>>()
   private readonly generator: A2uiGenerator
   private defaultEnabled: boolean
 
   constructor(generator: A2uiGenerator = createGenerator(DEFAULT_CATALOGS), initialEnabled = true) {
     this.generator = generator
     this.defaultEnabled = initialEnabled
+  }
+
+  getDefaultEnabled(): boolean {
+    return this.defaultEnabled
   }
 
   isEnabled(sessionId: string): boolean {
@@ -388,6 +432,127 @@ export class SurfaceSessions {
 
   setDefaultEnabled(enabled: boolean): void {
     this.defaultEnabled = enabled
+  }
+
+  private recordRedactionMessages(
+    sessionId: string,
+    messages: readonly AgentToRendererMessage[],
+  ): void {
+    let bySurface = this.redactionBySession.get(sessionId)
+    if (!bySurface) {
+      bySurface = new Map<string, SurfaceRedactionRecord>()
+      touchMapLru(this.redactionBySession, sessionId, bySurface, MAX_HOST_SESSIONS)
+    } else {
+      touchMapLru(this.redactionBySession, sessionId, bySurface, MAX_HOST_SESSIONS)
+    }
+    const ensureSurface = (surfaceId: string): SurfaceRedactionRecord => {
+      let rec = bySurface.get(surfaceId)
+      if (!rec) {
+        rec = {
+          obscuredPointers: new Set<string>(),
+          kvPointers: new Set<string>(),
+          componentsById: new Map<string, Record<string, unknown>>(),
+        }
+        bySurface.set(surfaceId, rec)
+      }
+      return rec
+    }
+    const ingestComponents = (surfaceId: string, list: unknown) => {
+      if (!Array.isArray(list)) return
+      const rec = ensureSurface(surfaceId)
+      for (const item of list) {
+        if (typeof item !== 'object' || item === null) continue
+        const comp = item as Record<string, unknown>
+        const id =
+          typeof comp.id === 'string' && comp.id !== ''
+            ? comp.id
+            : `anon_${rec.componentsById.size}`
+        rec.componentsById.set(id, comp)
+        if (comp.component === 'KvEditor') {
+          const p = extractBindingPointer(comp.items)
+          if (p !== null) rec.kvPointers.add(p)
+        }
+      }
+      resolveTemplateObscuredPointers([...rec.componentsById.values()], rec.obscuredPointers)
+    }
+    const ingestDataModel = (surfaceId: string, dmPath: string, dmValue: unknown) => {
+      const rec = bySurface.get(surfaceId)
+      if (!rec || rec.kvPointers.size === 0) return
+      for (const kvPtr of rec.kvPointers) {
+        const normKv = normalizePointerPath(kvPtr)
+        if (dmPath === normKv) {
+          collectKvSecretsFromValue(dmValue, normKv, rec.obscuredPointers, new Set(), new Set())
+        } else if (dmPath === '/') {
+          const val = getAtPointerLocal(dmValue, normKv)
+          if (val !== undefined) {
+            collectKvSecretsFromValue(val, normKv, rec.obscuredPointers, new Set(), new Set())
+          }
+        } else if (normKv.startsWith(`${dmPath}/`)) {
+          const val = getAtPointerLocal(dmValue, normKv.slice(dmPath.length))
+          if (val !== undefined) {
+            collectKvSecretsFromValue(val, normKv, rec.obscuredPointers, new Set(), new Set())
+          }
+        } else if (dmPath.startsWith(`${normKv}/`)) {
+          const seg =
+            dmPath
+              .slice(normKv.length + 1)
+              .split('/')[0]
+              ?.replace(/~1/g, '/')
+              .replace(/~0/g, '~') ?? ''
+          if (seg !== '' && isSecretKey(seg)) {
+            rec.obscuredPointers.add(dmPath)
+          }
+        }
+      }
+    }
+    for (const msg of messages) {
+      const rec = msg as unknown as Record<string, unknown>
+      if (rec.deleteSurface && typeof rec.deleteSurface === 'object') {
+        const sid = (rec.deleteSurface as { surfaceId?: unknown }).surfaceId
+        if (typeof sid === 'string') bySurface.delete(sid)
+      }
+      if (rec.createSurface && typeof rec.createSurface === 'object') {
+        const cs = rec.createSurface as Record<string, unknown>
+        const sid = typeof cs.surfaceId === 'string' ? cs.surfaceId : ''
+        if (sid !== '') {
+          bySurface.delete(sid)
+          ingestComponents(sid, cs.components)
+          if (cs.dataModel !== undefined) ingestDataModel(sid, '/', cs.dataModel)
+        }
+      }
+      if (rec.updateComponents && typeof rec.updateComponents === 'object') {
+        const uc = rec.updateComponents as Record<string, unknown>
+        const sid = typeof uc.surfaceId === 'string' ? uc.surfaceId : ''
+        if (sid !== '') ingestComponents(sid, uc.components)
+      }
+      if (rec.updateDataModel && typeof rec.updateDataModel === 'object') {
+        const dm = rec.updateDataModel as { surfaceId?: unknown; path?: unknown; value?: unknown }
+        const sid = typeof dm.surfaceId === 'string' ? dm.surfaceId : ''
+        if (sid !== '') {
+          const dmPath = normalizePointerPath(typeof dm.path === 'string' ? dm.path : '/')
+          ingestDataModel(sid, dmPath, dm.value)
+        }
+      }
+    }
+  }
+
+  getSessionRedactionState(
+    sessionId: string,
+    surfaceIds?: readonly string[],
+  ): { obscuredPointers: Set<string>; kvPointers: Set<string> } {
+    const obscuredPointers = new Set<string>()
+    const kvPointers = new Set<string>()
+    const bySurface = this.redactionBySession.get(sessionId)
+    if (!bySurface) return { obscuredPointers, kvPointers }
+    const targetIds =
+      surfaceIds !== undefined && surfaceIds.length > 0 ? surfaceIds : [...bySurface.keys()]
+    for (const sid of targetIds) {
+      const rec = bySurface.get(sid)
+      if (!rec) continue
+      for (const p of rec.obscuredPointers) obscuredPointers.add(p)
+      for (const k of rec.kvPointers) kvPointers.add(k)
+    }
+    return { obscuredPointers, kvPointers }
   }
 
   rawPromptSnippet(): string {
@@ -461,11 +626,15 @@ export class SurfaceSessions {
 
     const prevState = this.states.get(sessionId)
     if (prevState !== undefined) {
-      return prevState.transaction(runCompile)
+      const compiled = prevState.transaction(runCompile)
+      this.recordRedactionMessages(sessionId, compiled)
+      return compiled
     }
 
     try {
-      return runCompile()
+      const compiled = runCompile()
+      this.recordRedactionMessages(sessionId, compiled)
+      return compiled
     } catch (err) {
       if (!hadPrevState) {
         this.states.delete(sessionId)
@@ -504,6 +673,7 @@ export class SurfaceSessions {
     this.states.delete(sessionId)
     this.enabledBySession.delete(sessionId)
     this.failuresBySession.delete(sessionId)
+    this.redactionBySession.delete(sessionId)
   }
 }
 

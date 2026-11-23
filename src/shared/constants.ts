@@ -172,6 +172,48 @@ const PIN_BENIGN_WORDS = new Set([
   'row',
 ])
 
+const KEY_QUALIFIER_WORDS = new Set([
+  'rsa',
+  'dsa',
+  'ecdsa',
+  'ed',
+  'pem',
+  'der',
+  'jwk',
+  'tls',
+  'ssl',
+  'aes',
+  'hmac',
+  'sha',
+  'v',
+  'id',
+  'public',
+  'prod',
+  'dev',
+  'staging',
+  'test',
+  'live',
+  'sandbox',
+  'primary',
+  'secondary',
+  'backup',
+  'new',
+  'old',
+  'next',
+  'prev',
+  'current',
+  'active',
+])
+
+function hasPrecedingSecretKeyPrefix(words: readonly string[], keyIdx: number): boolean {
+  for (let j = keyIdx - 1; j >= 0; j -= 1) {
+    const w = words[j] ?? ''
+    if (SECRET_KEY_PREFIXES.has(w)) return true
+    if (!KEY_QUALIFIER_WORDS.has(w)) return false
+  }
+  return false
+}
+
 const PLURAL_SECRET_MAP: Record<string, string> = {
   passwords: 'password',
   passwds: 'passwd',
@@ -208,12 +250,13 @@ export function isSecretKey(key: string): boolean {
     const raw = rawWords[i] ?? ''
     const w = words[i]
     if (!w) continue
-    if (raw === 'tokens' || w === 'token') {
+    if (w === 'tokens' || w === 'token') {
       const hasForceNeighbor = words.some(
-        (other, idx) => idx !== i && SECRET_FORCE_NEIGHBORS.has(other),
+        (other, idx) =>
+          idx !== i && (SECRET_FORCE_NEIGHBORS.has(other) || (w === 'tokens' && other === 'id')),
       )
       if (hasForceNeighbor) return true
-      if (raw === 'tokens') continue
+      if (w === 'tokens') continue
       const hasBenignNeighbor =
         words.length > 1 && words.some((other, idx) => idx !== i && TOKEN_BENIGN_WORDS.has(other))
       if (!hasBenignNeighbor) return true
@@ -231,7 +274,7 @@ export function isSecretKey(key: string): boolean {
     }
     if (SECRET_SINGLE_WORDS.has(w)) return true
     if (SECRET_COMPOUND_RE.test(raw)) return true
-    if (w === 'key' && i > 0 && SECRET_KEY_PREFIXES.has(words[i - 1] ?? '')) return true
+    if (w === 'key' && i > 0 && hasPrecedingSecretKeyPrefix(words, i)) return true
   }
   return false
 }

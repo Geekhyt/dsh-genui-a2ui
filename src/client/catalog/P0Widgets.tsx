@@ -40,6 +40,9 @@ export const DshDiffViewImpl = defineComponent<{
   const isMultiFile = multiFiles.length > 0
   const [activeFileIdx, setActiveFileIdx] = useState(0)
   const safeFileIdx = isMultiFile ? Math.min(activeFileIdx, multiFiles.length - 1) : 0
+  if (activeFileIdx !== safeFileIdx) {
+    setActiveFileIdx(safeFileIdx)
+  }
   const activeFile = isMultiFile ? multiFiles[safeFileIdx] : undefined
 
   const beforeStr = activeFile
@@ -136,6 +139,7 @@ export const DshDiffViewImpl = defineComponent<{
             <button
               type="button"
               className={css.diffModeBtn}
+              aria-pressed={mode === 'unified'}
               data-active={mode === 'unified' ? 'true' : 'false'}
               onClick={() => setMode('unified')}
             >
@@ -144,6 +148,7 @@ export const DshDiffViewImpl = defineComponent<{
             <button
               type="button"
               className={css.diffModeBtn}
+              aria-pressed={mode === 'split'}
               data-active={mode === 'split' ? 'true' : 'false'}
               onClick={() => setMode('split')}
             >
@@ -316,7 +321,12 @@ export const DshStepsImpl = defineComponent<{
       {headerTitle ? <div className={css.stepsTitle}>{headerTitle}</div> : null}
       <ol className={dir === 'horizontal' ? css.stepsHorizontal : css.stepsVertical}>
         {steps.map((step, idx) => (
-          <li key={`${step.title}-${idx}`} className={css.stepItem} data-status={step.status}>
+          <li
+            key={`${step.title}-${idx}`}
+            className={css.stepItem}
+            data-status={step.status}
+            aria-current={step.status === 'active' ? 'step' : undefined}
+          >
             <div className={css.stepIndicatorTrack}>
               <span className={css.stepDot} data-status={step.status} aria-hidden="true">
                 {step.status === 'done' ? '✓' : step.status === 'error' ? '!' : idx + 1}

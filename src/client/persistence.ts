@@ -329,14 +329,20 @@ export function saveSurfaceDraft(
 ): void {
   if (!sessionId || !surfaceId) return
   const sanitized = sanitizeDataModel(data, obscuredPointers)
-  if (Object.keys(sanitized).length === 0) return
+  if (Object.keys(sanitized).length === 0) {
+    removeSurfaceDraft(sessionId, surfaceId, fingerprint)
+    return
+  }
   let serialized = ''
   try {
     serialized = JSON.stringify(sanitized)
   } catch {
     return
   }
-  if (serialized.length > MAX_SINGLE_DRAFT_CHARS) return
+  if (serialized.length > MAX_SINGLE_DRAFT_CHARS) {
+    removeSurfaceDraft(sessionId, surfaceId, fingerprint)
+    return
+  }
 
   const targetKey = draftKeyOf(sessionId, surfaceId, fingerprint)
   const entries = readDraftList().filter((e) => e.key !== targetKey)
@@ -422,9 +428,11 @@ export function getDockUiState(sessionId: string | undefined): DockUiEntry {
 }
 
 export function setDockCollapsed(sessionId: string, collapsed: boolean): void {
-  if (!sessionId) return
+  if (!sessionId || isDangerousObjectKey(sessionId)) return
   const prev = readDockMap()
-  const cur = prev[sessionId] ?? DEFAULT_DOCK_STATE
+  const cur = Object.hasOwn(prev, sessionId)
+    ? (prev[sessionId] ?? DEFAULT_DOCK_STATE)
+    : DEFAULT_DOCK_STATE
   const next = { ...prev }
   delete next[sessionId]
   next[sessionId] = { ...cur, collapsed }
@@ -432,9 +440,11 @@ export function setDockCollapsed(sessionId: string, collapsed: boolean): void {
 }
 
 export function dismissDockAtSeq(sessionId: string, seq: number): void {
-  if (!sessionId) return
+  if (!sessionId || isDangerousObjectKey(sessionId)) return
   const prev = readDockMap()
-  const cur = prev[sessionId] ?? DEFAULT_DOCK_STATE
+  const cur = Object.hasOwn(prev, sessionId)
+    ? (prev[sessionId] ?? DEFAULT_DOCK_STATE)
+    : DEFAULT_DOCK_STATE
   const next = { ...prev }
   delete next[sessionId]
   next[sessionId] = { ...cur, dismissedSeq: seq }
@@ -480,8 +490,13 @@ function readEnabledStore(): EnabledStoreShape {
     const defaultCandidate = parsePersistedEnabled(parsed.defaultEnabled ?? parsed.defaultTier)
     const defaultEnabled = defaultCandidate ?? fallbackDefaultEnabled
     const bySession: Record<string, boolean> = {}
-    if (typeof parsed.bySession === 'object' && parsed.bySession !== null) {
+    if (
+      typeof parsed.bySession === 'object' &&
+      parsed.bySession !== null &&
+      !Array.isArray(parsed.bySession)
+    ) {
       for (const [k, v] of Object.entries(parsed.bySession as Record<string, unknown>)) {
+        if (isDangerousObjectKey(k)) continue
         const coerced = parsePersistedEnabled(v)
         if (coerced !== undefined) bySession[k] = coerced
       }
@@ -520,6 +535,7 @@ export function setA2uiEnabled(
   sessionId: string | undefined,
   enabled: boolean,
   atCommandSeq?: number,
+  updateDefault = true,
 ): void {
   if (typeof atCommandSeq === 'number') {
     const seqKey = sessionId ?? 'global'
@@ -530,12 +546,12 @@ export function setA2uiEnabled(
   }
   const prev = readEnabledStore()
   const nextBySession = { ...prev.bySession }
-  if (sessionId) {
+  if (sessionId && !isDangerousObjectKey(sessionId)) {
     delete nextBySession[sessionId]
     nextBySession[sessionId] = enabled
   }
   const next: EnabledStoreShape = {
-    defaultEnabled: enabled,
+    defaultEnabled: updateDefault || !sessionId ? enabled : prev.defaultEnabled,
     bySession: pruneRecordLru(nextBySession, MAX_DRAFT_ENTRIES),
   }
   const serialized = JSON.stringify(next)
@@ -568,7 +584,7 @@ export function reconcileLatestA2uiCommand(
   const seqKey = sessionId ?? 'global'
   const watermark = lastAppliedCommandSeqBySession.get(seqKey) ?? -1
   if (latestCommand.seq <= watermark) return
-  setA2uiEnabled(sessionId, latestCommand.enabled, latestCommand.seq)
+  setA2uiEnabled(sessionId, latestCommand.enabled, latestCommand.seq, false)
 }
 
 export interface A2uiCommandNotice {

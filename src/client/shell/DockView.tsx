@@ -34,7 +34,7 @@ export const A2uiDockView = memo(function A2uiDockView({
 }: A2uiDockViewProps) {
   const msg = useShellMessages()
   const [localCollapsed, setLocalCollapsed] = useState(false)
-  const [localDismissedSeq, setLocalDismissedSeq] = useState(0)
+  const [localDismissedSeq, setLocalDismissedSeq] = useState(-1)
   const subscribeChat = useCallback(
     (listener: () => void) => (chatStore ? chatStore.subscribe(listener) : NOOP_SUBSCRIBE()),
     [chatStore],
@@ -121,6 +121,7 @@ export const A2uiDockView = memo(function A2uiDockView({
         style={collapsed ? { display: 'none' } : undefined}
       >
         <LazySurfaceGroupView
+          key={sessionId ?? 'local'}
           messages={batch.messages}
           visibleSurfaceIds={batch.visibleSurfaceIds}
           sessionId={sessionId}

@@ -262,15 +262,22 @@ const FORBID_SVG_TAGS = [
 
 const UNSAFE_CSS_VALUE_RE =
   /\\|@import\b|expression\s*\(|image-set\s*\(|javascript\s*:|vbscript\s*:/i
-const CSS_URL_RE = /url\s*\(\s*(['"]?)([^)'"]*)\1\s*\)/gi
+const CSS_URL_START_RE = /\burl\s*\(/gi
+const SAFE_FRAGMENT_URL_RE =
+  /^\s*(?:"(#[A-Za-z0-9_.:-]+)"|'(#[A-Za-z0-9_.:-]+)'|(#[A-Za-z0-9_.:-]+))\s*\)/
+
+function stripCssComments(cssText: string): string {
+  return cssText.replace(/\/\*[\s\S]*?\*\//g, '')
+}
 
 function hasUnsafeCssContent(cssText: string): boolean {
-  if (UNSAFE_CSS_VALUE_RE.test(cssText)) return true
-  CSS_URL_RE.lastIndex = 0
+  const clean = stripCssComments(cssText)
+  if (clean.includes('/*') || UNSAFE_CSS_VALUE_RE.test(clean)) return true
+  CSS_URL_START_RE.lastIndex = 0
   let m: RegExpExecArray | null
-  while ((m = CSS_URL_RE.exec(cssText)) !== null) {
-    const target = (m[2] ?? '').trim()
-    if (!target.startsWith('#')) return true
+  while ((m = CSS_URL_START_RE.exec(clean)) !== null) {
+    const rest = clean.slice(CSS_URL_START_RE.lastIndex)
+    if (!SAFE_FRAGMENT_URL_RE.test(rest)) return true
   }
   return false
 }
@@ -320,8 +327,8 @@ function isSelectorScopedToRoot(selector: string, rootId: string): boolean {
 }
 
 function filterScopedCssBlock(body: string, rootId: string): string {
-  const uncommented = body.replace(/\/\*[\s\S]*?\*\//g, '').trim()
-  if (uncommented === '') return ''
+  const uncommented = stripCssComments(body).trim()
+  if (uncommented === '' || uncommented.includes('/*')) return ''
   const rules = splitTopLevelCssRules(uncommented)
   const safeRules: string[] = []
   for (const rule of rules) {
@@ -331,14 +338,13 @@ function filterScopedCssBlock(body: string, rootId: string): string {
     const inner = rule.slice(openIdx + 1, -1).trim()
     if (hasUnsafeCssContent(header)) continue
     if (header.startsWith('@')) {
-      if (/^@(?:keyframes|-webkit-keyframes)\b/i.test(header)) {
-        if (!hasUnsafeCssContent(inner)) safeRules.push(rule)
-      } else if (/^@(?:media|supports)\b/i.test(header)) {
+      if (/^@(?:media|supports)\b/i.test(header)) {
         const filteredInner = filterScopedCssBlock(inner, rootId)
         if (filteredInner !== '') safeRules.push(`${header}{${filteredInner}}`)
       }
       continue
     }
+    if (inner.includes('{') || inner.includes('}')) continue
     if (hasUnsafeCssContent(inner)) continue
     const selectors = header
       .split(',')
@@ -355,33 +361,100 @@ function filterScopedCssBlock(body: string, rootId: string): string {
 const UNSAFE_INLINE_STYLE_PROP_RE =
   /^(?:position|z-index|inset|top|right|bottom|left|behavior|-moz-binding)$/i
 
+function filterInlineStyleDeclarations(cssText: string): string {
+  const clean = stripCssComments(cssText)
+  if (clean.includes('/*')) return ''
+  const kept = clean
+    .split(';')
+    .map((decl) => decl.trim())
+    .filter((decl) => {
+      if (decl === '') return false
+      const colon = decl.indexOf(':')
+      if (colon === -1) return false
+      const prop = decl.slice(0, colon).trim()
+      const val = decl.slice(colon + 1).trim()
+      if (UNSAFE_INLINE_STYLE_PROP_RE.test(prop)) return false
+      if (hasUnsafeCssContent(val)) return false
+      return true
+    })
+  return kept.join('; ')
+}
+
 function sanitizeInlineStyleAttributes(svg: string): string {
-  return svg.replace(
-    /(<(?!svg\b)[A-Za-z][A-Za-z0-9:-]*\b[^>]*?)\s+style\s*=\s*(["'])([\s\S]*?)\2/gi,
-    (_full, prefix: string, quote: string, cssText: string) => {
-      const kept = cssText
-        .split(';')
-        .map((decl) => decl.trim())
-        .filter((decl) => {
-          if (decl === '') return false
-          const colon = decl.indexOf(':')
-          if (colon === -1) return false
-          const prop = decl.slice(0, colon).trim()
-          const val = decl.slice(colon + 1).trim()
-          if (UNSAFE_INLINE_STYLE_PROP_RE.test(prop)) return false
-          if (hasUnsafeCssContent(val)) return false
-          return true
-        })
-      return kept.length > 0 ? `${prefix} style=${quote}${kept.join('; ')}${quote}` : prefix
-    },
-  )
+  return svg.replace(/<(?:"[^"]*"|'[^']*'|[^'">])*>/g, (tag) => {
+    if (/^<\s*(?:\/|!|\?|(?:[a-z][a-z0-9._-]*:)?svg\b)/i.test(tag)) return tag
+    if (!/\bstyle\s*=/i.test(tag)) return tag
+    const openMatch = /^<([A-Za-z][A-Za-z0-9:._-]*)/.exec(tag)
+    if (!openMatch) return tag
+    let out = openMatch[0]!
+    let i = out.length
+    const end = tag.endsWith('/>') ? tag.length - 2 : tag.length - 1
+    while (i < end) {
+      const wsStart = i
+      while (i < end && /\s/.test(tag[i]!)) i += 1
+      const ws = tag.slice(wsStart, i)
+      if (i >= end) {
+        out += ws
+        break
+      }
+      const nameStart = i
+      while (i < end && !/[\s=/>]/.test(tag[i]!)) i += 1
+      const attrName = tag.slice(nameStart, i)
+      if (attrName === '') {
+        out += ws + tag[i]!
+        i += 1
+        continue
+      }
+      let eqIdx = i
+      while (eqIdx < end && /\s/.test(tag[eqIdx]!)) eqIdx += 1
+      if (eqIdx >= end || tag[eqIdx] !== '=') {
+        out += ws + attrName
+        continue
+      }
+      i = eqIdx + 1
+      while (i < end && /\s/.test(tag[i]!)) i += 1
+      let quote = ''
+      let val = ''
+      if (i < end && (tag[i] === '"' || tag[i] === "'")) {
+        quote = tag[i]!
+        const valStart = i + 1
+        const closeQuote = tag.indexOf(quote, valStart)
+        if (closeQuote === -1 || closeQuote >= end) {
+          val = tag.slice(valStart, end)
+          i = end
+        } else {
+          val = tag.slice(valStart, closeQuote)
+          i = closeQuote + 1
+        }
+      } else {
+        const valStart = i
+        while (i < end && !/[\s/>]/.test(tag[i]!)) i += 1
+        val = tag.slice(valStart, i)
+      }
+      if (attrName.toLowerCase() === 'style') {
+        const cleaned = filterInlineStyleDeclarations(val)
+        if (cleaned !== '') {
+          const q = quote || '"'
+          out += `${ws}style=${q}${cleaned}${q}`
+        }
+      } else if (quote !== '') {
+        out += `${ws}${attrName}=${quote}${val}${quote}`
+      } else {
+        out += `${ws}${attrName}=${val}`
+      }
+    }
+    return out + tag.slice(end)
+  })
 }
 
 export function scopeMermaidStyleRules(svg: string, rootId: string): string {
-  const scoped = svg.replace(/<style\b[^>]*>([\s\S]*?)<\/style>/gi, (_full, body: string) => {
-    const safeBody = filterScopedCssBlock(body, rootId)
-    return safeBody !== '' ? `<style>${safeBody}</style>` : ''
-  })
+  const scoped = svg.replace(
+    /<(?:[a-z][a-z0-9._-]*:)?style\b(?:"[^"]*"|'[^']*'|[^'">])*>([\s\S]*?)<\/(?:[a-z][a-z0-9._-]*:)?style\s*>/gi,
+    (_full, body: string) => {
+      const safeBody = filterScopedCssBlock(body, rootId)
+      return safeBody !== '' ? `<style>${safeBody}</style>` : ''
+    },
+  )
   return sanitizeInlineStyleAttributes(scoped)
 }
 

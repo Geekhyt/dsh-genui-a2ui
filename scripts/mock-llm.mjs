@@ -2088,6 +2088,154 @@ export const SHOWCASE_COMBO_AUDIT_V050_CHARTS_UI = [
   ']))',
 ].join('\n')
 
+export const SHOWCASE_COMBO_AUDIT_V053_CHARTS_UI = [
+  'surface("v053_audit_charts")',
+  '$/sub100Bullet = [',
+  '  { label: "错误率 P99", actual: 0.42, target: 0.5, max: 1.0 },',
+  '  { label: "超时占比", actual: 0.28, target: 0.35, max: 1.0, ranges: [1.0, 0.6, 0.3] }',
+  ']',
+  '$/rubricRadial = [',
+  '  { name: "架构清晰度", value: 4.6, max: 5 },',
+  '  { name: "安全性验证", value: 4.1, max: 5 },',
+  '  { name: "响应性能", value: 3.8, max: 5 },',
+  '  { name: "可访问性", value: 3.4, max: 5 }',
+  ']',
+  '$/radialSeven = [',
+  '  { name: "GPU 算力", value: 88, max: 100 },',
+  '  { name: "显存带宽", value: 79, max: 100 },',
+  '  { name: "KV Cache", value: 92, max: 100 },',
+  '  { name: "RDMA 网络", value: 71, max: 100 },',
+  '  { name: "磁盘 IOPS", value: 64, max: 100 },',
+  '  { name: "CPU 调度", value: 58, max: 100 },',
+  '  { name: "编解码器", value: 45, max: 100 }',
+  ']',
+  '$/histRightTail = [18, 22, 26, 31, 35, 39, 44, 49, 55, 62, 71, 84, 96, 112, 128, 138, 145]',
+  '$/scatterAuto = [',
+  '  { name: "Model-A", cost: 22, score: 86 },',
+  '  { name: "Model-B", cost: 54, score: 92 },',
+  '  { name: "Model-C", cost: 88, score: 78 },',
+  '  { name: "Model-D", cost: 36, score: 89 }',
+  ']',
+  '$/pctSigned = [',
+  '  { period: "Q1", gain: 60, loss: -40 },',
+  '  { period: "Q2", gain: 80, loss: -20 },',
+  '  { period: "Q3", gain: 50, loss: -50 }',
+  ']',
+  '$/multiYearCal = [',
+  '  { date: "2025-11-15", value: 4 },',
+  '  { date: "2025-12-08", value: 9 },',
+  '  { date: "2025-12-24", value: 14 },',
+  '  { date: "2026-01-10", value: 7 },',
+  '  { date: "2026-02-14", value: 12 },',
+  '  { date: "2026-03-05", value: 16 }',
+  ']',
+  '$/parallelNullFirst = [',
+  '  { name: "ColdRun", latency: 42, qps: null, tokens: 180000 },',
+  '  { name: "Warm-V3", latency: 24, qps: 1120, tokens: 165000 },',
+  '  { name: "Warm-R1", latency: 68, qps: 640, tokens: 120000 }',
+  ']',
+  '$/sunburst3L = [',
+  '  { name: "在线对话", children: [{ name: "R1 池", children: [{ name: "深度推理", value: 36 }, { name: "代码审阅", value: 18 }] }, { name: "V3 池", children: [{ name: "快回池", value: 24 }] }] },',
+  '  { name: "检索向量", children: [{ name: "Milvus", children: [{ name: "主集群", value: 22 }, { name: "副本", value: 12 }] }] },',
+  '  { name: "评测沙箱", children: [{ name: "回归池", children: [{ name: "自动压测", value: 14 }] }] }',
+  ']',
+  '$/dumbbellImprove = [',
+  '  { name: "网关 P99", before: 82, after: 96 },',
+  '  { name: "缓存命中", before: 74, after: 91 },',
+  '  { name: "一次编译", before: 81, after: 97 }',
+  ']',
+  'root = Card(Column([',
+  '  Text("### 全面审计 40：ECharts 6 刻度/几何/跨年日历/三层旭日图/极值标线/平行坐标实测"),',
+  '  Row([',
+  '    Chart("bullet", $/sub100Bullet, title="小数域 Bullet (max=1.0 + 乱序 ranges)", height=220, weight=1),',
+  '    Chart("radialBar", $/rubricRadial, title="5 分制玉玦图 (max=5)", height=220, weight=1)',
+  '  ], align="stretch"),',
+  '  Row([',
+  '    Chart("radialBar", $/radialSeven, title="7 项 276px 玉玦图防标签重叠", height=230, weight=1),',
+  '    Chart("histogram", $/histRightTail, title="276px 右尾参考线防裁切", bins=6, referenceLine=130, referenceLabel="P99 SLA 130ms", height=230, weight=1)',
+  '  ], align="stretch"),',
+  '  Row([',
+  '    Chart("scatter", $/scatterAuto, title="省缺 xField 自动数值散点 + RefX", referenceX=50, referenceXLabel="成本中位 50", height=220, weight=1),',
+  '    Chart("bar", $/pctSigned, title="含负值 100% 堆叠防反转", stacked=true, stackMode="percent", height=220, weight=1)',
+  '  ], align="stretch"),',
+  '  Row([',
+  '    Chart("calendar", $/multiYearCal, title="跨年日历 (2025-2026 防撞月标)", height=210, weight=1),',
+  '    Chart("parallel", $/parallelNullFirst, title="首行含 null + 最右大数刻度防裁切", height=210, weight=1)',
+  '  ], align="stretch"),',
+  '  Row([',
+  '    Chart("sunburst", $/sunburst3L, title="三层旭日图桌面连续环校验", height=260, weight=2),',
+  '    Chart("dumbbell", $/dumbbellImprove, title="全正向改善哑铃图 (图例配色一致)", xField="name", height=260, weight=1)',
+  '  ], align="stretch")',
+  ']))',
+].join('\n')
+
+export const SHOWCASE_COMBO_AUDIT_V053_WIDGETS_UI = [
+  'surface("v053_audit_widgets")',
+  '$/auditProRows = [',
+  '  { svc: "gateway-hz", qps: 1420, delta: "+12.4%", err: "0.02%" },',
+  '  { svc: "billing-core", qps: null, delta: "—", err: "-" },',
+  '  { svc: "search-neg", qps: -45, delta: "-8.1%", err: "0.14%" },',
+  '  { svc: "audit-empty", qps: "", delta: "", err: "0.00%" }',
+  ']',
+  '$/auditApiParams = [',
+  '  { name: "gatewayClusterId", in: "path", type: "string", required: true, description: "目标核心生产网关实例集群唯一标识符" },',
+  '  { name: "rateLimitWindowSec", in: "query", type: "integer", required: false, description: "滑动时间窗口秒数，默认 60 秒" }',
+  ']',
+  '$/auditClause = "乙方应在收到书面通知后 72 小时内完成严重安全漏洞修复并提交完整复盘报告；若逾期未修复，甲方有权暂停结算并启动应急熔断预案。"',
+  '$/auditAnns = [',
+  '  { start: 12, end: 36, label: "SLA 时限", tone: "info", note: "强制 72 小时内闭环", sourceId: "CLAUSE-4.2" },',
+  '  { start: 46, end: 62, label: "违约追责", tone: "danger", note: "触发暂停结算与熔断", sourceId: "CLAUSE-9.1" }',
+  ']',
+  '$/auditSched = [',
+  '  { label: "1. 跨夜长任务全宽进度条测试", owner: "@SRE", start: "22:30", end: "11:30", status: "done", note: "完整覆盖主窗口与次日上午核验节点" },',
+  '  { label: "2. 次日午后收尾 (13:00-14:00)", owner: "@DBA", start: "13:00", end: "14:00", status: "active", note: "次日 13:00 午后核验" }',
+  ']',
+  '$/auditSources = [',
+  '  { title: "A2UI 1.0 Protocol Specification", url: "https://a2ui.org/spec/v1", domain: "a2ui.org", snippet: "Native component streaming and data binding contract.", score: 0.96 },',
+  '  { title: "ECharts 6.1 Release Notes", url: "https://echarts.apache.org", domain: "echarts.apache.org", snippet: "Chord series, axis improvements and SVG SSR.", score: 0.91 }',
+  ']',
+  '$/warnTree = [',
+  '  { id: "n1", label: "checkout-api", metric: "184ms", sharePct: 100, status: "warning", children: [',
+  '    { id: "n2", label: "risk-scorer", metric: "128ms", sharePct: 70, status: "warning" }',
+  '  ] }',
+  ']',
+  '$/warnTracker = [',
+  '  { id: "t1", label: "11-20", status: "ok", value: "99.98%" },',
+  '  { id: "t2", label: "11-21", status: "warning", value: "99.41%" },',
+  '  { id: "t3", label: "11-22", status: "ok", value: "99.99%" }',
+  ']',
+  'root = Card(Column([',
+  '  Text("### 全面审计 41：字面量 CheckCard / 16 缺失图标 / Warning 语义点 / 306px ApiEndpoint / FileOpenBtn / AnnotationText 断行 / ProTable 空值排序"),',
+  '  Row([',
+  '    Card(Column([',
+  '      Text("#### 协议标准 Icon 补全验证"),',
+  '      Row([Icon("camera"), Icon("photo"), Icon("print"), Icon("attachFile"), Icon("volumeUp"), Icon("volumeMute"), Icon("starHalf"), Icon("skipNext")])',
+  '    ]), weight=1),',
+  '    Card(Column([',
+  '      Slider("小数域滑块 (0 ~ 0.5)", 0, 0.5, 0.25)',
+  '    ]), weight=1)',
+  '  ], align="stretch"),',
+  '  CheckCard("字面量 value=pro 选型卡片 (无绑定路径也应高亮且可点)", [{ value: "std", title: "标准版", description: "单集群" }, { value: "pro", title: "专业版", description: "双活容灾", recommended: true }, { value: "ent", title: "旗舰版", description: "三地五中心" }], value="pro", columns=3),',
+  '  Row([',
+  '    EntityHeader("billing-gateway-canary", subtitle="预警状态点应呈琥珀色而非蓝色", avatarText="BG", status="warning", statusLabel="延迟预警", metrics=[{ label: "P99", value: "184ms" }]),',
+  '    Tree($/warnTree, title="Warning 状态点瀑布树")',
+  '  ], align="stretch"),',
+  '  Tracker($/warnTracker, title="Warning 状态点时序条", summary="99.79%"),',
+  '  Row([',
+  '    ApiEndpoint("GET", "/v1/gateways/{gatewayClusterId}/rate-limits", summary="306px 参数表防挤压 + GET 对比度", status=200, latency="14 ms", params=$/auditApiParams, weight=1),',
+  '    Column([',
+  '      Code("export const ok = true", language="typescript", filePath="src/client/catalog/very-long-nested-subdirectory/SuperLongComponentModuleName.tsx:42"),',
+  '      AnnotationText($/auditClause, $/auditAnns, title="306px 可点击高亮跨行断行验证", action=Event("inspect_audit_clause"))',
+  '    ], weight=1)',
+  '  ], align="stretch"),',
+  '  Row([',
+  '    Schedule($/auditSched, title="跨夜过午 (22:00-14:00) + 宽条防置外", range=["22:00", "14:00"], now="09:00", weight=1),',
+  '    SourceList($/auditSources, title="带 URL 仍保留 Action 按钮", action=Event("cite_source"), weight=1)',
+  '  ], align="stretch"),',
+  '  Table($/auditProRows, title="ProTable 含 null / — / - / 负数排序验证 (点击列头降序)", columns=[{ key: "svc", label: "服务" }, { key: "qps", label: "QPS" }, { key: "delta", label: "环比" }, { key: "err", label: "错误率" }])',
+  ']))',
+].join('\n')
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 function extractText(content) {
@@ -2393,6 +2541,8 @@ export function startMockLlmServer(port = PORT) {
       const isShowcase37 = /\bshowcase-37\b|v050-upgrades/i.test(userText)
       const isShowcase38 = /\bshowcase-38\b|combo-v050-widgets/i.test(userText)
       const isShowcase39 = /\bshowcase-39\b|combo-v050-charts/i.test(userText)
+      const isShowcase40 = /\bshowcase-40\b|combo-v053-charts/i.test(userText)
+      const isShowcase41 = /\bshowcase-41\b|combo-v053-widgets/i.test(userText)
       const isDashboard = /dashboard|看板/i.test(userText)
       const isAsk = /ask|向导|部署/i.test(userText)
       const isDock = /dock|工作台|监控/i.test(userText)
@@ -2683,6 +2833,22 @@ export function startMockLlmServer(port = PORT) {
           })
           return
         }
+        if (isShowcase40) {
+          await streamToolCall(res, model, 'a2ui_render', {
+            title:
+              '全面审计 40：ECharts 6 小数域刻度 / 三层旭日图 / 跨年日历 / 右尾标线 / 平行坐标实测',
+            ui: SHOWCASE_COMBO_AUDIT_V053_CHARTS_UI,
+          })
+          return
+        }
+        if (isShowcase41) {
+          await streamToolCall(res, model, 'a2ui_render', {
+            title:
+              '全面审计 41：字面量 CheckCard / 协议标准 Icon / Warning 语义点 / 306px ApiEndpoint 与断行实测',
+            ui: SHOWCASE_COMBO_AUDIT_V053_WIDGETS_UI,
+          })
+          return
+        }
         if (userText.includes('[a2ui-action]')) {
           if (userText.includes('surface="analytics"') || userText.includes('action="boost_q2"')) {
             await streamToolCall(res, model, 'a2ui_render', {
@@ -2874,21 +3040,25 @@ export function startMockLlmServer(port = PORT) {
                                                                                   ? '已渲染深度组合审计 38（无权重并排、长标签对比、对象 KV 编辑、多列 Sticky ProTable、字面量控件与 Modal 动作）。'
                                                                                   : isShowcase39
                                                                                     ? '已渲染深度组合审计 39（区间/子弹/哑铃交叉筛选隔离、负值偏移参考线、对数散点防零、5 项玉玦图与整洁直方图）。'
-                                                                                    : userText.includes(
-                                                                                          '[a2ui-action]',
-                                                                                        )
-                                                                                      ? '已根据您的操作实时增量刷新界面数据模型。'
-                                                                                      : isDock
-                                                                                        ? '已将 CI/CD 发布流水线监控面板固定在输入框上方的常驻工作台（Dock），后续轮次将继续实时原地刷新。'
-                                                                                        : isInline
-                                                                                          ? '已在工具步骤流内嵌渲染诊断摘要。'
-                                                                                          : isDashboard
-                                                                                            ? '已为您生成 2026 区域经营交互看板（示例数据），可切换图表、搜索排序明细表或一键调整预测情景。'
-                                                                                            : userText.includes(
-                                                                                                  'test-error',
-                                                                                                )
-                                                                                              ? '初稿校验触发编译器诊断自愈，已自动将非法组件修正为标准组件并完成渲染。'
-                                                                                              : '已为您准备好餐厅预订交互卡片，您可直接在下方调整人数、口味或包间选项后点击确认。'
+                                                                                    : isShowcase40
+                                                                                      ? '已渲染全面审计 40（ECharts 6 小数域 Bullet/RadialBar、7 项玉玦图、右尾直方图参考线、自动数值散点、含负值 100% 堆叠、跨年日历、首行 null 平行坐标、三层旭日图与哑铃图）。'
+                                                                                      : isShowcase41
+                                                                                        ? '已渲染全面审计 41（16 协议标准图标、小数域滑块、字面量 CheckCard、Warning 语义点、306px ApiEndpoint/FileOpenBtn/AnnotationText、跨夜过午 Schedule、URL+Action SourceList 与 ProTable 空值排序）。'
+                                                                                        : userText.includes(
+                                                                                              '[a2ui-action]',
+                                                                                            )
+                                                                                          ? '已根据您的操作实时增量刷新界面数据模型。'
+                                                                                          : isDock
+                                                                                            ? '已将 CI/CD 发布流水线监控面板固定在输入框上方的常驻工作台（Dock），后续轮次将继续实时原地刷新。'
+                                                                                            : isInline
+                                                                                              ? '已在工具步骤流内嵌渲染诊断摘要。'
+                                                                                              : isDashboard
+                                                                                                ? '已为您生成 2026 区域经营交互看板（示例数据），可切换图表、搜索排序明细表或一键调整预测情景。'
+                                                                                                : userText.includes(
+                                                                                                      'test-error',
+                                                                                                    )
+                                                                                                  ? '初稿校验触发编译器诊断自愈，已自动将非法组件修正为标准组件并完成渲染。'
+                                                                                                  : '已为您准备好餐厅预订交互卡片，您可直接在下方调整人数、口味或包间选项后点击确认。'
       await streamTextReply(res, model, reply)
       return
     }
