@@ -2,6 +2,19 @@
 
 All notable changes to `dsh-genui-a2ui` are documented in this file.
 
+## [0.5.2] - 2026-11-23
+
+### Fixed
+- **Dual-Column Stretch Layout for `ImageCompare` & `Checklist` (`Catalog.module.css`, `NextGenWidgets.tsx`)**:
+  - Converted `.imageCompareCard` to a flex column and `.imageCompareStage` to `flex: 1 1 auto` with `minHeight: height` and neutral `--dsw-alias-bg-layer-3` studio backdrop, eliminating the empty dead void at the bottom of `ImageCompare` cards stretched beside taller peers inside `Row(..., align="stretch")`.
+  - Switched `.imageCompareImg` to `object-fit: contain` (with compact `10.5px` badges) under `@container (max-width: 360px)` so 306px dual-column comparison images stay centered and 100% uncropped with badges floating cleanly above the imagery.
+  - Added flex-column stretching and `margin-top: auto` to `.checklistCard` / `.checklistInner` / `.checklistFooter` so stretched `Checklist` action bars stay anchored cleanly to the card bottom.
+- **276px ECharts Scroll-Legend Peeking Icon Guard (`echarts-chunk.ts`, `tests/composition-audit-v050.spec.ts`)**:
+  - Split scroll-legend pagination gap bounds in `buildLegendOption` into upper/lower viewport estimates (`clipWMax = availW - 44` for `gapMin`, `clipWMin = availW - 68` for `gapMax`, cap `64px`), eliminating the peeking 3rd-item swatch beside `◀ 1/N ▶` on compact `rose` charts at `276px`.
+
+### Changed
+- Verified full automated & live visual gate: **36 suites / 212 tests**, **17/17** architectural invariants, **0** comments, **4/4** TLA+ specs, **5/5** bundle budgets, `eval:check`, `check:host-api`, **19/19** live interactive E2E assertions, and **32/32** Dark/Light `qa:visual` passes.
+
 ## [0.5.1] - 2026-11-23
 
 ### Added

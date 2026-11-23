@@ -1053,8 +1053,8 @@ function buildLegendOption(opts: {
     uniqueNames.length >= 3 &&
     !fitsNaturallyWithoutScroll &&
     estFormattedTotalMax > availW - 6
-  const pageCtrlW = 66
-  const clipW = Math.max(96, availW - pageCtrlW)
+  const clipWMax = Math.max(96, availW - 44)
+  const clipWMin = Math.max(96, availW - 68)
   const perPage = estContainerW < 340 ? 2 : 3
   let scrollItemGap = 8
   if (willPaginateScroll) {
@@ -1067,19 +1067,19 @@ function buildLegendOption(opts: {
         sumMax += formattedMaxWidths[i] ?? 0
       }
       if (k === 1) {
-        scrollItemGap = Math.max(8, Math.min(52, Math.ceil(clipW - sumMin + 12)))
+        scrollItemGap = Math.max(8, Math.min(64, Math.ceil(clipWMax - sumMin + 12)))
         break
       }
-      const gapMin = Math.ceil((clipW - sumMin + 12) / k)
-      const gapMax = Math.floor((clipW - sumMax - 6) / (k - 1))
+      const gapMin = Math.ceil((clipWMax - sumMin + 12) / k)
+      const gapMax = Math.floor((clipWMin - sumMax - 4) / (k - 1))
       if (gapMax >= 8 && gapMin <= gapMax) {
-        scrollItemGap = Math.max(8, Math.min(52, gapMin))
+        scrollItemGap = Math.max(8, Math.min(64, gapMin))
         break
       }
     }
   }
   const slotTextW = willPaginateScroll
-    ? Math.max(42, Math.floor((clipW - 8 * (perPage - 1)) / perPage) - itemWidth - 5)
+    ? Math.max(42, Math.floor((clipWMin - 8 * (perPage - 1)) / perPage) - itemWidth - 5)
     : undefined
 
   return {

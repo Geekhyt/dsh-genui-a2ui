@@ -6348,6 +6348,8 @@
 }
 
 .checklistCard {
+  display: flex;
+  flex-direction: column;
   container-type: inline-size;
   border-radius: var(--dsw-radius-md, 10px);
   border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.2));
@@ -6357,6 +6359,7 @@
 }
 
 .checklistInner {
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -6463,6 +6466,7 @@
 }
 
 .checklistFooter {
+  margin-top: auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -6846,6 +6850,8 @@
 }
 
 .imageCompareCard {
+  display: flex;
+  flex-direction: column;
   container-type: inline-size;
   border-radius: var(--dsw-radius-md, 10px);
   border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.2));
@@ -6882,10 +6888,11 @@
 
 .imageCompareStage {
   position: relative;
+  flex: 1 1 auto;
   width: 100%;
   overflow: hidden;
   user-select: none;
-  background: var(--dsw-alias-bg-layer-2, rgba(128, 128, 128, 0.08));
+  background: var(--dsw-alias-bg-layer-3, rgba(128, 128, 128, 0.1));
 }
 
 .imageCompareImg {
@@ -6895,6 +6902,17 @@
   height: 100%;
   object-fit: cover;
   display: block;
+}
+
+@container (max-width: 360px) {
+  .imageCompareImg {
+    object-fit: contain;
+  }
+
+  .imageCompareBadge {
+    font-size: 10.5px;
+    padding: 2px 7px;
+  }
 }
 
 .imageCompareOverlay {

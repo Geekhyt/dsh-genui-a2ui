@@ -870,7 +870,7 @@ export const DshImageCompareImpl = defineComponent<{
           <span className={css.imageComparePct}>{pos}%</span>
         </div>
       ) : null}
-      <div className={css.imageCompareStage} style={{ height }}>
+      <div className={css.imageCompareStage} style={{ minHeight: height }}>
         <img
           src={afterSrc}
           alt={afterLabel}

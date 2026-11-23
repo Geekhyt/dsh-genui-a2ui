@@ -955,6 +955,24 @@ describe('v0.5.0 composition audit regressions', () => {
       const dbFormatter = (negDumbbell.xAxis as { axisLabel: { formatter: (v: number) => string } })
         .axisLabel.formatter
       expect(dbFormatter(0)).toBe('-0.3')
+
+      const roseCompact = buildChartOption(
+        {
+          kind: 'rose',
+          data: [
+            { name: '深度推理', value: 42 },
+            { name: '代码生成', value: 34 },
+            { name: '数据分析', value: 26 },
+            { name: '系统运维', value: 21 },
+            { name: '文档写作', value: 15 },
+          ],
+        },
+        true,
+        276,
+      ) as Record<string, unknown>
+      const roseLegend = roseCompact.legend as { itemGap?: number; type?: string }
+      expect(roseLegend.type).toBe('scroll')
+      expect(roseLegend.itemGap ?? 0).toBeGreaterThanOrEqual(52)
     })
   })
 })
