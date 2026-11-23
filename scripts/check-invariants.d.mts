@@ -13,6 +13,12 @@ export interface InvariantReport {
 
 export function checkCssInvariants(source: string, relPath: string): InvariantViolation[]
 
+export function checkCssModuleKeyExists(
+  tsxSource: string,
+  cssSource: string,
+  relPath: string,
+): InvariantViolation[]
+
 export function checkTsInvariants(source: string, relPath: string): InvariantViolation[]
 
 export function checkLocaleParity(rootDir: string): InvariantViolation[]

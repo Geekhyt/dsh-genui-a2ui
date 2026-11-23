@@ -3,6 +3,18 @@ import { z } from 'zod'
 import { A2UI_LIMITS } from '../shared/catalog-schema.ts'
 import { isDangerousObjectKey, isSecretKey } from '../shared/constants.ts'
 import { HOST_MESSAGES, resolveHostLocale } from '../shared/i18n.ts'
+import {
+  collectKvSecretsFromValue,
+  collectSecretsFromNode,
+  escapeJsonPointerSegment,
+  extractBindingPointer,
+  isBindingExpression,
+  isPointerObscured,
+  isScrubbableNumericSecret,
+  normalizePointerPath,
+  referencesObscuredPointer,
+  scrubSecretString,
+} from '../shared/redaction.ts'
 import type { AskAnswerInput, AskMeta } from '../shared/wire-types.ts'
 import { ASK_TOOL, type SurfaceSessions } from './generator.ts'
 import {
@@ -22,55 +34,25 @@ const MAX_ANSWER_ARRAY_LEN = 200
 const MAX_ANSWER_KEYS = 200
 let fallbackAskSeq = 0
 
-function escapeObsPointerSegment(segment: string): string {
-  return segment.replace(/~/g, '~0').replace(/\//g, '~1')
-}
-
-function normalizeObsPointer(pointer: string): string {
-  const trimmed = pointer.trim()
-  if (trimmed === '' || trimmed === '/') return '/'
-  const withSlash = trimmed.startsWith('/') ? trimmed : `/${trimmed}`
-  return withSlash.length > 1 ? withSlash.replace(/\/+$/, '') : withSlash
-}
-
-function isPathObscured(path: string, obscured: ReadonlySet<string>, matchParent = false): boolean {
-  if (obscured.size === 0) return false
-  const norm = normalizeObsPointer(path)
-  for (const raw of obscured) {
-    const trimmed = raw.trim()
-    if (trimmed === '') continue
-    const isRelative = !trimmed.startsWith('/')
-    const obs = normalizeObsPointer(trimmed)
-    if (obs === '/') return true
-    if (norm === obs || norm.startsWith(`${obs}/`)) return true
-    if (matchParent && obs.startsWith(`${norm}/`)) return true
-    if (isRelative && (norm.endsWith(obs) || norm.includes(`${obs}/`))) return true
+function getValueAtPointer(root: unknown, pointer: string): unknown {
+  const norm = normalizePointerPath(pointer)
+  if (norm === '/') return root
+  const parts = norm.slice(1).split('/')
+  let cur: unknown = root
+  for (const rawSeg of parts) {
+    if (cur === null || cur === undefined || typeof cur !== 'object') return undefined
+    const seg = rawSeg.replace(/~1/g, '/').replace(/~0/g, '~')
+    if (Array.isArray(cur)) {
+      const idx = Number(seg)
+      if (!Number.isInteger(idx) || idx < 0 || idx >= cur.length) return undefined
+      cur = cur[idx]
+    } else {
+      const rec = cur as Record<string, unknown>
+      if (!Object.hasOwn(rec, seg)) return undefined
+      cur = rec[seg]
+    }
   }
-  return false
-}
-
-function referencesObscuredPointer(
-  node: unknown,
-  obscured: ReadonlySet<string>,
-  depth = 0,
-): boolean {
-  if (obscured.size === 0 || depth > 8 || typeof node !== 'object' || node === null) return false
-  if (Array.isArray(node)) {
-    return node.some((el) => referencesObscuredPointer(el, obscured, depth + 1))
-  }
-  const rec = node as Record<string, unknown>
-  const rawPath = rec.path ?? rec['@path']
-  if (
-    typeof rawPath === 'string' &&
-    rawPath.trim() !== '' &&
-    isPathObscured(rawPath, obscured, true)
-  ) {
-    return true
-  }
-  for (const val of Object.values(rec)) {
-    if (referencesObscuredPointer(val, obscured, depth + 1)) return true
-  }
-  return false
+  return cur
 }
 
 export function collectObscuredContextPointersFromMessages(
@@ -82,11 +64,17 @@ export function collectObscuredContextPointersFromMessages(
   const inspectContext = (ctx: unknown, prefix: string, depth: number) => {
     if (depth > 6 || typeof ctx !== 'object' || ctx === null || Array.isArray(ctx)) return
     for (const [k, v] of Object.entries(ctx as Record<string, unknown>)) {
-      const seg = escapeObsPointerSegment(k)
+      const seg = escapeJsonPointerSegment(k)
       const nextPath = prefix === '' ? `/${seg}` : `${prefix}/${seg}`
-      if (referencesObscuredPointer(v, obscuredPointers)) {
-        out.add(nextPath)
-      } else if (typeof v === 'object' && v !== null && !Array.isArray(v)) {
+      if (isBindingExpression(v)) {
+        if (referencesObscuredPointer(v, obscuredPointers)) {
+          out.add(nextPath)
+        }
+      } else if (Array.isArray(v)) {
+        if (referencesObscuredPointer(v, obscuredPointers)) {
+          out.add(nextPath)
+        }
+      } else if (typeof v === 'object' && v !== null) {
         inspectContext(v, nextPath, depth + 1)
       }
     }
@@ -119,25 +107,18 @@ export function collectObscuredContextPointersFromMessages(
   return out
 }
 
-export function collectObscuredPointersFromMessages(
+function collectKvEditorPointersFromMessages(
   messages: readonly AgentToRendererMessage[],
 ): Set<string> {
-  const obscured = new Set<string>()
+  const kvPointers = new Set<string>()
   const inspectComponents = (list: unknown) => {
     if (!Array.isArray(list)) return
     for (const item of list) {
       if (typeof item !== 'object' || item === null) continue
       const rec = item as Record<string, unknown>
-      if (rec.component !== 'TextField' || rec.variant !== 'obscured') continue
-      const val = rec.value
-      if (typeof val === 'object' && val !== null) {
-        const rawPath =
-          (val as { path?: unknown; '@path'?: unknown }).path ??
-          (val as { '@path'?: unknown })['@path']
-        if (typeof rawPath === 'string' && rawPath.trim() !== '') {
-          obscured.add(rawPath.trim())
-        }
-      }
+      if (rec.component !== 'KvEditor') continue
+      const p = extractBindingPointer(rec.items)
+      if (p !== null) kvPointers.add(p)
     }
   }
   for (const msg of messages) {
@@ -149,6 +130,55 @@ export function collectObscuredPointersFromMessages(
       inspectComponents((rec.updateComponents as Record<string, unknown>).components)
     }
   }
+  return kvPointers
+}
+
+export function collectObscuredPointersFromMessages(
+  messages: readonly AgentToRendererMessage[],
+): Set<string> {
+  const obscured = new Set<string>()
+  const kvPointers = collectKvEditorPointersFromMessages(messages)
+  const inspectComponents = (list: unknown) => {
+    if (!Array.isArray(list)) return
+    for (const item of list) {
+      if (typeof item !== 'object' || item === null) continue
+      const rec = item as Record<string, unknown>
+      if (rec.component !== 'TextField' || rec.variant !== 'obscured') continue
+      const p = extractBindingPointer(rec.value)
+      if (p !== null) obscured.add(p)
+    }
+  }
+  const inspectDataModel = (dmPath: string, dmValue: unknown) => {
+    for (const kvPtr of kvPointers) {
+      const normKv = normalizePointerPath(kvPtr)
+      if (dmPath === normKv) {
+        collectKvSecretsFromValue(dmValue, normKv, obscured, new Set(), new Set())
+      } else if (dmPath === '/') {
+        const val = getValueAtPointer(dmValue, normKv)
+        if (val !== undefined) {
+          collectKvSecretsFromValue(val, normKv, obscured, new Set(), new Set())
+        }
+      }
+    }
+  }
+  for (const msg of messages) {
+    const rec = msg as unknown as Record<string, unknown>
+    if (rec.createSurface && typeof rec.createSurface === 'object') {
+      const cs = rec.createSurface as Record<string, unknown>
+      inspectComponents(cs.components)
+      if (kvPointers.size > 0 && cs.dataModel !== undefined) {
+        inspectDataModel('/', cs.dataModel)
+      }
+    }
+    if (rec.updateComponents && typeof rec.updateComponents === 'object') {
+      inspectComponents((rec.updateComponents as Record<string, unknown>).components)
+    }
+    if (kvPointers.size > 0 && rec.updateDataModel && typeof rec.updateDataModel === 'object') {
+      const dm = rec.updateDataModel as { path?: unknown; value?: unknown }
+      const dmPath = normalizePointerPath(typeof dm.path === 'string' ? dm.path : '/')
+      inspectDataModel(dmPath, dm.value)
+    }
+  }
   return obscured
 }
 
@@ -156,9 +186,13 @@ export function sanitizePayloadObject(
   value: unknown,
   obscuredPointers?: ReadonlySet<string>,
   stripPerSurfaceRoot = false,
+  blockedExact?: ReadonlySet<string>,
+  blockedSubstrings?: ReadonlySet<string>,
 ): Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return {}
   const blocked = obscuredPointers ?? new Set<string>()
+  const exactSet = blockedExact ?? new Set<string>()
+  const subSet = blockedSubstrings ?? new Set<string>()
   const clean = (
     node: unknown,
     path: string,
@@ -166,9 +200,14 @@ export function sanitizePayloadObject(
     isSurfaceRootLevel: boolean,
   ): unknown => {
     if (depth > 8) return undefined
-    if (blocked.size > 0 && path !== '' && isPathObscured(path, blocked)) return undefined
+    if (blocked.size > 0 && path !== '' && isPointerObscured(path, blocked)) return undefined
     if (typeof node === 'string') {
-      return node.length > MAX_ANSWER_STR_LEN ? node.slice(0, MAX_ANSWER_STR_LEN) : node
+      const capped = node.length > MAX_ANSWER_STR_LEN ? node.slice(0, MAX_ANSWER_STR_LEN) : node
+      if (exactSet.size === 0 && subSet.size === 0) return capped
+      return scrubSecretString(capped, exactSet, subSet)
+    }
+    if (typeof node === 'number' && isScrubbableNumericSecret(node, exactSet)) {
+      return undefined
     }
     if (Array.isArray(node)) {
       const out: unknown[] = []
@@ -190,11 +229,16 @@ export function sanitizePayloadObject(
       let count = 0
       for (const [k, v] of Object.entries(rec)) {
         if (count >= MAX_ANSWER_KEYS) break
-        if (isDangerousObjectKey(k) || (!isSurfaceRootLevel && isSecretKey(k))) continue
+        if (isDangerousObjectKey(k)) continue
+        if (isSurfaceRootLevel) {
+          if (typeof v !== 'object' || v === null || Array.isArray(v)) continue
+        } else if (isSecretKey(k)) {
+          continue
+        }
         if (isKvSecretEntry && k === 'value') continue
-        const seg = escapeObsPointerSegment(k)
+        const seg = escapeJsonPointerSegment(k)
         const childPath = isSurfaceRootLevel ? '' : path === '' ? `/${seg}` : `${path}/${seg}`
-        if (blocked.size > 0 && childPath !== '' && isPathObscured(childPath, blocked)) continue
+        if (blocked.size > 0 && childPath !== '' && isPointerObscured(childPath, blocked)) continue
         const next = clean(v, childPath, isSurfaceRootLevel ? depth : depth + 1, false)
         if (next !== undefined) {
           Object.defineProperty(out, k, {
@@ -366,15 +410,34 @@ export class PendingAskRegistry {
 
     const trimCap = (val: unknown, max: number): string =>
       typeof val === 'string' ? val.trim().slice(0, max) : ''
-    const userMessage = trimCap(input.userMessage, 4_000)
+    const blockedExact = new Set<string>()
+    const blockedSubstrings = new Set<string>()
+    collectSecretsFromNode(
+      input.dataModels,
+      target.obscuredPointers,
+      blockedExact,
+      blockedSubstrings,
+      true,
+    )
+    const rawUserMessage = trimCap(input.userMessage, 4_000)
+    const scrubbedUserMessage =
+      rawUserMessage !== ''
+        ? (scrubSecretString(rawUserMessage, blockedExact, blockedSubstrings) ?? '')
+        : ''
 
     target.resolve({
       status: 'answered',
       action: trimCap(input.action, 256) || 'submit',
       surfaceId: trimCap(input.surfaceId, 256) || target.defaultSurfaceId,
       sourceComponentId: trimCap(input.sourceComponentId, 256),
-      ...(userMessage !== '' ? { userMessage } : {}),
-      context: sanitizePayloadObject(input.context, target.obscuredContextPointers, false),
+      ...(scrubbedUserMessage !== '' ? { userMessage: scrubbedUserMessage } : {}),
+      context: sanitizePayloadObject(
+        input.context,
+        target.obscuredContextPointers,
+        false,
+        blockedExact,
+        blockedSubstrings,
+      ),
       dataModels: sanitizePayloadObject(input.dataModels, target.obscuredPointers, true),
     })
     return true

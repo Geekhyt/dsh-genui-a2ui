@@ -123,6 +123,53 @@ function isDynamicBindingObject(rec: Record<string, unknown>): boolean {
   return false
 }
 
+const CHECK_VALUE_VALIDATORS = new Set(['required', 'numeric', 'length', 'regex', 'email'])
+
+function validateCheckConditionNode(
+  cond: unknown,
+  compId: string,
+  compName: string,
+  depth = 0,
+): void {
+  if (depth > 8 || typeof cond !== 'object' || cond === null) return
+  const condRec = cond as Record<string, unknown>
+  const callName = condRec['@call'] ?? condRec.call
+  const args = condRec.args
+  if (typeof callName !== 'string' || typeof args !== 'object' || args === null) return
+  const argsRec = args as Record<string, unknown>
+  if (callName === 'and' || callName === 'or') {
+    if (Array.isArray(argsRec.values)) {
+      for (const child of argsRec.values) {
+        validateCheckConditionNode(child, compId, compName, depth + 1)
+      }
+    }
+    return
+  }
+  if (callName === 'not') {
+    validateCheckConditionNode(argsRec.value, compId, compName, depth + 1)
+    return
+  }
+  if (!CHECK_VALUE_VALIDATORS.has(callName)) return
+  const val = argsRec.value
+  const isBound =
+    typeof val === 'object' &&
+    val !== null &&
+    !Array.isArray(val) &&
+    isDynamicBindingObject(val as Record<string, unknown>)
+  if (!isBound) {
+    if (callName === 'required' && typeof val === 'string') {
+      throw new A2uiError(
+        `Component "${compId}" (${compName}) has ?required(${JSON.stringify(val)}) without a target $/path binding. Pass the target $/path as the first argument (e.g. ?required($/field, ${JSON.stringify(val)})).`,
+        'VALIDATION_ERROR',
+      )
+    }
+    throw new A2uiError(
+      `Component "${compId}" (${compName}) has ?${callName}(...) with a literal value (${JSON.stringify(val)}) instead of a $/path binding. Pass the target $/path as the first argument (e.g. ?${callName}($/field, ...)).`,
+      'VALIDATION_ERROR',
+    )
+  }
+}
+
 function validateCheckRulesInComponents(components: readonly unknown[]): void {
   for (const item of components) {
     if (typeof item !== 'object' || item === null) continue
@@ -132,20 +179,7 @@ function validateCheckRulesInComponents(components: readonly unknown[]): void {
     const compId = typeof rec.id === 'string' ? rec.id : compName
     for (const rule of rec.checks) {
       if (typeof rule !== 'object' || rule === null) continue
-      const cond = (rule as Record<string, unknown>).condition
-      if (typeof cond !== 'object' || cond === null) continue
-      const condRec = cond as Record<string, unknown>
-      const callName = condRec['@call'] ?? condRec.call
-      if (callName !== 'required') continue
-      const args = condRec.args
-      if (typeof args !== 'object' || args === null) continue
-      const val = (args as Record<string, unknown>).value
-      if (typeof val === 'string') {
-        throw new A2uiError(
-          `Component "${compId}" (${compName}) has ?required(${JSON.stringify(val)}) without a target $/path binding. Pass the target $/path as the first argument (e.g. ?required($/field, ${JSON.stringify(val)})).`,
-          'VALIDATION_ERROR',
-        )
-      }
+      validateCheckConditionNode((rule as Record<string, unknown>).condition, compId, compName)
     }
   }
 }

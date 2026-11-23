@@ -798,12 +798,13 @@ export function compareFormattedNumericCells(a: unknown, b: unknown): number {
 }
 
 export function detectNumericColumnKeys(
-  columns: readonly { key: string; align?: 'left' | 'center' | 'right' }[],
+  columns: readonly { key: string; align?: 'left' | 'center' | 'right'; format?: string }[],
   rows: readonly Record<string, unknown>[],
 ): ReadonlySet<string> {
   const set = new Set<string>()
   if (rows.length === 0) return set
   for (const col of columns) {
+    if (col.format === 'code' || col.format === 'badge' || col.format === 'sparkline') continue
     let nonEmpty = 0
     let numericHits = 0
     for (const r of rows) {
@@ -829,7 +830,7 @@ export function detectNumericColumnKeys(
 }
 
 export function computeTableNumericSummary(
-  columns: readonly { key: string }[],
+  columns: readonly { key: string; format?: string; max?: number }[],
   rows: readonly Record<string, unknown>[],
   numericKeys: ReadonlySet<string>,
   formatAvg: (pctStr: string) => string = (pctStr) => `Avg ${pctStr}`,
@@ -873,6 +874,10 @@ export function computeTableNumericSummary(
         const avg = sum / count
         const pctDigits = avg > 0 && avg < 0.1 ? 2 : 1
         summary[col.key] = formatAvg(`${avg.toFixed(pctDigits)}%`)
+      } else if (col.format === 'bar' && col.max === 100) {
+        const avg = sum / count
+        const formatted = Number.isInteger(avg) ? String(avg) : avg.toFixed(1)
+        summary[col.key] = formatAvg(formatted)
       } else {
         const sign = sum < 0 ? '-' : ''
         const absVal = Math.abs(sum)
@@ -907,6 +912,9 @@ export function normalizeCrossFilterTokens(raw: unknown): readonly string[] {
     return s === '' ? [] : [s]
   }
   if (typeof raw === 'number' && Number.isFinite(raw)) {
+    return [String(raw)]
+  }
+  if (typeof raw === 'boolean') {
     return [String(raw)]
   }
   return []
@@ -960,10 +968,26 @@ function normalizeFilterToken(input: string): string {
     .toLowerCase()
 }
 
+function matchesTokenBoundary(haystack: string, needle: string): boolean {
+  let idx = haystack.indexOf(needle)
+  const wordChar = /[a-z0-9_]/
+  while (idx >= 0) {
+    const before = idx > 0 ? haystack[idx - 1]! : ''
+    const after = idx + needle.length < haystack.length ? haystack[idx + needle.length]! : ''
+    const leftOk = before === '' || !wordChar.test(before) || !wordChar.test(needle[0]!)
+    const rightOk =
+      after === '' || !wordChar.test(after) || !wordChar.test(needle[needle.length - 1]!)
+    if (leftOk && rightOk) return true
+    idx = haystack.indexOf(needle, idx + 1)
+  }
+  return false
+}
+
 export function filterTableRowsByField(
   rows: readonly Record<string, unknown>[],
   filterField: string | undefined,
   filterValue: string | readonly string[] | undefined,
+  exactOnly = false,
 ): readonly Record<string, unknown>[] {
   const rawTokens = normalizeCrossFilterTokens(filterValue)
   if (rawTokens.length === 0) return rows
@@ -990,12 +1014,17 @@ export function filterTableRowsByField(
         exactHits += 1
       }
     }
-    if (exactHits > 0) continue
+    if (exactHits > 0 || exactOnly) continue
 
     const fuzzyMatch = (t: string): boolean => {
       if (t === '') return false
       if (matchesPrefixBoundary(t, q) || matchesPrefixBoundary(q, t)) return true
-      if (q.length >= 3 && (field || /[\u4e00-\u9fa5]/.test(q)) && t.includes(q)) return true
+      if (
+        ((field && q.length >= 2) || (q.length >= 3 && /[\u4e00-\u9fa5]/.test(q))) &&
+        matchesTokenBoundary(t, q)
+      ) {
+        return true
+      }
       return false
     }
     for (let i = 0; i < rows.length; i++) {
@@ -1042,6 +1071,14 @@ export function formatChartDataToCsv(data: unknown): string | null {
       (item): item is Record<string, unknown> =>
         typeof item === 'object' && item !== null && !Array.isArray(item),
     )
+    if (rows.length === 0) {
+      const nums = data.filter(
+        (item): item is number => typeof item === 'number' && Number.isFinite(item),
+      )
+      if (nums.length > 0) {
+        rows = nums.map((value, idx) => ({ index: idx + 1, value }))
+      }
+    }
   } else if (typeof data === 'object' && data !== null) {
     const rec = data as Record<string, unknown>
     const rawLinks = Array.isArray(rec.links)

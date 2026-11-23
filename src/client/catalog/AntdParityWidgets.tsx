@@ -58,6 +58,8 @@ import {
   SurfaceActionStatusContext,
   SurfaceReadOnlyContext,
   SurfaceValidationContext,
+  useSurfaceActionRunner,
+  useWritablePropState,
   weightStyle,
 } from './widget-helpers.tsx'
 
@@ -107,7 +109,7 @@ export const DshNumberInputImpl = defineComponent<{
   isValid?: boolean
   validationErrors?: readonly string[]
   weight?: number
-}>(NumberInputApi, function DshNumberInput({ props }) {
+}>(NumberInputApi, function DshNumberInput({ props, context }) {
   const inputId = useId()
   const msg = useRuntimeMessages()
   const readOnly = useContext(SurfaceReadOnlyContext)
@@ -116,10 +118,10 @@ export const DshNumberInputImpl = defineComponent<{
   const [focused, setFocused] = useState(false)
   const [draft, setDraft] = useState('')
   const [prevValueKey, setPrevValueKey] = useState<string | null>(null)
+  const [rawVal, commitValue] = useWritablePropState(context, 'value', props.value, props.setValue)
 
-  const hasRawVal =
-    props.value !== undefined && props.value !== null && String(props.value).trim() !== ''
-  const numVal = hasRawVal ? Number(props.value) : Number.NaN
+  const hasRawVal = rawVal !== undefined && rawVal !== null && String(rawVal).trim() !== ''
+  const numVal = hasRawVal ? Number(rawVal) : Number.NaN
   const hasValidNum = hasRawVal && Number.isFinite(numVal)
   const safeMin =
     typeof props.min === 'number' && Number.isFinite(props.min) ? props.min : undefined
@@ -170,7 +172,7 @@ export const DshNumberInputImpl = defineComponent<{
           step,
         })
     if (focused) setDraft(String(next))
-    props.setValue?.(next)
+    commitValue(next)
   }
 
   return (
@@ -222,7 +224,7 @@ export const DshNumberInputImpl = defineComponent<{
               const trimmed = draft.trim()
               if (trimmed === '') {
                 if (hasValidNum) {
-                  props.setValue?.('' as unknown as number)
+                  commitValue('' as unknown as number)
                 }
                 return
               }
@@ -230,7 +232,7 @@ export const DshNumberInputImpl = defineComponent<{
               let clamped = Number.isFinite(parsed) ? parsed : safeVal
               if (safeMin !== undefined) clamped = Math.max(safeMin, clamped)
               if (safeMax !== undefined) clamped = Math.min(safeMax, clamped)
-              if (!hasValidNum || clamped !== numVal) props.setValue?.(clamped)
+              if (!hasValidNum || clamped !== numVal) commitValue(clamped)
             }}
             onKeyDown={(e) => {
               if (readOnly) return
@@ -244,12 +246,12 @@ export const DshNumberInputImpl = defineComponent<{
                 e.preventDefault()
                 setTouched(true)
                 if (focused) setDraft(String(safeMin))
-                props.setValue?.(safeMin)
+                commitValue(safeMin)
               } else if (e.key === 'End' && safeMax !== undefined) {
                 e.preventDefault()
                 setTouched(true)
                 if (focused) setDraft(String(safeMax))
-                props.setValue?.(safeMax)
+                commitValue(safeMax)
               }
             }}
             onChange={(e) => {
@@ -260,7 +262,7 @@ export const DshNumberInputImpl = defineComponent<{
               setDraft(rawText)
               const trimmed = rawText.trim()
               if (trimmed === '') {
-                props.setValue?.('' as unknown as number)
+                commitValue('' as unknown as number)
                 return
               }
               if (
@@ -273,7 +275,7 @@ export const DshNumberInputImpl = defineComponent<{
               }
               const parsed = Number(trimmed)
               if (Number.isFinite(parsed)) {
-                props.setValue?.(parsed)
+                commitValue(parsed)
               }
             }}
           />
@@ -305,7 +307,7 @@ export const DshMultiSelectImpl = defineComponent<{
   isValid?: boolean
   validationErrors?: readonly string[]
   weight?: number
-}>(MultiSelectApi, function DshMultiSelect({ props }) {
+}>(MultiSelectApi, function DshMultiSelect({ props, context }) {
   const msg = useRuntimeMessages()
   const readOnly = useContext(SurfaceReadOnlyContext)
   const { submitAttempted } = useContext(SurfaceValidationContext)
@@ -320,10 +322,16 @@ export const DshMultiSelectImpl = defineComponent<{
     setOpen(false)
   }
   const effectiveOpen = open && !readOnly
+  const [rawSelected, commitSelected] = useWritablePropState(
+    context,
+    'value',
+    props.value,
+    props.setValue,
+  )
 
   const selected = useMemo(
-    () => (Array.isArray(props.value) ? props.value.map(String).filter(Boolean) : []),
-    [props.value],
+    () => (Array.isArray(rawSelected) ? rawSelected.map(String).filter(Boolean) : []),
+    [rawSelected],
   )
   const selectedSet = useMemo(() => new Set(selected), [selected])
   const allOptions = useMemo(
@@ -396,7 +404,7 @@ export const DshMultiSelectImpl = defineComponent<{
     if (readOnly) return
     setTouched(true)
     const next = selectedSet.has(val) ? selected.filter((v) => v !== val) : [...selected, val]
-    props.setValue?.(next)
+    commitSelected(next)
   }
 
   const shownTags = selected.slice(0, maxTagCount)
@@ -419,7 +427,7 @@ export const DshMultiSelectImpl = defineComponent<{
                   onClick={() => {
                     if (readOnly) return
                     setTouched(true)
-                    props.setValue?.([])
+                    commitSelected([])
                   }}
                 >
                   {msg.multiSelectClearAll}
@@ -524,7 +532,7 @@ export const DshMultiSelectImpl = defineComponent<{
                           const clean = query.trim()
                           if (!selectedSet.has(clean)) {
                             setTouched(true)
-                            props.setValue?.([...selected, clean])
+                            commitSelected([...selected, clean])
                           }
                           setQuery('')
                         }
@@ -585,7 +593,7 @@ export const DshDateRangeImpl = defineComponent<{
   isValid?: boolean
   validationErrors?: readonly string[]
   weight?: number
-}>(DateRangeApi, function DshDateRange({ props }) {
+}>(DateRangeApi, function DshDateRange({ props, context }) {
   const msg = useRuntimeMessages()
   const dark = useDarkTheme()
   const readOnly = useContext(SurfaceReadOnlyContext)
@@ -594,9 +602,16 @@ export const DshDateRangeImpl = defineComponent<{
   const enableTime = Boolean(props.enableTime)
   const showPresets = props.presets !== false
   const inputType = enableTime ? 'datetime-local' : 'date'
+  const [rawStart, commitStart] = useWritablePropState(
+    context,
+    'start',
+    props.start,
+    props.setStart,
+  )
+  const [rawEnd, commitEnd] = useWritablePropState(context, 'end', props.end, props.setEnd)
 
-  const normStart = formatNativeTemporalValue(props.start, inputType)
-  const normEnd = formatNativeTemporalValue(props.end, inputType)
+  const normStart = formatNativeTemporalValue(rawStart, inputType)
+  const normEnd = formatNativeTemporalValue(rawEnd, inputType)
 
   const spanDays = useMemo(() => computeDateRangeSpanDays(normStart, normEnd), [normStart, normEnd])
   const todayIso = useMemo(() => buildDatePresetRange(1, false).start, [])
@@ -614,8 +629,8 @@ export const DshDateRangeImpl = defineComponent<{
       enableTime,
       days === 1 ? undefined : normEnd || undefined,
     )
-    props.setStart?.(next.start)
-    props.setEnd?.(next.end)
+    commitStart(next.start)
+    commitEnd(next.end)
   }
 
   return (
@@ -674,9 +689,9 @@ export const DshDateRangeImpl = defineComponent<{
           onChange={(nextS) => {
             if (readOnly) return
             setTouched(true)
-            props.setStart?.(nextS)
+            commitStart(nextS)
             if (nextS !== '' && normEnd && nextS > normEnd) {
-              props.setEnd?.(nextS)
+              commitEnd(nextS)
             }
           }}
         />
@@ -697,9 +712,9 @@ export const DshDateRangeImpl = defineComponent<{
           onChange={(nextE) => {
             if (readOnly) return
             setTouched(true)
-            props.setEnd?.(nextE)
+            commitEnd(nextE)
             if (nextE !== '' && normStart && nextE < normStart) {
-              props.setStart?.(nextE)
+              commitStart(nextE)
             }
           }}
         />
@@ -792,7 +807,7 @@ export const DshTreeSelectImpl = defineComponent<{
   isValid?: boolean
   validationErrors?: readonly string[]
   weight?: number
-}>(TreeSelectApi, function DshTreeSelect({ props }) {
+}>(TreeSelectApi, function DshTreeSelect({ props, context }) {
   const fieldId = useId()
   const msg = useRuntimeMessages()
   const readOnly = useContext(SurfaceReadOnlyContext)
@@ -808,13 +823,14 @@ export const DshTreeSelectImpl = defineComponent<{
     setOpen(false)
   }
   const effectiveOpen = open && !readOnly
+  const [rawVal, commitVal] = useWritablePropState(context, 'value', props.value, props.setValue)
 
   const tree = useMemo(() => normalizeHierarchyTree(props.nodes), [props.nodes])
   const filteredTree = useMemo(
     () => (props.searchable === false ? tree : filterHierarchyTree(tree, deferredQuery)),
     [tree, props.searchable, deferredQuery],
   )
-  const selectedVal = props.value === undefined || props.value === null ? '' : String(props.value)
+  const selectedVal = rawVal === undefined || rawVal === null ? '' : String(rawVal)
   const breadcrumb = useMemo(() => findBreadcrumbByValue(tree, selectedVal), [tree, selectedVal])
 
   const label = props.label !== undefined && props.label !== null ? String(props.label) : ''
@@ -940,7 +956,7 @@ export const DshTreeSelectImpl = defineComponent<{
                         onSelect={(val) => {
                           if (readOnly) return
                           setTouched(true)
-                          props.setValue?.(val)
+                          commitVal(val)
                           setOpen(false)
                           setQuery('')
                         }}
@@ -1225,9 +1241,10 @@ export const DshTreeImpl = defineComponent<{
   expandedDepth?: number
   action?: ((options?: ActionDispatchOptions) => Promise<void>) | undefined
   weight?: number
-}>(TreeApi, function DshTree({ props }) {
+}>(TreeApi, function DshTree({ props, context }) {
   const msg = useRuntimeMessages()
   const readOnly = useContext(SurfaceReadOnlyContext)
+  const runAction = useSurfaceActionRunner(context, props.action)
   const tree = useMemo(() => normalizeHierarchyTree(props.nodes), [props.nodes])
   const expandedDepth =
     typeof props.expandedDepth === 'number' && props.expandedDepth >= 0
@@ -1249,7 +1266,7 @@ export const DshTreeImpl = defineComponent<{
 
   const title = props.title !== undefined && props.title !== null ? String(props.title) : ''
   const summary = props.summary !== undefined && props.summary !== null ? String(props.summary) : ''
-  const canAct = !readOnly && typeof props.action === 'function'
+  const canAct = !readOnly && Boolean(runAction)
   const searchActive = Boolean(props.searchable && deferredQuery.trim() !== '')
   const allOpen =
     searchActive ||
@@ -1319,7 +1336,7 @@ export const DshTreeImpl = defineComponent<{
               onSelect={
                 canAct
                   ? (n) => {
-                      void props.action?.({
+                      void runAction?.({
                         metadata: {
                           extensions: {
                             dshSelection: {

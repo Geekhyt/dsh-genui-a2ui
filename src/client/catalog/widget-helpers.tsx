@@ -3,8 +3,17 @@ import {
   type ReactA2uiComponentProps,
   type ReactCatalogComponent,
 } from '@a2ui/react'
-import type { ComponentApi } from '@a2ui/web_core/v1_0'
-import { type CSSProperties, createContext, type FC, Fragment, type ReactNode } from 'react'
+import type { ActionDispatchOptions, ComponentApi } from '@a2ui/web_core/v1_0'
+import {
+  type CSSProperties,
+  createContext,
+  type FC,
+  Fragment,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useState,
+} from 'react'
 import { isSafeStaticSvgImage } from '../mermaid-safe.ts'
 
 export type ChildRef =
@@ -91,6 +100,66 @@ export function isWritableProp(context: unknown, propName: string, setter: unkno
     (typeof rec['@path'] === 'string' && rec['@path'].trim() !== '') ||
     (typeof rec.path === 'string' && rec.path.trim() !== '')
   )
+}
+
+export function areExternalValuesEqual(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return true
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) return false
+    for (let i = 0; i < a.length; i++) {
+      if (!Object.is(a[i], b[i])) return false
+    }
+    return true
+  }
+  return false
+}
+
+export function useWritablePropState<T>(
+  context: unknown,
+  propName: string,
+  externalValue: unknown,
+  setter: ((next: T) => void) | undefined,
+): readonly [unknown, (next: T) => void, boolean] {
+  const writable = isWritableProp(context, propName, setter)
+  const [localVal, setLocalVal] = useState<unknown>(externalValue)
+  const [prevExternal, setPrevExternal] = useState<unknown>(externalValue)
+  if (!areExternalValuesEqual(prevExternal, externalValue)) {
+    setPrevExternal(externalValue)
+    setLocalVal(externalValue)
+  }
+  const commit = useCallback(
+    (next: T) => {
+      if (writable && typeof setter === 'function') {
+        setter(next)
+      } else {
+        setLocalVal(next)
+      }
+    },
+    [writable, setter],
+  )
+  return [writable ? externalValue : localVal, commit, writable] as const
+}
+
+export function useSurfaceActionRunner<Opts = ActionDispatchOptions>(
+  context: unknown,
+  action: ((options?: Opts) => Promise<unknown> | unknown) | undefined,
+  propName = 'action',
+): ((options?: Opts) => Promise<boolean>) | undefined {
+  const closeModal = useContext(ModalCloseContext)
+  const getActionStatus = useContext(SurfaceActionStatusContext)
+  const isLocalFn = isLocalFunctionAction(context, propName)
+  const runner = useCallback(
+    async (options?: Opts) => {
+      if (typeof action !== 'function') return false
+      const ok = await runSurfaceAction(() => action(options), getActionStatus)
+      if (ok && closeModal && !isLocalFn) {
+        closeModal()
+      }
+      return ok
+    },
+    [action, closeModal, getActionStatus, isLocalFn],
+  )
+  return typeof action === 'function' ? runner : undefined
 }
 
 export function defineComponent<Props>(

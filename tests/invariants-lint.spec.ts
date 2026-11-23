@@ -10,6 +10,7 @@ import {
 } from '../scripts/check-bundle-budget.mjs'
 import {
   checkCssInvariants,
+  checkCssModuleKeyExists,
   checkLocaleParity,
   checkTsInvariants,
   runAllInvariantChecks,
@@ -17,8 +18,8 @@ import {
 
 const ROOT_DIR = resolve(import.meta.dirname, '..')
 
-describe('Architectural invariant linter (14 rules)', () => {
-  it('passes all 14 rules on the live repository with zero violations', () => {
+describe('Architectural invariant linter (17 rules)', () => {
+  it('passes all 17 rules on the live repository with zero violations', () => {
     const report = runAllInvariantChecks(ROOT_DIR)
     expect(report.filesScanned).toBeGreaterThan(50)
     expect(report.violations).toEqual([])
@@ -150,6 +151,26 @@ describe('Architectural invariant linter (14 rules)', () => {
       'src/client/catalog/bad-helpers.ts',
     )
     expect(helperJsonV.some((v) => v.rule === 'no-raw-json-stringify-in-helpers')).toBe(true)
+
+    const rawActionV = checkTsInvariants(
+      `export function W({ props }: { props: { action?: () => void } }) { props.action?.(); return null }`,
+      'src/client/catalog/BadAction.tsx',
+    )
+    expect(rawActionV.some((v) => v.rule === 'catalog-unified-action-runner')).toBe(true)
+
+    const rowParityV = checkCssInvariants(
+      `:where(.okCard, .missingCard) { width: 100%; }\n:is(.row, .listHorizontal) > :is(.okCard), :is(.row, .listHorizontal) > * > :is(.okCard) { flex: 1 1 220px; }`,
+      'src/client/catalog/Catalog.module.css',
+    )
+    expect(rowParityV.some((v) => v.rule === 'css-row-flex-parity')).toBe(true)
+
+    const cssKeyV = checkCssModuleKeyExists(
+      `import css from './Catalog.module.css'\nexport const X = (obj: { css: { ok: string } }) => <div className={css.nonExistentKey} data-x={obj.css.ignoredProp} />`,
+      `.realKey { color: red; }`,
+      'src/client/catalog/BadCssKey.tsx',
+    )
+    expect(cssKeyV.some((v) => v.rule === 'css-module-key-exists')).toBe(true)
+    expect(cssKeyV).toHaveLength(1)
   })
 
   it('verifies locale key parity across locale/*.json and TypeScript message tables', () => {

@@ -85,7 +85,7 @@ function filterAggregateItems(
     }
   }
   if (recordRows.length > 0) {
-    return filterTableRowsByField(recordRows, filterField, tokens)
+    return filterTableRowsByField(recordRows, filterField, tokens, true)
   }
   const lowerSet = new Set(tokens.map((t) => t.toLowerCase()))
   return scalarItems.filter((v) =>
@@ -283,6 +283,9 @@ export function evaluateRequiredValue(value: unknown): { valid: boolean; message
     return { valid: false, message: 'This field is required.' }
   }
   if (Array.isArray(value) && value.length === 0) {
+    return { valid: false, message: 'This field is required.' }
+  }
+  if (typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === 0) {
     return { valid: false, message: 'This field is required.' }
   }
   if (typeof value === 'number' && !Number.isFinite(value)) {

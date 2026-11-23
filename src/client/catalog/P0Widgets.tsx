@@ -52,7 +52,7 @@ export const DshDiffViewImpl = defineComponent<{
     : props.after === undefined || props.after === null
       ? ''
       : String(props.after)
-  const activeFilePath = activeFile ? activeFile.path : props.filePath
+  const activeFilePath = activeFile ? activeFile.filePath : props.filePath
   const activeLine = activeFile ? activeFile.line : props.line
   const activeLanguage = activeFile ? activeFile.language : props.language
 
@@ -104,7 +104,9 @@ export const DshDiffViewImpl = defineComponent<{
   const title = props.title
     ? String(props.title)
     : activeFile
-      ? activeFile.title
+      ? hasFileLink && activeFile.title === activeFile.filePath
+        ? ''
+        : activeFile.title
       : hasFileLink
         ? ''
         : msg.diffDefaultTitle
@@ -184,7 +186,13 @@ export const DshDiffViewImpl = defineComponent<{
         {diff.ops.length === 0 ? (
           <div className={css.emptyCell}>{msg.diffEmpty}</div>
         ) : mode === 'unified' ? (
-          <table className={css.diffTable}>
+          <table className={`${css.diffTable} ${css.diffUnifiedTable}`}>
+            <colgroup>
+              <col className={css.diffGutterCol} />
+              <col className={css.diffGutterCol} />
+              <col className={css.diffMarkerCol} />
+              <col />
+            </colgroup>
             <tbody>
               {diff.ops.map((op, i) => {
                 const rowAnns = [

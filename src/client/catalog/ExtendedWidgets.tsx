@@ -46,6 +46,7 @@ import {
   defineComponent,
   renderChildRef,
   SurfaceReadOnlyContext,
+  useSurfaceActionRunner,
   weightStyle,
 } from './widget-helpers.tsx'
 
@@ -386,9 +387,10 @@ export const DshFileTreeImpl = defineComponent<{
   expandedDepth?: number
   action?: ((options?: ActionDispatchOptions) => Promise<void>) | undefined
   weight?: number
-}>(FileTreeApi, function DshFileTree({ props }) {
+}>(FileTreeApi, function DshFileTree({ props, context }) {
   const msg = useRuntimeMessages()
   const readOnly = useContext(SurfaceReadOnlyContext)
+  const runAction = useSurfaceActionRunner(context, props.action)
   const openFile = useFileOpener()
   const tree = useMemo(() => buildFileTree(props.items), [props.items])
   const title = props.title !== undefined && props.title !== null ? String(props.title) : ''
@@ -397,7 +399,7 @@ export const DshFileTreeImpl = defineComponent<{
       ? Math.trunc(props.expandedDepth)
       : 2
 
-  const activeAction = readOnly ? undefined : props.action
+  const activeAction = readOnly ? undefined : runAction
   const interactive = Boolean(openFile || activeAction)
 
   const handleSelectFile = (node: FileTreeNode) => {

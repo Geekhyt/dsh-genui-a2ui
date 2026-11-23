@@ -760,10 +760,31 @@ export function flattenChainedCalc(ui: string): string {
   return outStmts.join('\n')
 }
 
-function rewriteDateRangeCallArgs(inner: string): string {
+interface ShorthandCheckSpec {
+  readonly targets: readonly { readonly named: string; readonly pos: number }[]
+}
+
+const SHORTHAND_REQUIRED_SPECS: Readonly<Record<string, ShorthandCheckSpec>> = {
+  DateRange: {
+    targets: [
+      { named: 'start', pos: 1 },
+      { named: 'end', pos: 2 },
+    ],
+  },
+  RangeSlider: {
+    targets: [
+      { named: 'start', pos: 3 },
+      { named: 'end', pos: 4 },
+    ],
+  },
+  KvEditor: {
+    targets: [{ named: 'items', pos: 0 }],
+  },
+}
+
+function rewriteNonValueShorthandCallArgs(inner: string, spec: ShorthandCheckSpec): string {
   const args = splitTopLevel(inner, ',')
-  let startExpr: string | null = null
-  let endExpr: string | null = null
+  const namedVals = new Map<string, string>()
   const positional: string[] = []
 
   for (const arg of args) {
@@ -773,15 +794,28 @@ function rewriteDateRangeCallArgs(inner: string): string {
     if (eqIdx !== -1 && trimmed[eqIdx + 1] !== '=' && !/[!<>]/.test(trimmed[eqIdx - 1] ?? '')) {
       const key = trimmed.slice(0, eqIdx).trim()
       const val = trimmed.slice(eqIdx + 1).trim()
-      if (key === 'start') startExpr = val
-      else if (key === 'end') endExpr = val
+      namedVals.set(key, val)
     } else {
       positional.push(trimmed)
     }
   }
-  if (startExpr === null && positional.length >= 2) startExpr = positional[1]!
-  if (endExpr === null && positional.length >= 3) endExpr = positional[2]!
-  if (!startExpr || !endExpr) return inner
+
+  const targetExprs: string[] = []
+  for (const t of spec.targets) {
+    const expr = namedVals.get(t.named) ?? (positional.length > t.pos ? positional[t.pos]! : null)
+    if (!expr) return inner
+    targetExprs.push(expr)
+  }
+
+  const buildRequiredCheck = (msgLiteral?: string): string => {
+    if (targetExprs.length === 1) {
+      return msgLiteral !== undefined
+        ? `?required(${targetExprs[0]}, ${msgLiteral})`
+        : `?required(${targetExprs[0]})`
+    }
+    const items = targetExprs.map((e) => `required(${e})`).join(', ')
+    return msgLiteral !== undefined ? `?and([${items}], ${msgLiteral})` : `?and([${items}])`
+  }
 
   let changed = false
   const nextArgs = args.map((arg) => {
@@ -793,7 +827,7 @@ function rewriteDateRangeCallArgs(inner: string): string {
     const afterQ = trimmed.slice(1).trimStart()
     if (afterQ === 'required') {
       changed = true
-      return `${lead}?and([required(${startExpr}), required(${endExpr})])${trail}${argComment}`
+      return `${lead}${buildRequiredCheck()}${trail}${argComment}`
     }
     if (!afterQ.startsWith('required(') || !afterQ.endsWith(')')) return arg
     const bMap = buildBracketMap(afterQ)
@@ -801,11 +835,11 @@ function rewriteDateRangeCallArgs(inner: string): string {
     const reqArgs = splitTopLevel(afterQ.slice(9, -1), ',').filter((a) => a.trim() !== '')
     if (reqArgs.length === 0) {
       changed = true
-      return `${lead}?and([required(${startExpr}), required(${endExpr})])${trail}${argComment}`
+      return `${lead}${buildRequiredCheck()}${trail}${argComment}`
     }
     if (reqArgs.length === 1 && parseJsonStringLiteral(reqArgs[0]!.trim()) !== null) {
       changed = true
-      return `${lead}?and([required(${startExpr}), required(${endExpr})], ${reqArgs[0]!.trim()})${trail}${argComment}`
+      return `${lead}${buildRequiredCheck(reqArgs[0]!.trim())}${trail}${argComment}`
     }
     return arg
   })
@@ -813,7 +847,9 @@ function rewriteDateRangeCallArgs(inner: string): string {
 }
 
 export function expandDateRangeShorthandChecks(ui: string): string {
-  if (!ui.includes('DateRange(') || !ui.includes('?')) return ui
+  if (!ui.includes('?')) return ui
+  const targetNames = Object.keys(SHORTHAND_REQUIRED_SPECS)
+  if (!targetNames.some((n) => ui.includes(`${n}(`))) return ui
   const brackets = buildBracketMap(ui)
   let out = ''
   let i = 0
@@ -824,15 +860,24 @@ export function expandDateRangeShorthandChecks(ui: string): string {
       i = skipped
       continue
     }
-    if (ui.startsWith('DateRange(', i) && (i === 0 || !isIdentChar(ui[i - 1]))) {
-      const closeIdx = brackets[i + 9] ?? -1
-      if (closeIdx !== -1) {
-        const inner = ui.slice(i + 10, closeIdx)
-        out += `DateRange(${rewriteDateRangeCallArgs(inner)})`
-        i = closeIdx + 1
-        continue
+    let matched = false
+    if (i === 0 || !isIdentChar(ui[i - 1])) {
+      for (const name of targetNames) {
+        const prefix = `${name}(`
+        if (ui.startsWith(prefix, i)) {
+          const openIdx = i + name.length
+          const closeIdx = brackets[openIdx] ?? -1
+          if (closeIdx !== -1) {
+            const inner = ui.slice(openIdx + 1, closeIdx)
+            out += `${name}(${rewriteNonValueShorthandCallArgs(inner, SHORTHAND_REQUIRED_SPECS[name]!)})`
+            i = closeIdx + 1
+            matched = true
+            break
+          }
+        }
       }
     }
+    if (matched) continue
     out += ui[i]!
     i += 1
   }

@@ -1985,6 +1985,109 @@ export const SHOWCASE_V050_UPGRADES_UI = [
   ']))',
 ].join('\n')
 
+export const SHOWCASE_COMBO_AUDIT_V050_WIDGETS_UI = [
+  'surface("v050_combo_audit_widgets")',
+  '$/chkItems = [',
+  '  { id: "snap", label: "生产库逻辑快照已校验", required: true, tag: "DBA", tone: "success" },',
+  '  { id: "canary", label: "5% 灰度流量观察窗口已开启", required: true, tag: "SRE", tone: "warning" }',
+  ']',
+  '$/chkVal = ["snap"]',
+  '$/srtItems = ["补齐 Row Flex 泛化契约", "修复 ProTable 固定首列配色", "统一 Modal Action 派发器"]',
+  '$/envObj = { HOST: "api.prod.internal", PORT: "8080", API_TOKEN: "sk-demo-secret" }',
+  '$/stickyRows = [',
+  '  { svc: "gateway-hz", port: 8080, region: "华东杭州 AZ1", load: 86, owner: "林珊", cluster: "prod-cn-hz-r1-pool-01", cost: 5200, detail: "ingress-nginx -> envoy-v1.31\\nmaxConns=20000" },',
+  '  { svc: "checkout-hz", port: 8443, region: "华东杭州 AZ2", load: 74, owner: "陈远", cluster: "prod-cn-hz-r1-pool-02", cost: 4660, detail: "grpc keepalive 30s\\nretryBudget=15%" },',
+  '  { svc: "fraud-sz", port: 9090, region: "华南深圳 AZ1", load: 94, owner: "周明", cluster: "prod-cn-sz-risk-01", cost: 4120, detail: "tikv-region-#19 hot read" }',
+  ']',
+  '$/modalCluster = "hz"',
+  '$/modalTree = [',
+  '  { id: "root", label: "cn-hz-prod-mesh", metric: "184ms", sharePct: 100, status: "healthy", children: [',
+  '    { id: "gw", label: "api-gateway", metric: "42ms", sharePct: 23, status: "healthy" },',
+  '    { id: "risk", label: "fraud-scorer", metric: "142ms", sharePct: 77, status: "warning" }',
+  '  ] }',
+  ']',
+  'root = Card(Column([',
+  '  Text("### 组合实测 38：无权重 v0.5.0 卡片并排 / 长标签对比 / 对象 KV 编辑 / 多列 Sticky ProTable / 字面量交互 / Modal 动作"),',
+  '  Row([',
+  '    Checklist($/chkItems, value=$/chkVal, title="无 weight 核查清单"),',
+  '    SortableList($/srtItems, title="无 weight 优先级排序")',
+  '  ], align="stretch"),',
+  '  Row([',
+  '    KvEditor($/envObj, title="对象模式 KV 编辑 (防删行)"),',
+  '    ImageCompare(' +
+    JSON.stringify(COMPARE_BEFORE_SVG) +
+    ', ' +
+    JSON.stringify(COMPARE_AFTER_SVG) +
+    ', beforeLabel="优化前布局 · 2026Q3 生产基线快照", afterLabel="泛化修复后 · 306px 双栏自适应对照", title="长标签滑动对比器", height=190)',
+  '  ], align="stretch"),',
+  '  Table($/stickyRows, title="Sticky 首列 + 展开 + 多选 + 数值 code 端口列", stickyFirstColumn=true, selectable=true, expandKey="detail", showSummary=true, columns=[{ key: "svc", label: "服务名" }, { key: "port", label: "端口", format: "code" }, { key: "region", label: "可用区" }, { key: "load", label: "负载", format: "bar", max: 100 }, { key: "owner", label: "负责人" }, { key: "cluster", label: "物理集群节点标识" }, { key: "cost", label: "月耗", align: "right" }]),',
+  '  Row([',
+  '    Card(RangeSlider("独立区间滑块 (字面量初值)", 0, 100, 20, 75, step=5, unit="%"), weight=1),',
+  '    Card(Rating("独立星级评分 (字面量初值)", 3, max=5, labels=["差", "较差", "一般", "良好", "极佳"]), weight=1)',
+  '  ], align="stretch"),',
+  '  Modal(Button(Text("打开 Modal 组合压测 (Select Esc LIFO + Tree Action)"), variant="primary", action=Event("open_modal_combo")), Column([',
+  '    Text("验证弹窗内 Select 按 Esc 仅关下拉，点击 Tree 节点派发 Action 后自动关闭弹窗。"),',
+  '    Select("目标集群", [{ value: "hz", label: "杭州主群" }, { value: "sh", label: "上海双活" }], $/modalCluster, searchable=true),',
+  '    Tree($/modalTree, title="点击节点派发并关闭 Modal", action=Event("inspect_modal_node"))',
+  '  ]))',
+  ']))',
+].join('\n')
+
+export const SHOWCASE_COMBO_AUDIT_V050_CHARTS_UI = [
+  'surface("v050_combo_audit_charts")',
+  '$/negRange = [',
+  '  { day: "周一", low: -20, forecast: 30, high: 95 },',
+  '  { day: "周二", low: -5, forecast: 120, high: 195 },',
+  '  { day: "周三", low: 40, forecast: 210, high: 300 },',
+  '  { day: "周四", low: 25, forecast: 175, high: 260 },',
+  '  { day: "周五", low: 10, forecast: 140, high: 220 }',
+  ']',
+  '$/selRange = "周三"',
+  '$/bulletData = [',
+  '  { label: "季度 ARR 达成", value: 92, target: 90, max: 110, ranges: [65, 85, 110] },',
+  '  { label: "Prompt 缓存命中", value: 78, target: 85, max: 100, ranges: [55, 80, 100] },',
+  '  { label: "首编一次通过率", value: 84, target: 80, max: 100, ranges: [60, 80, 100] }',
+  ']',
+  '$/selBullet = "季度 ARR 达成"',
+  '$/dumbbellData = [',
+  '  { name: "支付结算 P99", before: 420, after: 118 },',
+  '  { name: "订单检索 P99", before: 295, after: 86 },',
+  '  { name: "账单聚合 P99", before: 510, after: 164 },',
+  '  { name: "风控打分 P99", before: 190, after: 62 }',
+  ']',
+  '$/selDumbbell = "支付结算 P99"',
+  '$/logQuad = [',
+  '  { name: "pgvector", cost: 28, score: 84 },',
+  '  { name: "Milvus", cost: 62, score: 91 },',
+  '  { name: "Qdrant", cost: 34, score: 88 },',
+  '  { name: "ColdStart", cost: 18, score: 0 },',
+  '  { name: "ES-Dense", cost: 74, score: 79 }',
+  ']',
+  '$/radialFive = [',
+  '  { name: "GPU 算力", value: 86, max: 100 },',
+  '  { name: "显存带宽", value: 74, max: 100 },',
+  '  { name: "KV Cache", value: 91, max: 100 },',
+  '  { name: "网络吞吐", value: 63, max: 100 },',
+  '  { name: "磁盘 IOPS", value: 52, max: 100 }',
+  ']',
+  '$/histLatency = [14, 18, 19, 22, 24, 25, 28, 30, 31, 33, 35, 39, 44, 48, 55, 68, 79, 94, 112, 136]',
+  'root = Card(Column([',
+  '  Text("### 组合实测 39：区间/子弹/哑铃交叉筛选隔离 + 负值偏移参考线 + 对数散点防零 + 5项玉玦图 + 直方图整洁分箱"),',
+  '  Row([',
+  '    Chart("range", $/negRange, title="负值区间带 + 高标线(360) + 交叉筛选", xField="day", yField="forecast", referenceLine=360, referenceLabel="上限 360", markArea=[{ axis: "y", start: -15, end: 5, label: "零下带", tone: "info" }], selected=$/selRange, height=230, weight=1),',
+  '    Chart("bullet", $/bulletData, title="子弹图交叉筛选 + 垂直居中", xField="label", yField="value", selected=$/selBullet, height=230, weight=1)',
+  '  ], align="stretch"),',
+  '  Row([',
+  '    Chart("dumbbell", $/dumbbellData, title="哑铃图交叉筛选 (连接线防污染)", xField="name", selected=$/selDumbbell, height=230, weight=1),',
+  '    Chart("scatter", $/logQuad, title="对数散点(含0) + 越界参考X(95)", xField="cost", yField="score", yScale="log", referenceLine=85, referenceLabel="达标 85", referenceX=95, referenceXLabel="极限 95", height=230, weight=1)',
+  '  ], align="stretch"),',
+  '  Row([',
+  '    Chart("radialBar", $/radialFive, title="5 项玉玦图标签留白校验", xField="name", yField="value", height=230, weight=1),',
+  '    Chart("histogram", $/histLatency, title="整数延迟整洁分箱 + CSV 导出", referenceLine=80, referenceLabel="P95 80ms", height=230, weight=1)',
+  '  ], align="stretch")',
+  ']))',
+].join('\n')
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 function extractText(content) {
@@ -2288,6 +2391,8 @@ export function startMockLlmServer(port = PORT) {
       const isShowcase35 = /\bshowcase-35\b|v050-charts/i.test(userText)
       const isShowcase36 = /\bshowcase-36\b|v050-widgets/i.test(userText)
       const isShowcase37 = /\bshowcase-37\b|v050-upgrades/i.test(userText)
+      const isShowcase38 = /\bshowcase-38\b|combo-v050-widgets/i.test(userText)
+      const isShowcase39 = /\bshowcase-39\b|combo-v050-charts/i.test(userText)
       const isDashboard = /dashboard|看板/i.test(userText)
       const isAsk = /ask|向导|部署/i.test(userText)
       const isDock = /dock|工作台|监控/i.test(userText)
@@ -2562,6 +2667,22 @@ export function startMockLlmServer(port = PORT) {
           })
           return
         }
+        if (isShowcase38) {
+          await streamToolCall(res, model, 'a2ui_render', {
+            title:
+              '深度组合审计 38：无权重 v0.5.0 卡片 / 对象 KV / 多列 Sticky / 字面量交互 / Modal 动作',
+            ui: SHOWCASE_COMBO_AUDIT_V050_WIDGETS_UI,
+          })
+          return
+        }
+        if (isShowcase39) {
+          await streamToolCall(res, model, 'a2ui_render', {
+            title:
+              '深度组合审计 39：区间/子弹/哑铃交叉筛选隔离 + 负值参考线 + 对数散点 + 玉玦图 + 直方图',
+            ui: SHOWCASE_COMBO_AUDIT_V050_CHARTS_UI,
+          })
+          return
+        }
         if (userText.includes('[a2ui-action]')) {
           if (userText.includes('surface="analytics"') || userText.includes('action="boost_q2"')) {
             await streamToolCall(res, model, 'a2ui_render', {
@@ -2749,21 +2870,25 @@ export function startMockLlmServer(port = PORT) {
                                                                               ? '已渲染 v0.5.0 新增 7 个交互原语（RangeSlider / Checklist / SortableList / KvEditor / Rating / ImageCompare / AnnotationText）实测台。'
                                                                               : isShowcase37
                                                                                 ? '已渲染 v0.5.0 原地升级实测台（ProTable 语义列 + 固定首列、0ms 条件聚合函数、offsetPct Trace 瀑布树与多文件批注 DiffView）。'
-                                                                                : userText.includes(
-                                                                                      '[a2ui-action]',
-                                                                                    )
-                                                                                  ? '已根据您的操作实时增量刷新界面数据模型。'
-                                                                                  : isDock
-                                                                                    ? '已将 CI/CD 发布流水线监控面板固定在输入框上方的常驻工作台（Dock），后续轮次将继续实时原地刷新。'
-                                                                                    : isInline
-                                                                                      ? '已在工具步骤流内嵌渲染诊断摘要。'
-                                                                                      : isDashboard
-                                                                                        ? '已为您生成 2026 区域经营交互看板（示例数据），可切换图表、搜索排序明细表或一键调整预测情景。'
-                                                                                        : userText.includes(
-                                                                                              'test-error',
-                                                                                            )
-                                                                                          ? '初稿校验触发编译器诊断自愈，已自动将非法组件修正为标准组件并完成渲染。'
-                                                                                          : '已为您准备好餐厅预订交互卡片，您可直接在下方调整人数、口味或包间选项后点击确认。'
+                                                                                : isShowcase38
+                                                                                  ? '已渲染深度组合审计 38（无权重并排、长标签对比、对象 KV 编辑、多列 Sticky ProTable、字面量控件与 Modal 动作）。'
+                                                                                  : isShowcase39
+                                                                                    ? '已渲染深度组合审计 39（区间/子弹/哑铃交叉筛选隔离、负值偏移参考线、对数散点防零、5 项玉玦图与整洁直方图）。'
+                                                                                    : userText.includes(
+                                                                                          '[a2ui-action]',
+                                                                                        )
+                                                                                      ? '已根据您的操作实时增量刷新界面数据模型。'
+                                                                                      : isDock
+                                                                                        ? '已将 CI/CD 发布流水线监控面板固定在输入框上方的常驻工作台（Dock），后续轮次将继续实时原地刷新。'
+                                                                                        : isInline
+                                                                                          ? '已在工具步骤流内嵌渲染诊断摘要。'
+                                                                                          : isDashboard
+                                                                                            ? '已为您生成 2026 区域经营交互看板（示例数据），可切换图表、搜索排序明细表或一键调整预测情景。'
+                                                                                            : userText.includes(
+                                                                                                  'test-error',
+                                                                                                )
+                                                                                              ? '初稿校验触发编译器诊断自愈，已自动将非法组件修正为标准组件并完成渲染。'
+                                                                                              : '已为您准备好餐厅预订交互卡片，您可直接在下方调整人数、口味或包间选项后点击确认。'
       await streamTextReply(res, model, reply)
       return
     }

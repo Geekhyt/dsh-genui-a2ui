@@ -36,6 +36,7 @@ import {
   isWritableProp,
   ModalTriggerContext,
   SurfaceReadOnlyContext,
+  useSurfaceActionRunner,
   weightStyle,
 } from './widget-helpers.tsx'
 
@@ -394,7 +395,11 @@ export const DshCodeImpl = defineComponent<{
 })
 
 function normalizeBoundSelectionProp(raw: unknown): string | readonly string[] | undefined {
-  if (Array.isArray(raw)) return raw.map(String)
+  if (Array.isArray(raw)) {
+    return raw.every((item) => typeof item === 'string')
+      ? (raw as readonly string[])
+      : raw.map(String)
+  }
   if (raw !== undefined && raw !== null) return String(raw)
   return undefined
 }
@@ -428,6 +433,7 @@ export const DshChartImpl = defineComponent<{
   weight?: number
 }>(ChartApi, function DshChart({ props, context }) {
   const readOnly = useContext(SurfaceReadOnlyContext)
+  const runAction = useSurfaceActionRunner(context, props.action)
   const canCrossFilter = !readOnly && isWritableProp(context, 'selected', props.setSelected)
   const parseOptionalNum = (raw: unknown): number | undefined =>
     typeof raw === 'number' && Number.isFinite(raw)
@@ -437,6 +443,7 @@ export const DshChartImpl = defineComponent<{
         : undefined
   const parsedRefLine = parseOptionalNum(props.referenceLine)
   const parsedRefX = parseOptionalNum(props.referenceX)
+  const selectedProp = useMemo(() => normalizeBoundSelectionProp(props.selected), [props.selected])
   return (
     <EChartsWidget
       kind={props.kind}
@@ -457,7 +464,7 @@ export const DshChartImpl = defineComponent<{
       horizontal={props.horizontal}
       zoom={props.zoom}
       height={props.height}
-      selected={normalizeBoundSelectionProp(props.selected)}
+      selected={selectedProp}
       onSelectChange={canCrossFilter ? props.setSelected : undefined}
       exportable={props.exportable}
       step={props.step}
@@ -471,7 +478,7 @@ export const DshChartImpl = defineComponent<{
           : undefined
       }
       bins={props.bins}
-      action={readOnly ? undefined : props.action}
+      action={readOnly ? undefined : runAction}
       weight={props.weight}
     />
   )
@@ -496,7 +503,12 @@ export const DshTableImpl = defineComponent<{
   weight?: number
 }>(TableApi, function DshTable({ props, context }) {
   const readOnly = useContext(SurfaceReadOnlyContext)
+  const runAction = useSurfaceActionRunner(context, props.action)
   const canFilterWrite = !readOnly && isWritableProp(context, 'filterValue', props.setFilterValue)
+  const filterValueProp = useMemo(
+    () => normalizeBoundSelectionProp(props.filterValue),
+    [props.filterValue],
+  )
   return (
     <TableWidget
       rows={props.rows}
@@ -510,10 +522,10 @@ export const DshTableImpl = defineComponent<{
       showSummary={props.showSummary}
       expandKey={props.expandKey}
       filterField={props.filterField}
-      filterValue={normalizeBoundSelectionProp(props.filterValue)}
+      filterValue={filterValueProp}
       onFilterValueChange={canFilterWrite ? props.setFilterValue : undefined}
       stickyFirstColumn={props.stickyFirstColumn}
-      action={readOnly ? undefined : props.action}
+      action={readOnly ? undefined : runAction}
       weight={props.weight}
     />
   )

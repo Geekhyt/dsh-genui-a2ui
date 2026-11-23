@@ -436,6 +436,22 @@ function buildZoomConfig(
       ]
 }
 
+function computeEvenAxisInterval(maxVal: number, isCompact: boolean): number | undefined {
+  if (!Number.isFinite(maxVal) || maxVal <= 0) return undefined
+  const div = isCompact
+    ? maxVal % 3 === 0
+      ? 3
+      : maxVal % 4 === 0
+        ? 4
+        : 2
+    : maxVal % 5 === 0
+      ? 5
+      : maxVal % 4 === 0
+        ? 4
+        : 3
+  return Number((maxVal / div).toPrecision(6))
+}
+
 function niceUpperBound(v: number): number {
   if (v <= 0) return 0
   const mag = 10 ** Math.floor(Math.log10(v))
@@ -700,11 +716,34 @@ function extractCategoryAxisLabels(option: Record<string, unknown>): readonly st
   return null
 }
 
+function resolveYRange(
+  vals: readonly number[],
+  bounds: { readonly min?: number; readonly max?: number },
+): readonly [number, number] | undefined {
+  let lo = bounds.min ?? 0
+  let hi = bounds.max ?? 0
+  let hasVal = bounds.min !== undefined || bounds.max !== undefined
+  for (const v of vals) {
+    if (!Number.isFinite(v)) continue
+    if (!hasVal) {
+      lo = Math.min(0, v)
+      hi = v
+      hasVal = true
+    } else {
+      if (v < lo) lo = v
+      if (v > hi) hi = v
+    }
+  }
+  return hasVal && hi > lo ? [lo, hi] : undefined
+}
+
 function buildMarkAreaOption(
   rawMarkArea: unknown,
   theme: ReturnType<typeof resolvePalette>,
   dark: boolean,
   isCompact: boolean,
+  yOffset = 0,
+  yRange?: readonly [number, number],
 ): Record<string, unknown> | undefined {
   if (!Array.isArray(rawMarkArea) || rawMarkArea.length === 0) return undefined
   const toneFill = (tone: string): { readonly fill: string; readonly labelColor: string } => {
@@ -731,6 +770,10 @@ function buildMarkAreaOption(
       labelColor: theme.brand,
     }
   }
+  const shiftY = (v: unknown): unknown =>
+    yOffset !== 0 && typeof v === 'number' && Number.isFinite(v)
+      ? Number((v + yOffset).toFixed(4))
+      : v
   const areas: unknown[] = []
   for (const raw of rawMarkArea) {
     if (typeof raw !== 'object' || raw === null) continue
@@ -742,24 +785,33 @@ function buildMarkAreaOption(
     const { fill, labelColor } = toneFill(tone)
     const lbl = rec.label !== undefined && rec.label !== null ? sanitizeChartLabel(rec.label) : ''
     const isY = rec.axis === 'y'
+    const sVal = isY ? shiftY(startVal) : startVal
+    const eVal = isY ? shiftY(endVal) : endVal
+    const useTopAboveYBand =
+      isY &&
+      yRange !== undefined &&
+      typeof sVal === 'number' &&
+      typeof eVal === 'number' &&
+      yRange[1] > yRange[0] &&
+      Math.max(sVal, eVal) <= yRange[0] + (yRange[1] - yRange[0]) * 0.35
     const startPoint: Record<string, unknown> = {
-      ...(isY ? { yAxis: startVal } : { xAxis: startVal }),
+      ...(isY ? { yAxis: sVal } : { xAxis: sVal }),
       itemStyle: { color: fill },
       ...(lbl !== ''
         ? {
             name: truncateByVisualWidth(lbl, isCompact ? 10 : 18),
             label: {
               show: true,
-              position: 'insideTop',
+              position: useTopAboveYBand ? 'top' : 'insideTop',
               color: labelColor,
               fontSize: isCompact ? 9 : 10,
               fontWeight: 600,
-              distance: 4,
+              distance: useTopAboveYBand ? 3 : 4,
             },
           }
         : {}),
     }
-    const endPoint: Record<string, unknown> = isY ? { yAxis: endVal } : { xAxis: endVal }
+    const endPoint: Record<string, unknown> = isY ? { yAxis: eVal } : { xAxis: eVal }
     areas.push([startPoint, endPoint])
   }
   if (areas.length === 0) return undefined
@@ -814,19 +866,40 @@ export function computeHistogramBins(
     }
   }
   const maxAuto = isCompact ? 8 : 14
-  const binCount =
-    typeof requestedBins === 'number' && Number.isFinite(requestedBins)
-      ? Math.max(2, Math.min(isCompact ? 12 : 40, Math.trunc(requestedBins)))
-      : Math.max(4, Math.min(maxAuto, autoBins))
-  const step = span / binCount
+  const hasExplicitBins = typeof requestedBins === 'number' && Number.isFinite(requestedBins)
+  let binCount = hasExplicitBins
+    ? Math.max(2, Math.min(isCompact ? 12 : 40, Math.trunc(requestedBins)))
+    : Math.max(4, Math.min(maxAuto, autoBins))
+  let binStart = minVal
+  let binEnd = maxVal
+  let step = span / binCount
+  if (!hasExplicitBins) {
+    const rawStep = span / binCount
+    const mag = 10 ** Math.floor(Math.log10(rawStep))
+    for (const mult of [1, 2, 2.5, 5, 10]) {
+      const cand = mult * mag
+      const lo = Math.floor(minVal / cand + 1e-9) * cand
+      const hi = Math.ceil(maxVal / cand - 1e-9) * cand
+      const cnt = Math.round((hi - lo) / cand)
+      if (cnt >= 4 && cnt <= maxAuto) {
+        step = cand
+        binStart = lo
+        binEnd = hi
+        binCount = cnt
+        break
+      }
+    }
+  }
   const counts = new Array<number>(binCount).fill(0)
   for (const v of finite) {
-    const idx = Math.min(binCount - 1, Math.max(0, Math.floor((v - minVal) / step)))
+    const idx = Math.min(binCount - 1, Math.max(0, Math.floor((v - binStart) / step + 1e-9)))
     counts[idx] = (counts[idx] ?? 0) + 1
   }
+  const cleanNum = (n: number): number =>
+    Math.abs(n) < step * 1e-9 ? 0 : Number(n.toPrecision(10))
   return counts.map((count, i) => {
-    const start = minVal + i * step
-    const end = i === binCount - 1 ? maxVal : minVal + (i + 1) * step
+    const start = cleanNum(binStart + i * step)
+    const end = i === binCount - 1 ? cleanNum(binEnd) : cleanNum(binStart + (i + 1) * step)
     return {
       label: `${formatCompactTickNum(start)}–${formatCompactTickNum(end)}`,
       start,
@@ -900,7 +973,9 @@ function buildLegendOption(opts: {
   readonly fontSize?: number | undefined
   readonly itemWidth?: number | undefined
   readonly itemHeight?: number | undefined
-  readonly data?: readonly string[] | undefined
+  readonly data?:
+    | readonly (string | { readonly name: string; readonly icon?: string })[]
+    | undefined
   readonly names?: readonly string[] | undefined
   readonly containerWidth?: number | undefined
 }): Record<string, unknown> {
@@ -908,7 +983,8 @@ function buildLegendOption(opts: {
   const fontSize = opts.fontSize ?? 11
   const itemWidth = opts.itemWidth ?? 10
   const itemHeight = opts.itemHeight ?? 8
-  const candidateNames = opts.names ?? opts.data
+  const candidateNames =
+    opts.names ?? opts.data?.map((item) => (typeof item === 'string' ? item : item.name))
   const uniqueNames = candidateNames ? [...new Set(candidateNames)] : []
   const uniqueNameSet = new Set(uniqueNames)
   const estContainerW =
@@ -977,8 +1053,8 @@ function buildLegendOption(opts: {
     uniqueNames.length >= 3 &&
     !fitsNaturallyWithoutScroll &&
     estFormattedTotalMax > availW - 6
-  const pageCtrlW = 56
-  const clipW = Math.max(100, availW - pageCtrlW)
+  const pageCtrlW = 66
+  const clipW = Math.max(96, availW - pageCtrlW)
   const perPage = estContainerW < 340 ? 2 : 3
   let scrollItemGap = 8
   if (willPaginateScroll) {
@@ -1116,7 +1192,7 @@ function applyCrossFilterSelection(
   const highlightBorder = dark ? 'rgba(248, 250, 252, 0.92)' : 'rgba(15, 23, 42, 0.82)'
 
   const nextSeries = (opt.series as Record<string, unknown>[]).map((s) => {
-    if (typeof s !== 'object' || s === null) return s
+    if (typeof s !== 'object' || s === null || s.silent === true) return s
     const type = String(s.type ?? '')
     const seriesNameNorm = sanitizeChartLabel(s.name).trim().toLowerCase()
     const seriesMatched = seriesNameNorm !== '' && queries.includes(seriesNameNorm)
@@ -2619,9 +2695,23 @@ function buildChartOptionInternal(
             ],
           }
         : (refLineY ?? refLineX)
-    const scatterMarkArea = buildMarkAreaOption(props.markArea, theme, dark, isCompact)
     const scatterUseLog = canUseLogScale(props.yScale, scatterYVals)
     const bounds = scatterUseLog ? {} : computeRefAxisBounds(scatterYVals, props.referenceLine)
+    const scatterMarkArea = buildMarkAreaOption(
+      props.markArea,
+      theme,
+      dark,
+      isCompact,
+      0,
+      resolveYRange(scatterYVals, bounds),
+    )
+    const scatterXVals = numericX ? rows.map((r) => toNumber(r[xKey])) : []
+    const allNonNegX = scatterXVals.length > 0 && scatterXVals.every((v) => v >= 0)
+    const xBounds = numericX ? computeRefAxisBounds(scatterXVals, props.referenceX, false) : {}
+    const safeScatterY = (raw: unknown): number | null => {
+      const n = toNumber(raw)
+      return scatterUseLog && n <= 0 ? null : n
+    }
 
     const scatterLabelKey = Object.keys(rows[0] ?? {}).find(
       (rk) =>
@@ -2666,8 +2756,8 @@ function buildChartOptionInternal(
                 ? grpRows.map((r) => ({
                     name: resolveScatterPointName(r, r[groupField]),
                     value: sizeKey
-                      ? [toNumber(r[xKey]), toNumber(r[primaryY]), toNumber(r[sizeKey])]
-                      : [toNumber(r[xKey]), toNumber(r[primaryY])],
+                      ? [toNumber(r[xKey]), safeScatterY(r[primaryY]), toNumber(r[sizeKey])]
+                      : [toNumber(r[xKey]), safeScatterY(r[primaryY])],
                   }))
                 : grpRows.map((r) => {
                     const cxLabel = sanitizeChartLabel(r[xKey])
@@ -2675,8 +2765,8 @@ function buildChartOptionInternal(
                     return {
                       name: cxLabel,
                       value: sizeKey
-                        ? [cx, toNumber(r[primaryY]), toNumber(r[sizeKey])]
-                        : [cx, toNumber(r[primaryY])],
+                        ? [cx, safeScatterY(r[primaryY]), toNumber(r[sizeKey])]
+                        : [cx, safeScatterY(r[primaryY])],
                     }
                   }),
             }
@@ -2694,12 +2784,12 @@ function buildChartOptionInternal(
             ? rows.map((r) => ({
                 name: resolveScatterPointName(r),
                 value: sizeKey
-                  ? [toNumber(r[xKey]), toNumber(r[k]), toNumber(r[sizeKey])]
-                  : [toNumber(r[xKey]), toNumber(r[k])],
+                  ? [toNumber(r[xKey]), safeScatterY(r[k]), toNumber(r[sizeKey])]
+                  : [toNumber(r[xKey]), safeScatterY(r[k])],
               }))
             : rows.map((r) => ({
                 name: sanitizeChartLabel(r[xKey]),
-                value: toNumber(r[k]),
+                value: safeScatterY(r[k]),
               })),
         }))
 
@@ -2734,7 +2824,10 @@ function buildChartOptionInternal(
       xAxis: {
         type: numericX ? 'value' : 'category',
         data: scatterCategories,
-        splitNumber: numericX && isCompact ? 3 : undefined,
+        ...xBounds,
+        ...(numericX && allNonNegX && xBounds.max !== undefined && xBounds.min === undefined
+          ? { min: 0, interval: computeEvenAxisInterval(xBounds.max, isCompact) }
+          : { splitNumber: numericX && isCompact ? 3 : undefined }),
         axisLabel: {
           color: theme.textSecondary,
           fontSize: isCompact ? 10 : 11,
@@ -3324,9 +3417,21 @@ function buildChartOptionInternal(
     const stackKey = props.stacked ? 'comboBar' : undefined
     const barFill = dark ? 'rgba(96, 165, 250, 0.40)' : 'rgba(37, 99, 235, 0.26)'
 
+    const stackedComboVals = props.stacked
+      ? [
+          ...categories.map((_, i) =>
+            barDataList.reduce((acc, arr) => acc + Math.max(arr[i] ?? 0, 0), 0),
+          ),
+          ...categories.map((_, i) =>
+            barDataList.reduce((acc, arr) => acc + Math.min(arr[i] ?? 0, 0), 0),
+          ),
+        ]
+      : barDataList.flat()
+    const comboUseLog = !props.stacked && canUseLogScale(props.yScale, stackedComboVals)
+
     const barSeries = barKeys.map((k, idx) => {
       const rawArr = barDataList[idx] ?? []
-      const hasNegBar = rawArr.some((v) => v < 0)
+      const hasNegBar = !comboUseLog && rawArr.some((v) => v < 0)
       return {
         name: sanitizeChartLabel(k),
         type: 'bar' as const,
@@ -3346,13 +3451,33 @@ function buildChartOptionInternal(
                 borderRadius: [4, 4, 0, 0],
               },
         markLine: lineKeys.length === 0 && idx === 0 ? refLine : undefined,
-        data: hasNegBar
-          ? rawArr.map((v) => (v < 0 ? { value: v, itemStyle: { borderRadius: [0, 0, 4, 4] } } : v))
-          : rawArr,
+        data: comboUseLog
+          ? rawArr.map((v) => (v > 0 ? v : null))
+          : hasNegBar
+            ? rawArr.map((v) =>
+                v < 0 ? { value: v, itemStyle: { borderRadius: [0, 0, 4, 4] } } : v,
+              )
+            : rawArr,
       }
     })
 
-    const comboMarkArea = buildMarkAreaOption(props.markArea, theme, dark, isCompact)
+    const lineVals = lineDataList.flat()
+    const leftBounds =
+      lineKeys.length === 0 && !comboUseLog
+        ? computeRefAxisBounds(stackedComboVals, props.referenceLine)
+        : {}
+    const rightBounds =
+      lineKeys.length > 0 ? computeRefAxisBounds(lineVals, props.referenceLine) : {}
+    const comboMarkArea = buildMarkAreaOption(
+      props.markArea,
+      theme,
+      dark,
+      isCompact,
+      0,
+      lineKeys.length > 0
+        ? resolveYRange(lineVals, rightBounds)
+        : resolveYRange(stackedComboVals, leftBounds),
+    )
     const comboStep = props.step ? ('end' as const) : false
     const barKeySet = new Set(barKeys)
     const lineColorStart = barKeys.length === 1 ? 3 : barKeys.length
@@ -3378,24 +3503,6 @@ function buildChartOptionInternal(
       ;(barSeries[0] as Record<string, unknown>).markArea = comboMarkArea
     }
 
-    const stackedComboVals = props.stacked
-      ? [
-          ...categories.map((_, i) =>
-            barDataList.reduce((acc, arr) => acc + Math.max(arr[i] ?? 0, 0), 0),
-          ),
-          ...categories.map((_, i) =>
-            barDataList.reduce((acc, arr) => acc + Math.min(arr[i] ?? 0, 0), 0),
-          ),
-        ]
-      : barDataList.flat()
-    const lineVals = lineDataList.flat()
-    const comboUseLog = canUseLogScale(props.yScale, stackedComboVals)
-    const leftBounds =
-      lineKeys.length === 0 && !comboUseLog
-        ? computeRefAxisBounds(stackedComboVals, props.referenceLine)
-        : {}
-    const rightBounds =
-      lineKeys.length > 0 ? computeRefAxisBounds(lineVals, props.referenceLine) : {}
     const totalSeriesCount = barSeries.length + lineSeries.length
 
     const zoomCfg = buildZoomConfig(props.zoom, false, theme.border)
@@ -3791,16 +3898,25 @@ function buildChartOptionInternal(
         })
       : orderedLows.map((lo, i) => Number(((lo + (orderedHighs[i] ?? lo)) / 2).toFixed(2)))
     const minLow = orderedLows.length > 0 ? Math.min(...orderedLows) : 0
-    const baseline = minLow < 0 ? Math.floor(minLow * 1.1) : 0
+    const baseline = minLow < 0 ? -niceUpperBound(Math.abs(minLow)) : 0
     const baseData = orderedLows.map((lo) => Number((lo - baseline).toFixed(4)))
     const spanData = orderedHighs.map((hi, i) => Number((hi - (orderedLows[i] ?? 0)).toFixed(4)))
+    const shiftedHighs = orderedHighs.map((hi) => Number((hi - baseline).toFixed(4)))
     const shiftedMid = midVals.map((m) => Number((m - baseline).toFixed(4)))
-    const rangeMarkArea = buildMarkAreaOption(props.markArea, theme, dark, isCompact)
     const rangeStep = props.step ? ('end' as const) : false
     const shiftedRef =
       props.referenceLine !== undefined && Number.isFinite(props.referenceLine)
         ? props.referenceLine - baseline
         : undefined
+    const rangeBounds = computeRefAxisBounds([...baseData, ...shiftedHighs], shiftedRef)
+    const rangeMarkArea = buildMarkAreaOption(
+      props.markArea,
+      theme,
+      dark,
+      isCompact,
+      -baseline,
+      resolveYRange([...baseData, ...shiftedHighs], rangeBounds),
+    )
     const rangeRefLabel =
       props.referenceLabel !== undefined && props.referenceLabel.trim() !== ''
         ? props.referenceLabel
@@ -3808,8 +3924,8 @@ function buildChartOptionInternal(
           ? String(props.referenceLine)
           : undefined
     const rangeMarkPos = pickMarkLinePosition(
-      shiftedMid.slice(0, 2),
-      shiftedMid.slice(-2),
+      [...shiftedMid.slice(0, 2), ...shiftedHighs.slice(0, 2)],
+      [...shiftedMid.slice(-2), ...shiftedHighs.slice(-2)],
       shiftedRef,
     )
     const refLine = buildReferenceMarkLine(
@@ -3849,7 +3965,7 @@ function buildChartOptionInternal(
         scroll: isCompact,
         bottom: props.zoom ? 24 : 0,
         names: [midSeriesName, localeMsg.chartRangeBand],
-        data: [midSeriesName, localeMsg.chartRangeBand],
+        data: [midSeriesName, { name: localeMsg.chartRangeBand, icon: 'roundRect' }],
         textColor: theme.textSecondary,
         containerWidth,
       }),
@@ -3877,6 +3993,7 @@ function buildChartOptionInternal(
       },
       yAxis: {
         type: 'value',
+        ...rangeBounds,
         splitNumber: isCompact ? 3 : undefined,
         splitLine: { lineStyle: { color: theme.border } },
         axisLabel: {
@@ -3972,6 +4089,9 @@ function buildChartOptionInternal(
       .map((p, idx) => (p.target !== undefined ? { name: p.label, value: [p.target, idx] } : null))
       .filter((pt): pt is { name: string; value: [number, number] } => pt !== null)
 
+    const bulletMax = niceUpperBound(maxBound)
+    const bulletInterval = computeEvenAxisInterval(bulletMax, isCompact)
+
     return {
       color: theme.colors,
       tooltip: {
@@ -4001,29 +4121,39 @@ function buildChartOptionInternal(
       },
       xAxis: {
         type: 'value',
-        max: niceUpperBound(maxBound),
-        splitNumber: isCompact ? 3 : 5,
+        min: 0,
+        max: bulletMax,
+        interval: bulletInterval,
         splitLine: { lineStyle: { color: theme.border, type: 'dashed' } },
         axisLabel: { color: theme.textSecondary, fontSize: isCompact ? 10 : 11, hideOverlap: true },
       },
-      yAxis: {
-        type: 'category',
-        inverse: true,
-        data: categories,
-        axisLine: { lineStyle: { color: theme.border } },
-        axisTick: { show: false },
-        axisLabel: {
-          color: theme.textPrimary,
-          fontSize: isCompact ? 10 : 11.5,
-          width: maxYLabelW,
-          overflow: 'truncate',
-          ellipsis: '…',
+      yAxis: [
+        {
+          type: 'category',
+          inverse: true,
+          data: categories,
+          axisLine: { lineStyle: { color: theme.border } },
+          axisTick: { show: false },
+          axisLabel: {
+            color: theme.textPrimary,
+            fontSize: isCompact ? 10 : 11.5,
+            width: maxYLabelW,
+            overflow: 'truncate',
+            ellipsis: '…',
+          },
         },
-      },
+        {
+          type: 'category',
+          inverse: true,
+          data: categories,
+          show: false,
+        },
+      ],
       series: [
         {
           name: '',
           type: 'bar',
+          yAxisIndex: 0,
           barWidth: barBandH,
           barGap: '-100%',
           silent: true,
@@ -4034,6 +4164,7 @@ function buildChartOptionInternal(
         {
           name: '',
           type: 'bar',
+          yAxisIndex: 0,
           barWidth: barBandH,
           barGap: '-100%',
           silent: true,
@@ -4044,6 +4175,7 @@ function buildChartOptionInternal(
         {
           name: '',
           type: 'bar',
+          yAxisIndex: 0,
           barWidth: barBandH,
           barGap: '-100%',
           silent: true,
@@ -4054,8 +4186,8 @@ function buildChartOptionInternal(
         {
           name: localeMsg.chartBulletActual,
           type: 'bar',
+          yAxisIndex: 1,
           barWidth: actualBarH,
-          barGap: '-100%',
           z: 4,
           data: parsedRows.map((p) => {
             const col =
@@ -4077,6 +4209,8 @@ function buildChartOptionInternal(
               {
                 name: localeMsg.chartBulletTarget,
                 type: 'scatter' as const,
+                yAxisIndex: 0,
+                silent: true,
                 symbol: 'rect',
                 symbolSize: [3, isCompact ? 16 : 22],
                 z: 6,
@@ -4232,7 +4366,7 @@ function buildChartOptionInternal(
     const categories = parsed.map((p) => p.label)
     const allVals = parsed.flatMap((p) => [p.before, p.after])
     const minVal = allVals.length > 0 ? Math.min(...allVals) : 0
-    const baseline = minVal < 0 ? Math.floor(minVal * 1.15) : 0
+    const baseline = minVal < 0 ? -niceUpperBound(Math.abs(minVal)) : 0
     const baseData = parsed.map((p) => Number((Math.min(p.before, p.after) - baseline).toFixed(4)))
     const spanData = parsed.map((p) => Number(Math.abs(p.after - p.before).toFixed(4)))
     const estW = containerWidth !== undefined && containerWidth > 0 ? containerWidth : 540
@@ -4421,8 +4555,8 @@ function buildChartOptionInternal(
         },
       },
       polar: {
-        radius: isCompact ? ['24%', '84%'] : ['26%', '86%'],
-        center: ['52%', '52%'],
+        radius: isCompact ? ['24%', '80%'] : ['26%', '84%'],
+        center: isCompact ? ['56%', '52%'] : ['54%', '52%'],
       },
       angleAxis: {
         max: maxVal,
@@ -4440,11 +4574,11 @@ function buildChartOptionInternal(
         axisTick: { show: false },
         axisLabel: {
           color: theme.textSecondary,
-          fontSize: isCompact ? 9.5 : 10.5,
+          fontSize: isCompact ? (items.length >= 5 ? 9 : 9.5) : 10.5,
           interval: 0,
           align: 'right',
-          margin: 6,
-          width: isCompact ? 62 : 90,
+          margin: isCompact ? 9 : 12,
+          width: isCompact ? 68 : 96,
           overflow: 'truncate',
         },
       },
@@ -4456,8 +4590,8 @@ function buildChartOptionInternal(
           showBackground: true,
           backgroundStyle: { color: trackBg },
           barWidth: isCompact
-            ? Math.max(6, Math.min(11, Math.floor(54 / Math.max(1, items.length))))
-            : 12,
+            ? Math.max(5.5, Math.min(10, Math.floor(46 / Math.max(1, items.length))))
+            : Math.min(12, Math.floor(64 / Math.max(1, items.length))),
           data: items.map((it, idx) => ({
             name: it.name,
             value: it.value,
@@ -4690,14 +4824,6 @@ function buildChartOptionInternal(
     cartMarkPos,
     isCompact,
   )
-  const cartMarkArea = buildMarkAreaOption(props.markArea, theme, dark, isCompact)
-  if (series[0] && refLine) {
-    series[0].markLine = refLine
-  }
-  if (series[0] && cartMarkArea) {
-    series[0].markArea = cartMarkArea
-  }
-
   const cartesianVals = isStacked
     ? [...stackedPosSums, ...stackedNegSums]
     : series.flatMap((s) => (s.data as unknown[]).map(extractDatumNum))
@@ -4706,6 +4832,20 @@ function buildChartOptionInternal(
     : useLogAxis
       ? {}
       : computeRefAxisBounds(cartesianVals, props.referenceLine)
+  const cartMarkArea = buildMarkAreaOption(
+    props.markArea,
+    theme,
+    dark,
+    isCompact,
+    0,
+    isHorizontal ? undefined : resolveYRange(cartesianVals, cartesianBounds),
+  )
+  if (series[0] && refLine) {
+    series[0].markLine = refLine
+  }
+  if (series[0] && cartMarkArea) {
+    series[0].markArea = cartMarkArea
+  }
 
   const showLegend = series.length > 1
   const estCartW = containerWidth !== undefined && containerWidth > 0 ? containerWidth : 560

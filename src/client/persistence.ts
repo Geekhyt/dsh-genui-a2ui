@@ -1,5 +1,18 @@
 import { isDangerousObjectKey, isSecretKey } from '../shared/constants.ts'
+import {
+  escapeJsonPointerSegment,
+  isPointerObscured,
+  isPointerObscuredOrParent,
+  normalizePointerPath,
+} from '../shared/redaction.ts'
 import { notifySubscribers } from './notify.ts'
+
+export {
+  escapeJsonPointerSegment,
+  isPointerObscured,
+  isPointerObscuredOrParent,
+  normalizePointerPath,
+}
 
 export const DRAFTS_STORAGE_KEY = 'dsh-a2ui:drafts:v1'
 export const DOCK_STORAGE_KEY = 'dsh-a2ui:dock:v1'
@@ -158,51 +171,6 @@ export function computeMessagesFingerprint(messages: readonly unknown[]): string
   return (hash >>> 0).toString(16).padStart(8, '0')
 }
 
-export function escapeJsonPointerSegment(key: string): string {
-  return key.replace(/~/g, '~0').replace(/\//g, '~1')
-}
-
-export function normalizePointerPath(pointer: string): string {
-  const trimmed = pointer.trim()
-  if (trimmed === '' || trimmed === '/') return '/'
-  const withSlash = trimmed.startsWith('/') ? trimmed : `/${trimmed}`
-  return withSlash.length > 1 ? withSlash.replace(/\/+$/, '') : withSlash
-}
-
-export function isPointerObscured(pointer: string, obscuredPointers: ReadonlySet<string>): boolean {
-  const norm = normalizePointerPath(pointer)
-  for (const rawObs of obscuredPointers) {
-    const trimmed = rawObs.trim()
-    if (trimmed === '') continue
-    const isRelative = !trimmed.startsWith('/')
-    const obs = normalizePointerPath(trimmed)
-    if (obs === '/') return true
-    if (norm === obs || norm.startsWith(`${obs}/`)) return true
-    if (isRelative && (norm.endsWith(obs) || norm.includes(`${obs}/`))) return true
-  }
-  return false
-}
-
-export function isPointerObscuredOrParent(
-  pointer: string,
-  obscuredPointers: ReadonlySet<string>,
-): boolean {
-  const norm = normalizePointerPath(pointer)
-  if (norm === '/') return obscuredPointers.size > 0
-  for (const rawObs of obscuredPointers) {
-    const trimmed = rawObs.trim()
-    if (trimmed === '') continue
-    const isRelative = !trimmed.startsWith('/')
-    const obs = normalizePointerPath(trimmed)
-    if (obs === '/') return true
-    if (norm === obs || obs.startsWith(`${norm}/`) || norm.startsWith(`${obs}/`)) {
-      return true
-    }
-    if (isRelative && (norm.endsWith(obs) || norm.includes(`${obs}/`))) return true
-  }
-  return false
-}
-
 export function sanitizeDataModel(
   value: unknown,
   obscuredPointers?: ReadonlySet<string>,
@@ -220,9 +188,16 @@ export function sanitizeDataModel(
     if (depth > 8) return undefined
     if (blocked.size > 0 && isPointerObscured(currentPath, blocked)) return undefined
     if (Array.isArray(node)) {
-      return node.map((item, idx) =>
-        walk(item, currentPath === '/' ? `/${idx}` : `${currentPath}/${idx}`, depth + 1),
-      )
+      const out: unknown[] = []
+      for (let idx = 0; idx < node.length; idx++) {
+        const cleaned = walk(
+          node[idx],
+          currentPath === '/' ? `/${idx}` : `${currentPath}/${idx}`,
+          depth + 1,
+        )
+        if (cleaned !== undefined) out.push(cleaned)
+      }
+      return out
     }
     if (typeof node === 'object' && node !== null) {
       const rec = node as Record<string, unknown>

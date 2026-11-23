@@ -15,7 +15,7 @@ import {
   tableFeatures,
   useTable,
 } from '@tanstack/react-table'
-import { Fragment, memo, useDeferredValue, useMemo, useState } from 'react'
+import { type CSSProperties, Fragment, memo, useDeferredValue, useMemo, useState } from 'react'
 import { safeStringifyJson } from '../../shared/constants.ts'
 import type { RuntimeUiMessages } from '../../shared/i18n.ts'
 import { useTransientFlag } from '../dom-hooks.ts'
@@ -88,7 +88,7 @@ export interface TableWidgetProps {
   readonly filterValue?: string | readonly string[] | undefined
   readonly onFilterValueChange?: ((next: string | string[]) => void) | undefined
   readonly stickyFirstColumn?: boolean | undefined
-  readonly action?: ((options?: ActionDispatchOptions) => Promise<void>) | undefined
+  readonly action?: ((options?: ActionDispatchOptions) => Promise<unknown> | unknown) | undefined
   readonly weight?: number | undefined
 }
 
@@ -574,6 +574,10 @@ export const TableWidget = memo(function TableWidget({
     1,
     columns.length + (selectable ? 1 : 0) + (hasExpandColumn ? 1 : 0),
   )
+  const expandStickyLeft = 0
+  const checkStickyLeft = hasExpandColumn ? 30 : 0
+  const firstColStickyLeft = (hasExpandColumn ? 30 : 0) + (selectable ? 34 : 0)
+  const stickyVar = (px: number): CSSProperties => ({ '--sticky-left': `${px}px` }) as CSSProperties
 
   return (
     <div
@@ -669,9 +673,17 @@ export const TableWidget = memo(function TableWidget({
           <thead>
             {table.getHeaderGroups().map((hg) => (
               <tr key={hg.id}>
-                {hasExpandColumn ? <th className={`${css.th} ${css.proExpandCell}`} /> : null}
+                {hasExpandColumn ? (
+                  <th
+                    className={`${css.th} ${css.proExpandCell}${stickyFirstColumn ? ` ${css.tableStickyCol}` : ''}`}
+                    style={stickyFirstColumn ? stickyVar(expandStickyLeft) : undefined}
+                  />
+                ) : null}
                 {selectable ? (
-                  <th className={`${css.th} ${css.proCheckCell}`}>
+                  <th
+                    className={`${css.th} ${css.proCheckCell}${stickyFirstColumn ? ` ${css.tableStickyCol}` : ''}`}
+                    style={stickyFirstColumn ? stickyVar(checkStickyLeft) : undefined}
+                  >
                     <input
                       type="checkbox"
                       checked={allPageSelected}
@@ -689,8 +701,11 @@ export const TableWidget = memo(function TableWidget({
                   return (
                     <th
                       key={header.id}
-                      className={`${css.th} ${canSort ? css.thSortable : ''} ${isSticky ? css.tableStickyCol : ''}`}
-                      style={{ textAlign: meta?.align ?? 'left' }}
+                      className={`${css.th} ${canSort ? css.thSortable : ''} ${isSticky ? `${css.tableStickyCol} ${css.tableStickyColEdge}` : ''}`}
+                      style={{
+                        textAlign: meta?.align ?? 'left',
+                        ...(isSticky ? stickyVar(firstColStickyLeft) : undefined),
+                      }}
                       tabIndex={canSort ? 0 : undefined}
                       aria-sort={
                         sorted === 'asc'
@@ -794,7 +809,8 @@ export const TableWidget = memo(function TableWidget({
                     >
                       {hasExpandColumn ? (
                         <td
-                          className={`${css.td} ${css.proExpandCell}`}
+                          className={`${css.td} ${css.proExpandCell}${stickyFirstColumn ? ` ${css.tableStickyCol}` : ''}`}
+                          style={stickyFirstColumn ? stickyVar(expandStickyLeft) : undefined}
                           onClick={(e) => e.stopPropagation()}
                           onKeyDown={(e) => e.stopPropagation()}
                         >
@@ -813,7 +829,8 @@ export const TableWidget = memo(function TableWidget({
                       ) : null}
                       {selectable ? (
                         <td
-                          className={`${css.td} ${css.proCheckCell}`}
+                          className={`${css.td} ${css.proCheckCell}${stickyFirstColumn ? ` ${css.tableStickyCol}` : ''}`}
+                          style={stickyFirstColumn ? stickyVar(checkStickyLeft) : undefined}
                           onClick={(e) => e.stopPropagation()}
                         >
                           <input
@@ -828,16 +845,22 @@ export const TableWidget = memo(function TableWidget({
                       {row.getAllCells().map((cell, cIdx) => {
                         const meta = cell.column.columnDef.meta
                         const isSticky = stickyFirstColumn && cIdx === 0
+                        const stickyCls = isSticky
+                          ? ` ${css.tableStickyCol} ${css.tableStickyColEdge}`
+                          : ''
                         const cellCls = meta?.isNumeric
-                          ? `${css.td} ${css.tdNum}${isSticky ? ` ${css.tableStickyCol}` : ''}`
+                          ? `${css.td} ${css.tdNum}${stickyCls}`
                           : meta?.wrapProse
-                            ? `${css.td} ${css.tdProse}${isSticky ? ` ${css.tableStickyCol}` : ''}`
-                            : `${css.td} ${css.tdNowrap}${isSticky ? ` ${css.tableStickyCol}` : ''}`
+                            ? `${css.td} ${css.tdProse}${stickyCls}`
+                            : `${css.td} ${css.tdNowrap}${stickyCls}`
                         return (
                           <td
                             key={cell.id}
                             className={cellCls}
-                            style={{ textAlign: meta?.align ?? 'left' }}
+                            style={{
+                              textAlign: meta?.align ?? 'left',
+                              ...(isSticky ? stickyVar(firstColStickyLeft) : undefined),
+                            }}
                           >
                             <table.FlexRender cell={cell} />
                           </td>
@@ -859,19 +882,33 @@ export const TableWidget = memo(function TableWidget({
           {summaryMap && filteredRows.length > 0 ? (
             <tfoot>
               <tr className={css.proSummaryRow}>
-                {hasExpandColumn ? <td className={css.td} /> : null}
-                {selectable ? <td className={css.td} /> : null}
+                {hasExpandColumn ? (
+                  <td
+                    className={`${css.td} ${css.proExpandCell}${stickyFirstColumn ? ` ${css.tableStickyCol}` : ''}`}
+                    style={stickyFirstColumn ? stickyVar(expandStickyLeft) : undefined}
+                  />
+                ) : null}
+                {selectable ? (
+                  <td
+                    className={`${css.td} ${css.proCheckCell}${stickyFirstColumn ? ` ${css.tableStickyCol}` : ''}`}
+                    style={stickyFirstColumn ? stickyVar(checkStickyLeft) : undefined}
+                  />
+                ) : null}
                 {inferredCols.map((col, idx) => {
                   const isSticky = stickyFirstColumn && idx === 0
+                  const stickyCls = isSticky
+                    ? ` ${css.tableStickyCol} ${css.tableStickyColEdge}`
+                    : ''
                   const footCls = numericKeySet.has(col.key)
-                    ? `${css.td} ${css.tdNum}${isSticky ? ` ${css.tableStickyCol}` : ''}`
-                    : `${css.td}${isSticky ? ` ${css.tableStickyCol}` : ''}`
+                    ? `${css.td} ${css.tdNum}${stickyCls}`
+                    : `${css.td}${stickyCls}`
                   return (
                     <td
                       key={col.key}
                       className={footCls}
                       style={{
                         textAlign: col.align ?? (numericKeySet.has(col.key) ? 'right' : 'left'),
+                        ...(isSticky ? stickyVar(firstColStickyLeft) : undefined),
                       }}
                     >
                       {idx === 0 && !summaryMap[col.key]

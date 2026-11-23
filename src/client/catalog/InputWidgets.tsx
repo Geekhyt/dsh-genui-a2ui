@@ -66,6 +66,7 @@ import {
   SurfaceActionStatusContext,
   SurfaceReadOnlyContext,
   SurfaceValidationContext,
+  useWritablePropState,
   weightStyle,
 } from './widget-helpers.tsx'
 
@@ -176,6 +177,7 @@ export const DshButtonImpl = defineComponent<{
 
 export function DshTextFieldView({
   props,
+  context,
 }: {
   props: {
     label?: unknown
@@ -187,15 +189,17 @@ export function DshTextFieldView({
     validationErrors?: readonly string[]
     weight?: number
   }
+  context?: unknown
 }) {
   const fieldId = useId()
   const readOnly = useContext(SurfaceReadOnlyContext)
   const { submitAttempted } = useContext(SurfaceValidationContext)
   const [touched, setTouched] = useState(false)
   const [focused, setFocused] = useState(false)
+  const [rawVal, commitValue] = useWritablePropState(context, 'value', props.value, props.setValue)
 
   const label = props.label ? String(props.label) : ''
-  const val = props.value === undefined || props.value === null ? '' : String(props.value)
+  const val = rawVal === undefined || rawVal === null ? '' : String(rawVal)
   const [draft, setDraft] = useState(val)
   const [prevVal, setPrevVal] = useState(val)
   if (val !== prevVal) {
@@ -245,7 +249,7 @@ export function DshTextFieldView({
           onBlur={() => setTouched(true)}
           onChange={(e) => {
             if (readOnly) return
-            props.setValue?.(e.target.value)
+            commitValue(e.target.value)
           }}
         />
       ) : (
@@ -272,17 +276,17 @@ export function DshTextFieldView({
               setDraft(raw)
               const trimmed = raw.trim()
               if (trimmed === '') {
-                props.setValue?.('')
+                commitValue('')
                 return
               }
               if (trimmed === '-' || trimmed === '.' || trimmed === '-.') {
                 return
               }
               const parsed = Number(trimmed)
-              props.setValue?.((Number.isFinite(parsed) ? parsed : raw) as unknown as string)
+              commitValue((Number.isFinite(parsed) ? parsed : raw) as unknown as string)
               return
             }
-            props.setValue?.(raw)
+            commitValue(raw)
           }}
         />
       )}
@@ -303,6 +307,7 @@ export const DshTextFieldImpl = defineComponent<{
 
 export function DshCheckBoxView({
   props,
+  context,
 }: {
   props: {
     label?: unknown
@@ -312,22 +317,24 @@ export function DshCheckBoxView({
     validationErrors?: readonly string[]
     weight?: number
   }
+  context?: unknown
 }) {
   const readOnly = useContext(SurfaceReadOnlyContext)
   const { submitAttempted } = useContext(SurfaceValidationContext)
   const [touched, setTouched] = useState(false)
+  const [rawVal, commitValue] = useWritablePropState(context, 'value', props.value, props.setValue)
   const showError = !readOnly && (touched || submitAttempted) && props.isValid === false
   const err = showError ? props.validationErrors?.[0] : undefined
 
   return (
     <div className={`${css.field} ${css.checkboxField}`} style={weightStyle(props.weight, 140)}>
       <DshCheckbox
-        checked={Boolean(props.value)}
+        checked={Boolean(rawVal)}
         disabled={readOnly}
         onChange={(next) => {
           if (readOnly) return
           setTouched(true)
-          props.setValue?.(next)
+          commitValue(next)
         }}
         label={String(props.label ?? '')}
       />
@@ -358,16 +365,22 @@ export const DshChoicePickerImpl = defineComponent<{
   isValid?: boolean
   validationErrors?: readonly string[]
   weight?: number
-}>(ChoicePickerApi, function DshChoicePicker({ props }) {
+}>(ChoicePickerApi, function DshChoicePicker({ props, context }) {
   const msg = useRuntimeMessages()
   const readOnly = useContext(SurfaceReadOnlyContext)
   const { submitAttempted } = useContext(SurfaceValidationContext)
   const [touched, setTouched] = useState(false)
   const [query, setQuery] = useState('')
   const deferredQuery = useDeferredValue(query)
+  const [rawSelected, commitSelected] = useWritablePropState(
+    context,
+    'value',
+    props.value,
+    props.setValue,
+  )
   const selected = useMemo(
-    () => (Array.isArray(props.value) ? props.value.map(String) : []),
-    [props.value],
+    () => (Array.isArray(rawSelected) ? rawSelected.map(String) : []),
+    [rawSelected],
   )
   const selectedSet = useMemo(() => new Set(selected), [selected])
   const options = useMemo(
@@ -401,11 +414,11 @@ export const DshChoicePickerImpl = defineComponent<{
     if (readOnly) return
     setTouched(true)
     if (isSingle) {
-      props.setValue?.([val])
+      commitSelected([val])
       return
     }
     const next = selectedSet.has(val) ? selected.filter((v) => v !== val) : [...selected, val]
-    props.setValue?.(next)
+    commitSelected(next)
   }
 
   return (
@@ -450,7 +463,7 @@ export const DshChoicePickerImpl = defineComponent<{
           onChange={(val) => {
             if (readOnly) return
             setTouched(true)
-            props.setValue?.([val])
+            commitSelected([val])
           }}
         >
           {filtered.map((opt) => (
@@ -487,11 +500,17 @@ export const DshSliderImpl = defineComponent<{
   isValid?: boolean
   validationErrors?: readonly string[]
   weight?: number
-}>(SliderApi, function DshSlider({ props }) {
+}>(SliderApi, function DshSlider({ props, context }) {
   const msg = useRuntimeMessages()
   const readOnly = useContext(SurfaceReadOnlyContext)
   const { submitAttempted } = useContext(SurfaceValidationContext)
   const [touched, setTouched] = useState(false)
+  const [sliderVal, commitValue] = useWritablePropState(
+    context,
+    'value',
+    props.value,
+    props.setValue,
+  )
   const min = typeof props.min === 'number' && Number.isFinite(props.min) ? props.min : 0
   const rawMax = typeof props.max === 'number' && Number.isFinite(props.max) ? props.max : 100
   const max = rawMax > min ? rawMax : min + 1
@@ -499,7 +518,7 @@ export const DshSliderImpl = defineComponent<{
     typeof props.steps === 'number' && Number.isFinite(props.steps) && props.steps > 0
       ? Number(((max - min) / props.steps).toFixed(6))
       : 1
-  const rawVal = Number(props.value ?? min)
+  const rawVal = Number(sliderVal ?? min)
   const value = Number.isFinite(rawVal) ? Math.min(max, Math.max(min, rawVal)) : min
   const pct = ((value - min) / (max - min)) * 100
   const label = props.label ? String(props.label) : ''
@@ -521,7 +540,7 @@ export const DshSliderImpl = defineComponent<{
           setTouched(true)
           const raw = Array.isArray(next) ? (next[0] ?? min) : next
           const cleaned = Number.isFinite(raw) ? Number(raw.toFixed(6)) : min
-          props.setValue?.(cleaned)
+          commitValue(cleaned)
         }}
       >
         <div className={css.sliderHeader}>
@@ -552,16 +571,17 @@ export const DshDateTimeInputImpl = defineComponent<{
   isValid?: boolean
   validationErrors?: readonly string[]
   weight?: number
-}>(DateTimeInputApi, function DshDateTimeInput({ props }) {
+}>(DateTimeInputApi, function DshDateTimeInput({ props, context }) {
   const inputId = useId()
   const dark = useDarkTheme()
   const readOnly = useContext(SurfaceReadOnlyContext)
   const { submitAttempted } = useContext(SurfaceValidationContext)
   const [touched, setTouched] = useState(false)
+  const [rawVal, commitValue] = useWritablePropState(context, 'value', props.value, props.setValue)
   const enableTime = Boolean(props.enableTime)
   const enableDate = props.enableDate === true || (props.enableDate !== false && !enableTime)
   const type = enableDate && enableTime ? 'datetime-local' : enableTime ? 'time' : 'date'
-  const normalizedVal = formatNativeTemporalValue(props.value, type)
+  const normalizedVal = formatNativeTemporalValue(rawVal, type)
   const normalizedMin =
     typeof props.min === 'string' && props.min.trim() !== ''
       ? formatNativeTemporalValue(props.min, type) || undefined
@@ -605,7 +625,7 @@ export const DshDateTimeInputImpl = defineComponent<{
           onBlur={() => setTouched(true)}
           onChange={(nextVal) => {
             setTouched(true)
-            props.setValue?.(nextVal)
+            commitValue(nextVal)
           }}
         />
       </div>
@@ -647,6 +667,7 @@ function handleListboxArrowKey(
 
 export function DshSelectView({
   props,
+  context,
 }: {
   props: {
     label?: unknown
@@ -659,6 +680,7 @@ export function DshSelectView({
     validationErrors?: readonly string[]
     weight?: number
   }
+  context?: unknown
 }) {
   const fieldId = useId()
   const msg = useRuntimeMessages()
@@ -672,13 +694,14 @@ export function DshSelectView({
   const triggerRef = useRef<HTMLButtonElement | null>(null)
   const popoverRef = useRef<HTMLDivElement | null>(null)
   const [popoverBox, setPopoverBox] = useState<ClampedPopoverBox | null>(null)
+  const [rawVal, commitValue] = useWritablePropState(context, 'value', props.value, props.setValue)
 
   if (readOnly && open) {
     setOpen(false)
   }
 
   const options = useMemo(() => normalizeSelectOptions(props.options), [props.options])
-  const selectedVal = props.value === undefined || props.value === null ? '' : String(props.value)
+  const selectedVal = rawVal === undefined || rawVal === null ? '' : String(rawVal)
   const activeOption = useMemo(
     () => options.find((opt) => opt.value === selectedVal),
     [options, selectedVal],
@@ -733,7 +756,7 @@ export function DshSelectView({
   const commitSelect = (val: string) => {
     if (readOnly) return
     setTouched(true)
-    props.setValue?.(val)
+    commitValue(val)
     setOpen(false)
     setQuery('')
   }
@@ -907,6 +930,7 @@ export const DshSelectImpl = defineComponent<{
 
 export function DshSegmentedView({
   props,
+  context,
 }: {
   props: {
     label?: unknown
@@ -917,19 +941,26 @@ export function DshSegmentedView({
     validationErrors?: readonly string[]
     weight?: number
   }
+  context?: unknown
 }) {
   const segId = useId()
   const msg = useRuntimeMessages()
   const readOnly = useContext(SurfaceReadOnlyContext)
   const { submitAttempted } = useContext(SurfaceValidationContext)
   const [touched, setTouched] = useState(false)
+  const [rawSegVal, commitValue] = useWritablePropState(
+    context,
+    'value',
+    props.value,
+    props.setValue,
+  )
 
   const options = useMemo(() => normalizeSelectOptions(props.options), [props.options])
   const segOptions = useMemo(
     () => options.map((opt) => ({ value: opt.value, label: opt.label, title: opt.description })),
     [options],
   )
-  const rawVal = props.value === undefined || props.value === null ? '' : String(props.value)
+  const rawVal = rawSegVal === undefined || rawSegVal === null ? '' : String(rawSegVal)
   const activeVal = options.some((opt) => opt.value === rawVal) ? rawVal : ''
 
   const label = props.label ? String(props.label) : ''
@@ -987,7 +1018,7 @@ export function DshSegmentedView({
                   onClick={() => {
                     if (readOnly) return
                     setTouched(true)
-                    props.setValue?.(opt.value)
+                    commitValue(opt.value)
                   }}
                 >
                   {opt.label}
@@ -1007,7 +1038,7 @@ export function DshSegmentedView({
             onChange={(next) => {
               if (readOnly) return
               setTouched(true)
-              props.setValue?.(next)
+              commitValue(next)
             }}
           />
         </div>
@@ -1028,6 +1059,7 @@ export const DshSegmentedImpl = defineComponent<{
 
 export function DshSwitchView({
   props,
+  context,
 }: {
   props: {
     label?: unknown
@@ -1038,10 +1070,12 @@ export function DshSwitchView({
     validationErrors?: readonly string[]
     weight?: number
   }
+  context?: unknown
 }) {
   const readOnly = useContext(SurfaceReadOnlyContext)
   const { submitAttempted } = useContext(SurfaceValidationContext)
   const [touched, setTouched] = useState(false)
+  const [rawVal, commitValue] = useWritablePropState(context, 'value', props.value, props.setValue)
 
   const label = props.label ? String(props.label) : ''
   const description =
@@ -1050,14 +1084,14 @@ export function DshSwitchView({
     String(props.description) !== ''
       ? String(props.description)
       : ''
-  const checked = Boolean(props.value)
+  const checked = Boolean(rawVal)
   const showError = !readOnly && (touched || submitAttempted) && props.isValid === false
   const err = showError ? props.validationErrors?.[0] : undefined
 
   const handleToggle = (next: boolean) => {
     if (readOnly) return
     setTouched(true)
-    props.setValue?.(next)
+    commitValue(next)
   }
 
   return (

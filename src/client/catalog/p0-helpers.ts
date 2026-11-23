@@ -32,6 +32,7 @@ export interface NormalizedDiffAnnotation {
 
 export interface NormalizedDiffFile {
   readonly path: string
+  readonly filePath?: string | undefined
   readonly title: string
   readonly before: string
   readonly after: string
@@ -42,14 +43,27 @@ export interface NormalizedDiffFile {
 
 const VALID_ANNOTATION_TONES = new Set<string>(['info', 'warning', 'danger', 'success'])
 
+function parsePositiveLineNumber(raw: unknown): number | undefined {
+  if (typeof raw === 'number') {
+    return Number.isFinite(raw) && raw >= 1 ? Math.trunc(raw) : undefined
+  }
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim()
+    if (trimmed === '') return undefined
+    const n = Number(trimmed)
+    return Number.isFinite(n) && n >= 1 ? Math.trunc(n) : undefined
+  }
+  return undefined
+}
+
 export function normalizeDiffAnnotations(raw: unknown): readonly NormalizedDiffAnnotation[] {
   if (!Array.isArray(raw)) return []
   const out: NormalizedDiffAnnotation[] = []
   for (const item of raw) {
     if (typeof item !== 'object' || item === null) continue
     const rec = item as Record<string, unknown>
-    const lineNum = Number(rec.line)
-    if (!Number.isFinite(lineNum) || lineNum < 1) continue
+    const lineNum = parsePositiveLineNumber(rec.line)
+    if (lineNum === undefined) continue
     const msg = String(rec.message ?? rec.text ?? rec.comment ?? '').trim()
     if (msg === '') continue
     const rawTone = typeof rec.tone === 'string' ? rec.tone.trim().toLowerCase() : 'info'
@@ -57,7 +71,7 @@ export function normalizeDiffAnnotations(raw: unknown): readonly NormalizedDiffA
       ? (rawTone as DiffAnnotationTone)
       : 'info'
     out.push({
-      line: Math.trunc(lineNum),
+      line: lineNum,
       side: rec.side === 'before' ? 'before' : 'after',
       author:
         rec.author !== undefined && rec.author !== null && String(rec.author).trim() !== ''
@@ -76,17 +90,21 @@ export function normalizeDiffFiles(raw: unknown): readonly NormalizedDiffFile[] 
   raw.forEach((item, idx) => {
     if (typeof item !== 'object' || item === null) return
     const rec = item as Record<string, unknown>
-    const path = String(rec.path ?? rec.filePath ?? rec.title ?? `file-${idx + 1}`).trim()
+    const rawFilePath = rec.path ?? rec.filePath
+    const filePath =
+      typeof rawFilePath === 'string' && rawFilePath.trim() !== '' ? rawFilePath.trim() : undefined
+    const path = filePath ?? String(rec.title ?? `file-${idx + 1}`).trim()
     const title = String(rec.title ?? path).trim() || `file-${idx + 1}`
-    const lineRaw = Number(rec.line)
+    const lineNum = parsePositiveLineNumber(rec.line)
     out.push({
       path,
+      ...(filePath !== undefined ? { filePath } : {}),
       title,
       before: rec.before === undefined || rec.before === null ? '' : String(rec.before),
       after: rec.after === undefined || rec.after === null ? '' : String(rec.after),
       language:
         typeof rec.language === 'string' && rec.language.trim() !== '' ? rec.language : undefined,
-      line: Number.isFinite(lineRaw) && lineRaw >= 1 ? Math.trunc(lineRaw) : undefined,
+      line: lineNum,
       annotations: normalizeDiffAnnotations(rec.annotations),
     })
   })

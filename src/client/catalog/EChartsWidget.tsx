@@ -63,7 +63,7 @@ export interface ChartWidgetProps {
   readonly referenceX?: number | undefined
   readonly referenceXLabel?: string | undefined
   readonly bins?: number | undefined
-  readonly action?: ((options?: ActionDispatchOptions) => Promise<void>) | undefined
+  readonly action?: ((options?: ActionDispatchOptions) => Promise<unknown> | unknown) | undefined
   readonly weight?: number | undefined
 }
 

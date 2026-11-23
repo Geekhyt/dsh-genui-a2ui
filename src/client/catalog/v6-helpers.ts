@@ -10,6 +10,17 @@ export interface ClampedRangeState {
   readonly endPct: number
 }
 
+function parseOptionalFiniteNumber(raw: unknown): number | null {
+  if (typeof raw === 'number') return Number.isFinite(raw) ? raw : null
+  if (typeof raw === 'string') {
+    const t = raw.trim()
+    if (t === '') return null
+    const n = Number(t)
+    return Number.isFinite(n) ? n : null
+  }
+  return null
+}
+
 export function clampRangeSliderBounds(params: {
   readonly min: unknown
   readonly max: unknown
@@ -24,10 +35,10 @@ export function clampRangeSliderBounds(params: {
     typeof params.step === 'number' && Number.isFinite(params.step) && params.step > 0
       ? params.step
       : 1
-  const rawStart = Number(params.start)
-  const rawEnd = Number(params.end)
-  const clampedStart = Number.isFinite(rawStart) ? Math.min(max, Math.max(min, rawStart)) : min
-  const clampedEnd = Number.isFinite(rawEnd) ? Math.min(max, Math.max(min, rawEnd)) : max
+  const rawStart = parseOptionalFiniteNumber(params.start)
+  const rawEnd = parseOptionalFiniteNumber(params.end)
+  const clampedStart = rawStart !== null ? Math.min(max, Math.max(min, rawStart)) : min
+  const clampedEnd = rawEnd !== null ? Math.min(max, Math.max(min, rawEnd)) : max
   const start = Math.min(clampedStart, clampedEnd)
   const end = Math.max(clampedStart, clampedEnd)
   const span = max - min
@@ -154,23 +165,30 @@ export interface NormalizedSortableItem {
 export function normalizeSortableItems(raw: unknown): readonly NormalizedSortableItem[] {
   if (!Array.isArray(raw)) return []
   const out: NormalizedSortableItem[] = []
-  const seen = new Set<string>()
+  const occurrences = new Map<string, number>()
+  const nextStableId = (base: string): string => {
+    const count = (occurrences.get(base) ?? 0) + 1
+    occurrences.set(base, count)
+    return count === 1 ? base : `${base}__${count}`
+  }
   raw.forEach((entry, idx) => {
     if (typeof entry === 'string' || typeof entry === 'number') {
       const title = String(entry).trim()
       if (!title) return
-      let id = `sort_${idx}_${title}`
-      if (seen.has(id)) id = `${id}_${idx}`
-      seen.add(id)
+      const id = nextStableId(`sort_${title}`)
       out.push({ id, title, tone: 'neutral', raw: entry })
       return
     }
     if (typeof entry !== 'object' || entry === null) return
     const rec = entry as Record<string, unknown>
     const title = String(rec.title ?? rec.label ?? rec.name ?? `#${idx + 1}`).trim()
-    let id = String(rec.id ?? rec.key ?? `sort_${idx}`).trim() || `sort_${idx}`
-    if (seen.has(id)) id = `${id}_${idx}`
-    seen.add(id)
+    const explicitId =
+      rec.id !== undefined && rec.id !== null && String(rec.id).trim() !== ''
+        ? String(rec.id).trim()
+        : rec.key !== undefined && rec.key !== null && String(rec.key).trim() !== ''
+          ? String(rec.key).trim()
+          : `sort_${title}`
+    const id = nextStableId(explicitId)
     const subtitle =
       rec.subtitle !== undefined && rec.subtitle !== null && String(rec.subtitle).trim() !== ''
         ? String(rec.subtitle).trim()
@@ -254,8 +272,8 @@ export function clampRatingScore(rawValue: unknown, rawMax: unknown, allowHalf: 
     typeof rawMax === 'number' && Number.isFinite(rawMax)
       ? Math.max(3, Math.min(10, Math.trunc(rawMax)))
       : 5
-  const n = Number(rawValue)
-  if (!Number.isFinite(n) || n <= 0) return 0
+  const n = parseOptionalFiniteNumber(rawValue)
+  if (n === null || n <= 0) return 0
   const clamped = Math.min(max, Math.max(0, n))
   return allowHalf ? Math.round(clamped * 2) / 2 : Math.round(clamped)
 }
@@ -266,8 +284,8 @@ export function normalizeRatingLabels(raw: unknown): readonly string[] {
 }
 
 export function clampImageComparePosition(raw: unknown): number {
-  const n = Number(raw)
-  if (!Number.isFinite(n)) return 50
+  const n = parseOptionalFiniteNumber(raw)
+  if (n === null) return 50
   return Math.max(0, Math.min(100, Math.round(n)))
 }
 
@@ -312,11 +330,11 @@ export function buildAnnotatedTextSegments(
     const rec = item as Record<string, unknown>
     let start = -1
     let end = -1
-    const rawStart = Number(rec.start)
-    const rawEnd = Number(rec.end)
+    const rawStart = parseOptionalFiniteNumber(rec.start)
+    const rawEnd = parseOptionalFiniteNumber(rec.end)
     if (
-      Number.isFinite(rawStart) &&
-      Number.isFinite(rawEnd) &&
+      rawStart !== null &&
+      rawEnd !== null &&
       rawStart >= 0 &&
       rawEnd > rawStart &&
       rawStart < sourceText.length

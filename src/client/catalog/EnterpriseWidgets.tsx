@@ -39,12 +39,10 @@ import {
 import {
   type ChildRef,
   defineComponent,
-  ModalCloseContext,
   renderChildRef,
-  runSurfaceAction,
-  SurfaceActionStatusContext,
   SurfaceReadOnlyContext,
   SurfaceValidationContext,
+  useSurfaceActionRunner,
   weightStyle,
 } from './widget-helpers.tsx'
 
@@ -316,11 +314,11 @@ export const DshApprovalCardImpl = defineComponent<{
   approveAction?: ((options?: ActionDispatchOptions) => unknown) | undefined
   rejectAction?: ((options?: ActionDispatchOptions) => unknown) | undefined
   weight?: number
-}>(ApprovalCardApi, function DshApprovalCard({ props }) {
+}>(ApprovalCardApi, function DshApprovalCard({ props, context }) {
   const msg = useRuntimeMessages()
   const readOnly = useContext(SurfaceReadOnlyContext)
-  const closeModal = useContext(ModalCloseContext)
-  const getActionStatus = useContext(SurfaceActionStatusContext)
+  const runApprove = useSurfaceActionRunner(context, props.approveAction, 'approveAction')
+  const runReject = useSurfaceActionRunner(context, props.rejectAction, 'rejectAction')
   const { markSubmitAttempted } = useContext(SurfaceValidationContext)
   const severity = props.severity ?? 'high'
   const title = props.title !== undefined && props.title !== null ? String(props.title) : ''
@@ -431,32 +429,24 @@ export const DshApprovalCardImpl = defineComponent<{
               variant="outline"
               disabled={!canReject}
               onClick={() => {
+                if (!runReject) return
                 markSubmitAttempted()
                 setDecision('rejected')
-                const rejectFn = props.rejectAction
-                void runSurfaceAction(
-                  () =>
-                    rejectFn?.({
-                      metadata: {
-                        extensions: {
-                          dshSelection: {
-                            source: 'approvalCard',
-                            label: title,
-                            series: 'rejected',
-                            scope,
-                            severity,
-                            decision: 'rejected',
-                          },
-                        },
+                void runReject({
+                  metadata: {
+                    extensions: {
+                      dshSelection: {
+                        source: 'approvalCard',
+                        label: title,
+                        series: 'rejected',
+                        scope,
+                        severity,
+                        decision: 'rejected',
                       },
-                    }),
-                  getActionStatus,
-                ).then((ok) => {
-                  if (!ok) {
-                    setDecision(null)
-                    return
-                  }
-                  closeModal?.()
+                    },
+                  },
+                }).then((ok) => {
+                  if (!ok) setDecision(null)
                 })
               }}
             >
@@ -469,33 +459,25 @@ export const DshApprovalCardImpl = defineComponent<{
               variant="primary"
               disabled={!canApprove}
               onClick={() => {
+                if (!runApprove) return
                 markSubmitAttempted()
                 setDecision('approved')
-                const approveFn = props.approveAction
-                void runSurfaceAction(
-                  () =>
-                    approveFn?.({
-                      metadata: {
-                        extensions: {
-                          dshSelection: {
-                            source: 'approvalCard',
-                            label: title,
-                            series: 'approved',
-                            scope,
-                            severity,
-                            acknowledged,
-                            decision: 'approved',
-                          },
-                        },
+                void runApprove({
+                  metadata: {
+                    extensions: {
+                      dshSelection: {
+                        source: 'approvalCard',
+                        label: title,
+                        series: 'approved',
+                        scope,
+                        severity,
+                        acknowledged,
+                        decision: 'approved',
                       },
-                    }),
-                  getActionStatus,
-                ).then((ok) => {
-                  if (!ok) {
-                    setDecision(null)
-                    return
-                  }
-                  closeModal?.()
+                    },
+                  },
+                }).then((ok) => {
+                  if (!ok) setDecision(null)
                 })
               }}
             >
@@ -521,9 +503,10 @@ export const DshApiEndpointImpl = defineComponent<{
   responseBody?: unknown
   action?: ((options?: ActionDispatchOptions) => Promise<void>) | undefined
   weight?: number
-}>(ApiEndpointApi, function DshApiEndpoint({ props }) {
+}>(ApiEndpointApi, function DshApiEndpoint({ props, context }) {
   const msg = useRuntimeMessages()
   const readOnly = useContext(SurfaceReadOnlyContext)
+  const runAction = useSurfaceActionRunner(context, props.action)
   const method = props.method ?? 'GET'
   const pathStr = props.path !== undefined && props.path !== null ? String(props.path) : '/'
   const routeTokens = useMemo(() => tokenizeEndpointPath(pathStr), [pathStr])
@@ -565,7 +548,7 @@ export const DshApiEndpointImpl = defineComponent<{
     markCopiedCurl()
   }
 
-  const canAct = !readOnly && typeof props.action === 'function'
+  const canAct = !readOnly && Boolean(runAction)
 
   return (
     <div className={css.apiCard} style={weightStyle(props.weight, 240)} data-a2ui-apiendpoint="">
@@ -610,7 +593,7 @@ export const DshApiEndpointImpl = defineComponent<{
               size="sm"
               variant="outline"
               onClick={() => {
-                void props.action?.({
+                void runAction?.({
                   metadata: {
                     extensions: {
                       dshSelection: {
@@ -705,14 +688,15 @@ export const DshScheduleImpl = defineComponent<{
   now?: unknown
   action?: ((options?: ActionDispatchOptions) => Promise<void>) | undefined
   weight?: number
-}>(ScheduleApi, function DshSchedule({ props }) {
+}>(ScheduleApi, function DshSchedule({ props, context }) {
   const msg = useRuntimeMessages()
   const readOnly = useContext(SurfaceReadOnlyContext)
+  const runAction = useSurfaceActionRunner(context, props.action)
   const model = useMemo(
     () => normalizeScheduleItems(props.items, props.range, props.now),
     [props.items, props.range, props.now],
   )
-  const canAct = !readOnly && typeof props.action === 'function'
+  const canAct = !readOnly && Boolean(runAction)
   const title =
     props.title !== undefined && props.title !== null && String(props.title) !== ''
       ? String(props.title)
@@ -781,7 +765,7 @@ export const DshScheduleImpl = defineComponent<{
                     onClick={
                       canAct
                         ? () => {
-                            void props.action?.({
+                            void runAction?.({
                               metadata: {
                                 extensions: {
                                   dshSelection: {
@@ -842,9 +826,10 @@ export const DshResultImpl = defineComponent<{
   action?: ((options?: ActionDispatchOptions) => Promise<void>) | undefined
   child?: ChildRef
   weight?: number
-}>(ResultApi, function DshResult({ props, buildChild }) {
+}>(ResultApi, function DshResult({ props, buildChild, context }) {
   const msg = useRuntimeMessages()
   const readOnly = useContext(SurfaceReadOnlyContext)
+  const runAction = useSurfaceActionRunner(context, props.action)
   const status = props.status ?? 'info'
   const title =
     props.title !== undefined && props.title !== null ? String(props.title) : msg.resultEmptyDefault
@@ -854,7 +839,7 @@ export const DshResultImpl = defineComponent<{
     () => (props.meta ? normalizeKeyValueItems(props.meta, false) : []),
     [props.meta],
   )
-  const canAct = !readOnly && typeof props.action === 'function'
+  const canAct = !readOnly && Boolean(runAction)
   const rawCtaLabel =
     props.actionLabel !== undefined && props.actionLabel !== null
       ? String(props.actionLabel).trim()
@@ -906,7 +891,7 @@ export const DshResultImpl = defineComponent<{
             size="sm"
             variant={status === 'empty' ? 'outline' : 'primary'}
             onClick={() => {
-              void props.action?.({
+              void runAction?.({
                 metadata: {
                   extensions: {
                     dshSelection: {
@@ -940,9 +925,10 @@ export const DshEntityHeaderImpl = defineComponent<{
   actionLabel?: unknown
   action?: ((options?: ActionDispatchOptions) => Promise<void>) | undefined
   weight?: number
-}>(EntityHeaderApi, function DshEntityHeader({ props }) {
+}>(EntityHeaderApi, function DshEntityHeader({ props, context }) {
   const msg = useRuntimeMessages()
   const readOnly = useContext(SurfaceReadOnlyContext)
+  const runAction = useSurfaceActionRunner(context, props.action)
   const title = props.title !== undefined && props.title !== null ? String(props.title) : ''
   const subtitle =
     props.subtitle !== undefined && props.subtitle !== null ? String(props.subtitle) : ''
@@ -974,7 +960,7 @@ export const DshEntityHeaderImpl = defineComponent<{
             ? 'pending'
             : null
 
-  const canAct = !readOnly && typeof props.action === 'function'
+  const canAct = !readOnly && Boolean(runAction)
   const rawCtaLabel =
     props.actionLabel !== undefined && props.actionLabel !== null
       ? String(props.actionLabel).trim()
@@ -1017,7 +1003,7 @@ export const DshEntityHeaderImpl = defineComponent<{
             size="sm"
             variant="outline"
             onClick={() => {
-              void props.action?.({
+              void runAction?.({
                 metadata: {
                   extensions: {
                     dshSelection: {

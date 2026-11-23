@@ -34,17 +34,31 @@ import {
   reorderListItems,
 } from './v6-helpers.ts'
 import {
+  areExternalValuesEqual,
   defineComponent,
-  isLocalFunctionAction,
   isSafeImageUrl,
   isWritableProp,
-  ModalCloseContext,
-  runSurfaceAction,
-  SurfaceActionStatusContext,
   SurfaceReadOnlyContext,
   SurfaceValidationContext,
+  useSurfaceActionRunner,
+  useWritablePropState,
   weightStyle,
 } from './widget-helpers.tsx'
+
+interface KvDraftRow {
+  readonly id: number
+  readonly key: string
+  readonly value: string
+  readonly sensitive: boolean
+}
+
+function serializeKvSnapshot(raw: unknown): string {
+  try {
+    return JSON.stringify(raw) ?? ''
+  } catch {
+    return ''
+  }
+}
 
 export const DshRangeSliderImpl = defineComponent<{
   label?: unknown
@@ -60,17 +74,24 @@ export const DshRangeSliderImpl = defineComponent<{
   isValid?: boolean
   validationErrors?: readonly string[]
   weight?: number
-}>(RangeSliderApi, function DshRangeSlider({ props }) {
+}>(RangeSliderApi, function DshRangeSlider({ props, context }) {
   const msg = useRuntimeMessages()
   const readOnly = useContext(SurfaceReadOnlyContext)
   const { submitAttempted } = useContext(SurfaceValidationContext)
   const [touched, setTouched] = useState(false)
+  const [startVal, commitStart] = useWritablePropState(
+    context,
+    'start',
+    props.start,
+    props.setStart,
+  )
+  const [endVal, commitEnd] = useWritablePropState(context, 'end', props.end, props.setEnd)
 
   const state = clampRangeSliderBounds({
     min: props.min,
     max: props.max,
-    start: props.start,
-    end: props.end,
+    start: startVal,
+    end: endVal,
     step: props.step,
   })
   const label = props.label !== undefined && props.label !== null ? String(props.label) : ''
@@ -80,8 +101,8 @@ export const DshRangeSliderImpl = defineComponent<{
   const err = showError ? props.validationErrors?.[0] : undefined
   const fmt = (n: number) => `${prefix}${n}${unit}`
 
-  const fillLeft = `calc(${state.startPct}% + ${(11 - 0.22 * state.startPct).toFixed(2)}px)`
-  const fillRight = `calc(${100 - state.endPct}% + ${(11 - 0.22 * (100 - state.endPct)).toFixed(2)}px)`
+  const fillLeft = `calc(${state.startPct}% + ${(9 - 0.18 * state.startPct).toFixed(2)}px)`
+  const fillRight = `calc(${100 - state.endPct}% + ${(9 - 0.18 * (100 - state.endPct)).toFixed(2)}px)`
 
   return (
     <div
@@ -91,7 +112,7 @@ export const DshRangeSliderImpl = defineComponent<{
     >
       <div className={css.sliderHeader}>
         {label ? <span className={css.label}>{label}</span> : <span />}
-        <span className={css.sliderVal}>
+        <span className={css.sliderOutput}>
           {fmt(state.start)} – {fmt(state.end)}
         </span>
       </div>
@@ -117,7 +138,7 @@ export const DshRangeSliderImpl = defineComponent<{
             setTouched(true)
             const next = Number(e.target.value)
             if (Number.isFinite(next)) {
-              props.setStart?.(Math.min(next, state.end))
+              commitStart(Math.min(next, state.end))
             }
           }}
         />
@@ -136,7 +157,7 @@ export const DshRangeSliderImpl = defineComponent<{
             setTouched(true)
             const next = Number(e.target.value)
             if (Number.isFinite(next)) {
-              props.setEnd?.(Math.max(next, state.start))
+              commitEnd(Math.max(next, state.start))
             }
           }}
         />
@@ -164,8 +185,7 @@ export const DshChecklistImpl = defineComponent<{
 }>(ChecklistApi, function DshChecklist({ props, context }) {
   const msg = useRuntimeMessages()
   const readOnly = useContext(SurfaceReadOnlyContext)
-  const closeModal = useContext(ModalCloseContext)
-  const getActionStatus = useContext(SurfaceActionStatusContext)
+  const runAction = useSurfaceActionRunner(context, props.action)
   const { submitAttempted, markSubmitAttempted } = useContext(SurfaceValidationContext)
   const [touched, setTouched] = useState(false)
 
@@ -175,11 +195,20 @@ export const DshChecklistImpl = defineComponent<{
     () => items.filter((it) => it.defaultChecked).map((it) => it.id),
     [items],
   )
-  const [localChecked, setLocalChecked] = useState<readonly string[]>(defaultCheckedIds)
-  const [prevItemsRef, setPrevItemsRef] = useState(props.items)
-  if (!hasWritableValue && !touched && prevItemsRef !== props.items) {
-    setPrevItemsRef(props.items)
-    setLocalChecked(defaultCheckedIds)
+  const externalCheckedIds = useMemo(
+    () => (Array.isArray(props.value) ? props.value.map(String) : null),
+    [props.value],
+  )
+  const seedCheckedIds = externalCheckedIds ?? defaultCheckedIds
+  const [localChecked, setLocalChecked] = useState<readonly string[]>(seedCheckedIds)
+  const [prevSeedChecked, setPrevSeedChecked] = useState<readonly string[]>(seedCheckedIds)
+  if (
+    !hasWritableValue &&
+    (externalCheckedIds !== null || !touched) &&
+    !areExternalValuesEqual(prevSeedChecked, seedCheckedIds)
+  ) {
+    setPrevSeedChecked(seedCheckedIds)
+    setLocalChecked(seedCheckedIds)
   }
 
   const activeCheckedList = hasWritableValue
@@ -210,31 +239,23 @@ export const DshChecklistImpl = defineComponent<{
   }
 
   const handleAction = () => {
-    if (readOnly || typeof props.action !== 'function') return
+    if (readOnly || !runAction) return
     if (blockedByRequired || props.isValid === false) {
       setTouched(true)
       markSubmitAttempted()
       return
     }
-    const localFn = isLocalFunctionAction(context)
-    const actionFn = props.action
-    void runSurfaceAction(
-      () =>
-        actionFn({
-          metadata: {
-            extensions: {
-              dshSelection: {
-                source: 'checklist',
-                checked: [...checkedSet],
-                done: summary.done,
-                total: summary.total,
-              },
-            },
+    void runAction({
+      metadata: {
+        extensions: {
+          dshSelection: {
+            source: 'checklist',
+            checked: [...checkedSet],
+            done: summary.done,
+            total: summary.total,
           },
-        }),
-      getActionStatus,
-    ).then((ok) => {
-      if (!localFn && ok) closeModal?.()
+        },
+      },
     })
   }
 
@@ -333,15 +354,15 @@ export const DshSortableListImpl = defineComponent<{
 }>(SortableListApi, function DshSortableList({ props, context }) {
   const msg = useRuntimeMessages()
   const readOnly = useContext(SurfaceReadOnlyContext)
-  const closeModal = useContext(ModalCloseContext)
-  const getActionStatus = useContext(SurfaceActionStatusContext)
+  const runAction = useSurfaceActionRunner(context, props.action)
 
   const hasWritableItems = isWritableProp(context, 'items', props.setItems)
   const propItems = useMemo(() => normalizeSortableItems(props.items), [props.items])
+  const propItemsSnap = useMemo(() => serializeKvSnapshot(props.items), [props.items])
   const [localItems, setLocalItems] = useState(propItems)
-  const [prevPropRef, setPrevPropRef] = useState(props.items)
-  if (!hasWritableItems && prevPropRef !== props.items) {
-    setPrevPropRef(props.items)
+  const [prevPropSnap, setPrevPropSnap] = useState(propItemsSnap)
+  if (!hasWritableItems && prevPropSnap !== propItemsSnap) {
+    setPrevPropSnap(propItemsSnap)
     setLocalItems(propItems)
   }
   const activeItems = hasWritableItems ? propItems : localItems
@@ -365,24 +386,16 @@ export const DshSortableListImpl = defineComponent<{
   }
 
   const handleDispatch = () => {
-    if (readOnly || typeof props.action !== 'function') return
-    const localFn = isLocalFunctionAction(context)
-    const actionFn = props.action
-    void runSurfaceAction(
-      () =>
-        actionFn({
-          metadata: {
-            extensions: {
-              dshSelection: {
-                source: 'sortableList',
-                items: activeItems.map((it) => it.raw),
-              },
-            },
+    if (readOnly || !runAction) return
+    void runAction({
+      metadata: {
+        extensions: {
+          dshSelection: {
+            source: 'sortableList',
+            items: activeItems.map((it) => it.raw),
           },
-        }),
-      getActionStatus,
-    ).then((ok) => {
-      if (!localFn && ok) closeModal?.()
+        },
+      },
     })
   }
 
@@ -495,13 +508,33 @@ export const DshKvEditorImpl = defineComponent<{
   const isObjectBacked =
     typeof props.items === 'object' && props.items !== null && !Array.isArray(props.items)
   const propRows = useMemo(() => normalizeKvEditorRows(props.items), [props.items])
-  const [localRows, setLocalRows] = useState(propRows)
-  const [prevPropRef, setPrevPropRef] = useState(props.items)
-  if (!hasWritableItems && prevPropRef !== props.items) {
-    setPrevPropRef(props.items)
-    setLocalRows(propRows)
+  const extSnap = useMemo(() => serializeKvSnapshot(props.items), [props.items])
+  const [draftState, setDraftState] = useState<{
+    readonly rows: readonly KvDraftRow[]
+    readonly nextId: number
+    readonly lastExtSnap: string
+    readonly lastCommitSnap: string | null
+  }>(() => ({
+    rows: propRows.map((r, idx) => ({ ...r, id: idx + 1 })),
+    nextId: propRows.length + 1,
+    lastExtSnap: extSnap,
+    lastCommitSnap: null,
+  }))
+  if (draftState.lastExtSnap !== extSnap) {
+    if (draftState.lastCommitSnap !== null && extSnap === draftState.lastCommitSnap) {
+      setDraftState((prev) => ({ ...prev, lastExtSnap: extSnap, lastCommitSnap: null }))
+    } else {
+      let idCursor = draftState.nextId
+      const synced = propRows.map((r) => ({ ...r, id: idCursor++ }))
+      setDraftState({
+        rows: synced,
+        nextId: idCursor,
+        lastExtSnap: extSnap,
+        lastCommitSnap: null,
+      })
+    }
   }
-  const rows = hasWritableItems ? propRows : localRows
+  const rows = draftState.rows
   const maxItems =
     typeof props.maxItems === 'number' && Number.isFinite(props.maxItems)
       ? Math.max(1, Math.min(100, Math.trunc(props.maxItems)))
@@ -520,15 +553,16 @@ export const DshKvEditorImpl = defineComponent<{
   const showError = !readOnly && (touched || submitAttempted) && props.isValid === false
   const err = showError ? props.validationErrors?.[0] : undefined
 
-  const commitRows = (nextRows: readonly { readonly key: string; readonly value: string }[]) => {
+  const commitRows = (nextRows: readonly KvDraftRow[], nextId = draftState.nextId) => {
     setTouched(true)
-    const normalized = nextRows.map((r) => ({
+    const normalized: KvDraftRow[] = nextRows.map((r) => ({
+      id: r.id,
       key: r.key,
       value: r.value,
       sensitive: isKvKeySensitive(r.key),
     }))
     if (!hasWritableItems) {
-      setLocalRows(normalized)
+      setDraftState((prev) => ({ ...prev, rows: normalized, nextId }))
       return
     }
     if (isObjectBacked) {
@@ -542,10 +576,15 @@ export const DshKvEditorImpl = defineComponent<{
           configurable: true,
         })
       }
+      const snap = serializeKvSnapshot(obj)
+      setDraftState((prev) => ({ ...prev, rows: normalized, nextId, lastCommitSnap: snap }))
       props.setItems?.(obj)
       return
     }
-    props.setItems?.(normalized.map((r) => ({ key: r.key, value: r.value })))
+    const arr = normalized.map((r) => ({ key: r.key, value: r.value }))
+    const snap = serializeKvSnapshot(arr)
+    setDraftState((prev) => ({ ...prev, rows: normalized, nextId, lastCommitSnap: snap }))
+    props.setItems?.(arr)
   }
 
   const nextAddedKey = (): string => {
@@ -565,7 +604,21 @@ export const DshKvEditorImpl = defineComponent<{
             <button
               type="button"
               className={css.diffCopyBtn}
-              onClick={() => commitRows([...rows, { key: nextAddedKey(), value: '' }])}
+              onClick={() => {
+                const newKey = nextAddedKey()
+                commitRows(
+                  [
+                    ...rows,
+                    {
+                      id: draftState.nextId,
+                      key: newKey,
+                      value: '',
+                      sensitive: isKvKeySensitive(newKey),
+                    },
+                  ],
+                  draftState.nextId + 1,
+                )
+              }}
             >
               + {addLabel}
             </button>
@@ -575,13 +628,21 @@ export const DshKvEditorImpl = defineComponent<{
           <div className={css.emptyCell}>{msg.kvEditorEmpty}</div>
         ) : (
           <div className={css.kvEditorList}>
-            <div className={css.kvEditorColHeads} aria-hidden="true">
+            <div
+              className={css.kvEditorColHeads}
+              data-readonly={readOnly ? 'true' : undefined}
+              aria-hidden="true"
+            >
               <span>{keyLabel}</span>
               <span>{valueLabel}</span>
-              <span />
+              {!readOnly ? <span /> : null}
             </div>
             {rows.map((row, idx) => (
-              <div key={idx} className={css.kvEditorRow}>
+              <div
+                key={row.id}
+                className={css.kvEditorRow}
+                data-readonly={readOnly ? 'true' : undefined}
+              >
                 <input
                   type="text"
                   className={css.kvEditorInput}
@@ -591,7 +652,9 @@ export const DshKvEditorImpl = defineComponent<{
                   aria-label={`${keyLabel} #${idx + 1}`}
                   onChange={(e) => {
                     if (readOnly) return
-                    const next = rows.map((r, i) => (i === idx ? { ...r, key: e.target.value } : r))
+                    const next = rows.map((r) =>
+                      r.id === row.id ? { ...r, key: e.target.value } : r,
+                    )
                     commitRows(next)
                   }}
                 />
@@ -604,8 +667,8 @@ export const DshKvEditorImpl = defineComponent<{
                   aria-label={`${valueLabel} #${idx + 1}`}
                   onChange={(e) => {
                     if (readOnly) return
-                    const next = rows.map((r, i) =>
-                      i === idx ? { ...r, value: e.target.value } : r,
+                    const next = rows.map((r) =>
+                      r.id === row.id ? { ...r, value: e.target.value } : r,
                     )
                     commitRows(next)
                   }}
@@ -615,7 +678,7 @@ export const DshKvEditorImpl = defineComponent<{
                     type="button"
                     className={css.kvEditorDelBtn}
                     aria-label={msg.kvEditorRemoveAria}
-                    onClick={() => commitRows(rows.filter((_, i) => i !== idx))}
+                    onClick={() => commitRows(rows.filter((r) => r.id !== row.id))}
                   >
                     ×
                   </button>
@@ -668,18 +731,19 @@ export const DshRatingImpl = defineComponent<{
   isValid?: boolean
   validationErrors?: readonly string[]
   weight?: number
-}>(RatingApi, function DshRating({ props }) {
+}>(RatingApi, function DshRating({ props, context }) {
   const msg = useRuntimeMessages()
   const readOnly = useContext(SurfaceReadOnlyContext)
   const { submitAttempted } = useContext(SurfaceValidationContext)
   const [touched, setTouched] = useState(false)
+  const [rawVal, commitVal] = useWritablePropState(context, 'value', props.value, props.setValue)
 
   const max =
     typeof props.max === 'number' && Number.isFinite(props.max)
       ? Math.max(3, Math.min(10, Math.trunc(props.max)))
       : 5
   const allowHalf = Boolean(props.allowHalf)
-  const score = clampRatingScore(props.value, max, allowHalf)
+  const score = clampRatingScore(rawVal, max, allowHalf)
   const variant = props.variant === 'scale' ? 'scale' : 'star'
   const labels = useMemo(() => normalizeRatingLabels(props.labels), [props.labels])
   const label = props.label !== undefined && props.label !== null ? String(props.label) : ''
@@ -690,7 +754,7 @@ export const DshRatingImpl = defineComponent<{
   const selectScore = (next: number) => {
     if (readOnly) return
     setTouched(true)
-    props.setValue?.(next)
+    commitVal(next)
   }
 
   return (
@@ -859,8 +923,7 @@ export const DshAnnotationTextImpl = defineComponent<{
 }>(AnnotationTextApi, function DshAnnotationText({ props, context }) {
   const msg = useRuntimeMessages()
   const readOnly = useContext(SurfaceReadOnlyContext)
-  const closeModal = useContext(ModalCloseContext)
-  const getActionStatus = useContext(SurfaceActionStatusContext)
+  const runAction = useSurfaceActionRunner(context, props.action)
 
   const sourceText = props.text !== undefined && props.text !== null ? String(props.text) : ''
   const { segments, legend } = useMemo(
@@ -869,30 +932,22 @@ export const DshAnnotationTextImpl = defineComponent<{
   )
   const title = props.title !== undefined && props.title !== null ? String(props.title) : ''
   const showLegend = props.showLegend !== false && legend.length > 0
-  const clickable = !readOnly && typeof props.action === 'function'
+  const clickable = !readOnly && Boolean(runAction)
 
   const triggerSpan = (ann: Extract<(typeof segments)[number], { kind: 'mark' }>['annotation']) => {
-    if (!clickable || typeof props.action !== 'function') return
-    const localFn = isLocalFunctionAction(context)
-    const actionFn = props.action
-    void runSurfaceAction(
-      () =>
-        actionFn({
-          metadata: {
-            extensions: {
-              dshSelection: {
-                source: 'annotationText',
-                text: ann.text,
-                label: ann.label,
-                note: ann.note,
-                sourceId: ann.sourceId,
-              },
-            },
+    if (!clickable || !runAction) return
+    void runAction({
+      metadata: {
+        extensions: {
+          dshSelection: {
+            source: 'annotationText',
+            text: ann.text,
+            label: ann.label,
+            note: ann.note,
+            sourceId: ann.sourceId,
           },
-        }),
-      getActionStatus,
-    ).then((ok) => {
-      if (!localFn && ok) closeModal?.()
+        },
+      },
     })
   }
 

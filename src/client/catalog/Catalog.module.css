@@ -135,6 +135,11 @@
     .codeWrap,
     .switchCard,
     .choiceGroup,
+    .checklistCard,
+    .sortableCard,
+    .kvEditorCard,
+    .imageCompareCard,
+    .annotationCard,
     .containerHost,
     .imageWrap:not([data-avatar="true"]),
     [data-a2ui-modal-root],
@@ -179,6 +184,11 @@
     .codeWrap,
     .switchCard,
     .choiceGroup,
+    .checklistCard,
+    .sortableCard,
+    .kvEditorCard,
+    .imageCompareCard,
+    .annotationCard,
     .containerHost,
     .imageWrap:not([data-avatar="true"]),
     [data-a2ui-modal-root],
@@ -930,6 +940,12 @@
   .td {
     padding: 6px 7px;
   }
+
+  .proExpandCell,
+  .proCheckCell {
+    padding-left: 4px;
+    padding-right: 4px;
+  }
 }
 
 .emptyCell {
@@ -1267,6 +1283,14 @@
   width: 38px;
 }
 
+.diffGutterCol {
+  width: 38px;
+}
+
+.diffMarkerCol {
+  width: 20px;
+}
+
 .diffGutter[data-kind="add"],
 .diffSplitCell[data-kind="add"] {
   background: color-mix(in srgb, var(--dsw-alias-state-success-primary, #10b981) 12%, transparent);
@@ -1323,16 +1347,35 @@
 }
 
 @container (max-width: 440px) {
+  .diffUnifiedTable {
+    table-layout: fixed;
+  }
+
   .diffSplitGutterCol {
     width: 30px;
   }
 
+  .diffGutterCol {
+    width: 24px;
+  }
+
+  .diffMarkerCol {
+    width: 18px;
+  }
+
   .diffGutter {
-    width: 30px;
-    min-width: 30px;
+    width: 24px;
+    min-width: 24px;
     padding: 1px 3px;
     font-size: 9.5px;
     overflow: hidden;
+  }
+
+  .diffMarker {
+    width: 18px;
+    min-width: 18px;
+    padding: 1px 2px;
+    box-sizing: border-box;
   }
 
   .diffSplitCell {
@@ -3863,6 +3906,11 @@
 
 .proCheckCell {
   width: 34px;
+  min-width: 34px;
+  max-width: 34px;
+  box-sizing: border-box;
+  padding-left: 4px;
+  padding-right: 4px;
   text-align: center;
 }
 
@@ -5172,8 +5220,9 @@
   width: 30px;
   min-width: 30px;
   max-width: 30px;
+  box-sizing: border-box;
   text-align: center;
-  padding-left: 6px;
+  padding-left: 4px;
   padding-right: 4px;
 }
 
@@ -5985,6 +6034,13 @@
     justify-content: flex-end;
     box-sizing: border-box;
   }
+
+  .generalTreeBarTrack {
+    flex: 1 1 80px;
+    width: auto;
+    min-width: 56px;
+    max-width: 180px;
+  }
 }
 
 .tableCodeChip {
@@ -6050,10 +6106,74 @@
 
 .tableStickyCol {
   position: sticky;
-  left: 0;
+  left: var(--sticky-left, 0px);
   z-index: 2;
-  background: var(--dsw-alias-bg-layer-1, var(--dsw-alias-bg-base, light-dark(#ffffff, #18191e)));
+  background-color: var(
+    --dsw-alias-bg-layer-1,
+    var(--dsw-alias-bg-base, light-dark(#ffffff, #18191e))
+  );
+}
+
+.tableStickyColEdge {
   box-shadow: 1px 0 0 var(--dsw-alias-border-l1, rgba(128, 128, 128, 0.16));
+}
+
+.th.tableStickyCol {
+  z-index: 3;
+  background-color: var(
+    --dsw-alias-bg-layer-1,
+    var(--dsw-alias-bg-base, light-dark(#ffffff, #18191e))
+  );
+  background-image: linear-gradient(
+    var(--dsw-alias-bg-layer-2, rgba(128, 128, 128, 0.06)),
+    var(--dsw-alias-bg-layer-2, rgba(128, 128, 128, 0.06))
+  );
+}
+
+.thSortable.tableStickyCol:hover {
+  background-color: var(
+    --dsw-alias-bg-layer-1,
+    var(--dsw-alias-bg-base, light-dark(#ffffff, #18191e))
+  );
+  background-image: linear-gradient(
+    var(--dsw-alias-interactive-bg-hover, rgba(128, 128, 128, 0.12)),
+    var(--dsw-alias-interactive-bg-hover, rgba(128, 128, 128, 0.12))
+  );
+}
+
+.proSummaryRow .td.tableStickyCol {
+  background-color: var(
+    --dsw-alias-bg-layer-1,
+    var(--dsw-alias-bg-base, light-dark(#ffffff, #18191e))
+  );
+  background-image: linear-gradient(
+    var(--dsw-alias-bg-layer-2, rgba(128, 128, 128, 0.06)),
+    var(--dsw-alias-bg-layer-2, rgba(128, 128, 128, 0.06))
+  );
+}
+
+.table tbody tr:hover .td.tableStickyCol {
+  background-color: var(
+    --dsw-alias-bg-layer-1,
+    var(--dsw-alias-bg-base, light-dark(#ffffff, #18191e))
+  );
+  background-image: linear-gradient(
+    var(--dsw-alias-interactive-bg-hover, rgba(128, 128, 128, 0.05)),
+    var(--dsw-alias-interactive-bg-hover, rgba(128, 128, 128, 0.05))
+  );
+}
+
+.trSelected .td.tableStickyCol,
+.trInteractive:hover .td.tableStickyCol,
+.trInteractive:focus-visible .td.tableStickyCol {
+  background-color: var(
+    --dsw-alias-bg-layer-1,
+    var(--dsw-alias-bg-base, light-dark(#ffffff, #18191e))
+  );
+  background-image: linear-gradient(
+    color-mix(in srgb, var(--dsw-alias-brand-primary, #4d6bfe) 8%, transparent),
+    color-mix(in srgb, var(--dsw-alias-brand-primary, #4d6bfe) 8%, transparent)
+  );
 }
 
 .diffFileTabs {
@@ -6169,8 +6289,8 @@
 
 .rangeRail {
   position: absolute;
-  left: 11px;
-  right: 11px;
+  left: 9px;
+  right: 9px;
   height: 5px;
   border-radius: 999px;
   background: var(--dsw-alias-bg-layer-3, rgba(128, 128, 128, 0.22));
@@ -6580,6 +6700,11 @@
   min-width: 0;
 }
 
+.kvEditorColHeads[data-readonly="true"],
+.kvEditorRow[data-readonly="true"] {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
+}
+
 .kvEditorInput {
   width: 100%;
   min-width: 0;
@@ -6628,6 +6753,10 @@
     border-radius: 8px;
     border: 1px solid var(--dsw-alias-border-l1, rgba(128, 128, 128, 0.14));
     background: var(--dsw-alias-bg-layer-2, rgba(128, 128, 128, 0.03));
+  }
+
+  .kvEditorRow[data-readonly="true"] {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .kvEditorRow > :nth-child(1) {
@@ -6777,6 +6906,10 @@
 .imageCompareBadge {
   position: absolute;
   top: 8px;
+  max-width: calc(50% - 14px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-sizing: border-box;
   padding: 2px 8px;
   border-radius: 999px;
   background: rgba(15, 23, 42, 0.72);

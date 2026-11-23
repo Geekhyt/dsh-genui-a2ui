@@ -22,6 +22,16 @@ import {
   useSyncExternalStore,
 } from 'react'
 import { isDangerousObjectKey } from '../../shared/constants.ts'
+import {
+  collectKvSecretsFromValue,
+  collectSecretsFromNode,
+  extractBindingPointer,
+  isBindingExpression,
+  isScrubbableNumericSecret,
+  recordSecretPrimitive,
+  referencesObscuredPointer,
+  scrubSecretString,
+} from '../../shared/redaction.ts'
 import { enrichActionWithSelection, formatActionMessage } from '../action-protocol.ts'
 import { DSH_CLIENT_CATALOGS } from '../catalog/index.ts'
 import {
@@ -38,8 +48,6 @@ import { useRuntimeMessages } from '../i18n.ts'
 import { notifySubscribers } from '../notify.ts'
 import {
   computeMessagesFingerprint,
-  escapeJsonPointerSegment,
-  isPointerObscuredOrParent,
   loadSurfaceDraft,
   normalizePointerPath,
   removeSurfaceDraft,
@@ -70,6 +78,7 @@ export function collectObscuredPointers(
   surface: SurfaceModel<ReactCatalogComponent>,
 ): Set<string> | null {
   const pointers = new Set<string>()
+  const kvPointers = new Set<string>()
   try {
     const entries = surface?.componentsModel?.entries
     if (
@@ -83,16 +92,22 @@ export function collectObscuredPointers(
       return null
     }
     for (const [, comp] of entries) {
-      if (comp.type !== 'TextField') continue
-      const props = comp.properties
-      if (props?.variant !== 'obscured') continue
-      const val = props?.value
-      if (typeof val === 'object' && val !== null) {
-        const rawPath =
-          (val as { path?: unknown; '@path'?: unknown }).path ??
-          (val as { '@path'?: unknown })['@path']
-        if (typeof rawPath === 'string' && rawPath.trim() !== '') {
-          pointers.add(rawPath)
+      if (comp.type === 'TextField' && comp.properties?.variant === 'obscured') {
+        const ptr = extractBindingPointer(comp.properties?.value)
+        if (ptr !== null) pointers.add(ptr)
+      } else if (comp.type === 'KvEditor') {
+        const ptr = extractBindingPointer(comp.properties?.items)
+        if (ptr !== null) kvPointers.add(ptr)
+      }
+    }
+    if (kvPointers.size > 0) {
+      const scratchExact = new Set<string>()
+      const scratchSub = new Set<string>()
+      for (const kvPtr of kvPointers) {
+        const normKv = normalizePointerPath(kvPtr)
+        const kvVal = surface.dataModel.get(normKv)
+        if (kvVal !== undefined) {
+          collectKvSecretsFromValue(kvVal, normKv, pointers, scratchExact, scratchSub)
         }
       }
     }
@@ -124,101 +139,66 @@ export function readSanitizedDataModels(
 function collectBlockedSecretValues(
   surface: SurfaceModel<ReactCatalogComponent>,
   obscuredPointers: ReadonlySet<string>,
-): { readonly blocked: Set<string>; readonly failed: boolean } {
-  const blocked = new Set<string>()
-  const addSecret = (val: unknown) => {
-    if (typeof val === 'string' && val.length >= 4) {
-      blocked.add(val)
-    } else if (typeof val === 'number' && Number.isFinite(val)) {
-      const s = String(val)
-      if (s.length >= 4) blocked.add(s)
-    }
-  }
-  const collectLeaves = (node: unknown, path: string, depth: number) => {
-    if (depth > 8 || node === null || node === undefined) return
-    if (typeof node === 'string' || typeof node === 'number') {
-      if (isPointerObscuredOrParent(path, obscuredPointers)) {
-        addSecret(node)
-      }
-      return
-    }
-    if (Array.isArray(node)) {
-      for (let i = 0; i < node.length; i++) {
-        collectLeaves(node[i], path === '/' ? `/${i}` : `${path}/${i}`, depth + 1)
-      }
-      return
-    }
-    if (typeof node === 'object') {
-      for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
-        const seg = escapeJsonPointerSegment(k)
-        collectLeaves(v, path === '/' ? `/${seg}` : `${path}/${seg}`, depth + 1)
-      }
-    }
-  }
-  let hasRelative = false
+): {
+  readonly blockedExact: Set<string>
+  readonly blockedSubstrings: Set<string>
+  readonly failed: boolean
+} {
+  const blockedExact = new Set<string>()
+  const blockedSubstrings = new Set<string>()
   for (const pointer of obscuredPointers) {
-    if (!pointer.trim().startsWith('/')) {
-      hasRelative = true
-      continue
-    }
+    if (!pointer.trim().startsWith('/')) continue
     try {
       const secretVal = surface.dataModel.get(normalizePointerPath(pointer))
-      addSecret(secretVal)
+      recordSecretPrimitive(secretVal, blockedExact, blockedSubstrings, true)
     } catch {
-      return { blocked, failed: true }
+      return { blockedExact, blockedSubstrings, failed: true }
     }
   }
-  if (hasRelative) {
-    try {
-      collectLeaves(surface.dataModel.get('/'), '/', 0)
-    } catch {
-      return { blocked, failed: true }
-    }
+  try {
+    collectSecretsFromNode(
+      surface.dataModel.get('/'),
+      obscuredPointers,
+      blockedExact,
+      blockedSubstrings,
+      false,
+    )
+  } catch {
+    return { blockedExact, blockedSubstrings, failed: true }
   }
-  return { blocked, failed: false }
-}
-
-function scrubStringWithBlockedValues(
-  input: string,
-  blockedValues: ReadonlySet<string>,
-): string | undefined {
-  if (blockedValues.has(input)) return undefined
-  let out = input
-  for (const secret of blockedValues) {
-    if (secret.length >= 4 && out.includes(secret)) {
-      out = out.split(secret).join('[REDACTED]')
-    }
-  }
-  return out
+  return { blockedExact, blockedSubstrings, failed: false }
 }
 
 function stripObscuredFromContext(
   value: unknown,
   rawBinding: unknown,
   obscuredPointers: ReadonlySet<string>,
-  blockedValues: ReadonlySet<string>,
+  blockedExact: ReadonlySet<string>,
+  blockedSubstrings: ReadonlySet<string>,
   depth = 0,
 ): unknown {
   if (depth > 8) return undefined
-  if (typeof rawBinding === 'object' && rawBinding !== null && !Array.isArray(rawBinding)) {
-    const boundPath =
-      (rawBinding as { path?: unknown; '@path'?: unknown }).path ??
-      (rawBinding as { '@path'?: unknown })['@path']
-    if (typeof boundPath === 'string' && isPointerObscuredOrParent(boundPath, obscuredPointers)) {
-      return undefined
-    }
+  if (isBindingExpression(rawBinding) && referencesObscuredPointer(rawBinding, obscuredPointers)) {
+    return undefined
   }
   if (typeof value === 'string') {
-    return scrubStringWithBlockedValues(value, blockedValues)
+    return scrubSecretString(value, blockedExact, blockedSubstrings)
   }
-  if (typeof value === 'number' && Number.isFinite(value) && blockedValues.has(String(value))) {
+  if (typeof value === 'number' && isScrubbableNumericSecret(value, blockedExact)) {
     return undefined
   }
   if (Array.isArray(value)) {
     const rawArr = Array.isArray(rawBinding) ? rawBinding : undefined
     return value
       .map((item, idx) =>
-        stripObscuredFromContext(item, rawArr?.[idx], obscuredPointers, blockedValues, depth + 1),
+        stripObscuredFromContext(
+          item,
+          rawArr?.[idx],
+          obscuredPointers,
+          blockedExact,
+          blockedSubstrings,
+          depth + 1,
+        ),
       )
       .filter((item) => item !== undefined)
   }
@@ -233,7 +213,8 @@ function stripObscuredFromContext(
         v,
         rawObj !== undefined && Object.hasOwn(rawObj, k) ? rawObj[k] : undefined,
         obscuredPointers,
-        blockedValues,
+        blockedExact,
+        blockedSubstrings,
         depth + 1,
       )
       if (cleaned !== undefined) out[k] = cleaned
@@ -285,38 +266,32 @@ function deepMergePlainObjects(
   return out
 }
 
-export function sanitizeActionContextForSurface(
-  surface: SurfaceModel<ReactCatalogComponent> | undefined,
+interface SurfaceRedactionState {
+  readonly obscured: ReadonlySet<string>
+  readonly blockedExact: ReadonlySet<string>
+  readonly blockedSubstrings: ReadonlySet<string>
+}
+
+function resolveSurfaceRedactionState(
+  surface: SurfaceModel<ReactCatalogComponent>,
+): SurfaceRedactionState | null {
+  const obscured = collectObscuredPointers(surface)
+  if (obscured === null) return null
+  const { blockedExact, blockedSubstrings, failed } = collectBlockedSecretValues(surface, obscured)
+  if (failed) return null
+  return { obscured, blockedExact, blockedSubstrings }
+}
+
+function sanitizeActionContextWithState(
+  surface: SurfaceModel<ReactCatalogComponent>,
   action: ActionPayload,
+  state: SurfaceRedactionState,
 ): Record<string, unknown> {
   const rawContext = action.context ?? {}
-  if (surface === undefined) return sanitizeDataModel(rawContext)
-  const obscuredPointers = new Set<string>()
   let rawActionCtx: Record<string, unknown> | undefined
   try {
-    const entries = surface?.componentsModel?.entries
-    if (
-      entries === undefined ||
-      entries === null ||
-      typeof entries[Symbol.iterator] !== 'function'
-    ) {
-      console.error(
-        '[dsh-genui-a2ui] Failed to inspect obscured fields: surface.componentsModel.entries is unavailable',
-      )
-      return {}
-    }
+    const entries = surface.componentsModel.entries
     for (const [id, comp] of entries) {
-      if (comp.type === 'TextField' && comp.properties?.variant === 'obscured') {
-        const val = comp.properties?.value
-        if (typeof val === 'object' && val !== null) {
-          const rawPath =
-            (val as { path?: unknown; '@path'?: unknown }).path ??
-            (val as { '@path'?: unknown })['@path']
-          if (typeof rawPath === 'string' && rawPath.trim() !== '') {
-            obscuredPointers.add(rawPath.trim())
-          }
-        }
-      }
       if (id === action.sourceComponentId && action.sourceComponentId !== '') {
         const props = comp.properties as Record<string, unknown> | undefined
         if (props) {
@@ -348,53 +323,67 @@ export function sanitizeActionContextForSurface(
     console.error('[dsh-genui-a2ui] Failed to inspect obscured fields:', err)
     return {}
   }
-  if (obscuredPointers.size === 0) return sanitizeDataModel(rawContext)
-  const { blocked: blockedValues, failed } = collectBlockedSecretValues(surface, obscuredPointers)
-  if (failed) return {}
+  const { obscured, blockedExact, blockedSubstrings } = state
+  if (obscured.size === 0 && blockedExact.size === 0 && blockedSubstrings.size === 0) {
+    return sanitizeDataModel(rawContext)
+  }
   const stripped = stripObscuredFromContext(
     rawContext,
     rawActionCtx,
-    obscuredPointers,
-    blockedValues,
+    obscured,
+    blockedExact,
+    blockedSubstrings,
   )
   return sanitizeDataModel(
     typeof stripped === 'object' && stripped !== null && !Array.isArray(stripped) ? stripped : {},
   )
 }
 
-function sanitizeActionPayloadForSurface(
+export function sanitizeActionContextForSurface(
+  surface: SurfaceModel<ReactCatalogComponent> | undefined,
+  action: ActionPayload,
+): Record<string, unknown> {
+  if (surface === undefined) return sanitizeDataModel(action.context ?? {})
+  const state = resolveSurfaceRedactionState(surface)
+  if (state === null) return {}
+  return sanitizeActionContextWithState(surface, action, state)
+}
+
+export function sanitizeActionPayloadForSurface(
   surface: SurfaceModel<ReactCatalogComponent> | undefined,
   action: ActionPayload,
 ): ActionPayload {
-  const safeContext = sanitizeActionContextForSurface(surface, action)
-  const enriched = enrichActionWithSelection({ ...action, context: safeContext })
-  if (surface === undefined) return enriched
-  const obscured = collectObscuredPointers(surface)
-  if (obscured === null) {
+  if (surface === undefined) {
+    return enrichActionWithSelection({
+      ...action,
+      context: sanitizeDataModel(action.context ?? {}),
+    })
+  }
+  const state = resolveSurfaceRedactionState(surface)
+  if (state === null) {
+    const enriched = enrichActionWithSelection({ ...action, context: {} })
     return {
       ...enriched,
       context: {},
       ...(enriched.userMessage !== undefined ? { userMessage: undefined } : {}),
     }
   }
-  if (obscured.size === 0) return enriched
-  const { blocked, failed } = collectBlockedSecretValues(surface, obscured)
-  if (failed) {
-    return {
-      ...enriched,
-      context: {},
-      ...(enriched.userMessage !== undefined ? { userMessage: undefined } : {}),
-    }
+  const safeContext = sanitizeActionContextWithState(surface, action, state)
+  const enriched = enrichActionWithSelection({ ...action, context: safeContext })
+  const { obscured, blockedExact, blockedSubstrings } = state
+  if (obscured.size === 0 && blockedExact.size === 0 && blockedSubstrings.size === 0) {
+    return enriched
   }
   const safeUserMessage =
     typeof enriched.userMessage === 'string'
-      ? scrubStringWithBlockedValues(enriched.userMessage, blocked)
+      ? scrubSecretString(enriched.userMessage, blockedExact, blockedSubstrings)
       : undefined
   const safeEnrichedContext = stripObscuredFromContext(
     enriched.context ?? {},
     undefined,
     obscured,
-    blocked,
+    blockedExact,
+    blockedSubstrings,
   )
   return {
     ...enriched,
@@ -407,7 +396,6 @@ function sanitizeActionPayloadForSurface(
         !Array.isArray(safeEnrichedContext)
         ? safeEnrichedContext
         : {},
-      obscured,
     ),
   }
 }

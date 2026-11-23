@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { extname, join, relative, resolve } from 'node:path'
+import { dirname, extname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import ts from 'typescript'
 
@@ -269,6 +269,78 @@ export function checkCssInvariants(source, relPath) {
     }
   }
 
+  if (source.includes(':where(') && source.includes(':is(.row, .listHorizontal)')) {
+    const whereBlockRe = /:where\(([\s\S]*?)\)\s*\{([\s\S]*?)\}/g
+    const fullWidthClasses = new Map()
+    let wm = whereBlockRe.exec(source)
+    while (wm !== null) {
+      const body = wm[2] ?? ''
+      if (/\bwidth\s*:\s*100%\s*;/.test(body)) {
+        const selectorList = wm[1] ?? ''
+        const clsRe = /\.([A-Za-z_][A-Za-z0-9_-]*)/g
+        let cm = clsRe.exec(selectorList)
+        while (cm !== null) {
+          const cls = cm[1]
+          if (cls && !fullWidthClasses.has(cls)) {
+            const absIdx = wm.index + 7 + cm.index
+            fullWidthClasses.set(cls, source.slice(0, Math.max(0, absIdx)).split('\n').length)
+          }
+          cm = clsRe.exec(selectorList)
+        }
+      }
+      wm = whereBlockRe.exec(source)
+    }
+
+    if (fullWidthClasses.size > 0) {
+      const directCovered = new Set()
+      const wrappedCovered = new Set()
+      const directRuleRe =
+        /:is\(\.row,\s*\.listHorizontal\)\s*>\s*(?::is\(([\s\S]*?)\)|\.([A-Za-z_][A-Za-z0-9_-]*))/g
+      let dm = directRuleRe.exec(source)
+      while (dm !== null) {
+        if (dm[2]) {
+          directCovered.add(dm[2])
+        } else if (dm[1]) {
+          const clsRe = /\.([A-Za-z_][A-Za-z0-9_-]*)/g
+          let cm = clsRe.exec(dm[1])
+          while (cm !== null) {
+            if (cm[1]) directCovered.add(cm[1])
+            cm = clsRe.exec(dm[1])
+          }
+        }
+        dm = directRuleRe.exec(source)
+      }
+
+      const wrappedRuleRe =
+        /:is\(\.row,\s*\.listHorizontal\)\s*>\s*\*\s*>\s*(?::is\(([\s\S]*?)\)|\.([A-Za-z_][A-Za-z0-9_-]*))/g
+      let wrm = wrappedRuleRe.exec(source)
+      while (wrm !== null) {
+        if (wrm[2]) {
+          wrappedCovered.add(wrm[2])
+        } else if (wrm[1]) {
+          const clsRe = /\.([A-Za-z_][A-Za-z0-9_-]*)/g
+          let cm = clsRe.exec(wrm[1])
+          while (cm !== null) {
+            if (cm[1]) wrappedCovered.add(cm[1])
+            cm = clsRe.exec(wrm[1])
+          }
+        }
+        wrm = wrappedRuleRe.exec(source)
+      }
+
+      for (const [cls, line] of fullWidthClasses) {
+        if (!directCovered.has(cls) || !wrappedCovered.has(cls)) {
+          violations.push({
+            rule: 'css-row-flex-parity',
+            file: relPath,
+            line,
+            message: `".${cls}" declares width: 100% in :where(...) but is missing from :is(.row, .listHorizontal) direct/wrapped flex-basis rules.`,
+          })
+        }
+      }
+    }
+  }
+
   return violations
 }
 
@@ -498,6 +570,24 @@ export function checkTsInvariants(source, relPath) {
           )
         }
       }
+    }
+
+    if (
+      isCatalogTsx &&
+      relPath !== 'src/client/catalog/widget-helpers.tsx' &&
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      ts.isIdentifier(node.expression.expression) &&
+      node.expression.expression.text === 'props' &&
+      (node.expression.name.text === 'action' ||
+        node.expression.name.text === 'approveAction' ||
+        node.expression.name.text === 'rejectAction')
+    ) {
+      report(
+        'catalog-unified-action-runner',
+        node,
+        `Invoke props.${node.expression.name.text} through useSurfaceActionRunner or runSurfaceAction instead of calling it directly.`,
+      )
     }
 
     if (
@@ -772,14 +862,61 @@ export function checkLocaleParity(rootDir) {
   return violations
 }
 
+export function checkCssModuleKeyExists(tsxSource, cssSource, relPath) {
+  const violations = []
+  const imp = /import\s+([A-Za-z_$][A-Za-z0-9_$]*)\s+from\s+['"][^'"]+\.module\.css['"]/.exec(
+    tsxSource,
+  )
+  if (!imp) return violations
+  const cssVar = imp[1]
+  const defined = new Set()
+  for (const m of cssSource.matchAll(/\.([A-Za-z_][A-Za-z0-9_-]*)/g)) {
+    if (m[1]) defined.add(m[1])
+  }
+  const refRe = new RegExp(`(?<![.\\w$])${cssVar}\\.([A-Za-z_][A-Za-z0-9_-]*)`, 'g')
+  let rm = refRe.exec(tsxSource)
+  while (rm !== null) {
+    const key = rm[1]
+    if (key && !defined.has(key)) {
+      const line = tsxSource.slice(0, rm.index).split('\n').length
+      violations.push({
+        rule: 'css-module-key-exists',
+        file: relPath,
+        line,
+        message: `${cssVar}.${key} does not match any class defined in the imported CSS module.`,
+      })
+    }
+    rm = refRe.exec(tsxSource)
+  }
+  return violations
+}
+
 export function runAllInvariantChecks(rootDir) {
   const violations = []
   const tsFiles = collectFiles(rootDir, 'src', (f) => /\.(?:ts|tsx)$/.test(f))
   const cssFiles = collectFiles(rootDir, 'src/client', (f) => f.endsWith('.css'))
+  const cssCache = new Map()
 
   for (const abs of tsFiles) {
     const rel = normalizeRel(rootDir, abs)
-    violations.push(...checkTsInvariants(readFileSync(abs, 'utf8'), rel))
+    const src = readFileSync(abs, 'utf8')
+    violations.push(...checkTsInvariants(src, rel))
+    if (rel.endsWith('.tsx')) {
+      const imp = /import\s+[A-Za-z_$][A-Za-z0-9_$]*\s+from\s+['"]([^'"]+\.module\.css)['"]/.exec(
+        src,
+      )
+      if (imp?.[1]) {
+        const cssAbs = resolve(dirname(abs), imp[1])
+        if (existsSync(cssAbs)) {
+          let cssSrc = cssCache.get(cssAbs)
+          if (cssSrc === undefined) {
+            cssSrc = readFileSync(cssAbs, 'utf8')
+            cssCache.set(cssAbs, cssSrc)
+          }
+          violations.push(...checkCssModuleKeyExists(src, cssSrc, rel))
+        }
+      }
+    }
   }
   for (const abs of cssFiles) {
     const rel = normalizeRel(rootDir, abs)
@@ -807,7 +944,7 @@ function runCli() {
     process.exit(1)
   }
   console.log(
-    `[check-invariants] OK: 14 architectural invariant rules verified across ${report.filesScanned} source/CSS file(s) and locale tables.`,
+    `[check-invariants] OK: 17 architectural invariant rules verified across ${report.filesScanned} source/CSS file(s) and locale tables.`,
   )
 }
 

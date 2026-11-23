@@ -37,12 +37,9 @@ import {
 import {
   type ChildRef,
   defineComponent,
-  isLocalFunctionAction,
-  ModalCloseContext,
   renderChildRef,
-  runSurfaceAction,
-  SurfaceActionStatusContext,
   SurfaceReadOnlyContext,
+  useSurfaceActionRunner,
   weightStyle,
 } from './widget-helpers.tsx'
 
@@ -108,8 +105,7 @@ export const DshComparisonImpl = defineComponent<{
 }>(ComparisonApi, function DshComparison({ props, context }) {
   const msg = useRuntimeMessages()
   const readOnly = useContext(SurfaceReadOnlyContext)
-  const closeModal = useContext(ModalCloseContext)
-  const getActionStatus = useContext(SurfaceActionStatusContext)
+  const runAction = useSurfaceActionRunner(context, props.action)
   const { options, rows } = useMemo(
     () => normalizeComparisonData(props.options, props.rows),
     [props.options, props.rows],
@@ -117,38 +113,28 @@ export const DshComparisonImpl = defineComponent<{
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
   const activeSelectedKey =
     selectedKey !== null && options.some((o) => o.key === selectedKey) ? selectedKey : null
-  const canAct = !readOnly && typeof props.action === 'function'
+  const canAct = !readOnly && Boolean(runAction)
   const title = props.title !== undefined && props.title !== null ? String(props.title) : ''
 
   if (options.length === 0) return null
 
   const handleSelectOption = (opt: (typeof options)[number]) => {
-    if (!canAct) return
+    if (!canAct || !runAction) return
     setSelectedKey(opt.key)
-    const localFn = isLocalFunctionAction(context)
-    const actionFn = props.action
-    void runSurfaceAction(
-      () =>
-        actionFn?.({
-          metadata: {
-            extensions: {
-              dshSelection: {
-                source: 'comparison',
-                label: opt.title,
-                value: opt.badge ?? opt.subtitle,
-                key: opt.key,
-                option: opt.raw,
-              },
-            },
+    void runAction({
+      metadata: {
+        extensions: {
+          dshSelection: {
+            source: 'comparison',
+            label: opt.title,
+            value: opt.badge ?? opt.subtitle,
+            key: opt.key,
+            option: opt.raw,
           },
-        }),
-      getActionStatus,
-    ).then((ok) => {
-      if (!ok) {
-        setSelectedKey(null)
-        return
-      }
-      if (!localFn) closeModal?.()
+        },
+      },
+    }).then((ok) => {
+      if (!ok) setSelectedKey(null)
     })
   }
 
@@ -279,9 +265,10 @@ export const DshLogViewerImpl = defineComponent<{
   maxHeight?: number
   action?: ((options?: ActionDispatchOptions) => Promise<void>) | undefined
   weight?: number
-}>(LogViewerApi, function DshLogViewer({ props }) {
+}>(LogViewerApi, function DshLogViewer({ props, context }) {
   const msg = useRuntimeMessages()
   const readOnly = useContext(SurfaceReadOnlyContext)
+  const runAction = useSurfaceActionRunner(context, props.action)
   const entries = useMemo(() => normalizeLogEntries(props.entries), [props.entries])
   const propDefaultLevel: 'all' | LogLevel = props.defaultLevel ?? 'all'
   const [prevDefaultLevel, setPrevDefaultLevel] = useState<'all' | LogLevel>(propDefaultLevel)
@@ -329,7 +316,7 @@ export const DshLogViewerImpl = defineComponent<{
   }, [entries, levelFilter, deferredQuery])
 
   const searchable = props.searchable !== false
-  const canAct = !readOnly && typeof props.action === 'function'
+  const canAct = !readOnly && Boolean(runAction)
   const title =
     props.title !== undefined && props.title !== null && String(props.title) !== ''
       ? String(props.title)
@@ -453,7 +440,7 @@ export const DshLogViewerImpl = defineComponent<{
                           size="sm"
                           variant="outline"
                           onClick={() => {
-                            void props.action?.({
+                            void runAction?.({
                               metadata: {
                                 extensions: {
                                   dshSelection: {
@@ -618,11 +605,12 @@ export const DshKanbanImpl = defineComponent<{
   title?: unknown
   action?: ((options?: ActionDispatchOptions) => Promise<void>) | undefined
   weight?: number
-}>(KanbanApi, function DshKanban({ props }) {
+}>(KanbanApi, function DshKanban({ props, context }) {
   const msg = useRuntimeMessages()
   const readOnly = useContext(SurfaceReadOnlyContext)
+  const runAction = useSurfaceActionRunner(context, props.action)
   const columns = useMemo(() => normalizeKanbanColumns(props.columns), [props.columns])
-  const canAct = !readOnly && typeof props.action === 'function'
+  const canAct = !readOnly && Boolean(runAction)
   const title = props.title !== undefined && props.title !== null ? String(props.title) : ''
 
   if (columns.length === 0) return null
@@ -664,7 +652,7 @@ export const DshKanbanImpl = defineComponent<{
                     onClick={
                       canAct
                         ? () => {
-                            void props.action?.({
+                            void runAction?.({
                               metadata: {
                                 extensions: {
                                   dshSelection: {
@@ -686,7 +674,7 @@ export const DshKanbanImpl = defineComponent<{
                         ? (e) => {
                             if (e.key === 'Enter' || e.key === ' ') {
                               e.preventDefault()
-                              void props.action?.({
+                              void runAction?.({
                                 metadata: {
                                   extensions: {
                                     dshSelection: {
@@ -745,11 +733,12 @@ export const DshSourceListImpl = defineComponent<{
   title?: unknown
   action?: ((options?: ActionDispatchOptions) => Promise<void>) | undefined
   weight?: number
-}>(SourceListApi, function DshSourceList({ props }) {
+}>(SourceListApi, function DshSourceList({ props, context }) {
   const msg = useRuntimeMessages()
   const readOnly = useContext(SurfaceReadOnlyContext)
+  const runAction = useSurfaceActionRunner(context, props.action)
   const items = useMemo(() => normalizeSourceItems(props.items), [props.items])
-  const canAct = !readOnly && typeof props.action === 'function'
+  const canAct = !readOnly && Boolean(runAction)
   const title =
     props.title !== undefined && props.title !== null && String(props.title) !== ''
       ? String(props.title)
@@ -789,7 +778,7 @@ export const DshSourceListImpl = defineComponent<{
                     type="button"
                     className={css.sourceTitleBtn}
                     onClick={() => {
-                      void props.action?.({
+                      void runAction?.({
                         metadata: {
                           extensions: {
                             dshSelection: {
@@ -949,10 +938,11 @@ export const DshServiceGraphImpl = defineComponent<{
   direction?: 'LR' | 'TB'
   action?: ((options?: ActionDispatchOptions) => Promise<void>) | undefined
   weight?: number
-}>(ServiceGraphApi, function DshServiceGraph({ props }) {
+}>(ServiceGraphApi, function DshServiceGraph({ props, context }) {
   const markerPrefix = useId().replace(/[^a-zA-Z0-9_-]/g, '')
   const msg = useRuntimeMessages()
   const readOnly = useContext(SurfaceReadOnlyContext)
+  const runAction = useSurfaceActionRunner(context, props.action)
   const direction = props.direction === 'TB' ? 'TB' : 'LR'
   const layout = useMemo(
     () => buildServiceGraphLayout(props.nodes, props.edges, direction),
@@ -961,7 +951,7 @@ export const DshServiceGraphImpl = defineComponent<{
   const viewportRef = useRef<HTMLDivElement | null>(null)
   const viewportW = useElementWidth(viewportRef)
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
-  const canAct = !readOnly && typeof props.action === 'function'
+  const canAct = !readOnly && Boolean(runAction)
   const title = props.title !== undefined && props.title !== null ? String(props.title) : ''
 
   const activeNode = useMemo(() => {
@@ -1186,7 +1176,7 @@ export const DshServiceGraphImpl = defineComponent<{
               size="sm"
               variant="outline"
               onClick={() => {
-                void props.action?.({
+                void runAction?.({
                   metadata: {
                     extensions: {
                       dshSelection: {
