@@ -37,6 +37,7 @@ import {
 } from './v3-helpers.ts'
 import {
   type ChildRef,
+  copyTextToClipboard,
   defineComponent,
   renderChildRef,
   SurfaceReadOnlyContext,
@@ -44,11 +45,7 @@ import {
   weightStyle,
 } from './widget-helpers.tsx'
 
-function copyToClipboardSafe(text: string): void {
-  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-    void navigator.clipboard.writeText(text).catch(() => {})
-  }
-}
+const VALID_LOG_LEVELS = new Set<string>(['all', 'error', 'warn', 'info', 'debug'])
 
 const SEARCH_ICON_14 = <DshSearchIcon size={14} />
 
@@ -274,7 +271,11 @@ export const DshLogViewerImpl = defineComponent<{
   const readOnly = useContext(SurfaceReadOnlyContext)
   const runAction = useSurfaceActionRunner(context, props.action)
   const entries = useMemo(() => normalizeLogEntries(props.entries), [props.entries])
-  const propDefaultLevel: 'all' | LogLevel = props.defaultLevel ?? 'all'
+  const rawDefaultLevel =
+    typeof props.defaultLevel === 'string' ? props.defaultLevel.trim().toLowerCase() : 'all'
+  const propDefaultLevel: 'all' | LogLevel = VALID_LOG_LEVELS.has(rawDefaultLevel)
+    ? (rawDefaultLevel as 'all' | LogLevel)
+    : 'all'
   const [prevDefaultLevel, setPrevDefaultLevel] = useState<'all' | LogLevel>(propDefaultLevel)
   const [levelFilter, setLevelFilter] = useState<'all' | LogLevel>(propDefaultLevel)
   if (prevDefaultLevel !== propDefaultLevel) {
@@ -346,7 +347,7 @@ export const DshLogViewerImpl = defineComponent<{
           `${e.time ? `${e.time} ` : ''}[${e.level.toUpperCase()}]${e.service ? ` [${e.service}]` : ''} ${e.message}${e.detail ? `\n${e.detail}` : ''}`,
       )
       .join('\n')
-    copyToClipboardSafe(text)
+    copyTextToClipboard(text)
     markCopiedAll()
   }
 
@@ -987,7 +988,7 @@ export const DshServiceGraphImpl = defineComponent<{
     [props.nodes, props.edges, direction],
   )
   const viewportRef = useRef<HTMLDivElement | null>(null)
-  const viewportW = useElementWidth(viewportRef)
+  const viewportW = useElementWidth(viewportRef, layout.nodes.length > 0)
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
   const canAct = !readOnly && Boolean(runAction)
   const title = props.title !== undefined && props.title !== null ? String(props.title) : ''

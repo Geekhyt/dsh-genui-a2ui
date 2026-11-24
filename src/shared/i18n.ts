@@ -16,6 +16,7 @@ export interface HostUiMessages {
   readonly invalidTierArg: (arg: string) => string
   readonly answerCommandDesc: string
   readonly missingPayload: string
+  readonly payloadTooLarge: string
   readonly invalidPayloadJson: string
   readonly noPendingAsk: string
   readonly askDefaultTitle: string
@@ -29,6 +30,7 @@ export const HOST_MESSAGES: Record<UiLocale, HostUiMessages> = {
     invalidTierArg: (arg) => `无效参数 "${arg}"，可选值：on | off | status（或不传参直接切换）`,
     answerCommandDesc: '提交正在等待输入的 A2UI 交互表单（内部桥接命令）',
     missingPayload: '缺少回传数据',
+    payloadTooLarge: '回传数据体积超过限制',
     invalidPayloadJson: '回传 JSON 解析失败',
     noPendingAsk: '当前会话没有待处理的 a2ui_ask 请求',
     askDefaultTitle: 'A2UI 交互提问',
@@ -42,6 +44,7 @@ export const HOST_MESSAGES: Record<UiLocale, HostUiMessages> = {
       `Invalid argument "${arg}". Expected: on | off | status (or omit to toggle)`,
     answerCommandDesc: 'Submit a pending A2UI interactive prompt (internal bridge command)',
     missingPayload: 'Missing response payload',
+    payloadTooLarge: 'Response payload exceeds size limit',
     invalidPayloadJson: 'Failed to parse response JSON',
     noPendingAsk: 'No pending a2ui_ask request in the current session',
     askDefaultTitle: 'A2UI interactive prompt',

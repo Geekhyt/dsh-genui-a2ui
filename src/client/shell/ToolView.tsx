@@ -120,6 +120,11 @@ export const A2uiToolView = memo(function A2uiToolView({
     return streamIds.length > 0 ? new Set(streamIds) : undefined
   }, [streamingSnapshot])
 
+  const settledVisibleIds = useMemo(() => {
+    const ids = settledMeta?.surfaceIds ?? []
+    return ids.length > 0 ? new Set(ids) : undefined
+  }, [settledMeta])
+
   const callSeq = useMemo(() => findCallSeq(chatSnapshot, callId), [chatSnapshot, callId])
 
   const liveMessages = useMemo(() => {
@@ -232,9 +237,7 @@ export const A2uiToolView = memo(function A2uiToolView({
         >
           <LazySurfaceGroupView
             messages={liveMessages}
-            visibleSurfaceIds={
-              settledMeta.surfaceIds.length > 0 ? new Set(settledMeta.surfaceIds) : undefined
-            }
+            visibleSurfaceIds={settledVisibleIds}
             sessionId={sessionId}
             variant="bare"
             streaming={false}
@@ -255,13 +258,7 @@ export const A2uiToolView = memo(function A2uiToolView({
       >
         <LazySurfaceGroupView
           messages={liveMessages}
-          visibleSurfaceIds={
-            phase !== 'result'
-              ? visibleIds
-              : settledMeta !== null && settledMeta.surfaceIds.length > 0
-                ? new Set(settledMeta.surfaceIds)
-                : undefined
-          }
+          visibleSurfaceIds={phase !== 'result' ? visibleIds : settledVisibleIds}
           title={title}
           sessionId={sessionId}
           streaming={phase !== 'result'}

@@ -75,6 +75,7 @@ const SECRET_SINGLE_WORDS = new Set([
   'secret',
   'passphrase',
   'passcode',
+  'passkey',
   'credential',
   'credentials',
   'authorization',
@@ -83,6 +84,7 @@ const SECRET_SINGLE_WORDS = new Set([
   'otp',
   'totp',
   'cvv',
+  'cvc',
   'jwt',
   'bearer',
   'oauth',
@@ -96,6 +98,8 @@ const SECRET_KEY_PREFIXES = new Set([
   'ssh',
   'signing',
   'encryption',
+  'encrypt',
+  'decrypt',
   'master',
   'client',
   'auth',
@@ -105,6 +109,21 @@ const SECRET_KEY_PREFIXES = new Set([
   'bearer',
   'csrf',
   'mfa',
+  'secret',
+  'deepseek',
+  'openai',
+  'anthropic',
+  'github',
+  'gitlab',
+  'stripe',
+  'aws',
+  'gcp',
+  'azure',
+  'slack',
+  'discord',
+  'webhook',
+  'license',
+  'bot',
 ])
 
 const SECRET_FORCE_NEIGHBORS = new Set([
@@ -129,6 +148,19 @@ const SECRET_FORCE_NEIGHBORS = new Set([
   'atm',
   'card',
   'account',
+  'secret',
+  'github',
+  'gitlab',
+  'stripe',
+  'aws',
+  'gcp',
+  'azure',
+  'slack',
+  'discord',
+  'webhook',
+  'bot',
+  'pat',
+  'personal',
 ])
 
 const TOKEN_BENIGN_WORDS = new Set([
@@ -148,16 +180,15 @@ const TOKEN_BENIGN_WORDS = new Set([
   'window',
   'prompt',
   'completion',
-  'input',
-  'output',
   'total',
   'cache',
   'cached',
   'per',
   'sec',
   'speed',
-  'budget',
 ])
+
+const TOKEN_DIRECTION_WORDS = new Set(['input', 'output'])
 
 const PIN_BENIGN_WORDS = new Set([
   'dock',
@@ -203,6 +234,13 @@ const KEY_QUALIFIER_WORDS = new Set([
   'prev',
   'current',
   'active',
+  'user',
+  'service',
+  'account',
+  'app',
+  'org',
+  'team',
+  'project',
 ])
 
 function hasPrecedingSecretKeyPrefix(words: readonly string[], keyIdx: number): boolean {
@@ -220,25 +258,124 @@ const PLURAL_SECRET_MAP: Record<string, string> = {
   secrets: 'secret',
   passphrases: 'passphrase',
   passcodes: 'passcode',
+  passkeys: 'passkey',
   credentials: 'credential',
   cookies: 'cookie',
   pins: 'pin',
   otps: 'otp',
   totps: 'totp',
   cvvs: 'cvv',
+  cvcs: 'cvc',
   jwts: 'jwt',
   keys: 'key',
 }
 
-const SECRET_COMPOUND_RE =
-  /(?:password|passwd|passphrase|passcode|secret|credential|authorization|cookie|totp|jwt)s?\d*$|(?:api|ssh|private|access|signing|master|client|encryption|auth|session|oauth)keys?\d*$|(?:access|refresh|auth|id|session|bearer|mfa|csrf|api|oauth)tokens?\d*$/
+const COMPOUND_SUBSTRING_ROOTS = [
+  'password',
+  'passphrase',
+  'passcode',
+  'passkey',
+  'credential',
+  'authorization',
+] as const
+
+const COMPOUND_SUFFIX_ROOTS = ['passwd', 'secret', 'cookie', 'totp', 'jwt'] as const
+
+const COMPOUND_KEY_PREFIXES = [
+  'api',
+  'ssh',
+  'private',
+  'access',
+  'signing',
+  'master',
+  'client',
+  'encryption',
+  'auth',
+  'session',
+  'oauth',
+  'secret',
+  'deepseek',
+  'openai',
+  'anthropic',
+  'github',
+  'gitlab',
+  'stripe',
+  'aws',
+  'gcp',
+  'azure',
+  'slack',
+  'webhook',
+  'license',
+] as const
+
+const COMPOUND_TOKEN_PREFIXES = [
+  'access',
+  'refresh',
+  'auth',
+  'id',
+  'session',
+  'bearer',
+  'mfa',
+  'csrf',
+  'api',
+  'oauth',
+  'secret',
+  'github',
+  'gitlab',
+  'stripe',
+  'slack',
+  'discord',
+  'bot',
+  'webhook',
+  'personal',
+  'pat',
+] as const
+
+const CJK_SECRET_RE =
+  /密码|密钥|秘钥|令牌|口令|私钥|通行码|授权码|(?:安全|登录|访问|认证|鉴权|身份|接口|账号|账户|用户)凭证/
+
+function stripTrailingDigits(raw: string): string {
+  let end = raw.length
+  while (end > 0) {
+    const code = raw.charCodeAt(end - 1)
+    if (code < 48 || code > 57) break
+    end -= 1
+  }
+  return end === raw.length ? raw : raw.slice(0, end)
+}
+
+function isCompoundSecretWord(raw: string): boolean {
+  const base = stripTrailingDigits(raw)
+  if (base.length < 5) return false
+  const singular = base.endsWith('s') ? base.slice(0, -1) : base
+  for (const root of COMPOUND_SUBSTRING_ROOTS) {
+    if (base.includes(root)) return true
+  }
+  for (const root of COMPOUND_SUFFIX_ROOTS) {
+    if (base.endsWith(root) || singular.endsWith(root)) return true
+  }
+  if (singular.endsWith('key') && singular.length > 3) {
+    const prefix = singular.slice(0, -3)
+    for (const p of COMPOUND_KEY_PREFIXES) {
+      if (prefix === p || prefix.endsWith(p)) return true
+    }
+  }
+  if (singular.endsWith('token') && singular.length > 5) {
+    const prefix = singular.slice(0, -5)
+    for (const p of COMPOUND_TOKEN_PREFIXES) {
+      if (prefix === p || prefix.endsWith(p)) return true
+    }
+  }
+  return false
+}
 
 function normalizeSecretWord(raw: string): string {
-  const noDigits = raw.replace(/\d+$/, '')
+  const noDigits = stripTrailingDigits(raw)
   return Object.hasOwn(PLURAL_SECRET_MAP, noDigits) ? PLURAL_SECRET_MAP[noDigits]! : noDigits
 }
 
 export function isSecretKey(key: string): boolean {
+  if (CJK_SECRET_RE.test(key)) return true
   const rawWords = key
     .replace(/([A-Z]+)([A-Z][a-z])/g, '$1_$2')
     .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
@@ -258,7 +395,12 @@ export function isSecretKey(key: string): boolean {
       if (hasForceNeighbor) return true
       if (w === 'tokens') continue
       const hasBenignNeighbor =
-        words.length > 1 && words.some((other, idx) => idx !== i && TOKEN_BENIGN_WORDS.has(other))
+        words.length > 1 &&
+        words.some(
+          (other, idx) =>
+            idx !== i &&
+            (TOKEN_BENIGN_WORDS.has(other) || (idx < i && TOKEN_DIRECTION_WORDS.has(other))),
+        )
       if (!hasBenignNeighbor) return true
       continue
     }
@@ -273,7 +415,7 @@ export function isSecretKey(key: string): boolean {
       continue
     }
     if (SECRET_SINGLE_WORDS.has(w)) return true
-    if (SECRET_COMPOUND_RE.test(raw)) return true
+    if (isCompoundSecretWord(raw)) return true
     if (w === 'key' && i > 0 && hasPrecedingSecretKeyPrefix(words, i)) return true
   }
   return false

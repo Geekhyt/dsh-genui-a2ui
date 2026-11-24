@@ -104,10 +104,17 @@ export const DshRangeSliderImpl = defineComponent<{
   const fillLeft = `calc(${state.startPct}% + ${(9 - 0.18 * state.startPct).toFixed(2)}px)`
   const fillRight = `calc(${100 - state.endPct}% + ${(9 - 0.18 * (100 - state.endPct)).toFixed(2)}px)`
 
-  const rawStartNum = typeof startVal === 'number' ? startVal : Number(startVal)
-  const rawEndNum = typeof endVal === 'number' ? endVal : Number(endVal)
-  const wasInverted =
-    Number.isFinite(rawStartNum) && Number.isFinite(rawEndNum) && rawStartNum > rawEndNum
+  const parseFiniteOpt = (v: unknown): number | null => {
+    if (typeof v === 'number') return Number.isFinite(v) ? v : null
+    if (typeof v === 'string' && v.trim() !== '') {
+      const n = Number(v.trim())
+      return Number.isFinite(n) ? n : null
+    }
+    return null
+  }
+  const rawStartNum = parseFiniteOpt(startVal)
+  const rawEndNum = parseFiniteOpt(endVal)
+  const wasInverted = rawStartNum !== null && rawEndNum !== null && rawStartNum > rawEndNum
 
   return (
     <div
@@ -236,7 +243,9 @@ export const DshChecklistImpl = defineComponent<{
   const activeCheckedList = hasWritableValue
     ? Array.isArray(props.value)
       ? props.value.map(String)
-      : []
+      : props.value === undefined
+        ? defaultCheckedIds
+        : []
     : localChecked
   const checkedSet = useMemo(() => new Set(activeCheckedList), [activeCheckedList])
   const summary = useMemo(() => computeChecklistSummary(items, checkedSet), [items, checkedSet])
@@ -902,7 +911,6 @@ export const DshImageCompareImpl = defineComponent<{
   weight?: number
 }>(ImageCompareApi, function DshImageCompare({ props }) {
   const msg = useRuntimeMessages()
-  const readOnly = useContext(SurfaceReadOnlyContext)
   const initialPos = clampImageComparePosition(props.initialPosition)
   const [prevInit, setPrevInit] = useState(initialPos)
   const [pos, setPos] = useState(initialPos)
@@ -990,11 +998,10 @@ export const DshImageCompareImpl = defineComponent<{
           min={0}
           max={100}
           value={pos}
-          disabled={readOnly}
           aria-label={msg.imageCompareSliderAria}
           className={css.imageCompareRange}
           onChange={(e) => {
-            if (!readOnly) setPos(clampImageComparePosition(e.target.value))
+            setPos(clampImageComparePosition(e.target.value))
           }}
         />
       </div>

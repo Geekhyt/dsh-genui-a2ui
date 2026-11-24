@@ -1,5 +1,5 @@
 import type { ActionPayload } from '@a2ui/web_core/v1_0'
-import { isDangerousObjectKey } from '../shared/constants.ts'
+import { isDangerousObjectKey, safeStringifyJson } from '../shared/constants.ts'
 import { resolveClientLocale, SHELL_MESSAGES } from '../shared/i18n.ts'
 import { sanitizeDataModel } from './persistence.ts'
 
@@ -143,7 +143,7 @@ export function formatActionMessage(
   }
   const cleanContext = sanitizeDataModel(action.context ?? {})
   if (Object.keys(cleanContext).length > 0) {
-    parts.push(`${msg.actionParamsPrefix}${JSON.stringify(cleanContext)}`)
+    parts.push(`${msg.actionParamsPrefix}${safeStringifyJson(cleanContext, 0)}`)
   }
   const cleanModels: Record<string, unknown> = {}
   if (dataModels !== undefined) {
@@ -173,7 +173,7 @@ export function formatActionMessage(
     }
   }
   if (Object.keys(cleanModels).length > 0) {
-    parts.push(`${msg.actionDataModelPrefix}${JSON.stringify(cleanModels)}`)
+    parts.push(`${msg.actionDataModelPrefix}${safeStringifyJson(cleanModels, 0)}`)
   }
   parts.push(msg.actionTrailingPrompt)
   return parts.join('\n')

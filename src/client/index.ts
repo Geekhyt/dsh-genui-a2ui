@@ -1,5 +1,11 @@
 import type { Context } from '@deepseek-ai/cordis'
-import { ANSWER_COMMAND, ASK_TOOL, RENDER_TOOL, TIER_COMMAND } from '../shared/constants.ts'
+import {
+  ANSWER_COMMAND,
+  ASK_TOOL,
+  RENDER_TOOL,
+  safeStringifyJson,
+  TIER_COMMAND,
+} from '../shared/constants.ts'
 import type { AskAnswerInput } from '../shared/wire-types.ts'
 import {
   A2UI_ACTION_NODE_ID,
@@ -149,10 +155,11 @@ async function executeSessionCommand(
   const session = binding?.session
   if (session === undefined || typeof session.command !== 'function') return false
   const res = await session.command(line)
-  if (res?.ok === false) return false
-  if (res?.value?.matched === false) return false
-  if (res?.value?.result?.kind === 'error') return false
-  return true
+  if (!res || typeof res !== 'object') return false
+  if (res.ok === false) return false
+  if (res.value?.matched === false) return false
+  if (res.value?.result?.kind === 'error') return false
+  return res.ok === true || res.value?.matched === true || res.value?.result?.kind === 'success'
 }
 
 function createFileOpener(
@@ -172,9 +179,10 @@ function createFileOpener(
         .binding?.(sessionId)
         ?.session?.projections?.faceOf?.('workingDirectory')
         ?.getSnapshot?.() ?? undefined
+    const workspaceRoot = cwd && cwd.trim() !== '' ? cwd : workingDir
     const resolvedPath = resolveSessionPath(workingDir, target.path)
-    if (!isPathWithinWorkspace(resolvedPath, cwd)) return
-    const address = fileAddressFor(sessionId, cwd, resolvedPath)
+    if (!isPathWithinWorkspace(resolvedPath, workspaceRoot)) return
+    const address = fileAddressFor(sessionId, workspaceRoot, resolvedPath)
     const opts = target.line !== undefined ? { params: { line: target.line } } : undefined
     const tryFallback = () => {
       try {
@@ -329,7 +337,7 @@ export function apply(ctx: Context, config: ClientConfig = {}): void {
                 executeSessionCommand(
                   host,
                   sessionId,
-                  `/${ANSWER_COMMAND} ${JSON.stringify(payload)}`,
+                  `/${ANSWER_COMMAND} ${safeStringifyJson(payload, 0)}`,
                 ),
             }),
           },

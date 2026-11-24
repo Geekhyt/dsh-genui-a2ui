@@ -15,9 +15,12 @@ let renderChain: Promise<unknown> = Promise.resolve()
 function readMermaidThemeColor(
   name: string,
   fallback: string,
+  dark: boolean,
   target?: HTMLElement | null,
 ): string {
   if (typeof document === 'undefined' || document.body === null) return fallback
+  const domIsDark = document.body.hasAttribute('data-ds-dark-theme')
+  if (domIsDark !== dark) return fallback
   const source = target ?? document.body ?? document.documentElement
   const value = getComputedStyle(source).getPropertyValue(name).trim()
   if (value === '') return fallback
@@ -59,7 +62,7 @@ function configureMermaidForHost(dark: boolean, target?: HTMLElement | null): vo
   const token = (name: string, fallback: string): string => {
     const hit = cache.get(name)
     if (hit !== undefined) return hit
-    const resolved = readMermaidThemeColor(name, fallback, target)
+    const resolved = readMermaidThemeColor(name, fallback, dark, target)
     cache.set(name, resolved)
     return resolved
   }
@@ -229,6 +232,7 @@ function configureMermaidForHost(dark: boolean, target?: HTMLElement | null): vo
       `.tick text, .sectionTitle { fill: ${textSecondary} !important; }`,
       `.titleText, .pieTitleText, .legend text { fill: ${textPrimary} !important; }`,
       '.taskTextOutsideRight, .taskTextOutsideLeft { font-weight: 500; }',
+      '.todayMarker { stroke-dasharray: 4 3 !important; stroke-opacity: 0.45 !important; stroke-width: 1.4px !important; }',
       `.mindmap-node text, .mindmap-node tspan, .mindmap-node .nodeLabel { fill: ${scaleLabel} !important; color: ${scaleLabel} !important; }`,
     ].join(' '),
   })
@@ -257,11 +261,14 @@ const FORBID_SVG_TAGS = [
   'animate',
   'animateTransform',
   'animateMotion',
+  'animateColor',
   'set',
+  'discard',
+  'handler',
 ]
 
 const UNSAFE_CSS_VALUE_RE =
-  /\\|@import\b|expression\s*\(|image-set\s*\(|javascript\s*:|vbscript\s*:/i
+  /\\|@import\b|expression\s*\(|(?:-webkit-)?image-set\s*\(|\bsrc\s*\(|javascript\s*:|vbscript\s*:/i
 const CSS_URL_START_RE = /\burl\s*\(/gi
 const SAFE_FRAGMENT_URL_RE =
   /^\s*(?:"(#[A-Za-z0-9_.:-]+)"|'(#[A-Za-z0-9_.:-]+)'|(#[A-Za-z0-9_.:-]+))\s*\)/
@@ -322,8 +329,15 @@ function isSelectorScopedToRoot(selector: string, rootId: string): boolean {
   const trimmed = selector.trim()
   const prefix = `#${rootId}`
   if (!trimmed.startsWith(prefix)) return false
-  const next = trimmed[prefix.length]
-  return next === undefined || /[\s>+~.:[#,]/.test(next)
+  const rest = trimmed.slice(prefix.length)
+  if (rest === '') return true
+  const next = rest[0]!
+  if (!/[\s>.:[#]/.test(next)) return false
+  if (/\s/.test(next)) {
+    const afterWs = rest.trimStart()
+    if (afterWs.startsWith('+') || afterWs.startsWith('~')) return false
+  }
+  return true
 }
 
 function filterScopedCssBlock(body: string, rootId: string): string {
@@ -352,7 +366,10 @@ function filterScopedCssBlock(body: string, rootId: string): string {
       .filter(Boolean)
     if (selectors.length === 0) continue
     if (selectors.every((s) => isSelectorScopedToRoot(s, rootId))) {
-      safeRules.push(rule)
+      const safeDecls = filterInlineStyleDeclarations(inner)
+      if (safeDecls !== '') {
+        safeRules.push(`${header}{${safeDecls}}`)
+      }
     }
   }
   return safeRules.join('\n')
@@ -382,7 +399,7 @@ function filterInlineStyleDeclarations(cssText: string): string {
 
 function sanitizeInlineStyleAttributes(svg: string): string {
   return svg.replace(/<(?:"[^"]*"|'[^']*'|[^'">])*>/g, (tag) => {
-    if (/^<\s*(?:\/|!|\?|(?:[a-z][a-z0-9._-]*:)?svg\b)/i.test(tag)) return tag
+    if (/^<\s*(?:\/|!|\?)/i.test(tag)) return tag
     if (!/\bstyle\s*=/i.test(tag)) return tag
     const openMatch = /^<([A-Za-z][A-Za-z0-9:._-]*)/.exec(tag)
     if (!openMatch) return tag
@@ -492,8 +509,10 @@ export function renderMermaidDiagram(
   rawCode: string,
   dark: boolean,
   target?: HTMLElement | null,
-): Promise<string> {
+  shouldProceed?: () => boolean,
+): Promise<string | null> {
   const job = renderChain.then(async () => {
+    if (shouldProceed && !shouldProceed()) return null
     const normalized = ensureFlowchartKind(rawCode)
     const kind = extractMermaidKind(normalized)
     if (!(ALLOWED_MERMAID_KINDS as readonly string[]).includes(kind)) {
@@ -501,11 +520,14 @@ export function renderMermaidDiagram(
     }
     configureMermaidForHost(dark, target)
     try {
-      return await renderIntoOffscreen(`dsh-a2ui-mermaid-${++renderSeq}`, normalized)
+      const svg = await renderIntoOffscreen(`dsh-a2ui-mermaid-${++renderSeq}`, normalized)
+      return shouldProceed && !shouldProceed() ? null : svg
     } catch (firstErr) {
+      if (shouldProceed && !shouldProceed()) return null
       const repaired = stripUnsafeDirectives(repairMermaidSource(normalized))
       if (repaired !== normalized) {
-        return await renderIntoOffscreen(`dsh-a2ui-mermaid-${++renderSeq}`, repaired)
+        const svg = await renderIntoOffscreen(`dsh-a2ui-mermaid-${++renderSeq}`, repaired)
+        return shouldProceed && !shouldProceed() ? null : svg
       }
       throw firstErr
     }

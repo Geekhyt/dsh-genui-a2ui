@@ -31,7 +31,11 @@ import {
   SumApi,
 } from '../../shared/catalog-schema.ts'
 import { resolveClientLocale } from '../../shared/i18n.ts'
-import { filterTableRowsByField, normalizeCrossFilterTokens } from './v4-helpers.ts'
+import {
+  filterTableRowsByField,
+  normalizeCrossFilterTokens,
+  parseFormattedNumericCell,
+} from './v4-helpers.ts'
 
 type FunctionImplList = readonly FunctionImplementation[]
 
@@ -85,7 +89,7 @@ function filterAggregateItems(
     }
   }
   if (recordRows.length > 0) {
-    return filterTableRowsByField(recordRows, filterField, tokens, true)
+    return filterTableRowsByField(recordRows, filterField, tokens, false)
   }
   const lowerSet = new Set(tokens.map((t) => t.toLowerCase()))
   return scalarItems.filter((v) =>
@@ -110,8 +114,9 @@ export function extractNumericValues(
       field !== undefined && field !== '' && typeof item === 'object' && item !== null
         ? (item as Record<string, unknown>)[field]
         : item
-    if (typeof candidate === 'number') {
-      if (Number.isFinite(candidate)) nums.push(candidate)
+    const parsed = parseFormattedNumericCell(candidate)
+    if (parsed !== null) {
+      nums.push(parsed)
     } else if (typeof candidate === 'string') {
       const cleaned = candidate.replace(/,/g, '').trim()
       if (cleaned !== '') {
@@ -222,9 +227,16 @@ export function computeEq(a: unknown, b: unknown): boolean {
   const left = unwrapSingleChoice(a)
   const right = unwrapSingleChoice(b)
   if (left === right) return true
+  if (typeof left === 'string' && typeof right === 'string') {
+    return left === right
+  }
   const numL = tryFiniteScalar(left)
   const numR = tryFiniteScalar(right)
-  if (numL !== null && numR !== null) return numL === numR
+  if (numL !== null && numR !== null) {
+    if (typeof left === 'string' && String(numL) !== left.trim()) return false
+    if (typeof right === 'string' && String(numR) !== right.trim()) return false
+    return numL === numR
+  }
   if (
     (typeof left === 'string' || typeof left === 'number' || typeof left === 'boolean') &&
     (typeof right === 'string' || typeof right === 'number' || typeof right === 'boolean')

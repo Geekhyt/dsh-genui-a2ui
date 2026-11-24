@@ -474,6 +474,20 @@ function formatHighPrecisionBelowHundred(val: number): string {
   return (Math.floor(val * 10_000) / 10_000).toString()
 }
 
+const VALID_RING_TONES = new Set<MetricRingTone>(['brand', 'success', 'warning', 'danger'])
+
+function parseMetricRingNumber(raw: unknown): number {
+  if (typeof raw === 'number') return Number.isFinite(raw) ? raw : 0
+  if (typeof raw === 'string') {
+    const cleaned = raw.replace(/[%,\s]/g, '').trim()
+    if (cleaned === '') return 0
+    const parsed = Number(cleaned)
+    return Number.isFinite(parsed) ? parsed : 0
+  }
+  const num = Number(raw)
+  return Number.isFinite(num) ? num : 0
+}
+
 export function computeMetricRingGeometry(params: {
   readonly value: unknown
   readonly max?: number | undefined
@@ -481,8 +495,7 @@ export function computeMetricRingGeometry(params: {
   readonly tone?: 'brand' | 'success' | 'warning' | 'danger' | 'auto' | undefined
   readonly unit?: string | undefined
 }): MetricRingGeometry {
-  const num = Number(params.value)
-  const safeVal = Number.isFinite(num) ? num : 0
+  const safeVal = parseMetricRingNumber(params.value)
   const max =
     typeof params.max === 'number' && Number.isFinite(params.max) && params.max > 0
       ? params.max
@@ -539,8 +552,10 @@ export function computeMetricRingGeometry(params: {
     resolvedTone = 'brand'
   } else if (params.tone === 'auto') {
     resolvedTone = clampedRatio >= 0.88 ? 'danger' : clampedRatio >= 0.7 ? 'warning' : 'success'
-  } else {
+  } else if (VALID_RING_TONES.has(params.tone)) {
     resolvedTone = params.tone
+  } else {
+    resolvedTone = 'brand'
   }
 
   return {

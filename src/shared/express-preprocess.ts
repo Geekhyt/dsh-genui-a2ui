@@ -92,6 +92,33 @@ function buildBracketMap(src: string): Int32Array {
   return map
 }
 
+function isScientificExponentPlus(src: string, plusIdx: number): boolean {
+  if (plusIdx < 2 || plusIdx + 1 >= src.length) return false
+  const next = src.charCodeAt(plusIdx + 1)
+  if (next < 48 || next > 57) return false
+  const prev = src[plusIdx - 1]
+  if (prev !== 'e' && prev !== 'E') return false
+  let j = plusIdx - 2
+  let sawDigit = false
+  let sawDot = false
+  while (j >= 0) {
+    const code = src.charCodeAt(j)
+    if (code >= 48 && code <= 57) {
+      sawDigit = true
+      j -= 1
+      continue
+    }
+    if (code === 46 && !sawDot) {
+      sawDot = true
+      j -= 1
+      continue
+    }
+    break
+  }
+  if (!sawDigit) return false
+  return j < 0 || !isIdentChar(src[j])
+}
+
 function splitTopLevel(src: string, sep: string): string[] {
   const parts: string[] = []
   let depthParen = 0
@@ -113,7 +140,13 @@ function splitTopLevel(src: string, sep: string): string[] {
     else if (ch === ']') depthBracket = Math.max(0, depthBracket - 1)
     else if (ch === '{') depthBrace += 1
     else if (ch === '}') depthBrace = Math.max(0, depthBrace - 1)
-    else if (ch === sep && depthParen === 0 && depthBracket === 0 && depthBrace === 0) {
+    else if (
+      ch === sep &&
+      depthParen === 0 &&
+      depthBracket === 0 &&
+      depthBrace === 0 &&
+      (sep !== '+' || !isScientificExponentPlus(src, i))
+    ) {
       parts.push(src.slice(start, i))
       start = i + 1
     }
@@ -436,20 +469,73 @@ function parseEqLiteralCall(
   return null
 }
 
-function tryFoldCondChain(condCall: string): string | null {
-  let cur = condCall.trim()
+function splitTopLevelRanges(
+  src: string,
+  from: number,
+  to: number,
+  sep: string,
+): Array<[number, number]> {
+  const ranges: Array<[number, number]> = []
+  let depthParen = 0
+  let depthBracket = 0
+  let depthBrace = 0
+  let start = from
+  let i = from
+  while (i < to) {
+    const skipped = scanStringOrComment(src, i)
+    if (skipped !== -1) {
+      i = Math.min(skipped, to)
+      continue
+    }
+    const ch = src[i]!
+    if (ch === '(') depthParen += 1
+    else if (ch === ')') depthParen = Math.max(0, depthParen - 1)
+    else if (ch === '[') depthBracket += 1
+    else if (ch === ']') depthBracket = Math.max(0, depthBracket - 1)
+    else if (ch === '{') depthBrace += 1
+    else if (ch === '}') depthBrace = Math.max(0, depthBrace - 1)
+    else if (ch === sep && depthParen === 0 && depthBracket === 0 && depthBrace === 0) {
+      ranges.push([start, i])
+      start = i + 1
+    }
+    i += 1
+  }
+  ranges.push([start, to])
+  return ranges
+}
+
+function trimRange(src: string, from: number, to: number): [number, number] {
+  let s = from
+  let e = to
+  while (s < e && isWsCharCode(src.charCodeAt(s))) s += 1
+  while (e > s && isWsCharCode(src.charCodeAt(e - 1))) e -= 1
+  return [s, e]
+}
+
+function tryFoldCondChainIndexed(
+  ui: string,
+  startIdx: number,
+  endIdx: number,
+  brackets: Int32Array,
+  failedStarts: Set<number>,
+): string | null {
+  let curStart = startIdx
+  let curEnd = endIdx
   let sharedKey: string | null = null
   const entries: Array<[string, string]> = []
   const seenKeys = new Set<string>()
+  const visitedCondStarts: number[] = []
 
-  while (cur.startsWith('cond(') && cur.endsWith(')')) {
-    const brackets = buildBracketMap(cur)
-    if (brackets[4] !== cur.length - 1) break
-    const args = splitTopLevel(cur.slice(5, -1), ',')
-    if (args.length !== 3) break
-    const eqInfo = parseEqLiteralCall(args[0]!)
-    const truthy = args[1]!.trim()
-    const falsy = args[2]!.trim()
+  while (ui.startsWith('cond(', curStart) && curEnd > curStart + 5) {
+    if (brackets[curStart + 4] !== curEnd - 1) break
+    visitedCondStarts.push(curStart)
+    const argRanges = splitTopLevelRanges(ui, curStart + 5, curEnd - 1, ',')
+    if (argRanges.length !== 3) break
+    const [a0s, a0e] = trimRange(ui, argRanges[0]![0], argRanges[0]![1])
+    const [a1s, a1e] = trimRange(ui, argRanges[1]![0], argRanges[1]![1])
+    const [a2s, a2e] = trimRange(ui, argRanges[2]![0], argRanges[2]![1])
+    const eqInfo = parseEqLiteralCall(ui.slice(a0s, a0e))
+    const truthy = ui.slice(a1s, a1e)
     if (!eqInfo || !isStaticScalarLiteral(truthy)) break
     if (sharedKey !== null && sharedKey !== eqInfo.keyExpr) break
     sharedKey = eqInfo.keyExpr
@@ -457,19 +543,23 @@ function tryFoldCondChain(condCall: string): string | null {
       seenKeys.add(eqInfo.decodedKey)
       entries.push([eqInfo.matchKey, truthy])
     }
-    cur = falsy
+    curStart = a2s
+    curEnd = a2e
   }
 
-  if (sharedKey === null || entries.length < 2 || !isStaticScalarLiteral(cur)) {
+  const tail = ui.slice(curStart, curEnd)
+  if (sharedKey === null || entries.length < 2 || !isStaticScalarLiteral(tail)) {
+    for (const pos of visitedCondStarts) failedStarts.add(pos)
     return null
   }
   const tableBody = entries.map(([k, v]) => `${k}: ${v}`).join(', ')
-  return `lookup(${sharedKey}, { ${tableBody} }, ${cur})`
+  return `lookup(${sharedKey}, { ${tableBody} }, ${tail})`
 }
 
 export function foldNestedCondToLookup(ui: string): string {
   if (!ui.includes('cond(')) return ui
   const brackets = buildBracketMap(ui)
+  const failedStarts = new Set<number>()
   let out = ''
   let i = 0
   while (i < ui.length) {
@@ -479,14 +569,13 @@ export function foldNestedCondToLookup(ui: string): string {
       i = skipped
       continue
     }
-    if (ui.startsWith('cond(', i) && (i === 0 || !isIdentChar(ui[i - 1]))) {
+    if (!failedStarts.has(i) && ui.startsWith('cond(', i) && (i === 0 || !isIdentChar(ui[i - 1]))) {
       let argStart = i + 5
-      while (argStart < ui.length && /\s/.test(ui[argStart]!)) argStart += 1
+      while (argStart < ui.length && isWsCharCode(ui.charCodeAt(argStart))) argStart += 1
       if (ui.startsWith('eq(', argStart)) {
         const closeIdx = brackets[i + 4] ?? -1
         if (closeIdx !== -1) {
-          const call = ui.slice(i, closeIdx + 1)
-          const folded = tryFoldCondChain(call)
+          const folded = tryFoldCondChainIndexed(ui, i, closeIdx + 1, brackets, failedStarts)
           if (folded !== null) {
             out += folded
             i = closeIdx + 1
@@ -657,7 +746,9 @@ function inlineSingleCalcCall(
   localMaps: ReadonlyMap<string, Record<string, string>>,
   calcDefs: ReadonlyMap<string, CalcDef>,
   nextAlias: () => number,
+  depth = 0,
 ): { def: CalcDef; rewritten: string; didInline: boolean } | null {
+  if (depth >= MAX_PREPROCESS_DEPTH) return null
   const parsed = parseCalcCall(calcSrc, localMaps)
   if (!parsed) return null
 
@@ -669,7 +760,7 @@ function inlineSingleCalcCall(
   for (const [k, rawVal] of Object.entries(parsed.vars)) {
     let refCalc = /^[A-Za-z_][A-Za-z0-9_]*$/.test(rawVal) ? calcDefs.get(rawVal) : undefined
     if (!refCalc && rawVal.startsWith('calc(')) {
-      const nested = inlineSingleCalcCall(rawVal, localMaps, calcDefs, nextAlias)
+      const nested = inlineSingleCalcCall(rawVal, localMaps, calcDefs, nextAlias, depth + 1)
       if (nested) refCalc = nested.def
     }
     if (!refCalc || refCalc.hasDynamicDecimals) {
@@ -760,8 +851,9 @@ function rewriteInlineCalcsInStatement(
   localMaps: ReadonlyMap<string, Record<string, string>>,
   calcDefs: ReadonlyMap<string, CalcDef>,
   nextAlias: () => number,
+  depth = 0,
 ): string {
-  if (!stmt.includes('calc(')) return stmt
+  if (depth >= MAX_PREPROCESS_DEPTH || !stmt.includes('calc(')) return stmt
   const brackets = buildBracketMap(stmt)
   let out = ''
   let i = 0
@@ -780,9 +872,10 @@ function rewriteInlineCalcsInStatement(
           localMaps,
           calcDefs,
           nextAlias,
+          depth + 1,
         )
         const callSrc = `calc(${innerArgs})`
-        const inlined = inlineSingleCalcCall(callSrc, localMaps, calcDefs, nextAlias)
+        const inlined = inlineSingleCalcCall(callSrc, localMaps, calcDefs, nextAlias, depth + 1)
         if (inlined?.didInline) {
           out += inlined.rewritten
           i = closeIdx + 1
@@ -1034,6 +1127,157 @@ export function extractUpdateSurfaceIds(cleanedUi: string): string[] {
     i += 1
   }
   return ids
+}
+
+const POINTER_STOP_CHARS = new Set([
+  ' ',
+  '\t',
+  '\n',
+  '\r',
+  '=',
+  ',',
+  ')',
+  ']',
+  '}',
+  '(',
+  '[',
+  '{',
+  ';',
+  ':',
+  '+',
+  '#',
+  '"',
+  "'",
+])
+
+function prevNonWsChar(src: string, idx: number): string {
+  let k = idx - 1
+  while (k >= 0 && isWsCharCode(src.charCodeAt(k))) k -= 1
+  return k >= 0 ? src[k]! : ''
+}
+
+export function findDangerousExpressPointer(ui: string): string | null {
+  let i = 0
+  while (i < ui.length) {
+    const ch = ui[i]!
+    if (
+      ch === '#' ||
+      (ch === '-' && ui[i + 1] === '-') ||
+      (ch === '/' && (ui[i + 1] === '/' || ui[i + 1] === '*'))
+    ) {
+      const skipped = scanStringOrComment(ui, i)
+      i = skipped !== -1 ? skipped : i + 1
+      continue
+    }
+    if (
+      ch === '"' ||
+      ((ch === 'r' || ch === 'R') && ui[i + 1] === '"' && (i === 0 || !isIdentChar(ui[i - 1])))
+    ) {
+      const skipped = scanStringOrComment(ui, i)
+      const end = skipped !== -1 ? skipped : ui.length
+      if (ch === '"') {
+        const prevCh = prevNonWsChar(ui, i)
+        if (prevCh === '{' || prevCh === ',') {
+          let nextWs = end
+          while (nextWs < ui.length && isWsCharCode(ui.charCodeAt(nextWs))) nextWs += 1
+          if (ui[nextWs] === ':') {
+            const decoded = parseJsonStringLiteral(ui.slice(i, end))
+            if (decoded === '__proto__') return decoded
+          }
+        }
+      }
+      i = end
+      continue
+    }
+    if (ch === '$' && ui[i + 1] === '/' && (i === 0 || !isIdentChar(ui[i - 1]))) {
+      let j = i + 2
+      while (j < ui.length && !POINTER_STOP_CHARS.has(ui[j]!)) j += 1
+      const pointer = ui.slice(i, j)
+      const segs = ui.slice(i + 2, j).split('/')
+      for (const rawSeg of segs) {
+        const seg = rawSeg.replace(/~1/g, '/').replace(/~0/g, '~')
+        if (isDangerousObjectKey(seg)) return pointer
+      }
+      i = j
+      continue
+    }
+    if ((i === 0 || !isIdentChar(ui[i - 1])) && ch === '_') {
+      let j = i
+      while (j < ui.length && isIdentChar(ui[j])) j += 1
+      const ident = ui.slice(i, j)
+      if (ident === '__proto__') {
+        const prevCh = prevNonWsChar(ui, i)
+        if (prevCh === '{' || prevCh === ',') {
+          let nextWs = j
+          while (nextWs < ui.length && isWsCharCode(ui.charCodeAt(nextWs))) nextWs += 1
+          if (ui[nextWs] === ':') return ident
+        }
+      }
+      i = j
+      continue
+    }
+    i += 1
+  }
+  return null
+}
+
+export function assertSafeExpressProgram(ui: string): void {
+  const dangerous = findDangerousExpressPointer(ui)
+  if (dangerous !== null) {
+    throw new Error(`Forbidden prototype property key "${dangerous}" in A2UI Express program.`)
+  }
+}
+
+export function estimateExpressExpansionSize(ui: string, maxChars: number): number {
+  const stmts = splitTopLevel(ui, '\n')
+  const varSizes = new Map<string, number>()
+  let total = 0
+  for (const stmt of stmts) {
+    const { code } = splitTrailingLineComment(stmt)
+    const trimmed = stripAllComments(code).trim()
+    if (trimmed === '') continue
+    if (/^(?:surface|deleteSurface)\s*\(/.test(trimmed)) {
+      varSizes.clear()
+      continue
+    }
+    const eqIdx = findTopLevelChar(trimmed, '=')
+    const lhs = eqIdx !== -1 ? trimmed.slice(0, eqIdx).trim() : ''
+    const rhs = eqIdx !== -1 ? trimmed.slice(eqIdx + 1) : trimmed
+    let expanded = rhs.length
+    let i = 0
+    while (i < rhs.length) {
+      const skipped = scanStringOrComment(rhs, i)
+      if (skipped !== -1) {
+        i = skipped
+        continue
+      }
+      const ch = rhs[i]!
+      if (/[A-Za-z_]/.test(ch) && (i === 0 || (!isIdentChar(rhs[i - 1]) && rhs[i - 1] !== '.'))) {
+        let j = i + 1
+        while (j < rhs.length && isIdentChar(rhs[j])) j += 1
+        const ident = rhs.slice(i, j)
+        const refSize = varSizes.get(ident)
+        if (refSize !== undefined) {
+          let nextWs = j
+          while (nextWs < rhs.length && isWsCharCode(rhs.charCodeAt(nextWs))) nextWs += 1
+          const nextCh = rhs[nextWs]
+          if (nextCh !== '(' && nextCh !== ':' && nextCh !== '=') {
+            expanded += Math.max(0, refSize - ident.length)
+            if (expanded > maxChars) return maxChars + 1
+          }
+        }
+        i = j
+        continue
+      }
+      i += 1
+    }
+    total += expanded
+    if (total > maxChars) return maxChars + 1
+    if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(lhs)) {
+      varSizes.set(lhs, expanded)
+    }
+  }
+  return total
 }
 
 export function preprocessExpressProgram(ui: string): string {

@@ -17,7 +17,7 @@ export const ALLOWED_MERMAID_KINDS = [
 ] as const
 
 const FORBIDDEN_SVG_TAG_RE =
-  /<(?:[a-z][a-z0-9._-]*:)?(?:script|iframe|object|embed|applet|meta|base|animate|animateTransform|animateMotion|set|image|feImage)\b/i
+  /<(?:[a-z][a-z0-9._-]*:)?(?:script|iframe|object|embed|applet|meta|base|animate|animateTransform|animateMotion|animateColor|set|discard|handler|image|feImage)\b/i
 
 const TAG_EVENT_HANDLER_RE = /<(?:"[^"]*"|'[^']*'|[^'">])*\bon[a-z]+\s*=/i
 
@@ -86,18 +86,43 @@ export function assertSafeSvg(svg: string): void {
 }
 
 const EXTERNAL_HREF_RE = /\b(?:xlink:)?href\s*=\s*(?:"([^"]*)"|'([^']*)')/gi
+const HARMLESS_XML_DECL_RE =
+  /^\uFEFF?\s*<\?xml(?:\s+(?:version|encoding|standalone)\s*=\s*(?:"[^"]*"|'[^']*'))*\s*\?>/i
+const XML_PROLOG_OR_DOCTYPE_RE = /<!\s*(?:DOCTYPE|ENTITY)\b|<\?/i
+const INLINE_STYLE_ATTR_RE = /<(?:"[^"]*"|'[^']*'|[^'">])*\bstyle\s*=/i
+const SVG_URL_CALL_RE = /\burl\s*\(([^)]*)\)/gi
+
+function hasExternalUrlInStaticSvg(svg: string): boolean {
+  const decoded = decodeHtmlEntities(svg)
+  for (const candidate of [svg, decoded]) {
+    SVG_URL_CALL_RE.lastIndex = 0
+    let m: RegExpExecArray | null
+    while ((m = SVG_URL_CALL_RE.exec(candidate)) !== null) {
+      const inner = (m[1] ?? '')
+        .trim()
+        .replace(/^['"]|['"]$/g, '')
+        .trim()
+      if (inner !== '' && !inner.startsWith('#')) return true
+    }
+  }
+  return false
+}
 
 export function isSafeStaticSvgImage(svg: string): boolean {
-  if (!/<(?:[a-z][a-z0-9._-]*:)?svg\b/i.test(svg)) return false
-  if (/<(?:[a-z][a-z0-9._-]*:)?(?:foreignObject|use|a|style)\b/i.test(svg)) return false
+  const body = svg.replace(HARMLESS_XML_DECL_RE, '')
+  if (XML_PROLOG_OR_DOCTYPE_RE.test(body)) return false
+  if (!/<(?:[a-z][a-z0-9._-]*:)?svg\b/i.test(body)) return false
+  if (/<(?:[a-z][a-z0-9._-]*:)?(?:foreignObject|use|a|style)\b/i.test(body)) return false
+  if (INLINE_STYLE_ATTR_RE.test(body)) return false
+  if (hasExternalUrlInStaticSvg(body)) return false
   try {
-    assertSafeSvg(svg)
+    assertSafeSvg(body)
   } catch {
     return false
   }
   EXTERNAL_HREF_RE.lastIndex = 0
   let m: RegExpExecArray | null
-  while ((m = EXTERNAL_HREF_RE.exec(svg)) !== null) {
+  while ((m = EXTERNAL_HREF_RE.exec(body)) !== null) {
     const val = (m[1] ?? m[2] ?? '').trim()
     if (val !== '' && !val.startsWith('#')) return false
   }

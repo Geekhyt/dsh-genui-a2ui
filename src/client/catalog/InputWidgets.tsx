@@ -222,7 +222,7 @@ export function DshTextFieldView({
   const err = showError ? props.validationErrors?.[0] : undefined
 
   const isNumber = props.variant === 'number'
-  const inputType = isNumber ? 'number' : props.variant === 'obscured' ? 'password' : 'text'
+  const inputType = props.variant === 'obscured' ? 'password' : 'text'
 
   return (
     <div className={css.field} style={weightStyle(props.weight, 160)}>
@@ -256,7 +256,7 @@ export function DshTextFieldView({
         <DshInput
           id={fieldId}
           type={inputType}
-          step={isNumber ? 'any' : undefined}
+          inputMode={isNumber ? 'decimal' : undefined}
           autoComplete="off"
           value={isNumber && focused ? draft : val}
           placeholder={placeholder}
@@ -280,7 +280,14 @@ export function DshTextFieldView({
                 commitValue('')
                 return
               }
-              if (trimmed === '-' || trimmed === '.' || trimmed === '-.') {
+              if (
+                trimmed === '-' ||
+                trimmed === '+' ||
+                trimmed === '.' ||
+                trimmed === '-.' ||
+                trimmed === '+.' ||
+                /^[+-]?(?:\d+\.?\d*|\.\d+)[eE][+-]?$/.test(trimmed)
+              ) {
                 return
               }
               const parsed = Number(trimmed)
@@ -445,7 +452,9 @@ export const DshChoicePickerImpl = defineComponent<{
         />
       ) : null}
 
-      {props.displayStyle === 'chips' ? (
+      {filtered.length === 0 ? (
+        <div className={css.selectEmpty}>{msg.selectNoResults}</div>
+      ) : props.displayStyle === 'chips' ? (
         <div className={css.pillGroup}>
           {filtered.map((opt) => (
             <DshPill
@@ -463,7 +472,7 @@ export const DshChoicePickerImpl = defineComponent<{
         <AriaRadioGroup
           className={css.radioList}
           aria-label={label || msg.radioGroupAria}
-          value={selected[0] ?? ''}
+          value={selected[0] ?? null}
           isDisabled={readOnly}
           onChange={(val) => {
             if (readOnly) return
@@ -599,7 +608,7 @@ export const DshDateTimeInputImpl = defineComponent<{
       : undefined
   const normalizedMax =
     typeof props.max === 'string' && props.max.trim() !== ''
-      ? formatNativeTemporalValue(props.max, type) || undefined
+      ? formatNativeTemporalValue(props.max, type, 'end') || undefined
       : undefined
   const label = props.label ? String(props.label) : ''
   const showError = !readOnly && (touched || submitAttempted) && props.isValid === false
@@ -695,6 +704,7 @@ export function DshSelectView({
 }) {
   const fieldId = useId()
   const msg = useRuntimeMessages()
+  const dark = useDarkTheme()
   const readOnly = useContext(SurfaceReadOnlyContext)
   const { submitAttempted } = useContext(SurfaceValidationContext)
   const [touched, setTouched] = useState(false)
@@ -840,7 +850,8 @@ export function DshSelectView({
             ? createPortal(
                 <div
                   role="presentation"
-                  className={css.selectBackdrop}
+                  data-a2ui-portal-popover=""
+                  className={`${css.selectBackdrop} ${dark ? 'a2ui-dark' : 'a2ui-light'}`}
                   onClick={(e) => {
                     e.stopPropagation()
                     closePopover()
@@ -848,8 +859,7 @@ export function DshSelectView({
                 >
                   <div
                     ref={popoverRef}
-                    role="listbox"
-                    aria-label={label || placeholder}
+                    data-a2ui-select-popover=""
                     className={css.selectPopover}
                     style={{
                       ...(resolvedPopoverBox.placeAbove
@@ -874,7 +884,11 @@ export function DshSelectView({
                         />
                       </div>
                     ) : null}
-                    <div className={css.selectOptionList}>
+                    <div
+                      role="listbox"
+                      aria-label={label || placeholder}
+                      className={css.selectOptionList}
+                    >
                       {filteredOptions.length === 0 ? (
                         <div className={css.selectEmpty}>{msg.selectNoResults}</div>
                       ) : (

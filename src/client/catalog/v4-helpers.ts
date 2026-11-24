@@ -249,7 +249,7 @@ export function normalizeApiParamsAndHeaders(
       out.push({
         name,
         location: 'HEADER',
-        type: String(rec.value ?? 'string'),
+        type: String(rec.value ?? rec.example ?? 'string'),
         required: Boolean(rec.required),
         description: rec.description ? String(rec.description) : '',
       })
@@ -282,7 +282,9 @@ function normalizeSafeBaseUrl(raw: string | undefined): string {
   try {
     const parsed = new URL(candidate)
     if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
-      return candidate.replace(/\/+$/, '')
+      let end = candidate.length
+      while (end > 0 && candidate[end - 1] === '/') end -= 1
+      return candidate.slice(0, end)
     }
   } catch {}
   return 'https://api.example.com'
@@ -527,11 +529,14 @@ export function normalizeScheduleItems(
     }
   }
 
-  if (overnightAnchor !== null) {
-    const wrapCutoff =
-      rangeIsOvernightHhmm && rangeEnd
+  const wrapCutoff =
+    overnightAnchor !== null
+      ? rangeIsOvernightHhmm && rangeEnd
         ? Math.min(overnightAnchor, Math.max(720, rangeEnd.numeric + 1))
         : Math.min(overnightAnchor, 720)
+      : null
+
+  if (wrapCutoff !== null) {
     for (const p of sameKindParsed) {
       if (p.kind !== 'hhmm') continue
       if (p.sNum < wrapCutoff) {
@@ -582,11 +587,7 @@ export function normalizeScheduleItems(
     const pNow = parseTemporalPosition(rawNow)
     if (pNow && pNow.kind === kind) {
       let nowNum = pNow.numeric
-      if (
-        overnightAnchor !== null &&
-        pNow.kind === 'hhmm' &&
-        nowNum < Math.min(overnightAnchor, 720)
-      ) {
+      if (wrapCutoff !== null && pNow.kind === 'hhmm' && nowNum < wrapCutoff) {
         nowNum += 1440
       }
       if (nowNum >= minB && nowNum <= maxB) {
@@ -907,7 +908,8 @@ export function computeTableNumericSummary(
     if (count > 0 && nonNumericCount === 0) {
       if (allPercent) {
         const avg = sum / count
-        const pctDigits = avg > 0 && avg < 0.1 ? 2 : 1
+        const absAvg = Math.abs(avg)
+        const pctDigits = absAvg > 0 && absAvg < 0.1 ? 2 : 1
         summary[col.key] = formatAvg(`${avg.toFixed(pctDigits)}%`)
       } else if (col.format === 'bar' && col.max === 100) {
         const avg = sum / count

@@ -1,5 +1,5 @@
 import type { ActionDispatchOptions } from '@a2ui/web_core/v1_0'
-import { useContext, useMemo, useState } from 'react'
+import { useContext, useMemo, useRef, useState } from 'react'
 import {
   ApiEndpointApi,
   ApprovalCardApi,
@@ -38,6 +38,7 @@ import {
 } from './v4-helpers.ts'
 import {
   type ChildRef,
+  copyTextToClipboard,
   defineComponent,
   renderChildRef,
   SurfaceReadOnlyContext,
@@ -45,12 +46,6 @@ import {
   useSurfaceActionRunner,
   weightStyle,
 } from './widget-helpers.tsx'
-
-function copyToClipboardSafe(text: string): void {
-  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-    void navigator.clipboard.writeText(text).catch(() => {})
-  }
-}
 
 export const DshTrackerImpl = defineComponent<{
   data?: unknown
@@ -242,7 +237,7 @@ export const DshTerminalImpl = defineComponent<{
       : 340
 
   const handleCopyCmd = (id: string, cmd: string) => {
-    copyToClipboardSafe(cmd)
+    copyTextToClipboard(cmd)
     markCopiedId(id)
   }
 
@@ -320,7 +315,15 @@ export const DshApprovalCardImpl = defineComponent<{
   const runApprove = useSurfaceActionRunner(context, props.approveAction, 'approveAction')
   const runReject = useSurfaceActionRunner(context, props.rejectAction, 'rejectAction')
   const { markSubmitAttempted } = useContext(SurfaceValidationContext)
-  const severity = props.severity ?? 'high'
+  const rawSeverity =
+    typeof props.severity === 'string' ? props.severity.trim().toLowerCase() : 'high'
+  const severity: 'low' | 'medium' | 'high' | 'critical' =
+    rawSeverity === 'critical' ||
+    rawSeverity === 'high' ||
+    rawSeverity === 'medium' ||
+    rawSeverity === 'low'
+      ? rawSeverity
+      : 'high'
   const title = props.title !== undefined && props.title !== null ? String(props.title) : ''
   const summary = props.summary !== undefined && props.summary !== null ? String(props.summary) : ''
   const scope = props.scope !== undefined && props.scope !== null ? String(props.scope) : ''
@@ -332,7 +335,9 @@ export const DshApprovalCardImpl = defineComponent<{
   const [prevTargetKey, setPrevTargetKey] = useState(targetKey)
   const [acknowledged, setAcknowledged] = useState(false)
   const [decision, setDecision] = useState<'approved' | 'rejected' | null>(null)
+  const decisionSeqRef = useRef(0)
   if (prevTargetKey !== targetKey) {
+    decisionSeqRef.current += 1
     setPrevTargetKey(targetKey)
     if (acknowledged) setAcknowledged(false)
     if (decision !== null) setDecision(null)
@@ -431,6 +436,7 @@ export const DshApprovalCardImpl = defineComponent<{
               onClick={() => {
                 if (!runReject) return
                 markSubmitAttempted()
+                const seq = ++decisionSeqRef.current
                 setDecision('rejected')
                 void runReject({
                   metadata: {
@@ -446,7 +452,7 @@ export const DshApprovalCardImpl = defineComponent<{
                     },
                   },
                 }).then((ok) => {
-                  if (!ok) setDecision(null)
+                  if (!ok && decisionSeqRef.current === seq) setDecision(null)
                 })
               }}
             >
@@ -461,6 +467,7 @@ export const DshApprovalCardImpl = defineComponent<{
               onClick={() => {
                 if (!runApprove) return
                 markSubmitAttempted()
+                const seq = ++decisionSeqRef.current
                 setDecision('approved')
                 void runApprove({
                   metadata: {
@@ -477,7 +484,7 @@ export const DshApprovalCardImpl = defineComponent<{
                     },
                   },
                 }).then((ok) => {
-                  if (!ok) setDecision(null)
+                  if (!ok && decisionSeqRef.current === seq) setDecision(null)
                 })
               }}
             >
@@ -507,7 +514,10 @@ export const DshApiEndpointImpl = defineComponent<{
   const msg = useRuntimeMessages()
   const readOnly = useContext(SurfaceReadOnlyContext)
   const runAction = useSurfaceActionRunner(context, props.action)
-  const method = props.method ?? 'GET'
+  const method =
+    typeof props.method === 'string' && props.method.trim() !== ''
+      ? props.method.trim().toUpperCase()
+      : 'GET'
   const pathStr = props.path !== undefined && props.path !== null ? String(props.path) : '/'
   const routeTokens = useMemo(() => tokenizeEndpointPath(pathStr), [pathStr])
   const paramRows = useMemo(
@@ -544,7 +554,7 @@ export const DshApiEndpointImpl = defineComponent<{
       headers: props.headers,
       requestBody: props.requestBody,
     })
-    copyToClipboardSafe(curl)
+    copyTextToClipboard(curl)
     markCopiedCurl()
   }
 

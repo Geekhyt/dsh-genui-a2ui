@@ -1,9 +1,12 @@
 import { isDangerousObjectKey, isSecretKey } from '../shared/constants.ts'
 import {
+  collectSecretsFromNode,
   escapeJsonPointerSegment,
   isPointerObscured,
   isPointerObscuredOrParent,
+  isScrubbableNumericSecret,
   normalizePointerPath,
+  scrubSecretString,
 } from '../shared/redaction.ts'
 import { notifySubscribers } from './notify.ts'
 
@@ -134,6 +137,7 @@ function parseStoredJson(
 
 export function resetPersistenceForTests(): void {
   memoryFallback.clear()
+  memoryPreferredKeys.clear()
   warnedStorageKeys.clear()
   fallbackDefaultEnabled = true
   cachedDockRaw = undefined
@@ -183,10 +187,20 @@ export function sanitizeDataModel(
       if (t !== '') blocked.add(t)
     }
   }
+  const blockedExact = new Set<string>()
+  const blockedSubstrings = new Set<string>()
+  collectSecretsFromNode(value, blocked, blockedExact, blockedSubstrings, false)
 
   const walk = (node: unknown, currentPath: string, depth: number): unknown => {
     if (depth > 8) return undefined
     if (blocked.size > 0 && isPointerObscured(currentPath, blocked)) return undefined
+    if (typeof node === 'string') {
+      if (blockedExact.size === 0 && blockedSubstrings.size === 0) return node
+      return scrubSecretString(node, blockedExact, blockedSubstrings)
+    }
+    if (typeof node === 'number' && isScrubbableNumericSecret(node, blockedExact)) {
+      return undefined
+    }
     if (Array.isArray(node)) {
       const out: unknown[] = []
       for (let idx = 0; idx < node.length; idx++) {
@@ -281,6 +295,16 @@ export function removeSurfaceDraft(
   const targetKey = draftKeyOf(sessionId, surfaceId, fingerprint)
   const prev = readDraftList()
   const next = prev.filter((e) => e.key !== targetKey)
+  if (next.length !== prev.length) {
+    writeDraftList(next)
+  }
+}
+
+export function removeSurfaceDraftsBySurface(sessionId: string, surfaceId: string): void {
+  if (!sessionId || !surfaceId) return
+  const prefix = `${sessionId}::${surfaceId}::`
+  const prev = readDraftList()
+  const next = prev.filter((e) => !e.key.startsWith(prefix))
   if (next.length !== prev.length) {
     writeDraftList(next)
   }
@@ -523,6 +547,10 @@ export function subscribeA2uiEnabled(listener: () => void): () => void {
   }
 }
 
+export function getDefaultA2uiEnabled(): boolean {
+  return readEnabledStore().defaultEnabled
+}
+
 export function getA2uiEnabled(sessionId: string | undefined): boolean {
   const store = readEnabledStore()
   if (sessionId && Object.hasOwn(store.bySession, sessionId)) {
@@ -537,11 +565,13 @@ export function setA2uiEnabled(
   atCommandSeq?: number,
   updateDefault = true,
 ): void {
+  let watermarkAdvanced = false
   if (typeof atCommandSeq === 'number') {
     const seqKey = sessionId ?? 'global'
     const prevSeq = lastAppliedCommandSeqBySession.get(seqKey) ?? -1
     if (atCommandSeq > prevSeq) {
       lastAppliedCommandSeqBySession.set(seqKey, atCommandSeq)
+      watermarkAdvanced = true
     }
   }
   const prev = readEnabledStore()
@@ -555,7 +585,10 @@ export function setA2uiEnabled(
     bySession: pruneRecordLru(nextBySession, MAX_DRAFT_ENTRIES),
   }
   const serialized = JSON.stringify(next)
-  if (serialized === cachedEnabledRaw) return
+  if (serialized === cachedEnabledRaw) {
+    if (watermarkAdvanced) notifySubscribers(enabledListeners, 'Persistence')
+    return
+  }
   cachedEnabledRaw = serialized
   cachedEnabledStore = next
   writeStorage(ENABLED_STORAGE_KEY, serialized)

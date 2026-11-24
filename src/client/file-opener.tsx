@@ -22,23 +22,36 @@ function isAbsoluteWindows(path: string): boolean {
   return isWindowsStylePath(path)
 }
 
+function stripTrailingSlashes(p: string): string {
+  let end = p.length
+  while (end > 0 && p[end - 1] === '/') {
+    end -= 1
+  }
+  return end === p.length ? p : p.slice(0, end)
+}
+
+function collapseDuplicateSlashes(p: string): string {
+  return p.replace(/\/{2,}/g, '/')
+}
+
 function hasPathTraversalSegment(rawPath: string): boolean {
   return rawPath.replace(/\\/g, '/').split('/').includes('..')
 }
 
 export function sessionFileAddress(sessionId: string, path: string): string {
-  const normalized = path.replace(/\\/g, '/').replace(/^(?:\.\/)+/, '')
+  const normalized = collapseDuplicateSlashes(path.replace(/\\/g, '/')).replace(/^(?:\.\/)+/, '')
   return `${FILE_ADDRESS_PREFIX}session/${encodeSegment(sessionId)}/${encodePath(normalized)}`
 }
 
 function normalizeForPrefixCompare(p: string): string {
-  const slashes = p.replace(/\\/g, '/').replace(/\/+$/, '')
+  const slashes = stripTrailingSlashes(collapseDuplicateSlashes(p.replace(/\\/g, '/')))
   return isWindowsStylePath(slashes) ? slashes.toLowerCase() : slashes
 }
 
 export function isPathWithinWorkspace(targetPath: string, cwd: string | undefined): boolean {
-  const normalized = targetPath.replace(/\\/g, '/')
-  if (hasPathTraversalSegment(normalized) || normalized.startsWith('//')) return false
+  const rawSlashes = targetPath.replace(/\\/g, '/')
+  if (rawSlashes.startsWith('//') || hasPathTraversalSegment(rawSlashes)) return false
+  const normalized = collapseDuplicateSlashes(rawSlashes)
   if (!isAbsoluteWorkspacePath(normalized)) return true
   if (!cwd || cwd.trim() === '') return false
   const rootCmp = normalizeForPrefixCompare(cwd)
@@ -48,11 +61,12 @@ export function isPathWithinWorkspace(targetPath: string, cwd: string | undefine
 }
 
 export function fileAddressFor(sessionId: string, cwd: string | undefined, path: string): string {
-  const normalized = path.replace(/\\/g, '/')
+  const normalized = collapseDuplicateSlashes(path.replace(/\\/g, '/'))
   if (!isAbsoluteWorkspacePath(normalized)) {
     return sessionFileAddress(sessionId, normalized)
   }
-  const root = cwd === undefined ? '' : cwd.replace(/\\/g, '/').replace(/\/+$/, '')
+  const root =
+    cwd === undefined ? '' : stripTrailingSlashes(collapseDuplicateSlashes(cwd.replace(/\\/g, '/')))
   if (root !== '') {
     const rootCmp = normalizeForPrefixCompare(root)
     const normCmp = normalizeForPrefixCompare(normalized)
@@ -67,9 +81,9 @@ export function fileAddressFor(sessionId: string, cwd: string | undefined, path:
 }
 
 export function resolveSessionPath(workingDir: string | undefined, path: string): string {
-  const normalized = path.replace(/\\/g, '/').replace(/^(?:\.\/)+/, '')
+  const normalized = collapseDuplicateSlashes(path.replace(/\\/g, '/')).replace(/^(?:\.\/)+/, '')
   if (!workingDir || isAbsoluteWorkspacePath(normalized)) return normalized
-  const base = workingDir.replace(/\\/g, '/').replace(/\/+$/, '')
+  const base = stripTrailingSlashes(collapseDuplicateSlashes(workingDir.replace(/\\/g, '/')))
   return base === '' ? normalized : `${base}/${normalized}`
 }
 
@@ -80,12 +94,31 @@ export interface ParsedFileTarget {
 
 const URI_SCHEME_RE = /^[A-Za-z][A-Za-z0-9+.-]*:/
 const CONTROL_CHAR_RE = /[\u0000-\u001f\u007f]/
-const ENCODED_TRAVERSAL_RE = /%(?:2e%2e|2f|5c|00)/i
+const ENCODED_TRAVERSAL_RE = /%(?:2e|2f|5c|00)/i
+
+function hasEncodedTraversalOrControl(raw: string): boolean {
+  if (ENCODED_TRAVERSAL_RE.test(raw)) return true
+  let cur = raw
+  for (let pass = 0; pass < 3; pass++) {
+    if (!cur.includes('%')) break
+    let decoded: string
+    try {
+      decoded = decodeURIComponent(cur)
+    } catch {
+      return true
+    }
+    if (decoded === cur) break
+    if (CONTROL_CHAR_RE.test(decoded) || hasPathTraversalSegment(decoded)) return true
+    if (decoded.replace(/\\/g, '/').startsWith('//')) return true
+    cur = decoded
+  }
+  return false
+}
 
 export function parseFileTarget(rawPath: unknown, explicitLine?: unknown): ParsedFileTarget | null {
   if (typeof rawPath !== 'string') return null
   const trimmed = rawPath.trim()
-  if (trimmed === '' || CONTROL_CHAR_RE.test(trimmed) || ENCODED_TRAVERSAL_RE.test(trimmed)) {
+  if (trimmed === '' || CONTROL_CHAR_RE.test(trimmed) || hasEncodedTraversalOrControl(trimmed)) {
     return null
   }
   const slashNorm = trimmed.replace(/\\/g, '/')

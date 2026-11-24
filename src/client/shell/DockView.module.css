@@ -1,3 +1,11 @@
+:global(.a2ui-dark) {
+  color-scheme: dark;
+}
+
+:global(.a2ui-light) {
+  color-scheme: light;
+}
+
 .root {
   --a2ui-z-modal: 1000;
   --a2ui-z-popover-backdrop: 1099;
@@ -73,6 +81,8 @@
 
 .tag {
   flex: none;
+  flex-shrink: 0;
+  white-space: nowrap;
   font-size: 11px;
   padding: 1px 6px;
   border-radius: var(--dsw-radius-sm, 4px);
@@ -97,7 +107,7 @@
   border: none;
   border-radius: var(--dsw-radius-sm, 6px);
   background: transparent;
-  color: var(--dsw-alias-label-tertiary, #8f959e);
+  color: var(--dsw-alias-label-tertiary, light-dark(#646a73, #9ca3af));
   font-size: 12px;
   cursor: pointer;
 }

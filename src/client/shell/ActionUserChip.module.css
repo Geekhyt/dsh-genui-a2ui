@@ -3,6 +3,7 @@
   flex-direction: column;
   align-items: flex-start;
   gap: 6px;
+  min-width: 0;
   max-width: 100%;
   vertical-align: middle;
 }
@@ -28,6 +29,7 @@
   color: var(--dsw-alias-label-primary, inherit);
   font-size: 13px;
   line-height: 20px;
+  min-width: 0;
   max-width: 100%;
   box-sizing: border-box;
 }
@@ -87,6 +89,8 @@
   box-sizing: border-box;
   width: 100%;
   max-width: 520px;
+  max-height: 280px;
+  overflow-y: auto;
   padding: 8px 10px;
   border-radius: var(--dsw-radius-md, 8px);
   background: var(--dsw-alias-bg-layer-1, rgba(0, 0, 0, 0.04));

@@ -32,6 +32,7 @@ import {
   useTransientFlag,
 } from '../dom-hooks.ts'
 import { useShellMessages, useUiLocale } from '../i18n.ts'
+import { useDarkTheme } from '../theme.ts'
 
 export type {
   ButtonVariant,
@@ -476,6 +477,7 @@ export function DshModal(props: {
   footer?: ReactNode
 }) {
   const hasHostModal = hasComponent(raw.Modal)
+  const dark = useDarkTheme()
   const dialogRef = useRef<HTMLDivElement | null>(null)
   useEscapeKey(!hasHostModal && props.open, props.onClose)
   useDialogFocus(!hasHostModal && props.open, dialogRef)
@@ -489,6 +491,8 @@ export function DshModal(props: {
       role="dialog"
       aria-modal="true"
       aria-label={props.title}
+      data-a2ui-overlay=""
+      className={dark ? 'a2ui-dark' : 'a2ui-light'}
       onClick={(e) => {
         e.stopPropagation()
         props.onClose()
@@ -1017,6 +1021,7 @@ export function DshMenu(props: {
   anchor: ReactElement
 }) {
   const hasHostMenu = hasComponent(raw.Menu)
+  const dark = useDarkTheme()
   const anchorWrapRef = useRef<HTMLSpanElement | null>(null)
   const menuPopoverRef = useRef<HTMLDivElement | null>(null)
   const resolvedSide = props.side ?? 'top'
@@ -1094,6 +1099,8 @@ export function DshMenu(props: {
         ? createPortal(
             <div
               role="presentation"
+              data-a2ui-portal-popover=""
+              className={dark ? 'a2ui-dark' : 'a2ui-light'}
               onClick={(e) => {
                 e.stopPropagation()
                 props.onClose()
@@ -1364,6 +1371,7 @@ export function DshImageLightbox(props: {
   onClose: () => void
 }) {
   const hasHostLightbox = hasComponent(raw.ImageLightbox)
+  const dark = useDarkTheme()
   const dialogRef = useRef<HTMLDivElement | null>(null)
   useEscapeKey(!hasHostLightbox && props.open, props.onClose)
   useDialogFocus(!hasHostLightbox && props.open, dialogRef)
@@ -1385,6 +1393,8 @@ export function DshImageLightbox(props: {
       role="dialog"
       aria-modal="true"
       aria-label={props.dialogLabel}
+      data-a2ui-overlay=""
+      className={dark ? 'a2ui-dark' : 'a2ui-light'}
       onClick={(e) => {
         e.stopPropagation()
         props.onClose()

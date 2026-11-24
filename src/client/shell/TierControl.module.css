@@ -1,3 +1,11 @@
+:global(.a2ui-dark) {
+  color-scheme: dark;
+}
+
+:global(.a2ui-light) {
+  color-scheme: light;
+}
+
 .trigger {
   border-radius: 999px;
   min-width: 0;
@@ -27,7 +35,7 @@
 }
 
 .triggerOff {
-  color: var(--dsw-alias-label-tertiary, #8f959e);
+  color: var(--dsw-alias-label-tertiary, light-dark(#646a73, #9ca3af));
   background: transparent;
   border: 0.5px solid var(--dsw-alias-border-l1, rgba(128, 128, 128, 0.18));
 }

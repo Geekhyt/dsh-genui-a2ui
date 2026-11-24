@@ -313,6 +313,7 @@ export const DshMultiSelectImpl = defineComponent<{
   const { submitAttempted } = useContext(SurfaceValidationContext)
   const [touched, setTouched] = useState(false)
   const [open, setOpen] = useState(false)
+  const dark = useDarkTheme()
   const [query, setQuery] = useState('')
   const deferredQuery = useDeferredValue(query)
   const triggerRef = useRef<HTMLDivElement | null>(null)
@@ -499,7 +500,8 @@ export const DshMultiSelectImpl = defineComponent<{
         ? createPortal(
             <div
               role="presentation"
-              className={css.selectBackdrop}
+              data-a2ui-portal-popover=""
+              className={`${css.selectBackdrop} ${dark ? 'a2ui-dark' : 'a2ui-light'}`}
               onClick={(e) => {
                 e.stopPropagation()
                 closePopover()
@@ -507,8 +509,7 @@ export const DshMultiSelectImpl = defineComponent<{
             >
               <div
                 ref={popoverRef}
-                role="listbox"
-                aria-multiselectable="true"
+                data-a2ui-select-popover=""
                 className={css.selectPopover}
                 style={{
                   ...(popoverBox.placeAbove
@@ -546,7 +547,12 @@ export const DshMultiSelectImpl = defineComponent<{
                     />
                   </div>
                 ) : null}
-                <div className={css.selectOptionList}>
+                <div
+                  role="listbox"
+                  aria-multiselectable="true"
+                  aria-label={label || placeholder}
+                  className={css.selectOptionList}
+                >
                   {filteredOptions.length === 0 ? (
                     <div className={css.selectEmpty}>{msg.selectNoResults}</div>
                   ) : (
@@ -613,8 +619,8 @@ export const DshDateRangeImpl = defineComponent<{
   )
   const [rawEnd, commitEnd] = useWritablePropState(context, 'end', props.end, props.setEnd)
 
-  const normStart = formatNativeTemporalValue(rawStart, inputType)
-  const normEnd = formatNativeTemporalValue(rawEnd, inputType)
+  const normStart = formatNativeTemporalValue(rawStart, inputType, 'start')
+  const normEnd = formatNativeTemporalValue(rawEnd, inputType, 'end')
 
   const spanDays = useMemo(() => computeDateRangeSpanDays(normStart, normEnd), [normStart, normEnd])
   const todayIso = useMemo(() => buildDatePresetRange(1, false).start, [])
@@ -819,6 +825,7 @@ export const DshTreeSelectImpl = defineComponent<{
 }>(TreeSelectApi, function DshTreeSelect({ props, context }) {
   const fieldId = useId()
   const msg = useRuntimeMessages()
+  const dark = useDarkTheme()
   const readOnly = useContext(SurfaceReadOnlyContext)
   const { submitAttempted } = useContext(SurfaceValidationContext)
   const [touched, setTouched] = useState(false)
@@ -917,7 +924,8 @@ export const DshTreeSelectImpl = defineComponent<{
         ? createPortal(
             <div
               role="presentation"
-              className={css.selectBackdrop}
+              data-a2ui-portal-popover=""
+              className={`${css.selectBackdrop} ${dark ? 'a2ui-dark' : 'a2ui-light'}`}
               onClick={(e) => {
                 e.stopPropagation()
                 closePopover()
@@ -925,7 +933,7 @@ export const DshTreeSelectImpl = defineComponent<{
             >
               <div
                 ref={popoverRef}
-                role="tree"
+                data-a2ui-select-popover=""
                 className={css.selectPopover}
                 style={{
                   ...(popoverBox.placeAbove
@@ -951,7 +959,7 @@ export const DshTreeSelectImpl = defineComponent<{
                     />
                   </div>
                 ) : null}
-                <div className={css.selectOptionList}>
+                <div role="tree" aria-label={label || placeholder} className={css.selectOptionList}>
                   {filteredTree.length === 0 ? (
                     <div className={css.selectEmpty}>{msg.treeEmpty}</div>
                   ) : (
@@ -1039,19 +1047,23 @@ export const DshCheckCardImpl = defineComponent<{
   const handleCardClick = (opt: (typeof options)[number]) => {
     if (readOnly) return
     setTouched(true)
+    let nextHasSelection = selectedSet.size > 0
     if (isFormBound) {
       if (multiple) {
         const cur = [...selectedSet]
         const next = selectedSet.has(opt.value)
           ? cur.filter((v) => v !== opt.value)
           : [...cur, opt.value]
+        nextHasSelection = next.length > 0
         commitSelectedVal(next)
       } else {
+        nextHasSelection = opt.value !== ''
         commitSelectedVal(opt.value)
       }
     }
     if (typeof props.action === 'function') {
-      if (props.isValid === false) {
+      const blockedByValidation = props.isValid === false && (!isFormBound || !nextHasSelection)
+      if (blockedByValidation) {
         markSubmitAttempted()
         return
       }

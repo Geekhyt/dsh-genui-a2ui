@@ -1,4 +1,5 @@
-import { memo, useCallback, useMemo, useState, useSyncExternalStore } from 'react'
+import { memo, useCallback, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useEffectCallback } from '../dom-hooks.ts'
 import css from './DockView.module.css'
 import type { WorkspaceFileOpener } from '../file-opener.tsx'
 import { useShellMessages } from '../i18n.ts'
@@ -6,12 +7,14 @@ import { LazySurfaceGroupView } from './LazySurfaceGroupView.tsx'
 import {
   dismissDockAtSeq,
   getDockUiState,
+  removeSurfaceDraftsBySurface,
   setDockCollapsed,
   subscribeDockUi,
 } from '../persistence.ts'
 import type { SurfaceActionCallback } from '../runtime/SurfaceView.tsx'
 import type { ChatExternalStore } from './ToolView.tsx'
-import { resolveDockBatch } from './turn-surfaces.ts'
+import { collectDeletedSurfaceIds, resolveDockBatch } from './turn-surfaces.ts'
+import { useDarkTheme } from '../theme.ts'
 import { DshAppsIcon, DshChevronDownIcon, DshChevronUpIcon } from '../ui/primitives.tsx'
 
 export interface A2uiDockViewProps {
@@ -33,6 +36,7 @@ export const A2uiDockView = memo(function A2uiDockView({
   openWorkspaceFile,
 }: A2uiDockViewProps) {
   const msg = useShellMessages()
+  const dark = useDarkTheme()
   const [localCollapsed, setLocalCollapsed] = useState(false)
   const [localDismissedSeq, setLocalDismissedSeq] = useState(-1)
   const subscribeChat = useCallback(
@@ -46,6 +50,21 @@ export const A2uiDockView = memo(function A2uiDockView({
   const uiState = useSyncExternalStore(subscribeDockUi, getUiState, () => getDockUiState(undefined))
 
   const batch = useMemo(() => resolveDockBatch(snapshot), [snapshot])
+  const deletedSurfaceIds = useMemo(() => collectDeletedSurfaceIds(snapshot), [snapshot])
+  const prevBatchIdsRef = useRef<ReadonlySet<string> | null>(null)
+
+  useEffectCallback(() => {
+    if (sessionId && deletedSurfaceIds.size > 0) {
+      const prevIds = prevBatchIdsRef.current
+      for (const delId of deletedSurfaceIds) {
+        if (!batch?.visibleSurfaceIds.has(delId) && (prevIds === null || prevIds.has(delId))) {
+          removeSurfaceDraftsBySurface(sessionId, delId)
+        }
+      }
+    }
+    prevBatchIdsRef.current = batch?.visibleSurfaceIds ?? null
+    return undefined
+  }, [batch, deletedSurfaceIds, sessionId])
 
   const effectiveDismissedSeq = sessionId ? uiState.dismissedSeq : localDismissedSeq
   if (batch === null || batch.messages.length === 0) return null
@@ -72,7 +91,7 @@ export const A2uiDockView = memo(function A2uiDockView({
 
   return (
     <section
-      className={css.root}
+      className={`${css.root} ${dark ? 'a2ui-dark' : 'a2ui-light'}`}
       data-a2ui-dock=""
       data-collapsed={collapsed || undefined}
       aria-label={title}

@@ -58,10 +58,11 @@ export function loadRuntimeChunk(): Promise<RuntimeChunkModule> {
       runtimeSnapshot = PENDING_RUNTIME_SNAPSHOT
       notifySubscribers(runtimeListeners, 'Chunk store')
     }
-    const rawPromise =
+    const rawPromise = Promise.resolve().then(() =>
       typeof __DSH_BUNDLED_CLIENT__ !== 'undefined' && __DSH_BUNDLED_CLIENT__
         ? (require.async('./client.runtime.js') as Promise<RuntimeChunkModule>)
-        : import('./chunks/runtime-chunk.ts')
+        : import('./chunks/runtime-chunk.ts'),
+    )
     runtimePromise = rawPromise.then(
       (mod) => {
         runtimeModuleSync = mod
@@ -137,10 +138,11 @@ export function loadEchartsChunk(): Promise<EchartsChunkModule> {
       echartsSnapshot = PENDING_ECHARTS_SNAPSHOT
       notifySubscribers(echartsListeners, 'Chunk store')
     }
-    const rawPromise =
+    const rawPromise = Promise.resolve().then(() =>
       typeof __DSH_BUNDLED_CLIENT__ !== 'undefined' && __DSH_BUNDLED_CLIENT__
         ? (require.async('./client.echarts.js') as Promise<EchartsChunkModule>)
-        : import('./chunks/echarts-chunk.ts')
+        : import('./chunks/echarts-chunk.ts'),
+    )
     echartsPromise = rawPromise.then(
       (mod) => {
         echartsModuleSync = mod
@@ -246,22 +248,25 @@ function storeMermaidSnapshot(key: string, snapshot: MermaidDiagramSnapshot): vo
 function startMermaidRender(key: string, code: string, dark: boolean): void {
   if ((mermaidListenersByKey.get(key)?.size ?? 0) === 0) return
   if (mermaidInflightKeys.has(key)) return
+  const existing = mermaidDiagramCache.get(key)
+  if (existing !== undefined && existing.error === null) return
   mermaidInflightKeys.add(key)
+  const shouldProceed = () => (mermaidListenersByKey.get(key)?.size ?? 0) > 0
   loadMermaidChunk()
     .then((mod) => {
-      if ((mermaidListenersByKey.get(key)?.size ?? 0) === 0) return null
-      return mod.renderMermaidDiagram(code, dark, resolveLiveMermaidTarget(key))
+      if (!shouldProceed()) return null
+      return mod.renderMermaidDiagram(code, dark, resolveLiveMermaidTarget(key), shouldProceed)
     })
     .then(
       (renderedSvg) => {
         mermaidInflightKeys.delete(key)
         if (renderedSvg === null) {
-          if ((mermaidListenersByKey.get(key)?.size ?? 0) > 0) {
+          if (shouldProceed()) {
             startMermaidRender(key, code, dark)
           }
           return
         }
-        if ((mermaidListenersByKey.get(key)?.size ?? 0) === 0) return
+        if (!shouldProceed()) return
         storeMermaidSnapshot(key, {
           svg: renderedSvg,
           error: null,
@@ -270,7 +275,7 @@ function startMermaidRender(key: string, code: string, dark: boolean): void {
       },
       (err: unknown) => {
         mermaidInflightKeys.delete(key)
-        if ((mermaidListenersByKey.get(key)?.size ?? 0) === 0) return
+        if (!shouldProceed()) return
         const errMsg =
           err instanceof Error && err.message ? err.message : MERMAID_RENDER_ERROR_SENTINEL
         storeMermaidSnapshot(key, {
@@ -286,24 +291,26 @@ export function retryMermaidDiagram(code: string, dark: boolean): void {
   if (code === '') return
   const key = mermaidCacheKey(code, dark)
   if (mermaidInflightKeys.has(key)) return
+  const listeners = mermaidListenersByKey.get(key)
+  if (!listeners || listeners.size === 0) return
   const pendingTimer = mermaidTimersByKey.get(key)
   if (pendingTimer !== undefined) {
     clearTimeout(pendingTimer)
     mermaidTimersByKey.delete(key)
   }
   mermaidDiagramCache.delete(key)
-  const listeners = mermaidListenersByKey.get(key)
-  if (listeners) notifySubscribers(listeners, 'Chunk store')
   startMermaidRender(key, code, dark)
+  notifySubscribers(listeners, 'Chunk store')
 }
 
 export function loadMermaidChunk(): Promise<MermaidChunkModule> {
   if (mermaidModuleSync !== null) return Promise.resolve(mermaidModuleSync)
   if (mermaidPromise === null) {
-    const rawPromise =
+    const rawPromise = Promise.resolve().then(() =>
       typeof __DSH_BUNDLED_CLIENT__ !== 'undefined' && __DSH_BUNDLED_CLIENT__
         ? (require.async('./client.mermaid.js') as Promise<MermaidChunkModule>)
-        : import('./chunks/mermaid-chunk.ts')
+        : import('./chunks/mermaid-chunk.ts'),
+    )
     mermaidPromise = rawPromise.then(
       (mod) => {
         mermaidModuleSync = mod

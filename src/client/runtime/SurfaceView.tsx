@@ -23,6 +23,7 @@ import {
 } from 'react'
 import { isDangerousObjectKey } from '../../shared/constants.ts'
 import {
+  buildTemplatePathMap,
   collectKvSecretsFromValue,
   collectSecretsFromNode,
   extractBindingPointer,
@@ -52,6 +53,7 @@ import {
   loadSurfaceDraft,
   normalizePointerPath,
   removeSurfaceDraft,
+  removeSurfaceDraftsBySurface,
   sanitizeDataModel,
   saveSurfaceDraft,
 } from '../persistence.ts'
@@ -163,26 +165,30 @@ export function readSanitizedDataModels(
   const result: Record<string, unknown> = {}
   for (const surface of processor.getSurfaces().values()) {
     if (visibleSurfaceIds !== undefined && !visibleSurfaceIds.has(surface.id)) continue
+    if (isDangerousObjectKey(surface.id)) continue
     const obscured = collectObscuredPointers(surface)
     if (obscured === null) continue
     const raw = surface.dataModel.get('/')
     let cleaned = sanitizeDataModel(raw, obscured)
-    if (obscured.size > 0) {
-      const { blockedExact, blockedSubstrings, failed } = collectBlockedSecretValues(
-        surface,
-        obscured,
-      )
-      if (failed) continue
-      if (blockedExact.size > 0 || blockedSubstrings.size > 0) {
-        const scrubbed = scrubSanitizedTree(cleaned, blockedExact, blockedSubstrings)
-        cleaned =
-          typeof scrubbed === 'object' && scrubbed !== null && !Array.isArray(scrubbed)
-            ? (scrubbed as Record<string, unknown>)
-            : {}
-      }
+    const { blockedExact, blockedSubstrings, failed } = collectBlockedSecretValues(
+      surface,
+      obscured,
+    )
+    if (failed) continue
+    if (blockedExact.size > 0 || blockedSubstrings.size > 0) {
+      const scrubbed = scrubSanitizedTree(cleaned, blockedExact, blockedSubstrings)
+      cleaned =
+        typeof scrubbed === 'object' && scrubbed !== null && !Array.isArray(scrubbed)
+          ? (scrubbed as Record<string, unknown>)
+          : {}
     }
     if (Object.keys(cleaned).length > 0) {
-      result[surface.id] = cleaned
+      Object.defineProperty(result, surface.id, {
+        value: cleaned,
+        enumerable: true,
+        writable: true,
+        configurable: true,
+      })
     }
   }
   return result
@@ -228,9 +234,13 @@ function stripObscuredFromContext(
   blockedExact: ReadonlySet<string>,
   blockedSubstrings: ReadonlySet<string>,
   depth = 0,
+  templatePrefixes?: ReadonlySet<string>,
 ): unknown {
   if (depth > 8) return undefined
-  if (isBindingExpression(rawBinding) && referencesObscuredPointer(rawBinding, obscuredPointers)) {
+  if (
+    isBindingExpression(rawBinding) &&
+    referencesObscuredPointer(rawBinding, obscuredPointers, 0, templatePrefixes)
+  ) {
     return undefined
   }
   if (typeof value === 'string') {
@@ -250,6 +260,7 @@ function stripObscuredFromContext(
           blockedExact,
           blockedSubstrings,
           depth + 1,
+          templatePrefixes,
         ),
       )
       .filter((item) => item !== undefined)
@@ -268,6 +279,7 @@ function stripObscuredFromContext(
         blockedExact,
         blockedSubstrings,
         depth + 1,
+        templatePrefixes,
       )
       if (cleaned !== undefined) out[k] = cleaned
     }
@@ -341,11 +353,18 @@ function sanitizeActionContextWithState(
 ): Record<string, unknown> {
   const rawContext = action.context ?? {}
   let rawActionCtx: Record<string, unknown> | undefined
+  let templatePrefixes: ReadonlySet<string> | undefined
   try {
     const entries = surface.componentsModel.entries
+    const componentRecords: Record<string, unknown>[] = []
     for (const [id, comp] of entries) {
+      const props = comp.properties as Record<string, unknown> | undefined
+      componentRecords.push({
+        ...(typeof props === 'object' && props !== null ? props : {}),
+        id,
+        component: comp.type,
+      })
       if (id === action.sourceComponentId && action.sourceComponentId !== '') {
-        const props = comp.properties as Record<string, unknown> | undefined
         if (props) {
           let exactMatch: Record<string, unknown> | undefined
           let merged: Record<string, unknown> | undefined
@@ -371,6 +390,9 @@ function sanitizeActionContextWithState(
         }
       }
     }
+    if (action.sourceComponentId !== '') {
+      templatePrefixes = buildTemplatePathMap(componentRecords).get(action.sourceComponentId)
+    }
   } catch (err) {
     console.error('[dsh-genui-a2ui] Failed to inspect obscured fields:', err)
     return {}
@@ -385,6 +407,8 @@ function sanitizeActionContextWithState(
     obscured,
     blockedExact,
     blockedSubstrings,
+    0,
+    templatePrefixes,
   )
   return sanitizeDataModel(
     typeof stripped === 'object' && stripped !== null && !Array.isArray(stripped) ? stripped : {},
@@ -710,7 +734,7 @@ export class SurfaceSessionStore {
   }
 
   private clearDraftSubscriptions(): void {
-    if (this.readOnly) {
+    if (this.readOnly || this.streaming || this.processor.getSurfaces().size === 0) {
       this.cancelPendingDraftWrites()
     } else {
       this.flushPendingDraftWrites()
@@ -735,12 +759,29 @@ export class SurfaceSessionStore {
       readonly notify?: boolean | undefined
     },
   ): void {
-    if (options.readOnly) {
+    const prev = this.appliedPrefix
+    const prevCount = this.appliedCount
+    const isExtension =
+      messages.length >= prevCount &&
+      prev.every((msg, idx) => idx >= prevCount || messages[idx] === msg)
+
+    if (options.readOnly || options.streaming) {
       this.cancelPendingDraftWrites()
     } else if (options.readOnlySurfaceIds !== undefined) {
       for (const roId of options.readOnlySurfaceIds) {
         this.cancelPendingDraftWrites(roId)
       }
+    }
+    if (
+      !options.skipDraftIo &&
+      !options.readOnly &&
+      !options.streaming &&
+      isExtension &&
+      this.fingerprint !== '' &&
+      this.fingerprint !== options.fingerprint &&
+      this.sessionId === options.sessionId
+    ) {
+      this.flushPendingDraftWrites()
     }
     this.streaming = options.streaming
     this.readOnly = options.readOnly
@@ -749,12 +790,6 @@ export class SurfaceSessionStore {
     this.fingerprint = options.fingerprint
     this.visibleSurfaceIds = options.visibleSurfaceIds
     this.onAction = options.onAction
-
-    const prev = this.appliedPrefix
-    const prevCount = this.appliedCount
-    const isExtension =
-      messages.length >= prevCount &&
-      prev.every((msg, idx) => idx >= prevCount || messages[idx] === msg)
 
     let snapshotChanged = false
     if (!isExtension || messages.length > prevCount) {
@@ -781,8 +816,8 @@ export class SurfaceSessionStore {
                 ?.surfaceId
               if (typeof delId === 'string' && delId !== '') {
                 this.cancelPendingDraftWrites(delId)
-                if (!options.skipDraftIo && options.sessionId && options.fingerprint) {
-                  removeSurfaceDraft(options.sessionId, delId, options.fingerprint)
+                if (!options.skipDraftIo && options.sessionId) {
+                  removeSurfaceDraftsBySurface(options.sessionId, delId)
                 }
               }
             }

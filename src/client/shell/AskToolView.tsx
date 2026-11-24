@@ -2,10 +2,11 @@ import type { ActionPayload } from '@a2ui/web_core/v1_0'
 import { memo, useCallback, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { AskAnswerInput } from '../../shared/wire-types.ts'
 import dockCss from './DockView.module.css'
+import { useEffectCallback } from '../dom-hooks.ts'
 import type { WorkspaceFileOpener } from '../file-opener.tsx'
 import { useShellMessages } from '../i18n.ts'
 import { LazySurfaceGroupView, useLazyStreamingExpress } from './LazySurfaceGroupView.tsx'
-import { computeMessagesFingerprint, removeSurfaceDraft } from '../persistence.ts'
+import { removeSurfaceDraftsBySurface } from '../persistence.ts'
 import css from '../SurfaceView.module.css'
 import type { ChatExternalStore, ToolViewOwnerProps } from './ToolView.tsx'
 import {
@@ -39,7 +40,7 @@ export const A2uiAskDockView = memo(function A2uiAskDockView({
   submitAskAnswer,
 }: A2uiAskDockViewProps) {
   const msg = useShellMessages()
-  const [submittingCallId, setSubmittingCallId] = useState<string | null>(null)
+  const [submittingKeys, setSubmittingKeys] = useState<ReadonlySet<string>>(() => new Set())
   const [errorState, setErrorState] = useState<{
     readonly callId: string
     readonly message: string
@@ -86,18 +87,57 @@ export const A2uiAskDockView = memo(function A2uiAskDockView({
 
   const draftSessionId =
     sessionId && activeCallId ? `${sessionId}::ask::${activeCallId}` : undefined
-  const inFlightCallIdRef = useRef<string | null>(null)
-  const submitting = compositeCallKey !== '' && submittingCallId === compositeCallKey
+  const inFlightKeysRef = useRef<Set<string>>(new Set())
+  const prevAskDraftRef = useRef<{
+    readonly sessionId: string | undefined
+    readonly draftSessionId: string
+    readonly surfaceIds: readonly string[]
+  } | null>(null)
+  const submitting = compositeCallKey !== '' && submittingKeys.has(compositeCallKey)
   const submitError =
     compositeCallKey !== '' && errorState?.callId === compositeCallKey ? errorState.message : null
 
-  const clearAskDrafts = useCallback(() => {
-    if (!draftSessionId || !liveVisibleIds || liveMessages.length === 0) return
-    const fp = computeMessagesFingerprint(liveMessages)
-    for (const id of liveVisibleIds) {
-      removeSurfaceDraft(draftSessionId, id, fp)
+  const clearAskDrafts = useCallback(
+    (
+      targetSessionId: string | undefined = draftSessionId,
+      targetIds: readonly string[] = liveVisibleIds ? [...liveVisibleIds] : [],
+    ) => {
+      if (!targetSessionId || targetIds.length === 0) return
+      for (const id of targetIds) {
+        removeSurfaceDraftsBySurface(targetSessionId, id)
+      }
+    },
+    [draftSessionId, liveVisibleIds],
+  )
+
+  useEffectCallback(() => {
+    const prev = prevAskDraftRef.current
+    if (draftSessionId && liveVisibleIds && liveVisibleIds.size > 0) {
+      if (prev && prev.sessionId === sessionId && prev.draftSessionId !== draftSessionId) {
+        clearAskDrafts(prev.draftSessionId, prev.surfaceIds)
+      }
+      prevAskDraftRef.current = {
+        sessionId,
+        draftSessionId,
+        surfaceIds: [...liveVisibleIds],
+      }
+    } else if (prev !== null) {
+      if (prev.sessionId === sessionId) {
+        clearAskDrafts(prev.draftSessionId, prev.surfaceIds)
+      }
+      prevAskDraftRef.current = null
     }
-  }, [draftSessionId, liveMessages, liveVisibleIds])
+    return undefined
+  }, [clearAskDrafts, draftSessionId, liveVisibleIds, sessionId])
+
+  const removeSubmittingKey = useCallback((targetKey: string) => {
+    setSubmittingKeys((prev) => {
+      if (!prev.has(targetKey)) return prev
+      const next = new Set(prev)
+      next.delete(targetKey)
+      return next
+    })
+  }, [])
 
   const handleSurfaceAction = useCallback(
     (
@@ -108,15 +148,21 @@ export const A2uiAskDockView = memo(function A2uiAskDockView({
       if (
         !activeCallId ||
         submitting ||
-        inFlightCallIdRef.current === compositeCallKey ||
+        inFlightKeysRef.current.has(compositeCallKey) ||
         submitAskAnswer === undefined
       ) {
         return Promise.resolve(false)
       }
       const targetCallId = activeCallId
       const targetKey = compositeCallKey
-      inFlightCallIdRef.current = targetKey
-      setSubmittingCallId(targetKey)
+      const targetDraftSessionId = draftSessionId
+      const targetSurfaceIds = liveVisibleIds ? [...liveVisibleIds] : []
+      inFlightKeysRef.current.add(targetKey)
+      setSubmittingKeys((prev) => {
+        const next = new Set(prev)
+        next.add(targetKey)
+        return next
+      })
       setErrorState(null)
       return submitAskAnswer({
         callId: targetCallId,
@@ -128,22 +174,19 @@ export const A2uiAskDockView = memo(function A2uiAskDockView({
         dataModels,
       }).then(
         (ok) => {
-          if (inFlightCallIdRef.current === targetKey) {
-            inFlightCallIdRef.current = null
-          }
+          inFlightKeysRef.current.delete(targetKey)
           if (ok) {
-            clearAskDrafts()
+            clearAskDrafts(targetDraftSessionId, targetSurfaceIds)
+            removeSubmittingKey(targetKey)
             return true
           }
-          setSubmittingCallId((prev) => (prev === targetKey ? null : prev))
+          removeSubmittingKey(targetKey)
           setErrorState({ callId: targetKey, message: msg.askSubmitRetry })
           return false
         },
         (err: unknown) => {
-          if (inFlightCallIdRef.current === targetKey) {
-            inFlightCallIdRef.current = null
-          }
-          setSubmittingCallId((prev) => (prev === targetKey ? null : prev))
+          inFlightKeysRef.current.delete(targetKey)
+          removeSubmittingKey(targetKey)
           setErrorState({
             callId: targetKey,
             message: err instanceof Error ? err.message : msg.askSubmitFailed,
@@ -152,52 +195,79 @@ export const A2uiAskDockView = memo(function A2uiAskDockView({
         },
       )
     },
-    [activeCallId, clearAskDrafts, compositeCallKey, msg, submitAskAnswer, submitting],
+    [
+      activeCallId,
+      clearAskDrafts,
+      compositeCallKey,
+      draftSessionId,
+      liveVisibleIds,
+      msg,
+      removeSubmittingKey,
+      submitAskAnswer,
+      submitting,
+    ],
   )
 
   const handleSkip = useCallback(() => {
     if (
       !activeCallId ||
       submitting ||
-      inFlightCallIdRef.current === compositeCallKey ||
+      inFlightKeysRef.current.has(compositeCallKey) ||
       submitAskAnswer === undefined
     ) {
       return
     }
     const targetCallId = activeCallId
     const targetKey = compositeCallKey
-    inFlightCallIdRef.current = targetKey
-    setSubmittingCallId(targetKey)
+    const targetDraftSessionId = draftSessionId
+    const targetSurfaceIds = liveVisibleIds ? [...liveVisibleIds] : []
+    inFlightKeysRef.current.add(targetKey)
+    setSubmittingKeys((prev) => {
+      const next = new Set(prev)
+      next.add(targetKey)
+      return next
+    })
     setErrorState(null)
     void submitAskAnswer({ callId: targetCallId, skipped: true }).then(
       (ok) => {
-        if (inFlightCallIdRef.current === targetKey) {
-          inFlightCallIdRef.current = null
-        }
+        inFlightKeysRef.current.delete(targetKey)
         if (ok) {
-          clearAskDrafts()
+          clearAskDrafts(targetDraftSessionId, targetSurfaceIds)
+          removeSubmittingKey(targetKey)
           return
         }
-        setSubmittingCallId((prev) => (prev === targetKey ? null : prev))
+        removeSubmittingKey(targetKey)
         setErrorState({ callId: targetKey, message: msg.askSkipRetry })
       },
       (err: unknown) => {
-        if (inFlightCallIdRef.current === targetKey) {
-          inFlightCallIdRef.current = null
-        }
-        setSubmittingCallId((prev) => (prev === targetKey ? null : prev))
+        inFlightKeysRef.current.delete(targetKey)
+        removeSubmittingKey(targetKey)
         setErrorState({
           callId: targetKey,
           message: err instanceof Error ? err.message : msg.askSkipFailed,
         })
       },
     )
-  }, [activeCallId, clearAskDrafts, compositeCallKey, msg, submitAskAnswer, submitting])
+  }, [
+    activeCallId,
+    clearAskDrafts,
+    compositeCallKey,
+    draftSessionId,
+    liveVisibleIds,
+    msg,
+    removeSubmittingKey,
+    submitAskAnswer,
+    submitting,
+  ])
 
   if (activeAsk === null) return null
 
   const waiting = activeAsk.phase === 'start'
   const title = activeAsk.title ?? msg.askDefaultTitle
+  const compileError =
+    waiting && liveMessages.length === 0 && streamingSnapshot?.error
+      ? streamingSnapshot.error
+      : null
 
   return (
     <section
@@ -244,6 +314,11 @@ export const A2uiAskDockView = memo(function A2uiAskDockView({
           onAction={handleSurfaceAction}
           openWorkspaceFile={openWorkspaceFile}
         />
+        {compileError ? (
+          <div className={css.reason} role="alert" data-a2ui-ask-compile-error="">
+            {compileError}
+          </div>
+        ) : null}
         {submitError ? (
           <div className={css.reason} role="alert">
             {submitError}

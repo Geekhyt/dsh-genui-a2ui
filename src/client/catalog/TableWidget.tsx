@@ -33,7 +33,7 @@ import {
   formatTableToMarkdown,
   normalizeCrossFilterTokens,
 } from './v4-helpers.ts'
-import { weightStyle } from './widget-helpers.tsx'
+import { copyTextToClipboard, weightStyle } from './widget-helpers.tsx'
 
 type RowRecord = Record<string, unknown>
 
@@ -143,23 +143,25 @@ function resolveBadgeCellTone(rawText: string): { readonly label: string; readon
   }
   if (lower.startsWith('info:')) return { label: trimmed.slice(5).trim(), tone: 'info' }
   if (
-    /(?:正常|健康|成功|通过|已回款|达标|上线|healthy|ok|pass|passed|done|active|success|online)/i.test(
-      trimmed,
-    )
-  ) {
-    return { label: trimmed, tone: 'success' }
-  }
-  if (
-    /(?:预警|降级|审批中|待|警告|缓慢|warn|warning|degraded|pending|review|slow)/i.test(trimmed)
-  ) {
-    return { label: trimmed, tone: 'warning' }
-  }
-  if (
-    /(?:异常|失败|高危|故障|错误|超限|熔断|拒绝|error|fail|failed|critical|down|danger|rejected)/i.test(
+    /(?:未通过|不通过|未达标|未上线|不健康|不正常|异常|失败|高危|故障|错误|超限|熔断|拒绝|\b(?:error|fail|failed|critical|down|danger|rejected|unhealthy|broken|offline|crash|crashed|timeout)\b)/i.test(
       trimmed,
     )
   ) {
     return { label: trimmed, tone: 'danger' }
+  }
+  if (
+    /(?:预警|降级|审批中|待|警告|缓慢|\b(?:warn|warning|degraded|pending|review|slow|inactive|paused|disabled)\b)/i.test(
+      trimmed,
+    )
+  ) {
+    return { label: trimmed, tone: 'warning' }
+  }
+  if (
+    /(?:正常|健康|成功|通过|已回款|达标|上线|\b(?:healthy|ok|pass|passed|done|active|success|online)\b)/i.test(
+      trimmed,
+    )
+  ) {
+    return { label: trimmed, tone: 'success' }
   }
   return { label: trimmed, tone: 'neutral' }
 }
@@ -169,7 +171,9 @@ function parseSparklineCellPoints(value: unknown): readonly number[] {
   if (typeof value === 'string' && value.includes(',')) {
     const parts = value
       .split(',')
-      .map((s) => Number(s.trim()))
+      .map((s) => s.trim())
+      .filter((s) => s !== '')
+      .map(Number)
       .filter(Number.isFinite)
     return normalizeSparklinePoints(parts)
   }
@@ -197,11 +201,13 @@ function renderFormattedTableCell(
     const text = formatCellValue(value, msg)
     const num = parseNumericScalarForBar(value)
     const dir =
-      text.startsWith('+') || (num !== null && num > 0 && !text.startsWith('-'))
-        ? 'up'
-        : text.startsWith('-') || (num !== null && num < 0)
-          ? 'down'
-          : 'neutral'
+      num === 0 || text === '-' || text === '—' || text === ''
+        ? 'neutral'
+        : text.startsWith('+') || (num !== null && num > 0 && !text.startsWith('-'))
+          ? 'up'
+          : text.startsWith('-') || (num !== null && num < 0)
+            ? 'down'
+            : 'neutral'
     return (
       <span className={css.tableDeltaCell} data-dir={dir}>
         {text}
@@ -256,12 +262,6 @@ function renderFormattedTableCell(
   return formatCellValue(value, msg)
 }
 
-function copyToClipboardSafe(text: string): void {
-  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-    void navigator.clipboard.writeText(text).catch(() => {})
-  }
-}
-
 function triggerCsvDownload(csvText: string, baseTitle: string): void {
   if (
     typeof document === 'undefined' ||
@@ -269,17 +269,19 @@ function triggerCsvDownload(csvText: string, baseTitle: string): void {
     typeof Blob === 'undefined' ||
     typeof URL === 'undefined'
   ) {
-    copyToClipboardSafe(csvText)
+    copyTextToClipboard(csvText)
     return
   }
   let anchor: HTMLAnchorElement | null = null
   try {
     const blob = new Blob([csvText], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
-    const slug = baseTitle
-      .trim()
-      .replace(/[^\w\u4e00-\u9fa5-]+/g, '-')
-      .replace(/^-+|-+$/g, '')
+    const rawSlug = baseTitle.trim().replace(/[^\w\u4e00-\u9fa5-]+/g, '-')
+    let sStart = 0
+    while (sStart < rawSlug.length && rawSlug[sStart] === '-') sStart += 1
+    let sEnd = rawSlug.length
+    while (sEnd > sStart && rawSlug[sEnd - 1] === '-') sEnd -= 1
+    const slug = rawSlug.slice(sStart, sEnd)
     anchor = document.createElement('a')
     anchor.href = url
     anchor.download = `${slug || 'a2ui-table'}.csv`
@@ -288,7 +290,7 @@ function triggerCsvDownload(csvText: string, baseTitle: string): void {
     anchor.click()
     setTimeout(() => URL.revokeObjectURL(url), 1000)
   } catch {
-    copyToClipboardSafe(csvText)
+    copyTextToClipboard(csvText)
   } finally {
     if (anchor?.parentNode) {
       anchor.parentNode.removeChild(anchor)
@@ -565,7 +567,7 @@ export const TableWidget = memo(function TableWidget({
       sortedRows.map((r) => r.original),
       numericKeySet,
     )
-    copyToClipboardSafe(md)
+    copyTextToClipboard(md)
     markCopiedMd()
   }
 

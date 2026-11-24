@@ -108,6 +108,14 @@ function normalizeStatus(raw: unknown): FileChangeStatus | undefined {
   return undefined
 }
 
+function trimEdgeSlashes(src: string): string {
+  let start = 0
+  while (start < src.length && src[start] === '/') start += 1
+  let end = src.length
+  while (end > start && src[end - 1] === '/') end -= 1
+  return src.slice(start, end)
+}
+
 export function normalizeFileEntries(rawItems: unknown): NormalizedFileEntry[] {
   if (!Array.isArray(rawItems)) return []
   const out: NormalizedFileEntry[] = []
@@ -118,7 +126,7 @@ export function normalizeFileEntries(rawItems: unknown): NormalizedFileEntry[] {
         .replace(/^(?:\.\/)+/, '')
         .trim()
       const isAbs = normalizedSlashes.startsWith('/')
-      const body = normalizedSlashes.replace(/^\/+|\/+$/g, '').trim()
+      const body = trimEdgeSlashes(normalizedSlashes).trim()
       if (body !== '') {
         const clean = isAbs ? `/${body}` : body
         const isDir = normalizedSlashes.endsWith('/')
@@ -135,7 +143,7 @@ export function normalizeFileEntries(rawItems: unknown): NormalizedFileEntry[] {
         .replace(/^(?:\.\/)+/, '')
         .trim()
       const isAbs = normalizedSlashes.startsWith('/')
-      const body = normalizedSlashes.replace(/^\/+|\/+$/g, '').trim()
+      const body = trimEdgeSlashes(normalizedSlashes).trim()
       if (body === '') continue
       const clean = isAbs ? `/${body}` : body
       const explicitKind =

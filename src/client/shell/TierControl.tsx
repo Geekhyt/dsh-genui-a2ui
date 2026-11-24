@@ -4,6 +4,7 @@ import {
   dismissCommandNotice,
   getA2uiEnabled,
   getCommandNotice,
+  getDefaultA2uiEnabled,
   reconcileLatestA2uiCommand,
   resolveEffectiveA2uiEnabled,
   setA2uiEnabled,
@@ -13,6 +14,7 @@ import {
 import css from './TierControl.module.css'
 import type { ChatExternalStore } from './ToolView.tsx'
 import { isChatTimelineActive, resolveLatestA2uiCommandState } from './turn-surfaces.ts'
+import { useDarkTheme } from '../theme.ts'
 import { DshAppsIcon, DshToast, DshTooltip, DshWarningIcon } from '../ui/primitives.tsx'
 
 export interface A2uiTierControlProps {
@@ -73,6 +75,7 @@ export const A2uiTierControl = memo(function A2uiTierControl({
 
   const handleToggle = useCallback(() => {
     const prev = enabled
+    const prevDefault = getDefaultA2uiEnabled()
     const next = !prev
     const targetSessionId = sessionId
     const targetKey = targetSessionId ?? '__global__'
@@ -82,17 +85,20 @@ export const A2uiTierControl = memo(function A2uiTierControl({
     const reqId = (reqSeqBySessionRef.current.get(targetKey) ?? 0) + 1
     reqSeqBySessionRef.current.set(targetKey, reqId)
     setBusyBySession((cur) => ({ ...cur, [targetKey]: reqId }))
+    const rollback = () => {
+      if (reqSeqBySessionRef.current.get(targetKey) !== reqId) return
+      setA2uiEnabled(undefined, prevDefault, undefined, true)
+      if (targetSessionId) {
+        setA2uiEnabled(targetSessionId, prev, cmdSeq, false)
+      }
+    }
     void syncHostEnabled(next)
       .then(
         (ok) => {
-          if (!ok && reqSeqBySessionRef.current.get(targetKey) === reqId) {
-            setA2uiEnabled(targetSessionId, prev, cmdSeq, false)
-          }
+          if (!ok) rollback()
         },
         () => {
-          if (reqSeqBySessionRef.current.get(targetKey) === reqId) {
-            setA2uiEnabled(targetSessionId, prev, cmdSeq, false)
-          }
+          rollback()
         },
       )
       .finally(() => {
@@ -106,9 +112,14 @@ export const A2uiTierControl = memo(function A2uiTierControl({
   }, [enabled, latestCommand?.seq, sessionId, syncHostEnabled])
 
   const msg = useShellMessages()
+  const dark = useDarkTheme()
   const tooltip = enabled ? msg.toggleOnTooltip : msg.toggleOffTooltip
 
-  const triggerClass = [css.trigger, enabled ? css.triggerOn : css.triggerOff]
+  const triggerClass = [
+    css.trigger,
+    enabled ? css.triggerOn : css.triggerOff,
+    dark ? 'a2ui-dark' : 'a2ui-light',
+  ]
     .filter(Boolean)
     .join(' ')
 

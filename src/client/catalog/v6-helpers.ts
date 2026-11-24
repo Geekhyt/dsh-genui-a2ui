@@ -32,17 +32,18 @@ export function clampRangeSliderBounds(params: {
   const min = typeof params.min === 'number' && Number.isFinite(params.min) ? params.min : 0
   const rawMax = typeof params.max === 'number' && Number.isFinite(params.max) ? params.max : 100
   const max = rawMax > min ? rawMax : min + 1
+  const span = max - min
+  const fallbackStep = span <= 1 ? Math.max(1e-6, Number((span / 100).toPrecision(2))) : 1
   const step =
     typeof params.step === 'number' && Number.isFinite(params.step) && params.step > 0
       ? params.step
-      : 1
+      : fallbackStep
   const rawStart = parseOptionalFiniteNumber(params.start)
   const rawEnd = parseOptionalFiniteNumber(params.end)
   const clampedStart = rawStart !== null ? Math.min(max, Math.max(min, rawStart)) : min
   const clampedEnd = rawEnd !== null ? Math.min(max, Math.max(min, rawEnd)) : max
   const start = Math.min(clampedStart, clampedEnd)
   const end = Math.max(clampedStart, clampedEnd)
-  const span = max - min
   return {
     min,
     max,

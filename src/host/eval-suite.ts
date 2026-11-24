@@ -558,6 +558,19 @@ export function gradeToolAttempt(
 
   try {
     const messages = sessions.compile(sessionId, ui)
+    if (messages.length === 0) {
+      return {
+        attempt,
+        toolCalled,
+        placement,
+        ui,
+        compiledOk: false,
+        errorMessage: 'Express program produced no UI messages (missing root assignment)',
+        errorBucket: 'OTHER_VALIDATION',
+        usedComponents: [],
+        usedChartKinds: [],
+      }
+    }
     const { components, chartKinds } = extractCompiledArtifacts(messages)
     return {
       attempt,

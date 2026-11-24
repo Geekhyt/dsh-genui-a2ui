@@ -23,7 +23,9 @@ import {
 } from '../shared/redaction.ts'
 import { A2UI_LIMITS, ASK_TOOL, dshSchemaCatalog, RENDER_TOOL } from '../shared/catalog-schema.ts'
 import {
+  assertSafeExpressProgram,
   desugarExpressConcat,
+  estimateExpressExpansionSize,
   extractUpdateSurfaceIds,
   flattenChainedCalc,
   foldNestedCondToLookup,
@@ -492,13 +494,10 @@ export class SurfaceSessions {
           if (val !== undefined) {
             collectKvSecretsFromValue(val, normKv, rec.obscuredPointers, new Set(), new Set())
           }
-        } else if (dmPath.startsWith(`${normKv}/`)) {
+        } else if (normKv === '/' ? dmPath !== '/' : dmPath.startsWith(`${normKv}/`)) {
+          const relStart = normKv === '/' ? 1 : normKv.length + 1
           const seg =
-            dmPath
-              .slice(normKv.length + 1)
-              .split('/')[0]
-              ?.replace(/~1/g, '/')
-              .replace(/~0/g, '~') ?? ''
+            dmPath.slice(relStart).split('/')[0]?.replace(/~1/g, '/').replace(/~0/g, '~') ?? ''
           if (seg !== '' && isSecretKey(seg)) {
             rec.obscuredPointers.add(dmPath)
           }
@@ -539,11 +538,16 @@ export class SurfaceSessions {
   getSessionRedactionState(
     sessionId: string,
     surfaceIds?: readonly string[],
-  ): { obscuredPointers: Set<string>; kvPointers: Set<string> } {
+  ): {
+    obscuredPointers: Set<string>
+    kvPointers: Set<string>
+    components: Record<string, unknown>[]
+  } {
     const obscuredPointers = new Set<string>()
     const kvPointers = new Set<string>()
+    const components: Record<string, unknown>[] = []
     const bySurface = this.redactionBySession.get(sessionId)
-    if (!bySurface) return { obscuredPointers, kvPointers }
+    if (!bySurface) return { obscuredPointers, kvPointers, components }
     const targetIds =
       surfaceIds !== undefined && surfaceIds.length > 0 ? surfaceIds : [...bySurface.keys()]
     for (const sid of targetIds) {
@@ -551,8 +555,9 @@ export class SurfaceSessions {
       if (!rec) continue
       for (const p of rec.obscuredPointers) obscuredPointers.add(p)
       for (const k of rec.kvPointers) kvPointers.add(k)
+      for (const c of rec.componentsById.values()) components.push(c)
     }
-    return { obscuredPointers, kvPointers }
+    return { obscuredPointers, kvPointers, components }
   }
 
   rawPromptSnippet(): string {
@@ -590,7 +595,20 @@ export class SurfaceSessions {
     }
 
     const hadPrevState = this.states.has(sessionId)
-    const cleaned = preprocessExpressProgram(stripWrapping(ui))
+    const stripped = stripWrapping(ui)
+    try {
+      assertSafeExpressProgram(stripped)
+    } catch (err) {
+      throw new A2uiError(err instanceof Error ? err.message : String(err), 'VALIDATION_ERROR')
+    }
+    const cleaned = preprocessExpressProgram(stripped)
+    const maxExpansion = A2UI_LIMITS.maxCompiledBytes * 2
+    if (estimateExpressExpansionSize(cleaned, maxExpansion) > maxExpansion) {
+      throw new A2uiError(
+        `Express local-variable expansion exceeds limit (${maxExpansion} chars). Simplify repeated references.`,
+        'VALIDATION_ERROR',
+      )
+    }
 
     const runCompile = (): AgentToRendererMessage[] => {
       let parts: ReturnType<A2uiRequestProcessor['parseResponse']>

@@ -8,7 +8,11 @@ export function normalizePointerPath(pointer: string): string {
   const trimmed = pointer.trim()
   if (trimmed === '' || trimmed === '/') return '/'
   const withSlash = trimmed.startsWith('/') ? trimmed : `/${trimmed}`
-  return withSlash.length > 1 ? withSlash.replace(/\/+$/, '') : withSlash
+  let end = withSlash.length
+  while (end > 1 && withSlash[end - 1] === '/') {
+    end -= 1
+  }
+  return end === withSlash.length ? withSlash : withSlash.slice(0, end)
 }
 
 function matchesWildcardPointer(norm: string, obs: string, matchParent: boolean): boolean {
@@ -231,10 +235,19 @@ function collectChildComponentIds(comp: Record<string, unknown>, outIds: string[
   }
 }
 
-export function resolveTemplateObscuredPointers(
+function composeTemplatePath(outerTplPath: string, rawInnerPath: string): string {
+  const trimmed = rawInnerPath.trim()
+  if (trimmed === '' || trimmed === '/') return outerTplPath
+  if (trimmed.startsWith('/')) return normalizePointerPath(trimmed)
+  let start = 0
+  while (start < trimmed.length && trimmed[start] === '/') start += 1
+  const cleanRel = trimmed.slice(start)
+  return cleanRel === '' ? outerTplPath : `${outerTplPath}/*/${cleanRel}`
+}
+
+export function buildTemplatePathMap(
   components: readonly Record<string, unknown>[],
-  outObscured: Set<string>,
-): void {
+): Map<string, Set<string>> {
   const byId = new Map<string, Record<string, unknown>>()
   for (const comp of components) {
     if (typeof comp.id === 'string' && comp.id !== '') {
@@ -242,25 +255,18 @@ export function resolveTemplateObscuredPointers(
     }
   }
   const templatePathByCompId = new Map<string, Set<string>>()
-  const markTemplateSubtree = (rootId: string, tplPath: string) => {
-    const visited = new Set<string>()
-    const stack = [rootId]
-    while (stack.length > 0) {
-      const id = stack.pop()!
-      if (visited.has(id)) continue
-      visited.add(id)
-      let paths = templatePathByCompId.get(id)
-      if (!paths) {
-        paths = new Set<string>()
-        templatePathByCompId.set(id, paths)
-      }
-      paths.add(tplPath)
-      const comp = byId.get(id)
-      if (!comp) continue
-      const childIds: string[] = []
-      collectChildComponentIds(comp, childIds)
-      for (const cid of childIds) stack.push(cid)
+  const queue: Array<{ readonly id: string; readonly tplPath: string }> = []
+
+  const enqueue = (id: string, tplPath: string) => {
+    let paths = templatePathByCompId.get(id)
+    if (!paths) {
+      paths = new Set<string>()
+      templatePathByCompId.set(id, paths)
     }
+    if (paths.has(tplPath)) return
+    if (paths.size >= 8) return
+    paths.add(tplPath)
+    queue.push({ id, tplPath })
   }
 
   for (const comp of components) {
@@ -270,10 +276,39 @@ export function resolveTemplateObscuredPointers(
       const tplPath = typeof rec.path === 'string' ? rec.path.trim() : ''
       const tplCompId = typeof rec.componentId === 'string' ? rec.componentId.trim() : ''
       if (tplPath !== '' && tplCompId !== '') {
-        markTemplateSubtree(tplCompId, normalizePointerPath(tplPath))
+        enqueue(tplCompId, normalizePointerPath(tplPath))
       }
     }
   }
+
+  while (queue.length > 0) {
+    const { id, tplPath } = queue.shift()!
+    const comp = byId.get(id)
+    if (!comp) continue
+    const childIds: string[] = []
+    collectChildComponentIds(comp, childIds)
+    for (const cid of childIds) {
+      enqueue(cid, tplPath)
+    }
+    const children = comp.children
+    if (typeof children === 'object' && children !== null && !Array.isArray(children)) {
+      const rec = children as Record<string, unknown>
+      const innerPath = typeof rec.path === 'string' ? rec.path.trim() : ''
+      const innerCompId = typeof rec.componentId === 'string' ? rec.componentId.trim() : ''
+      if (innerPath !== '' && innerCompId !== '') {
+        enqueue(innerCompId, composeTemplatePath(tplPath, innerPath))
+      }
+    }
+  }
+
+  return templatePathByCompId
+}
+
+export function resolveTemplateObscuredPointers(
+  components: readonly Record<string, unknown>[],
+  outObscured: Set<string>,
+): void {
+  const templatePathByCompId = buildTemplatePathMap(components)
 
   for (const comp of components) {
     if (comp.component !== 'TextField' || comp.variant !== 'obscured') continue
@@ -287,8 +322,7 @@ export function resolveTemplateObscuredPointers(
     const tplPaths = id !== '' ? templatePathByCompId.get(id) : undefined
     if (tplPaths && tplPaths.size > 0) {
       for (const tp of tplPaths) {
-        const cleanRel = rawPtr.replace(/^\/+/, '')
-        outObscured.add(cleanRel === '' ? tp : `${tp}/*/${cleanRel}`)
+        outObscured.add(composeTemplatePath(tp, rawPtr))
       }
     } else {
       outObscured.add(rawPtr === '' ? '/' : normalizePointerPath(rawPtr))
@@ -308,26 +342,42 @@ export function isBindingExpression(node: unknown): boolean {
   )
 }
 
+function isPointerObscuredInScope(
+  ptr: string,
+  obscured: ReadonlySet<string>,
+  templatePrefixes?: ReadonlySet<string>,
+): boolean {
+  if (isPointerObscured(ptr, obscured, true)) return true
+  if (templatePrefixes && templatePrefixes.size > 0 && !ptr.trim().startsWith('/')) {
+    for (const tp of templatePrefixes) {
+      const scoped = composeTemplatePath(tp, ptr)
+      if (isPointerObscured(scoped, obscured, true)) return true
+    }
+  }
+  return false
+}
+
 export function referencesObscuredPointer(
   node: unknown,
   obscured: ReadonlySet<string>,
   depth = 0,
+  templatePrefixes?: ReadonlySet<string>,
 ): boolean {
   if (obscured.size === 0 || depth > 8 || node === null || node === undefined) return false
   if (typeof node === 'string') {
     for (const ptr of extractInterpolatedPointers(node)) {
-      if (isPointerObscured(ptr, obscured, true)) return true
+      if (isPointerObscuredInScope(ptr, obscured, templatePrefixes)) return true
     }
     return false
   }
   if (Array.isArray(node)) {
-    return node.some((el) => referencesObscuredPointer(el, obscured, depth + 1))
+    return node.some((el) => referencesObscuredPointer(el, obscured, depth + 1, templatePrefixes))
   }
   if (typeof node === 'object') {
     const bound = extractBindingPointer(node)
-    if (bound !== null && isPointerObscured(bound, obscured, true)) return true
+    if (bound !== null && isPointerObscuredInScope(bound, obscured, templatePrefixes)) return true
     for (const val of Object.values(node as Record<string, unknown>)) {
-      if (referencesObscuredPointer(val, obscured, depth + 1)) return true
+      if (referencesObscuredPointer(val, obscured, depth + 1, templatePrefixes)) return true
     }
   }
   return false

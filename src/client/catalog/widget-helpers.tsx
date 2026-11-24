@@ -86,6 +86,8 @@ export const SurfaceValidationContext = createContext<SurfaceValidationContextVa
   markSubmitAttempted: () => {},
 })
 
+export { copyTextToClipboard } from '../dom-hooks.ts'
+
 export function isWritableProp(context: unknown, propName: string, setter: unknown): boolean {
   if (typeof setter !== 'function') return false
   if (typeof context !== 'object' || context === null) return true
@@ -96,6 +98,14 @@ export function isWritableProp(context: unknown, propName: string, setter: unkno
   const rawVal = (rawProps as Record<string, unknown>)[propName]
   if (typeof rawVal !== 'object' || rawVal === null || Array.isArray(rawVal)) return false
   const rec = rawVal as Record<string, unknown>
+  if ('componentId' in rec) return false
+  const atLeastV10 = (context as { dataContext?: { atLeastV10?: unknown } }).dataContext?.atLeastV10
+  if (atLeastV10 === true) {
+    return typeof rec['@path'] === 'string' && rec['@path'].trim() !== ''
+  }
+  if (atLeastV10 === false) {
+    return typeof rec.path === 'string' && rec.path.trim() !== ''
+  }
   return (
     (typeof rec['@path'] === 'string' && rec['@path'].trim() !== '') ||
     (typeof rec.path === 'string' && rec.path.trim() !== '')

@@ -18,8 +18,8 @@ import {
 
 const ROOT_DIR = resolve(import.meta.dirname, '..')
 
-describe('Architectural invariant linter (19 rules)', () => {
-  it('passes all 19 rules on the live repository with zero violations', () => {
+describe('Architectural invariant linter (23 rules)', () => {
+  it('passes all 23 rules on the live repository with zero violations', () => {
     const report = runAllInvariantChecks(ROOT_DIR)
     expect(report.filesScanned).toBeGreaterThan(50)
     expect(report.violations).toEqual([])
@@ -185,10 +185,34 @@ describe('Architectural invariant linter (19 rules)', () => {
     expect(properOrderCssOk).toEqual([])
 
     const redosV = checkTsInvariants(
-      `export const trimTrail = (s: string) => s.replace(/\\s*$/, '')`,
+      `export const trimTrail = (s: string) => s.replace(/\\s*$/, '').replace(/\\/+$/, '').replace(/\\d+$/, '')`,
       'src/shared/bad-regex.ts',
     )
-    expect(redosV.some((v) => v.rule === 'no-catastrophic-trailing-ws-regex')).toBe(true)
+    expect(redosV.filter((v) => v.rule === 'no-catastrophic-trailing-ws-regex').length).toBe(3)
+
+    const lightDarkCssV = checkCssInvariants(
+      `.badCard { color: light-dark(#111, #eee); }`,
+      'src/client/catalog/BadScheme.module.css',
+    )
+    expect(lightDarkCssV.some((v) => v.rule === 'css-light-dark-requires-color-scheme')).toBe(true)
+
+    const stickyCssV = checkCssInvariants(
+      `.badSticky { position: sticky; left: 0; background-color: var(--dsw-alias-bg-layer-1, #fff); }`,
+      'src/client/catalog/BadSticky.module.css',
+    )
+    expect(stickyCssV.some((v) => v.rule === 'css-sticky-bg-opaque-layer')).toBe(true)
+
+    const dupClipV = checkTsInvariants(
+      `function copyToClipboardSafe(t: string) { void navigator.clipboard.writeText(t) }\nexport const x = copyToClipboardSafe`,
+      'src/client/catalog/BadClip.tsx',
+    )
+    expect(dupClipV.filter((v) => v.rule === 'no-duplicate-clipboard-wrapper').length).toBe(2)
+
+    const rawActionJsonV = checkTsInvariants(
+      `export const enc = (x: unknown) => JSON.stringify(x)`,
+      'src/client/action-protocol.ts',
+    )
+    expect(rawActionJsonV.some((v) => v.rule === 'no-raw-json-stringify-action-bridge')).toBe(true)
   })
 
   it('verifies locale key parity across locale/*.json and TypeScript message tables', () => {

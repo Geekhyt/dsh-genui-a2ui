@@ -52,10 +52,12 @@ const PARAMETERS = {
   additionalProperties: false,
 } as const
 
+const MAX_TITLE_LEN = 200
+
 const RenderArgsSchema = z
   .object({
     ui: z.string(),
-    title: z.union([z.string(), z.null()]).optional(),
+    title: z.unknown().optional(),
     placement: z.unknown().optional(),
   })
   .passthrough()
@@ -125,7 +127,7 @@ export function readArgs(args: unknown): {
   }
   const cleanTitle =
     typeof parsed.data.title === 'string' && parsed.data.title.trim() !== ''
-      ? parsed.data.title.trim()
+      ? parsed.data.title.trim().slice(0, MAX_TITLE_LEN)
       : undefined
   return {
     ui: parsed.data.ui,

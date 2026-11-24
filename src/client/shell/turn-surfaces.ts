@@ -229,10 +229,20 @@ export function isTurnClosedForCall(
   snapshot: ChatTargetSnapshot | undefined,
   callId: string,
 ): boolean {
-  if (snapshot === undefined) return false
+  if (snapshot === undefined || callId === '') return false
   for (const node of snapshot.nodes.values()) {
-    if ((node.kind === 'tool-call' || node.kind === A2UI_SURFACE_NODE_KIND) && node.id === callId) {
-      return node.location?.turn?.status === 'closed'
+    if (node.kind === A2UI_SURFACE_NODE_KIND) {
+      const data = node.data as SettledA2uiCall | undefined
+      if (node.id === callId || data?.callId === callId) {
+        return node.location?.turn?.status === 'closed'
+      }
+      continue
+    }
+    if (node.kind === 'tool-call') {
+      const data = node.data as { readonly root?: { readonly callId?: unknown } } | undefined
+      if (node.id === callId || data?.root?.callId === callId) {
+        return node.location?.turn?.status === 'closed'
+      }
     }
   }
   return false
@@ -508,6 +518,26 @@ const dockBySnapshot = new WeakMap<ChatTargetSnapshot, DockBatch | null>()
 const dockMemoByKey = new Map<string, { sig: string; batch: DockBatch }>()
 const MAX_DOCK_MEMO = 64
 
+export function collectDeletedSurfaceIds(
+  snapshot: ChatTargetSnapshot | undefined,
+): ReadonlySet<string> {
+  const deleted = new Set<string>()
+  for (const call of collectOrderedCalls(snapshot)) {
+    for (const msg of call.messages) {
+      const del = (msg as { deleteSurface?: { surfaceId?: unknown } }).deleteSurface
+      if (del && typeof del.surfaceId === 'string' && del.surfaceId !== '') {
+        deleted.add(del.surfaceId)
+        continue
+      }
+      const created = (msg as { createSurface?: { surfaceId?: unknown } }).createSurface
+      if (created && typeof created.surfaceId === 'string' && created.surfaceId !== '') {
+        deleted.delete(created.surfaceId)
+      }
+    }
+  }
+  return deleted
+}
+
 export function resolveDockBatch(snapshot: ChatTargetSnapshot | undefined): DockBatch | null {
   if (snapshot === undefined) return null
   if (dockBySnapshot.has(snapshot)) {
@@ -527,10 +557,7 @@ export function resolveDockBatch(snapshot: ChatTargetSnapshot | undefined): Dock
     const touchesDock = call.placement === 'dock' || call.surfaceIds.some((id) => dockedIds.has(id))
     if (!touchesDock) continue
 
-    if (call.placement === 'dock') {
-      for (const id of call.surfaceIds) dockedIds.add(id)
-    }
-    let updatedExistingDocked = call.placement === 'dock'
+    let updatedExistingDocked = false
     for (const msg of call.messages) {
       const del = (msg as { deleteSurface?: { surfaceId?: unknown } }).deleteSurface
       if (del && typeof del.surfaceId === 'string') {
@@ -546,8 +573,13 @@ export function resolveDockBatch(snapshot: ChatTargetSnapshot | undefined): Dock
         continue
       }
       const sid = extractSurfaceIds([msg])[0] ?? null
-      if (sid !== null && dockedIds.has(sid)) {
-        updatedExistingDocked = true
+      if (sid !== null) {
+        if (call.placement === 'dock') {
+          dockedIds.add(sid)
+          updatedExistingDocked = true
+        } else if (dockedIds.has(sid)) {
+          updatedExistingDocked = true
+        }
       }
     }
     if (updatedExistingDocked) {

@@ -17,7 +17,12 @@ import {
   retryEchartsChunk,
   subscribeEchartsChunk,
 } from '../chunk-loader.ts'
-import { type EChartsClickParams, useEChartsMount, useTransientFlag } from '../dom-hooks.ts'
+import {
+  copyTextToClipboard,
+  type EChartsClickParams,
+  useEChartsMount,
+  useTransientFlag,
+} from '../dom-hooks.ts'
 import { useRuntimeMessages, useUiLocale } from '../i18n.ts'
 import { useDarkTheme } from '../theme.ts'
 import css from './Catalog.module.css'
@@ -80,12 +85,12 @@ function hasChartData(kind: ChartKind, data: unknown): boolean {
   }
   if (typeof data === 'object' && data !== null) {
     const rec = data as Record<string, unknown>
-    if (kind === 'graph' || kind === 'chord') {
+    if (kind === 'graph') {
       const nodes = Array.isArray(rec.nodes) ? rec.nodes : []
       const links = Array.isArray(rec.links) ? rec.links : Array.isArray(rec.edges) ? rec.edges : []
       return nodes.length > 0 || links.length > 0
     }
-    if (kind === 'sankey') {
+    if (kind === 'sankey' || kind === 'chord') {
       const links = Array.isArray(rec.links) ? rec.links : Array.isArray(rec.edges) ? rec.edges : []
       return links.length > 0
     }
@@ -129,17 +134,6 @@ function sanitizeChartValue(input: unknown): string {
   const s = sanitizeInlineUrlText(input).trim()
   if (s === '' || s.startsWith('series\0') || s.startsWith('\0')) return ''
   return s
-}
-
-function copyTextSafe(text: string, onSuccess: () => void): void {
-  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-    void navigator.clipboard
-      .writeText(text)
-      .then(() => {
-        onSuccess()
-      })
-      .catch(() => {})
-  }
 }
 
 export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps) {
@@ -343,8 +337,21 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
         )
         if (hit !== undefined) return hit
       }
-      if (curKind === 'heatmap' && idx !== undefined && idx >= 0 && idx < curRows.length) {
-        return curRows[idx]
+      if (curKind === 'heatmap') {
+        const rawData =
+          params?.data && typeof params.data === 'object' && !Array.isArray(params.data)
+            ? (params.data as { rowIndex?: unknown })
+            : undefined
+        const rIdx =
+          typeof rawData?.rowIndex === 'number' &&
+          Number.isInteger(rawData.rowIndex) &&
+          rawData.rowIndex >= 0 &&
+          rawData.rowIndex < curRows.length
+            ? rawData.rowIndex
+            : idx
+        if (rIdx !== undefined && rIdx >= 0 && rIdx < curRows.length) {
+          return curRows[rIdx]
+        }
       }
       if (curKind === 'calendar' && tupleLabel) {
         const hit = curRows.find((r) => {
@@ -432,7 +439,7 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
 
   const handleCopyCsv = () => {
     if (!csvPayload) return
-    copyTextSafe(csvPayload, markCopiedCsv)
+    copyTextToClipboard(csvPayload, markCopiedCsv)
   }
 
   const showActions = Boolean(exportable && chunk && !loadError && chartHasData)

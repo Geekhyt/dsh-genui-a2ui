@@ -76,8 +76,31 @@ export function useTransientKey<T>(durationMs = 1500): readonly [T | null, (key:
 
 const escapeHandlerStack: Array<() => void> = []
 
+function isInsideUnmanagedHostOverlay(): boolean {
+  if (typeof document === 'undefined') return false
+  const active = document.activeElement
+  if (!(active instanceof HTMLElement)) return false
+  const overlay = active.closest('[role="dialog"], [role="alertdialog"], [role="menu"]')
+  if (!overlay) return false
+  if (
+    overlay.hasAttribute('data-a2ui-overlay') ||
+    overlay.hasAttribute('data-a2ui-portal-popover')
+  ) {
+    return false
+  }
+  if (
+    overlay.closest(
+      '[data-dsh-a2ui-card], [data-a2ui-dock], [data-a2ui-ask-dock], [data-a2ui-overlay], [data-a2ui-portal-popover]',
+    )
+  ) {
+    return false
+  }
+  return true
+}
+
 function dispatchTopEscape(e: KeyboardEvent): void {
   if (e.key !== 'Escape' || escapeHandlerStack.length === 0) return
+  if (isInsideUnmanagedHostOverlay()) return
   const top = escapeHandlerStack[escapeHandlerStack.length - 1]
   if (!top) return
   e.preventDefault()
@@ -245,9 +268,19 @@ export function usePortalPopover(params: {
         ? new ResizeObserver(() => scheduleSync())
         : null
     if (ro && triggerRef.current) ro.observe(triggerRef.current)
+    const io =
+      typeof IntersectionObserver !== 'undefined' && triggerRef.current
+        ? new IntersectionObserver((entries) => {
+            if (entries.some((entry) => !entry.isIntersecting)) {
+              scheduleSync()
+            }
+          })
+        : null
+    if (io && triggerRef.current) io.observe(triggerRef.current)
     return () => {
       removeEscape()
       ro?.disconnect()
+      io?.disconnect()
       if (rafId !== 0) window.cancelAnimationFrame(rafId)
       window.removeEventListener('resize', handleResize)
       window.removeEventListener('scroll', handleScroll, { capture: true })
@@ -255,19 +288,25 @@ export function usePortalPopover(params: {
   }, [open, popoverRef, triggerRef])
 }
 
-const dialogFocusStack: Array<RefObject<HTMLElement | null>> = []
+interface DialogFocusEntry {
+  readonly dialogRef: RefObject<HTMLElement | null>
+  prevFocused: HTMLElement | null
+}
+
+const dialogFocusStack: DialogFocusEntry[] = []
 
 export function useDialogFocus(open: boolean, dialogRef: RefObject<HTMLElement | null>): void {
-  const prevFocusedRef = useRef<HTMLElement | null>(null)
-
   useEffect(() => {
     if (typeof document === 'undefined') return
     if (!open) {
       return
     }
     const active = document.activeElement
-    prevFocusedRef.current = active instanceof HTMLElement ? active : null
-    dialogFocusStack.push(dialogRef)
+    const entry: DialogFocusEntry = {
+      dialogRef,
+      prevFocused: active instanceof HTMLElement ? active : null,
+    }
+    dialogFocusStack.push(entry)
     const dialog = dialogRef.current
     if (dialog) {
       const focusables = Array.from(
@@ -277,9 +316,18 @@ export function useDialogFocus(open: boolean, dialogRef: RefObject<HTMLElement |
     }
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Tab') return
-      if (dialogFocusStack[dialogFocusStack.length - 1] !== dialogRef) return
+      const top = dialogFocusStack[dialogFocusStack.length - 1]
+      if (!top || top.dialogRef !== dialogRef) return
       const root = dialogRef.current
       if (!root) return
+      const cur = document.activeElement
+      if (
+        cur instanceof HTMLElement &&
+        cur.closest('[data-a2ui-portal-popover], [role="listbox"], [role="menu"]') !== null &&
+        !root.contains(cur)
+      ) {
+        return
+      }
       const focusables = Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
         isVisibleFocusable,
       )
@@ -290,7 +338,6 @@ export function useDialogFocus(open: boolean, dialogRef: RefObject<HTMLElement |
       }
       const first = focusables[0]!
       const last = focusables[focusables.length - 1]!
-      const cur = document.activeElement
       if (!cur || cur === root || !root.contains(cur)) {
         e.preventDefault()
         ;(e.shiftKey ? last : first).focus()
@@ -304,11 +351,18 @@ export function useDialogFocus(open: boolean, dialogRef: RefObject<HTMLElement |
     }
     document.addEventListener('keydown', onKeyDown)
     return () => {
-      const idx = dialogFocusStack.lastIndexOf(dialogRef)
-      if (idx >= 0) dialogFocusStack.splice(idx, 1)
+      const idx = dialogFocusStack.lastIndexOf(entry)
+      const wasTop = idx === dialogFocusStack.length - 1
+      if (idx >= 0) {
+        if (!wasTop && idx + 1 < dialogFocusStack.length) {
+          dialogFocusStack[idx + 1]!.prevFocused = entry.prevFocused
+        }
+        dialogFocusStack.splice(idx, 1)
+      }
       document.removeEventListener('keydown', onKeyDown)
-      const prev = prevFocusedRef.current
-      prevFocusedRef.current = null
+      const prev = entry.prevFocused
+      entry.prevFocused = null
+      if (!wasTop) return
       if (prev?.isConnected) {
         try {
           prev.focus({ preventScroll: true })
@@ -316,7 +370,7 @@ export function useDialogFocus(open: boolean, dialogRef: RefObject<HTMLElement |
           prev.focus?.()
         }
       } else {
-        const topDialog = dialogFocusStack[dialogFocusStack.length - 1]?.current
+        const topDialog = dialogFocusStack[dialogFocusStack.length - 1]?.dialogRef.current
         topDialog?.focus?.()
       }
     }
@@ -359,6 +413,7 @@ export function useEChartsMount(params: {
   const chartRef = useRef<ReturnType<EchartsChunkModule['initChartInstance']> | null>(null)
   const optionRef = useRef<Record<string, unknown> | null>(option)
   optionRef.current = option
+  const lastAppliedOptionRef = useRef<Record<string, unknown> | null>(null)
   const prevKindRef = useRef<string | undefined>(chartKind)
   const prevDataIdRef = useRef<unknown>(dataIdentity)
   const onPointClickRef = useRef(onPointClick)
@@ -393,6 +448,7 @@ export function useEChartsMount(params: {
       })
       if (optionRef.current) {
         instance.setOption(optionRef.current, { notMerge: true })
+        lastAppliedOptionRef.current = optionRef.current
       }
       return instance
     }
@@ -431,12 +487,18 @@ export function useEChartsMount(params: {
       }
       chartRef.current?.dispose()
       chartRef.current = null
+      lastAppliedOptionRef.current = null
     }
   }, [chunk, hostRef, mounted])
 
   useEffect(() => {
     const inst = chartRef.current
     if (!option || !inst) {
+      prevKindRef.current = chartKind
+      prevDataIdRef.current = dataIdentity
+      return
+    }
+    if (lastAppliedOptionRef.current === option) {
       prevKindRef.current = chartKind
       prevDataIdRef.current = dataIdentity
       return
@@ -492,6 +554,7 @@ export function useEChartsMount(params: {
       }
     }
     inst.setOption(nextOption, { notMerge: true })
+    lastAppliedOptionRef.current = option
   }, [chunk, option, chartKind, dataIdentity])
 
   const exportPng = useCallback((filename: string, backgroundColor: string): boolean => {
@@ -505,10 +568,12 @@ export function useEChartsMount(params: {
         backgroundColor,
       })
       if (!dataUrl?.startsWith('data:image/png')) return false
-      const slug = filename
-        .trim()
-        .replace(/[^\w\u4e00-\u9fa5-]+/g, '-')
-        .replace(/^-+|-+$/g, '')
+      const rawSlug = filename.trim().replace(/[^\w\u4e00-\u9fa5-]+/g, '-')
+      let sStart = 0
+      while (sStart < rawSlug.length && rawSlug[sStart] === '-') sStart += 1
+      let sEnd = rawSlug.length
+      while (sEnd > sStart && rawSlug[sEnd - 1] === '-') sEnd -= 1
+      const slug = rawSlug.slice(sStart, sEnd)
       anchor = document.createElement('a')
       anchor.href = dataUrl
       anchor.download = `${slug || 'a2ui-chart'}.png`
@@ -743,10 +808,11 @@ export function useSurfaceStoreSync(sync: () => void, deps: readonly unknown[]):
   }, deps)
 }
 
-export function useElementWidth(ref: RefObject<HTMLElement | null>): number {
+export function useElementWidth(ref: RefObject<HTMLElement | null>, mounted = true): number {
   const [width, setWidth] = useState(0)
 
   useEffect(() => {
+    if (!mounted) return
     const el = ref.current
     if (!el) return
     const sync = () => {
@@ -760,7 +826,27 @@ export function useElementWidth(ref: RefObject<HTMLElement | null>): number {
     return () => {
       ro.disconnect()
     }
-  }, [ref])
+  }, [ref, mounted])
 
   return width
+}
+
+export function useEffectCallback(
+  effect: () => undefined | (() => void),
+  deps: readonly unknown[],
+): void {
+  const effectRef = useRef(effect)
+  effectRef.current = effect
+  useEffect(() => effectRef.current(), deps)
+}
+
+export function copyTextToClipboard(text: string, onSuccess?: () => void): void {
+  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+    void navigator.clipboard
+      .writeText(text)
+      .then(() => {
+        onSuccess?.()
+      })
+      .catch(() => {})
+  }
 }

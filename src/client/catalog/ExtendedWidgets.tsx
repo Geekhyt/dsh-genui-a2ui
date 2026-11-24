@@ -43,18 +43,13 @@ import css from './Catalog.module.css'
 import { buildFileTree, type FileChangeStatus, type FileTreeNode } from './stat-file-helpers.ts'
 import {
   type ChildRef,
+  copyTextToClipboard,
   defineComponent,
   renderChildRef,
   SurfaceReadOnlyContext,
   useSurfaceActionRunner,
   weightStyle,
 } from './widget-helpers.tsx'
-
-function copyToClipboardSafe(text: string): void {
-  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-    void navigator.clipboard.writeText(text).catch(() => {})
-  }
-}
 
 const CHEVRON_UP_14 = <DshChevronUpIcon size={14} />
 const CHEVRON_DOWN_14 = <DshChevronDownIcon size={14} />
@@ -265,7 +260,7 @@ export const DshJsonTreeImpl = defineComponent<{
   const [copiedAll, markCopiedAll] = useTransientFlag(1300)
 
   const handleCopyAll = () => {
-    copyToClipboardSafe(safeStringifyJson(props.data ?? null, 2))
+    copyTextToClipboard(safeStringifyJson(props.data ?? null, 2))
     markCopiedAll()
   }
 
@@ -788,7 +783,7 @@ export function DshMermaidView({ props }: { props: MermaidWidgetProps }) {
   })
 
   const handleCopy = () => {
-    copyToClipboardSafe(code)
+    copyTextToClipboard(code)
     markCopied()
   }
 
@@ -1090,8 +1085,9 @@ export function DshMermaidView({ props }: { props: MermaidWidgetProps }) {
               role="dialog"
               aria-modal="true"
               aria-label={displayTitle}
-              className={css.mermaidFullscreenMask}
+              className={`${css.mermaidFullscreenMask} ${dark ? 'a2ui-dark' : 'a2ui-light'}`}
               data-a2ui-mermaid-dialog=""
+              data-a2ui-overlay=""
               onClick={(e) => {
                 e.stopPropagation()
                 handleCloseFullscreen()

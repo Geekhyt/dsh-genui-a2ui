@@ -1,7 +1,9 @@
-const EXPLICIT_TZ_RE = /(?:Z|[T ]\d{1,2}:\d{2}(?::\d{2}(?:\.\d+)?)?\s*[+-]\d{2}(?::?\d{2})?)$/i
+const EXPLICIT_TZ_RE =
+  /^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T ](\d{1,2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?)?\s*(?:Z|[+-]\d{2}(?::?\d{2})?)$/i
 const SHORT_TZ_SUFFIX_RE = /([+-]\d{2})$/
 const NAIVE_DATE_RE = /^(\d{4})-(\d{1,2})-(\d{1,2})$/
-const NAIVE_DATETIME_RE = /^(\d{4})-(\d{1,2})-(\d{1,2})[T ](\d{1,2}):(\d{2})(?::(\d{2}))?/
+const NAIVE_DATETIME_RE =
+  /^(\d{4})-(\d{1,2})-(\d{1,2})[T ](\d{1,2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?$/
 const NAIVE_TIME_RE = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/
 
 function normalizeExplicitTzString(trimmed: string): string {
@@ -13,6 +15,34 @@ function isValidLocalCalendarDate(y: number, m: number, d: number): boolean {
   if (m < 1 || m > 12 || d < 1 || d > 31) return false
   const probe = new Date(y, m - 1, d)
   return probe.getFullYear() === y && probe.getMonth() === m - 1 && probe.getDate() === d
+}
+
+function isValidLocalTime(hh: number, mi: number, ss = 0): boolean {
+  return (
+    Number.isInteger(hh) &&
+    Number.isInteger(mi) &&
+    Number.isInteger(ss) &&
+    hh >= 0 &&
+    hh <= 23 &&
+    mi >= 0 &&
+    mi <= 59 &&
+    ss >= 0 &&
+    ss <= 59
+  )
+}
+
+function parseExplicitTzDate(trimmed: string): Date | null {
+  const m = EXPLICIT_TZ_RE.exec(trimmed)
+  if (!m) return null
+  const y = Number(m[1])
+  const mo = Number(m[2])
+  const d = Number(m[3])
+  if (!isValidLocalCalendarDate(y, mo, d)) return null
+  if (m[4] !== undefined) {
+    if (!isValidLocalTime(Number(m[4]), Number(m[5]), Number(m[6] ?? 0))) return null
+  }
+  const parsed = new Date(normalizeExplicitTzString(trimmed))
+  return Number.isNaN(parsed.getTime()) ? null : parsed
 }
 
 export function formatLocalDateValue(d: Date, enableTime: boolean): string {
@@ -35,8 +65,8 @@ export function formatNativeTemporalValue(
   if (trimmed === '') return ''
 
   if (EXPLICIT_TZ_RE.test(trimmed)) {
-    const parsed = new Date(normalizeExplicitTzString(trimmed))
-    if (!Number.isNaN(parsed.getTime())) {
+    const parsed = parseExplicitTzDate(trimmed)
+    if (parsed !== null) {
       if (mode === 'date') return formatLocalDateValue(parsed, false)
       if (mode === 'datetime-local') return formatLocalDateValue(parsed, true)
       const hh = String(parsed.getHours()).padStart(2, '0')
@@ -60,7 +90,10 @@ export function formatNativeTemporalValue(
       const y = Number(dtm[1])
       const m = Number(dtm[2])
       const d = Number(dtm[3])
-      if (!isValidLocalCalendarDate(y, m, d)) return ''
+      const hh = Number(dtm[4])
+      const mi = Number(dtm[5])
+      const ss = Number(dtm[6] ?? 0)
+      if (!isValidLocalCalendarDate(y, m, d) || !isValidLocalTime(hh, mi, ss)) return ''
       return `${dtm[1]!}-${dtm[2]!.padStart(2, '0')}-${dtm[3]!.padStart(2, '0')}`
     }
     return ''
@@ -72,7 +105,10 @@ export function formatNativeTemporalValue(
       const y = Number(dtm[1])
       const m = Number(dtm[2])
       const d = Number(dtm[3])
-      if (!isValidLocalCalendarDate(y, m, d)) return ''
+      const hh = Number(dtm[4])
+      const mi = Number(dtm[5])
+      const ss = Number(dtm[6] ?? 0)
+      if (!isValidLocalCalendarDate(y, m, d) || !isValidLocalTime(hh, mi, ss)) return ''
       return `${dtm[1]!}-${dtm[2]!.padStart(2, '0')}-${dtm[3]!.padStart(2, '0')}T${dtm[4]!.padStart(2, '0')}:${dtm[5]!}`
     }
     const dm = NAIVE_DATE_RE.exec(trimmed)
@@ -91,49 +127,61 @@ export function formatNativeTemporalValue(
   if (tm) {
     const hh = Number(tm[1])
     const mi = Number(tm[2])
-    if (hh < 0 || hh > 23 || mi < 0 || mi > 59) return ''
+    const ss = Number(tm[3] ?? 0)
+    if (!isValidLocalTime(hh, mi, ss)) return ''
     return `${tm[1]!.padStart(2, '0')}:${tm[2]!}`
   }
   const dtm = NAIVE_DATETIME_RE.exec(trimmed)
   if (dtm) {
+    const y = Number(dtm[1])
+    const m = Number(dtm[2])
+    const d = Number(dtm[3])
     const hh = Number(dtm[4])
     const mi = Number(dtm[5])
-    if (hh < 0 || hh > 23 || mi < 0 || mi > 59) return ''
+    const ss = Number(dtm[6] ?? 0)
+    if (!isValidLocalCalendarDate(y, m, d) || !isValidLocalTime(hh, mi, ss)) return ''
     return `${dtm[4]!.padStart(2, '0')}:${dtm[5]!}`
   }
   return ''
 }
 
-export function parseLocalDateAnchor(anchorStr?: string): Date {
-  if (!anchorStr) return new Date()
-  const trimmed = anchorStr.trim()
-  if (trimmed === '') return new Date()
+export function tryParseLocalDate(raw?: string): Date | null {
+  if (!raw) return null
+  const trimmed = raw.trim()
+  if (trimmed === '') return null
   if (EXPLICIT_TZ_RE.test(trimmed)) {
-    const ts = Date.parse(normalizeExplicitTzString(trimmed))
-    return Number.isNaN(ts) ? new Date() : new Date(ts)
+    return parseExplicitTzDate(trimmed)
   }
   const dateOnly = NAIVE_DATE_RE.exec(trimmed)
   if (dateOnly) {
     const y = Number(dateOnly[1])
     const m = Number(dateOnly[2])
     const d = Number(dateOnly[3])
-    return isValidLocalCalendarDate(y, m, d) ? new Date(y, m - 1, d) : new Date()
+    return isValidLocalCalendarDate(y, m, d) ? new Date(y, m - 1, d) : null
   }
   const dateTimeLocal = NAIVE_DATETIME_RE.exec(trimmed)
   if (dateTimeLocal) {
     const y = Number(dateTimeLocal[1])
     const m = Number(dateTimeLocal[2])
     const d = Number(dateTimeLocal[3])
-    if (!isValidLocalCalendarDate(y, m, d)) return new Date()
-    return new Date(
-      y,
-      m - 1,
-      d,
-      Number(dateTimeLocal[4]),
-      Number(dateTimeLocal[5]),
-      Number(dateTimeLocal[6] ?? 0),
-    )
+    const hh = Number(dateTimeLocal[4])
+    const mi = Number(dateTimeLocal[5])
+    const ss = Number(dateTimeLocal[6] ?? 0)
+    if (!isValidLocalCalendarDate(y, m, d) || !isValidLocalTime(hh, mi, ss)) return null
+    return new Date(y, m - 1, d, hh, mi, ss)
   }
-  const parsed = Date.parse(trimmed)
-  return Number.isNaN(parsed) ? new Date() : new Date(parsed)
+  return null
+}
+
+export function parseLocalDateAnchor(anchorStr?: string): Date {
+  const strict = tryParseLocalDate(anchorStr)
+  if (strict !== null) return strict
+  if (typeof anchorStr === 'string') {
+    const trimmed = anchorStr.trim()
+    if (trimmed !== '' && !/^\d{4}-\d{1,2}-\d{1,2}/.test(trimmed)) {
+      const parsed = Date.parse(trimmed)
+      if (!Number.isNaN(parsed)) return new Date(parsed)
+    }
+  }
+  return new Date()
 }

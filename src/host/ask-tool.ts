@@ -4,6 +4,7 @@ import { A2UI_LIMITS } from '../shared/catalog-schema.ts'
 import { isDangerousObjectKey, isSecretKey } from '../shared/constants.ts'
 import { HOST_MESSAGES, resolveHostLocale } from '../shared/i18n.ts'
 import {
+  buildTemplatePathMap,
   collectKvSecretsFromValue,
   collectSecretsFromNode,
   escapeJsonPointerSegment,
@@ -30,6 +31,9 @@ export type { AskAnswerInput, AskMeta }
 
 export const DEFAULT_ASK_TIMEOUT_SECONDS = 180
 const MAX_TIMEOUT_SECONDS = 2_147_483
+const MAX_TITLE_LEN = 200
+const MAX_PENDING_PER_SESSION = 16
+const MAX_PENDING_TOTAL = 128
 const MAX_ANSWER_STR_LEN = 32_000
 const MAX_ANSWER_ARRAY_LEN = 200
 const MAX_ANSWER_KEYS = 200
@@ -59,51 +63,64 @@ function getValueAtPointer(root: unknown, pointer: string): unknown {
 export function collectObscuredContextPointersFromMessages(
   messages: readonly AgentToRendererMessage[],
   obscuredPointers: ReadonlySet<string>,
+  priorComponents?: readonly Record<string, unknown>[],
 ): Set<string> {
   const out = new Set<string>(obscuredPointers)
   if (obscuredPointers.size === 0) return out
-  const inspectContext = (ctx: unknown, prefix: string, depth: number) => {
-    if (depth > 6 || typeof ctx !== 'object' || ctx === null || Array.isArray(ctx)) return
-    for (const [k, v] of Object.entries(ctx as Record<string, unknown>)) {
-      const seg = escapeJsonPointerSegment(k)
-      const nextPath = prefix === '' ? `/${seg}` : `${prefix}/${seg}`
-      if (isBindingExpression(v)) {
-        if (referencesObscuredPointer(v, obscuredPointers)) {
-          out.add(nextPath)
-        }
-      } else if (Array.isArray(v)) {
-        if (referencesObscuredPointer(v, obscuredPointers)) {
-          out.add(nextPath)
-        }
-      } else if (typeof v === 'object' && v !== null) {
-        inspectContext(v, nextPath, depth + 1)
-      }
-    }
-  }
-  const inspectAction = (action: unknown) => {
-    if (typeof action !== 'object' || action === null) return
-    const event = (action as Record<string, unknown>).event
-    if (typeof event !== 'object' || event === null) return
-    inspectContext((event as Record<string, unknown>).context, '', 0)
-  }
-  const inspectComponents = (list: unknown) => {
+  const allComponents: Record<string, unknown>[] = priorComponents ? [...priorComponents] : []
+  const collectList = (list: unknown) => {
     if (!Array.isArray(list)) return
     for (const item of list) {
-      if (typeof item !== 'object' || item === null) continue
-      const rec = item as Record<string, unknown>
-      inspectAction(rec.action)
-      inspectAction(rec.approveAction)
-      inspectAction(rec.rejectAction)
+      if (typeof item === 'object' && item !== null) {
+        allComponents.push(item as Record<string, unknown>)
+      }
     }
   }
   for (const msg of messages) {
     const rec = msg as unknown as Record<string, unknown>
     if (rec.createSurface && typeof rec.createSurface === 'object') {
-      inspectComponents((rec.createSurface as Record<string, unknown>).components)
+      collectList((rec.createSurface as Record<string, unknown>).components)
     }
     if (rec.updateComponents && typeof rec.updateComponents === 'object') {
-      inspectComponents((rec.updateComponents as Record<string, unknown>).components)
+      collectList((rec.updateComponents as Record<string, unknown>).components)
     }
+  }
+  const templatePathByCompId = buildTemplatePathMap(allComponents)
+  const inspectContext = (
+    ctx: unknown,
+    prefix: string,
+    depth: number,
+    templatePrefixes?: ReadonlySet<string>,
+  ) => {
+    if (depth > 6 || typeof ctx !== 'object' || ctx === null || Array.isArray(ctx)) return
+    for (const [k, v] of Object.entries(ctx as Record<string, unknown>)) {
+      const seg = escapeJsonPointerSegment(k)
+      const nextPath = prefix === '' ? `/${seg}` : `${prefix}/${seg}`
+      if (isBindingExpression(v)) {
+        if (referencesObscuredPointer(v, obscuredPointers, 0, templatePrefixes)) {
+          out.add(nextPath)
+        }
+      } else if (Array.isArray(v)) {
+        if (referencesObscuredPointer(v, obscuredPointers, 0, templatePrefixes)) {
+          out.add(nextPath)
+        }
+      } else if (typeof v === 'object' && v !== null) {
+        inspectContext(v, nextPath, depth + 1, templatePrefixes)
+      }
+    }
+  }
+  const inspectAction = (action: unknown, templatePrefixes?: ReadonlySet<string>) => {
+    if (typeof action !== 'object' || action === null) return
+    const event = (action as Record<string, unknown>).event
+    if (typeof event !== 'object' || event === null) return
+    inspectContext((event as Record<string, unknown>).context, '', 0, templatePrefixes)
+  }
+  for (const rec of allComponents) {
+    const id = typeof rec.id === 'string' ? rec.id : ''
+    const templatePrefixes = id !== '' ? templatePathByCompId.get(id) : undefined
+    inspectAction(rec.action, templatePrefixes)
+    inspectAction(rec.approveAction, templatePrefixes)
+    inspectAction(rec.rejectAction, templatePrefixes)
   }
   return out
 }
@@ -168,8 +185,9 @@ export function collectObscuredPointersFromMessages(
         if (val !== undefined) {
           collectKvSecretsFromValue(val, normKv, obscured, new Set(), new Set())
         }
-      } else if (dmPath.startsWith(`${normKv}/`)) {
-        const relParts = dmPath.slice(normKv.length + 1).split('/')
+      } else if (normKv === '/' ? dmPath !== '/' : dmPath.startsWith(`${normKv}/`)) {
+        const relStart = normKv === '/' ? 1 : normKv.length + 1
+        const relParts = dmPath.slice(relStart).split('/')
         const firstSeg = relParts[0]?.replace(/~1/g, '/').replace(/~0/g, '~') ?? ''
         if (firstSeg !== '' && isSecretKey(firstSeg)) {
           obscured.add(dmPath)
@@ -231,9 +249,10 @@ export function sanitizePayloadObject(
     if (depth > 8) return undefined
     if (blocked.size > 0 && path !== '' && isPointerObscured(path, blocked)) return undefined
     if (typeof node === 'string') {
-      const capped = node.length > MAX_ANSWER_STR_LEN ? node.slice(0, MAX_ANSWER_STR_LEN) : node
-      if (exactSet.size === 0 && subSet.size === 0) return capped
-      return scrubSecretString(capped, exactSet, subSet)
+      const scrubbed =
+        exactSet.size === 0 && subSet.size === 0 ? node : scrubSecretString(node, exactSet, subSet)
+      if (scrubbed === undefined) return undefined
+      return scrubbed.length > MAX_ANSWER_STR_LEN ? scrubbed.slice(0, MAX_ANSWER_STR_LEN) : scrubbed
     }
     if (typeof node === 'number' && isScrubbableNumericSecret(node, exactSet)) {
       return undefined
@@ -326,6 +345,15 @@ interface PendingEntry {
 
 export class PendingAskRegistry {
   private readonly entriesBySession = new Map<string, Map<string, PendingEntry>>()
+  private disposed = false
+
+  private totalPendingCount(): number {
+    let total = 0
+    for (const sessionMap of this.entriesBySession.values()) {
+      total += sessionMap.size
+    }
+    return total
+  }
 
   private removeEntry(sessionId: string, callId: string, expected?: PendingEntry): void {
     const sessionMap = this.entriesBySession.get(sessionId)
@@ -364,10 +392,20 @@ export class PendingAskRegistry {
       obscuredPointers,
       obscuredContextPointers,
     } = options
+    if (this.disposed) {
+      return Promise.reject(new Error('dsh-genui-a2ui plugin disposed'))
+    }
     if (signal?.aborted) {
       const reason = signal.reason
       return Promise.reject(reason instanceof Error ? reason : new Error('a2ui_ask aborted'))
     }
+
+    const effectiveTimeout =
+      timeoutSeconds === -1
+        ? -1
+        : Number.isFinite(timeoutSeconds) && timeoutSeconds > 0
+          ? Math.min(timeoutSeconds, MAX_TIMEOUT_SECONDS)
+          : DEFAULT_ASK_TIMEOUT_SECONDS
 
     let sessionMap = this.entriesBySession.get(sessionId)
     if (!sessionMap) {
@@ -382,6 +420,13 @@ export class PendingAskRegistry {
         sessionMap = new Map<string, PendingEntry>()
         this.entriesBySession.set(sessionId, sessionMap)
       }
+    }
+    if (
+      sessionMap.size >= MAX_PENDING_PER_SESSION ||
+      this.totalPendingCount() >= MAX_PENDING_TOTAL
+    ) {
+      if (sessionMap.size === 0) this.entriesBySession.delete(sessionId)
+      return Promise.reject(new Error('Too many concurrent pending a2ui_ask requests'))
     }
 
     return new Promise<AskSettlement>((resolve, reject) => {
@@ -402,12 +447,12 @@ export class PendingAskRegistry {
         signal?.removeEventListener('abort', onAbort)
       }
 
-      if (timeoutSeconds !== -1) {
+      if (effectiveTimeout !== -1) {
         timer = setTimeout(() => {
           cleanup()
           this.removeEntry(sessionId, callId, entryRef)
           resolve({ status: 'timed_out' })
-        }, timeoutSeconds * 1000)
+        }, effectiveTimeout * 1000)
       }
 
       signal?.addEventListener('abort', onAbort, { once: true })
@@ -515,6 +560,7 @@ export class PendingAskRegistry {
   }
 
   disposeAll(): void {
+    this.disposed = true
     const allEntries: PendingEntry[] = []
     for (const sessionMap of this.entriesBySession.values()) {
       for (const entry of sessionMap.values()) allEntries.push(entry)
@@ -551,7 +597,7 @@ const ASK_PARAMETERS = {
 const AskArgsSchema = z
   .object({
     ui: z.string(),
-    title: z.union([z.string(), z.null()]).optional(),
+    title: z.unknown().optional(),
     timeout: z.unknown().optional(),
   })
   .passthrough()
@@ -596,7 +642,7 @@ export function readAskArgs(args: unknown): {
     ui: parsed.data.ui,
     title:
       typeof parsed.data.title === 'string' && parsed.data.title.trim() !== ''
-        ? parsed.data.title.trim()
+        ? parsed.data.title.trim().slice(0, MAX_TITLE_LEN)
         : undefined,
     timeout,
   }
@@ -674,6 +720,10 @@ export function createAskTool(sessions: SurfaceSessions, asks: PendingAskRegistr
           'a2ui_ask cannot be called inside a background subagent. Return structured questions to the parent agent instead.',
         )
       }
+      if (exec?.signal?.aborted) {
+        const reason = exec.signal.reason
+        throw reason instanceof Error ? reason : new Error('a2ui_ask aborted')
+      }
 
       const { ui, title, timeout } = readAskArgs(args)
       if (ui === undefined || ui.trim() === '') {
@@ -724,6 +774,7 @@ export function createAskTool(sessions: SurfaceSessions, asks: PendingAskRegistr
       const obscuredContextPointers = collectObscuredContextPointersFromMessages(
         messages,
         obscuredPointers,
+        sessionRedaction.components,
       )
       const callId =
         typeof exec?.callId === 'string' && exec.callId.trim() !== ''

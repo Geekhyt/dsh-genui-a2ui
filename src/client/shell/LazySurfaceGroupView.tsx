@@ -41,7 +41,10 @@ export function useLazyStreamingExpress(
   const ref = useRef<{ key: string; session: StreamingExpressSession } | null>(null)
 
   return useMemo(() => {
-    if (!active || runtime === null) return null
+    if (!active || runtime === null) {
+      ref.current = null
+      return null
+    }
     if (ref.current === null || ref.current.key !== sessionKey) {
       ref.current = {
         key: sessionKey,

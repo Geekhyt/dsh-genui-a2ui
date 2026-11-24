@@ -21,7 +21,7 @@ const PURE_FORBIDDEN_PACKAGES = new Set(['react', 'react-dom', 'echarts', 'merma
 const PURE_FORBIDDEN_GLOBALS = new Set(['window', 'document', 'localStorage', 'sessionStorage'])
 const HTML_IN_RICHTEXT_RE = /<\s*(?:br|strong|div|span|table|tr|td|th|b|i|p|ul|li)\b/i
 const RAW_DATE_TYPES = new Set(['date', 'time', 'datetime-local'])
-const CATASTROPHIC_TRAILING_WS_RE = /\\s[*+]\$\/[a-z]*$/
+const CATASTROPHIC_TRAILING_QUANT_RE = /(?:\[[^\]]+\]|\\[sdw/]|[^\\])[+*]\$\/[a-z]*$/
 
 function getScriptKind(filePath) {
   const ext = extname(filePath)
@@ -228,6 +228,15 @@ function extractCssBlocks(cssText) {
     }
   }
 
+  const stickyTransparentBgRules = []
+  for (const rule of topRules) {
+    if (!rule.header.startsWith('@') && /\bposition\s*:\s*sticky\b/.test(rule.body)) {
+      if (/background(?:-color)?\s*:\s*var\(\s*--dsw-alias-bg-layer-1\b/.test(rule.body)) {
+        stickyTransparentBgRules.push({ line: rule.startLine, header: rule.header })
+      }
+    }
+  }
+
   const responsiveDeclByClass = new Map()
   for (const rule of topRules) {
     if (rule.header.startsWith('@container')) {
@@ -293,6 +302,7 @@ function extractCssBlocks(cssText) {
     containerSelfQueries,
     mediaWidthRules,
     shadowedResponsiveRules,
+    stickyTransparentBgRules,
   }
 }
 
@@ -303,7 +313,30 @@ export function checkCssInvariants(source, relPath) {
     containerSelfQueries,
     mediaWidthRules,
     shadowedResponsiveRules,
+    stickyTransparentBgRules,
   } = extractCssBlocks(source)
+
+  if (/\blight-dark\s*\(/.test(source)) {
+    const hasDarkScheme = /\bcolor-scheme\s*:\s*dark\b/.test(source)
+    const hasLightScheme = /\bcolor-scheme\s*:\s*light\b/.test(source)
+    if (!hasDarkScheme || !hasLightScheme) {
+      violations.push({
+        rule: 'css-light-dark-requires-color-scheme',
+        file: relPath,
+        line: 1,
+        message: `${relPath} uses light-dark(...) without declaring both color-scheme: dark and color-scheme: light rules.`,
+      })
+    }
+  }
+
+  for (const st of stickyTransparentBgRules) {
+    violations.push({
+      rule: 'css-sticky-bg-opaque-layer',
+      file: relPath,
+      line: st.line,
+      message: `Sticky rule "${st.header}" uses translucent --dsw-alias-bg-layer-1 as primary background-color; use opaque --dsw-alias-bg-base with optional linear-gradient tint.`,
+    })
+  }
 
   for (const sr of shadowedResponsiveRules) {
     violations.push({
@@ -667,7 +700,9 @@ export function checkTsInvariants(source, relPath) {
     }
 
     if (
-      isCatalogHelper &&
+      (isCatalogHelper ||
+        relPath === 'src/client/action-protocol.ts' ||
+        relPath === 'src/client/index.ts') &&
       ts.isCallExpression(node) &&
       ts.isPropertyAccessExpression(node.expression) &&
       ts.isIdentifier(node.expression.expression) &&
@@ -675,9 +710,27 @@ export function checkTsInvariants(source, relPath) {
       node.expression.name.text === 'stringify'
     ) {
       report(
-        'no-raw-json-stringify-in-helpers',
+        isCatalogHelper
+          ? 'no-raw-json-stringify-in-helpers'
+          : 'no-raw-json-stringify-action-bridge',
         node,
-        'Use safeStringifyJson from src/shared/constants.ts instead of raw JSON.stringify in catalog helpers.',
+        'Use safeStringifyJson from src/shared/constants.ts instead of raw JSON.stringify.',
+      )
+    }
+
+    if (
+      isCatalogTsx &&
+      relPath !== 'src/client/catalog/widget-helpers.tsx' &&
+      ((ts.isFunctionDeclaration(node) && node.name?.text === 'copyToClipboardSafe') ||
+        (ts.isPropertyAccessExpression(node) &&
+          node.name.text === 'writeText' &&
+          ts.isPropertyAccessExpression(node.expression) &&
+          node.expression.name.text === 'clipboard'))
+    ) {
+      report(
+        'no-duplicate-clipboard-wrapper',
+        node,
+        'Use copyTextToClipboard from src/client/catalog/widget-helpers.tsx instead of duplicating clipboard access.',
       )
     }
 
@@ -776,11 +829,11 @@ export function checkTsInvariants(source, relPath) {
 
     if (ts.isRegularExpressionLiteral(node)) {
       const rawRe = node.text
-      if (!rawRe.startsWith('/^') && CATASTROPHIC_TRAILING_WS_RE.test(rawRe)) {
+      if (!rawRe.startsWith('/^') && CATASTROPHIC_TRAILING_QUANT_RE.test(rawRe)) {
         report(
           'no-catastrophic-trailing-ws-regex',
           node,
-          `Unanchored trailing whitespace regex ${rawRe} can exhibit O(N^2) backtracking; use trimEnd() or a linear backward scan.`,
+          `Unanchored trailing quantifier regex ${rawRe} can exhibit O(N^2) backtracking; use trimEnd() or a linear backward scan.`,
         )
       }
     }
@@ -1031,7 +1084,7 @@ function runCli() {
     process.exit(1)
   }
   console.log(
-    `[check-invariants] OK: 19 architectural invariant rules verified across ${report.filesScanned} source/CSS file(s) and locale tables.`,
+    `[check-invariants] OK: 23 architectural invariant rules verified across ${report.filesScanned} source/CSS file(s) and locale tables.`,
   )
 }
 

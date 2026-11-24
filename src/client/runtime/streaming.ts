@@ -1,6 +1,9 @@
 import { type AgentToRendererMessage, ExpressParser } from '@a2ui/agent'
 import { dshSchemaCatalog } from '../../shared/catalog-schema.ts'
+import { A2UI_LIMITS } from '../../shared/constants.ts'
 import {
+  assertSafeExpressProgram,
+  estimateExpressExpansionSize,
   extractUpdateSurfaceIds,
   preprocessExpressProgram,
 } from '../../shared/express-preprocess.ts'
@@ -168,6 +171,18 @@ export class StreamingExpressSession {
       }
       return this.buildSnapshot()
     }
+    if (rawClean.length > A2UI_LIMITS.maxUiChars) {
+      this.streamRejected = true
+      this.lastError = `Express program length (${rawClean.length} chars) exceeds maximum (${A2UI_LIMITS.maxUiChars} chars).`
+      return this.buildSnapshot()
+    }
+    try {
+      assertSafeExpressProgram(rawClean)
+    } catch (err) {
+      this.streamRejected = true
+      this.lastError = err instanceof Error ? err.message : String(err)
+      return this.buildSnapshot()
+    }
     let clean: string
     if (final) {
       clean = preprocessExpressProgram(rawClean)
@@ -178,6 +193,12 @@ export class StreamingExpressSession {
       } else {
         clean = rawClean
       }
+    }
+    const maxExpansion = A2UI_LIMITS.maxCompiledBytes * 2
+    if (estimateExpressExpansionSize(clean, maxExpansion) > maxExpansion) {
+      this.streamRejected = true
+      this.lastError = `Express local-variable expansion exceeds limit (${maxExpansion} chars).`
+      return this.buildSnapshot()
     }
     let savedMessages: readonly AgentToRendererMessage[] | null = null
     let savedSurfaceIds: Set<string> | null = null
@@ -230,6 +251,11 @@ export class StreamingExpressSession {
         if (!this.trySeedAndReplay(clean, msg, true)) {
           this.streamRejected = true
           this.lastError = msg
+        }
+        if (this.messages.length === 0 && savedMessages !== null && savedSurfaceIds !== null) {
+          this.messages = [...savedMessages]
+          this.surfaceIdSet.clear()
+          for (const id of savedSurfaceIds) this.surfaceIdSet.add(id)
         }
       }
     }

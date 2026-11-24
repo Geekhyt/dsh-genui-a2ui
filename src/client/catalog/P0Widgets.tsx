@@ -15,13 +15,13 @@ import {
   normalizeStepItems,
   pairSplitDiffRows,
 } from './p0-helpers.ts'
-import { type ChildRef, defineComponent, renderChildRef, weightStyle } from './widget-helpers.tsx'
-
-function copyToClipboardSafe(text: string): void {
-  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-    void navigator.clipboard.writeText(text).catch(() => {})
-  }
-}
+import {
+  type ChildRef,
+  copyTextToClipboard,
+  defineComponent,
+  renderChildRef,
+  weightStyle,
+} from './widget-helpers.tsx'
 
 export const DshDiffViewImpl = defineComponent<{
   before?: unknown
@@ -115,7 +115,7 @@ export const DshDiffViewImpl = defineComponent<{
         : msg.diffDefaultTitle
 
   const handleCopyAfter = () => {
-    copyToClipboardSafe(afterStr)
+    copyTextToClipboard(afterStr)
     markCopied()
   }
 
@@ -468,7 +468,7 @@ export const DshKeyValueImpl = defineComponent<{
   const headerTitle = props.title ? String(props.title) : ''
 
   const handleCopy = (idx: number, text: string) => {
-    copyToClipboardSafe(text)
+    copyTextToClipboard(text)
     markCopiedIdx(idx)
   }
 

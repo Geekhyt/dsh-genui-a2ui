@@ -1,4 +1,8 @@
-import { formatLocalDateValue, parseLocalDateAnchor } from '../../shared/temporal.ts'
+import {
+  formatLocalDateValue,
+  parseLocalDateAnchor,
+  tryParseLocalDate,
+} from '../../shared/temporal.ts'
 import {
   makeUniqueIdFactory,
   type NormalizedSelectOption,
@@ -69,15 +73,15 @@ export function normalizeMultiSelectMergedOptions(
 
 export function computeDateRangeSpanDays(startStr: string, endStr: string): number | null {
   if (!startStr || !endStr) return null
-  const sDate = Date.parse(startStr.slice(0, 10))
-  const eDate = Date.parse(endStr.slice(0, 10))
-  if (Number.isNaN(sDate) || Number.isNaN(eDate) || eDate < sDate) return null
+  const sDate = tryParseLocalDate(startStr.slice(0, 10))
+  const eDate = tryParseLocalDate(endStr.slice(0, 10))
+  if (sDate === null || eDate === null || eDate.getTime() < sDate.getTime()) return null
   if (startStr.length > 10 && endStr.length > 10) {
-    const sFull = parseLocalDateAnchor(startStr).getTime()
-    const eFull = parseLocalDateAnchor(endStr).getTime()
-    if (!Number.isNaN(sFull) && !Number.isNaN(eFull) && eFull < sFull) return null
+    const sFull = tryParseLocalDate(startStr)
+    const eFull = tryParseLocalDate(endStr)
+    if (sFull === null || eFull === null || eFull.getTime() < sFull.getTime()) return null
   }
-  const diffDays = Math.round((eDate - sDate) / 86_400_000) + 1
+  const diffDays = Math.round((eDate.getTime() - sDate.getTime()) / 86_400_000) + 1
   return Math.max(1, diffDays)
 }
 
@@ -184,10 +188,17 @@ export function normalizeHierarchyTree(
         rec.badge !== undefined && rec.badge !== null && String(rec.badge) !== ''
           ? String(rec.badge)
           : undefined
-      const metricStr =
+      const rawMetric =
         rec.metric !== undefined && rec.metric !== null && String(rec.metric) !== ''
           ? String(rec.metric)
-          : undefined
+          : typeof rec.durationMs === 'number' && Number.isFinite(rec.durationMs)
+            ? `${rec.durationMs}ms`
+            : rec.duration !== undefined && rec.duration !== null && String(rec.duration) !== ''
+              ? String(rec.duration)
+              : rec.meta !== undefined && rec.meta !== null && String(rec.meta) !== ''
+                ? String(rec.meta)
+                : undefined
+      const metricStr = rawMetric
       out.push({
         id,
         value,
