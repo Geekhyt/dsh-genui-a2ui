@@ -1,3 +1,4 @@
+import { readExpandedCss } from '../scripts/check-invariants.mjs'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { createElement } from 'react'
@@ -186,9 +187,8 @@ describe('Generalized Multi-Component Composition & Runtime Fixes', () => {
     expect(weightStyle(1, 240)?.minWidth).toBe('min(100%, 240px)')
     expect(weightStyle(1, 0)?.minWidth).toBe(0)
 
-    const catalogCss = readFileSync(
+    const catalogCss = readExpandedCss(
       resolve(process.cwd(), 'src/client/catalog/Catalog.module.css'),
-      'utf8',
     )
     const surfaceCss = readFileSync(
       resolve(process.cwd(), 'src/client/SurfaceView.module.css'),
@@ -451,9 +451,8 @@ describe('Generalized Multi-Component Composition & Runtime Fixes', () => {
       resolve(__dirname, '../src/client/chunks/mermaid-chunk.ts'),
       'utf8',
     )
-    const catalogCss = readFileSync(
+    const catalogCss = readExpandedCss(
       resolve(__dirname, '../src/client/catalog/Catalog.module.css'),
-      'utf8',
     )
     const dockCss = readFileSync(
       resolve(__dirname, '../src/client/shell/DockView.module.css'),

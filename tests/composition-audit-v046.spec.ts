@@ -1,3 +1,4 @@
+import { readExpandedCss } from '../scripts/check-invariants.mjs'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import type { AgentToRendererMessage } from '@a2ui/agent'
@@ -51,30 +52,32 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => ({
   IconWarningOutlineRegular: undefined,
 }))
 import {
-  DshCheckCardImpl,
-  DshDateRangeImpl,
-  DshNumberInputImpl,
-  DshTreeSelectImpl,
-} from '../src/client/catalog/AntdParityWidgets.tsx'
-import {
-  DshApprovalCardImpl,
-  DshEntityHeaderImpl,
-  DshResultImpl,
-} from '../src/client/catalog/EnterpriseWidgets.tsx'
-import {
   computeCond,
   evaluateNumericValue,
   evaluateRequiredValue,
   LocaleFormatCurrencyImplementation,
   LocaleFormatNumberImplementation,
 } from '../src/client/catalog/functions.ts'
+import { DshProgressImpl } from '../src/client/catalog/MediaAndDataWidgets.tsx'
+import {
+  DshDateRangeImpl,
+  DshNumberInputImpl,
+} from '../src/client/catalog/widgets/AdvancedPickers.tsx'
+import { DshApprovalCardImpl } from '../src/client/catalog/widgets/DevOpsActionWidgets.tsx'
 import {
   DshButtonView,
   DshChoicePickerImpl,
   DshDateTimeInputImpl,
-  DshSegmentedView,
-} from '../src/client/catalog/InputWidgets.tsx'
-import { DshProgressImpl } from '../src/client/catalog/MediaAndDataWidgets.tsx'
+} from '../src/client/catalog/widgets/FormFields.tsx'
+import {
+  DshEntityHeaderImpl,
+  DshResultImpl,
+} from '../src/client/catalog/widgets/PlanningAndMatrixWidgets.tsx'
+import { DshSegmentedView } from '../src/client/catalog/widgets/SelectControls.tsx'
+import {
+  DshCheckCardImpl,
+  DshTreeSelectImpl,
+} from '../src/client/catalog/widgets/TreeAndCardPickers.tsx'
 import { normalizeFileEntries } from '../src/client/catalog/stat-file-helpers.ts'
 import {
   buildEndpointCurl,
@@ -135,9 +138,8 @@ describe('Composition Audit v0.4.6 Generalized Fixes (G1–G8)', () => {
       minWidth: 'min(100%, 220px)',
     })
 
-    const catalogCss = readFileSync(
+    const catalogCss = readExpandedCss(
       resolve(import.meta.dirname, '../src/client/catalog/Catalog.module.css'),
-      'utf8',
     )
     expect(catalogCss).toContain(':where(')
     expect(catalogCss).toContain('.responsiveGrid[data-columns="3"]')

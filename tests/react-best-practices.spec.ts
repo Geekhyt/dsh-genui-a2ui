@@ -51,7 +51,7 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => ({
   IconWarningOutlineRegular: undefined,
 }))
 
-import { DshMermaidView } from '../src/client/catalog/ExtendedWidgets.tsx'
+import { DshMermaidView } from '../src/client/catalog/widgets/MermaidWidget.tsx'
 import {
   countMermaidDiagramCacheEntries,
   MAX_MERMAID_CACHE_ENTRIES,

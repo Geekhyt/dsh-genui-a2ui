@@ -229,10 +229,23 @@ function extractCssBlocks(cssText) {
   }
 
   const stickyTransparentBgRules = []
+  const rawWhiteOnStatePrimaryRules = []
+  const STATE_PRIMARY_BG_RE =
+    /\bbackground(?:-color)?\s*:\s*var\(\s*--(?:dsw-alias-state-(?:business|error|warn|success)-primary|a2ui-(?:accent|danger|warn|success))\b/
+  const RAW_WHITE_COLOR_RE = /(?:^|[;{\s])color\s*:\s*(?:#fff(?:fff)?\b|white\b)/i
   for (const rule of topRules) {
-    if (!rule.header.startsWith('@') && /\bposition\s*:\s*sticky\b/.test(rule.body)) {
-      if (/background(?:-color)?\s*:\s*var\(\s*--dsw-alias-bg-layer-1\b/.test(rule.body)) {
-        stickyTransparentBgRules.push({ line: rule.startLine, header: rule.header })
+    if (!rule.header.startsWith('@')) {
+      if (/\bposition\s*:\s*sticky\b/.test(rule.body)) {
+        if (
+          /background(?:-color)?\s*:\s*var\(\s*--(?:dsw-alias-bg-layer-1|a2ui-bg-1)\b/.test(
+            rule.body,
+          )
+        ) {
+          stickyTransparentBgRules.push({ line: rule.startLine, header: rule.header })
+        }
+      }
+      if (STATE_PRIMARY_BG_RE.test(rule.body) && RAW_WHITE_COLOR_RE.test(rule.body)) {
+        rawWhiteOnStatePrimaryRules.push({ line: rule.startLine, header: rule.header })
       }
     }
   }
@@ -303,6 +316,7 @@ function extractCssBlocks(cssText) {
     mediaWidthRules,
     shadowedResponsiveRules,
     stickyTransparentBgRules,
+    rawWhiteOnStatePrimaryRules,
   }
 }
 
@@ -314,6 +328,7 @@ export function checkCssInvariants(source, relPath) {
     mediaWidthRules,
     shadowedResponsiveRules,
     stickyTransparentBgRules,
+    rawWhiteOnStatePrimaryRules,
   } = extractCssBlocks(source)
 
   if (/\blight-dark\s*\(/.test(source)) {
@@ -335,6 +350,27 @@ export function checkCssInvariants(source, relPath) {
       file: relPath,
       line: st.line,
       message: `Sticky rule "${st.header}" uses translucent --dsw-alias-bg-layer-1 as primary background-color; use opaque --dsw-alias-bg-base with optional linear-gradient tint.`,
+    })
+  }
+
+  const REDUNDANT_ROOT_TOKEN_FALLBACK_RE =
+    /\bvar\(\s*(--a2ui-(?:mono|fg|fg-2|fg-3|accent|brand|success|warn|danger|bg-1|bg-2|bg-3|bg-hover|bg-opaque|border-1|border-2|r-sm|r-md|r-lg|on-accent|warn-fg))\s*,/g
+  for (const m of source.matchAll(REDUNDANT_ROOT_TOKEN_FALLBACK_RE)) {
+    const line = source.slice(0, m.index ?? 0).split('\n').length
+    violations.push({
+      rule: 'css-no-redundant-a2ui-token-fallback',
+      file: relPath,
+      line,
+      message: `Redundant fallback on root-defined token "${m[1]}"; use var(${m[1]}) directly.`,
+    })
+  }
+
+  for (const rw of rawWhiteOnStatePrimaryRules) {
+    violations.push({
+      rule: 'css-no-raw-white-on-state-primary',
+      file: relPath,
+      line: rw.line,
+      message: `Rule "${rw.header}" pairs hardcoded white text with a state primary background (breaks WCAG contrast in Dark Mode); use var(--a2ui-on-accent) or light-dark(#ffffff, #0b1220).`,
     })
   }
 
@@ -470,7 +506,9 @@ export function checkTsInvariants(source, relPath) {
   const isCatalogTsx = relPath.startsWith('src/client/catalog/') && relPath.endsWith('.tsx')
   const isCatalogHelper = /^src\/client\/catalog\/.*-helpers\.ts$/.test(relPath)
   const isClientFile = relPath.startsWith('src/client/')
-  const isEchartsChunk = relPath === 'src/client/chunks/echarts-chunk.ts'
+  const isEchartsChunk =
+    relPath === 'src/client/chunks/echarts-chunk.ts' ||
+    relPath.startsWith('src/client/chunks/echarts/')
 
   const report = (rule, node, message) => {
     violations.push({
@@ -719,6 +757,20 @@ export function checkTsInvariants(source, relPath) {
     }
 
     if (
+      relPath !== 'src/client/catalog/widget-helpers.tsx' &&
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      (node.expression.text === 'createComponentImplementation' ||
+        node.expression.text === 'createBinderlessComponentImplementation')
+    ) {
+      report(
+        'catalog-define-component-only',
+        node,
+        'Use defineComponent from src/client/catalog/widget-helpers.tsx instead of calling createComponentImplementation directly so custom elements use reload-safe dsh-a2ui-* tags.',
+      )
+    }
+
+    if (
       isCatalogTsx &&
       relPath !== 'src/client/catalog/widget-helpers.tsx' &&
       ((ts.isFunctionDeclaration(node) && node.name?.text === 'copyToClipboardSafe') ||
@@ -784,7 +836,7 @@ export function checkTsInvariants(source, relPath) {
     }
 
     if (
-      relPath !== 'src/client/catalog/ExtendedWidgets.tsx' &&
+      relPath !== 'src/client/catalog/widgets/MermaidWidget.tsx' &&
       ts.isJsxAttribute(node) &&
       ts.isIdentifier(node.name) &&
       node.name.text === 'dangerouslySetInnerHTML'
@@ -792,7 +844,7 @@ export function checkTsInvariants(source, relPath) {
       report(
         'security-no-dangerous-sinks',
         node,
-        'dangerouslySetInnerHTML is restricted exclusively to sanitized SVG rendering in ExtendedWidgets.tsx.',
+        'dangerouslySetInnerHTML is restricted exclusively to sanitized SVG rendering in widgets/MermaidWidget.tsx.',
       )
     }
 
@@ -1031,6 +1083,47 @@ export function checkCssModuleKeyExists(tsxSource, cssSource, relPath) {
   return violations
 }
 
+const LOCAL_CSS_IMPORT_RE = /^@import\s+['"](\.[^'"]+\.css)['"]\s*;\s*$/
+
+export function readExpandedCss(filePath, seen = new Set()) {
+  const abs = resolve(filePath)
+  if (seen.has(abs) || !existsSync(abs)) return ''
+  seen.add(abs)
+  const raw = readFileSync(abs, 'utf8')
+  const parts = []
+  for (const line of raw.split('\n')) {
+    const match = LOCAL_CSS_IMPORT_RE.exec(line.trim())
+    if (match?.[1]) {
+      parts.push(readExpandedCss(resolve(dirname(abs), match[1]), seen))
+    } else {
+      parts.push(line)
+    }
+  }
+  return parts.join('\n')
+}
+
+const MODULE_LINE_LIMITS = [
+  { match: (rel) => /^src\/client\/catalog\/widgets\/[^/]+\.tsx$/.test(rel), max: 900 },
+  { match: (rel) => /^src\/client\/catalog\/[^/]+\.tsx$/.test(rel), max: 1000 },
+  { match: (rel) => /^src\/client\/chunks\/.+\.ts$/.test(rel), max: 950 },
+  { match: (rel) => /^src\/client\/.+\.css$/.test(rel), max: 950 },
+]
+
+export function checkModuleMaxLines(source, relPath) {
+  const rule = MODULE_LINE_LIMITS.find((entry) => entry.match(relPath))
+  if (!rule) return []
+  const lines = source === '' ? 0 : source.split('\n').length
+  if (lines <= rule.max) return []
+  return [
+    {
+      rule: 'module-max-lines',
+      file: relPath,
+      line: rule.max + 1,
+      message: `${relPath} has ${lines} lines (limit ${rule.max}); split cohesive sub-modules instead of growing a monolith.`,
+    },
+  ]
+}
+
 export function runAllInvariantChecks(rootDir) {
   const violations = []
   const tsFiles = collectFiles(rootDir, 'src', (f) => /\.(?:ts|tsx)$/.test(f))
@@ -1041,6 +1134,7 @@ export function runAllInvariantChecks(rootDir) {
     const rel = normalizeRel(rootDir, abs)
     const src = readFileSync(abs, 'utf8')
     violations.push(...checkTsInvariants(src, rel))
+    violations.push(...checkModuleMaxLines(src, rel))
     if (rel.endsWith('.tsx')) {
       const imp = /import\s+[A-Za-z_$][A-Za-z0-9_$]*\s+from\s+['"]([^'"]+\.module\.css)['"]/.exec(
         src,
@@ -1050,7 +1144,7 @@ export function runAllInvariantChecks(rootDir) {
         if (existsSync(cssAbs)) {
           let cssSrc = cssCache.get(cssAbs)
           if (cssSrc === undefined) {
-            cssSrc = readFileSync(cssAbs, 'utf8')
+            cssSrc = readExpandedCss(cssAbs)
             cssCache.set(cssAbs, cssSrc)
           }
           violations.push(...checkCssModuleKeyExists(src, cssSrc, rel))
@@ -1060,7 +1154,9 @@ export function runAllInvariantChecks(rootDir) {
   }
   for (const abs of cssFiles) {
     const rel = normalizeRel(rootDir, abs)
-    violations.push(...checkCssInvariants(readFileSync(abs, 'utf8'), rel))
+    violations.push(...checkModuleMaxLines(readFileSync(abs, 'utf8'), rel))
+    if (rel.includes('/styles/')) continue
+    violations.push(...checkCssInvariants(readExpandedCss(abs), rel))
   }
   violations.push(...checkLocaleParity(rootDir))
 
@@ -1084,7 +1180,7 @@ function runCli() {
     process.exit(1)
   }
   console.log(
-    `[check-invariants] OK: 23 architectural invariant rules verified across ${report.filesScanned} source/CSS file(s) and locale tables.`,
+    `[check-invariants] OK: 27 architectural invariant rules verified across ${report.filesScanned} source/CSS file(s) and locale tables.`,
   )
 }
 

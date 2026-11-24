@@ -390,10 +390,77 @@ export interface EChartsMountHandle {
   readonly exportPng: (filename: string, backgroundColor: string) => boolean
 }
 
+interface ChartInteractiveState {
+  readonly zoom: Array<{ start?: number; end?: number }> | null
+  readonly legendSelected: Record<string, boolean> | null
+}
+
+function captureChartInteractiveState(
+  inst: ReturnType<EchartsChunkModule['initChartInstance']> | null,
+): ChartInteractiveState | null {
+  if (!inst || typeof inst.getOption !== 'function') return null
+  try {
+    const cur = inst.getOption() as {
+      dataZoom?: Array<{ start?: number; end?: number }>
+      legend?: Array<{ selected?: Record<string, boolean> }>
+    }
+    const zoom =
+      Array.isArray(cur?.dataZoom) && cur.dataZoom.length > 0
+        ? cur.dataZoom.map((z) => ({ start: z.start, end: z.end }))
+        : null
+    const firstLegend = Array.isArray(cur?.legend) ? cur.legend[0] : undefined
+    const legendSelected =
+      firstLegend?.selected && Object.keys(firstLegend.selected).length > 0
+        ? { ...firstLegend.selected }
+        : null
+    return zoom || legendSelected ? { zoom, legendSelected } : null
+  } catch {
+    return null
+  }
+}
+
+function applyChartInteractiveState(
+  option: Record<string, unknown>,
+  saved: ChartInteractiveState | null,
+): Record<string, unknown> {
+  if (!saved) return option
+  let nextOption = option
+  if (saved.zoom && Array.isArray(option.dataZoom)) {
+    nextOption = {
+      ...nextOption,
+      dataZoom: (option.dataZoom as Array<Record<string, unknown>>).map((dz, idx) => {
+        const z = saved.zoom?.[idx]
+        if (!z || (z.start === undefined && z.end === undefined)) return dz
+        return {
+          ...dz,
+          ...(z.start !== undefined ? { start: z.start } : {}),
+          ...(z.end !== undefined ? { end: z.end } : {}),
+        }
+      }),
+    }
+  }
+  if (
+    saved.legendSelected &&
+    option.legend &&
+    typeof option.legend === 'object' &&
+    !Array.isArray(option.legend)
+  ) {
+    nextOption = {
+      ...nextOption,
+      legend: {
+        ...(option.legend as Record<string, unknown>),
+        selected: saved.legendSelected,
+      },
+    }
+  }
+  return nextOption
+}
+
 export function useEChartsMount(params: {
   readonly hostRef: RefObject<HTMLDivElement | null>
   readonly chunk: EchartsChunkModule | null
   readonly option: Record<string, unknown> | null
+  readonly dark?: boolean | undefined
   readonly mounted?: boolean | undefined
   readonly chartKind?: string | undefined
   readonly dataIdentity?: unknown
@@ -404,6 +471,7 @@ export function useEChartsMount(params: {
     hostRef,
     chunk,
     option,
+    dark,
     mounted = true,
     chartKind,
     dataIdentity,
@@ -413,7 +481,17 @@ export function useEChartsMount(params: {
   const chartRef = useRef<ReturnType<EchartsChunkModule['initChartInstance']> | null>(null)
   const optionRef = useRef<Record<string, unknown> | null>(option)
   optionRef.current = option
+  const chartKindRef = useRef<string | undefined>(chartKind)
+  chartKindRef.current = chartKind
+  const dataIdRef = useRef<unknown>(dataIdentity)
+  dataIdRef.current = dataIdentity
+  const savedInteractiveRef = useRef<{
+    readonly kind: string | undefined
+    readonly dataId: unknown
+    readonly state: ChartInteractiveState
+  } | null>(null)
   const lastAppliedOptionRef = useRef<Record<string, unknown> | null>(null)
+  const prevDarkRef = useRef<boolean | undefined>(undefined)
   const prevKindRef = useRef<string | undefined>(chartKind)
   const prevDataIdRef = useRef<unknown>(dataIdentity)
   const onPointClickRef = useRef(onPointClick)
@@ -434,6 +512,8 @@ export function useEChartsMount(params: {
     const el = hostRef.current
     if (!el) return
     let resizeRaf = 0
+    let suppressEntrance = prevDarkRef.current !== undefined && prevDarkRef.current !== dark
+    prevDarkRef.current = dark
 
     const ensureInit = (): ReturnType<EchartsChunkModule['initChartInstance']> | null => {
       if (chartRef.current) return chartRef.current
@@ -441,13 +521,21 @@ export function useEChartsMount(params: {
       const h = Math.round(el.clientHeight)
       if (w === 0 || h === 0) return null
       onContainerWidthRef.current(w)
-      const instance = chunk.initChartInstance(el)
+      const instance = chunk.initChartInstance(el, dark)
       chartRef.current = instance
       instance.on('click', (clickParams: EChartsClickParams) => {
         onPointClickRef.current(clickParams)
       })
       if (optionRef.current) {
-        instance.setOption(optionRef.current, { notMerge: true })
+        const saved = savedInteractiveRef.current
+        savedInteractiveRef.current = null
+        const restored =
+          saved && saved.kind === chartKindRef.current && saved.dataId === dataIdRef.current
+            ? applyChartInteractiveState(optionRef.current, saved.state)
+            : optionRef.current
+        const initialOpt = suppressEntrance ? { ...restored, animation: false } : restored
+        suppressEntrance = false
+        instance.setOption(initialOpt, { notMerge: true })
         lastAppliedOptionRef.current = optionRef.current
       }
       return instance
@@ -485,11 +573,15 @@ export function useEChartsMount(params: {
       if (resizeRaf !== 0 && typeof window !== 'undefined') {
         window.cancelAnimationFrame(resizeRaf)
       }
+      const captured = captureChartInteractiveState(chartRef.current)
+      savedInteractiveRef.current = captured
+        ? { kind: chartKindRef.current, dataId: dataIdRef.current, state: captured }
+        : null
       chartRef.current?.dispose()
       chartRef.current = null
       lastAppliedOptionRef.current = null
     }
-  }, [chunk, hostRef, mounted])
+  }, [chunk, dark, hostRef, mounted])
 
   useEffect(() => {
     const inst = chartRef.current
@@ -507,52 +599,8 @@ export function useEChartsMount(params: {
       prevKindRef.current === chartKind && prevDataIdRef.current === dataIdentity
     prevKindRef.current = chartKind
     prevDataIdRef.current = dataIdentity
-    let prevZoom: Array<{ start?: number; end?: number }> | null = null
-    let prevLegendSelected: Record<string, boolean> | null = null
-    if (preserveInteractive && typeof inst.getOption === 'function') {
-      try {
-        const cur = inst.getOption() as {
-          dataZoom?: Array<{ start?: number; end?: number }>
-          legend?: Array<{ selected?: Record<string, boolean> }>
-        }
-        if (Array.isArray(cur?.dataZoom) && cur.dataZoom.length > 0) {
-          prevZoom = cur.dataZoom.map((z) => ({ start: z.start, end: z.end }))
-        }
-        const firstLegend = Array.isArray(cur?.legend) ? cur.legend[0] : undefined
-        if (firstLegend?.selected && Object.keys(firstLegend.selected).length > 0) {
-          prevLegendSelected = { ...firstLegend.selected }
-        }
-      } catch {}
-    }
-    let nextOption = option
-    if (prevZoom && Array.isArray(option.dataZoom)) {
-      nextOption = {
-        ...nextOption,
-        dataZoom: (option.dataZoom as Array<Record<string, unknown>>).map((dz, idx) => {
-          const saved = prevZoom?.[idx]
-          if (!saved || (saved.start === undefined && saved.end === undefined)) return dz
-          return {
-            ...dz,
-            ...(saved.start !== undefined ? { start: saved.start } : {}),
-            ...(saved.end !== undefined ? { end: saved.end } : {}),
-          }
-        }),
-      }
-    }
-    if (
-      prevLegendSelected &&
-      option.legend &&
-      typeof option.legend === 'object' &&
-      !Array.isArray(option.legend)
-    ) {
-      nextOption = {
-        ...nextOption,
-        legend: {
-          ...(option.legend as Record<string, unknown>),
-          selected: prevLegendSelected,
-        },
-      }
-    }
+    const saved = preserveInteractive ? captureChartInteractiveState(inst) : null
+    const nextOption = applyChartInteractiveState(option, saved)
     inst.setOption(nextOption, { notMerge: true })
     lastAppliedOptionRef.current = option
   }, [chunk, option, chartKind, dataIdentity])

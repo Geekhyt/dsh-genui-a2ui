@@ -49,7 +49,7 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => ({
 }))
 vi.mock('@deepseek-ai/dsh-client-ui-sidebar-right', () => ({}))
 
-import { DshTreeImpl } from '../src/client/catalog/AntdParityWidgets.tsx'
+import { DshTreeImpl } from '../src/client/catalog/widgets/TreeAndCardPickers.tsx'
 import {
   computeArrayCount,
   computeArraySum,
@@ -59,8 +59,8 @@ import {
   DshChecklistImpl,
   DshKvEditorImpl,
   DshRangeSliderImpl,
-  DshRatingImpl,
-} from '../src/client/catalog/NextGenWidgets.tsx'
+} from '../src/client/catalog/widgets/InteractiveLists.tsx'
+import { DshRatingImpl } from '../src/client/catalog/widgets/RatingAndMediaCompare.tsx'
 import { normalizeDiffAnnotations, normalizeDiffFiles } from '../src/client/catalog/p0-helpers.ts'
 import {
   computeTableNumericSummary,

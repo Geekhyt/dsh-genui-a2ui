@@ -108,6 +108,94 @@ function hasExternalUrlInStaticSvg(svg: string): boolean {
   return false
 }
 
+const SAFE_STATIC_SVG_TAGS = new Set([
+  'svg',
+  'g',
+  'defs',
+  'title',
+  'desc',
+  'switch',
+  'path',
+  'rect',
+  'circle',
+  'ellipse',
+  'line',
+  'polyline',
+  'polygon',
+  'text',
+  'tspan',
+  'textpath',
+  'lineargradient',
+  'radialgradient',
+  'stop',
+  'clippath',
+  'mask',
+  'pattern',
+  'symbol',
+  'marker',
+  'filter',
+  'fegaussianblur',
+  'fedropshadow',
+  'feoffset',
+  'feblend',
+  'fecolormatrix',
+  'fecomponenttransfer',
+  'fefuncr',
+  'fefuncg',
+  'fefuncb',
+  'fefunca',
+  'fecomposite',
+  'feconvolvematrix',
+  'fedisplacementmap',
+  'feflood',
+  'femerge',
+  'femergenode',
+  'femorphology',
+  'fetile',
+  'feturbulence',
+])
+
+const UNSAFE_ATTR_PROTOCOL_RE = /^\s*(?:javascript|vbscript|data|blob|file)\s*:/i
+
+function verifyStaticSvgWithDomParser(body: string): boolean {
+  if (typeof DOMParser === 'undefined') return true
+  try {
+    const doc = new DOMParser().parseFromString(body, 'image/svg+xml')
+    if (!doc?.documentElement) return false
+    if (doc.getElementsByTagName('parsererror').length > 0) return false
+    if (doc.documentElement.localName.toLowerCase() !== 'svg') return false
+    for (let i = 0; i < doc.childNodes.length; i += 1) {
+      const nt = doc.childNodes[i]?.nodeType
+      if (nt === 7 || nt === 10) return false
+    }
+    const stack: Element[] = [doc.documentElement]
+    while (stack.length > 0) {
+      const el = stack.pop()!
+      if (!SAFE_STATIC_SVG_TAGS.has(el.localName.toLowerCase())) return false
+      for (let i = 0; i < el.attributes.length; i += 1) {
+        const attr = el.attributes[i]!
+        const name = attr.name.toLowerCase()
+        const local = attr.localName.toLowerCase()
+        const val = attr.value.trim()
+        if (local === 'style' || local.startsWith('on') || name.startsWith('on')) return false
+        if (local === 'href' || name === 'xlink:href' || local === 'src') {
+          if (val !== '' && !val.startsWith('#')) return false
+        }
+        if (UNSAFE_ATTR_PROTOCOL_RE.test(val)) return false
+        if (hasExternalUrlInStaticSvg(val)) return false
+      }
+      for (let i = 0; i < el.childNodes.length; i += 1) {
+        const child = el.childNodes[i]!
+        if (child.nodeType === 7 || child.nodeType === 10) return false
+        if (child.nodeType === 1) stack.push(child as Element)
+      }
+    }
+    return true
+  } catch {
+    return false
+  }
+}
+
 export function isSafeStaticSvgImage(svg: string): boolean {
   const body = svg.replace(HARMLESS_XML_DECL_RE, '')
   if (XML_PROLOG_OR_DOCTYPE_RE.test(body)) return false
@@ -126,7 +214,7 @@ export function isSafeStaticSvgImage(svg: string): boolean {
     const val = (m[1] ?? m[2] ?? '').trim()
     if (val !== '' && !val.startsWith('#')) return false
   }
-  return true
+  return verifyStaticSvgWithDomParser(body)
 }
 
 const YAML_FRONTMATTER_RE = /^\s*---[ \t]*\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)/

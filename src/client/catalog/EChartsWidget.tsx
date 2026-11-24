@@ -414,6 +414,7 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
     hostRef,
     chunk,
     option,
+    dark,
     mounted: chartHasData && !loadError,
     chartKind: kind,
     dataIdentity: data,

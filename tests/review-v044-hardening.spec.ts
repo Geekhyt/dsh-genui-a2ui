@@ -1,3 +1,4 @@
+import { readExpandedCss } from '../scripts/check-invariants.mjs'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { createElement } from 'react'
@@ -53,7 +54,7 @@ import { A2uiActionUserChip } from '../src/client/shell/ActionUserChip.tsx'
 import { A2uiAskDockView, A2uiAskToolView } from '../src/client/shell/AskToolView.tsx'
 import { formatActionMessage, matchA2uiActionUserText } from '../src/client/action-protocol.ts'
 import { DSH_REACT_COMPONENTS } from '../src/client/catalog/BasicWidgets.tsx'
-import { namespaceSvgIds } from '../src/client/catalog/ExtendedWidgets.tsx'
+import { namespaceSvgIds } from '../src/client/catalog/widgets/MermaidWidget.tsx'
 import {
   computeArrayAvg,
   computeArraySum,
@@ -687,9 +688,8 @@ describe('v0.4.4 Comprehensive Review Hardening (CLS-1..CLS-8)', () => {
       ;(globalThis as { CSSStyleSheet?: unknown }).CSSStyleSheet = prevCss
     }
 
-    const catalogCss = readFileSync(
+    const catalogCss = readExpandedCss(
       resolve(import.meta.dirname, '../src/client/catalog/Catalog.module.css'),
-      'utf8',
     )
     expect(catalogCss).toContain('.selectSearchRow > *')
     expect(catalogCss).toContain('contain: layout paint')

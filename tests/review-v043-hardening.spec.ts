@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readExpandedCss } from '../scripts/check-invariants.mjs'
 import { resolve } from 'node:path'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
@@ -301,9 +301,8 @@ describe('v0.4.3 Comprehensive Review & Visual QA Hardening', () => {
   })
 
   it('H-15 & V-01/V-04: removes non-existent host CSS tokens and enforces split diff wrapping + shared NativeDateField', () => {
-    const cssText = readFileSync(
+    const cssText = readExpandedCss(
       resolve(import.meta.dirname, '../src/client/catalog/Catalog.module.css'),
-      'utf8',
     )
     expect(cssText).not.toContain('--dsw-alias-status-')
     expect(cssText).not.toContain('--dsw-alias-state-info-primary')

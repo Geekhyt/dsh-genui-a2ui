@@ -1,11 +1,11 @@
 import { type CSSProperties, Fragment, useMemo, useState } from 'react'
-import { CalloutApi, DiffViewApi, KeyValueApi, StepsApi } from '../../shared/catalog-schema.ts'
-import { useTransientFlag, useTransientKey } from '../dom-hooks.ts'
-import { parseFileTarget } from '../file-opener.tsx'
-import { useRuntimeMessages, useUiLocale } from '../i18n.ts'
-import { DshChevronDownIcon, DshChevronUpIcon, DshMarkdown, DshTag } from '../ui/primitives.tsx'
-import css from './Catalog.module.css'
-import { FileOpenChip } from './FileOpenChip.tsx'
+import { CalloutApi, DiffViewApi, KeyValueApi, StepsApi } from '../../../shared/catalog-schema.ts'
+import { useTransientFlag, useTransientKey } from '../../dom-hooks.ts'
+import { parseFileTarget } from '../../file-opener.tsx'
+import { useRuntimeMessages, useUiLocale } from '../../i18n.ts'
+import { DshChevronDownIcon, DshChevronUpIcon, DshMarkdown, DshTag } from '../../ui/primitives.tsx'
+import css from '../Catalog.module.css'
+import { FileOpenChip } from '../FileOpenChip.tsx'
 import {
   computeLineDiff,
   type NormalizedDiffAnnotation,
@@ -14,14 +14,14 @@ import {
   normalizeKeyValueItems,
   normalizeStepItems,
   pairSplitDiffRows,
-} from './p0-helpers.ts'
+} from '../p0-helpers.ts'
 import {
   type ChildRef,
   copyTextToClipboard,
   defineComponent,
   renderChildRef,
   weightStyle,
-} from './widget-helpers.tsx'
+} from '../widget-helpers.tsx'
 
 export const DshDiffViewImpl = defineComponent<{
   before?: unknown

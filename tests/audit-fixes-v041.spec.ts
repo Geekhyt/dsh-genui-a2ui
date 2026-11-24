@@ -49,7 +49,7 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => ({
 }))
 
 import { computeArrayAvg, extractNumericValues } from '../src/client/catalog/functions.ts'
-import { DshSegmentedView } from '../src/client/catalog/InputWidgets.tsx'
+import { DshSegmentedView } from '../src/client/catalog/widgets/SelectControls.tsx'
 import { normalizeKeyValueItems } from '../src/client/catalog/p0-helpers.ts'
 import { buildServiceGraphLayout } from '../src/client/catalog/v3-helpers.ts'
 import { buildEndpointCurl, formatTableToCsv } from '../src/client/catalog/v4-helpers.ts'

@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readExpandedCss } from '../scripts/check-invariants.mjs'
 import { resolve } from 'node:path'
 import * as echarts from 'echarts/core'
 import { SVGRenderer } from 'echarts/renderers'
@@ -399,9 +399,8 @@ describe('Comprehensive Repo Audit v0.5.4 — Concurrency, Lifecycle & Widget Co
     expect(parseLocalDateAnchor('2026/05/01').getMonth()).toBe(4)
     expect(computeDateRangeSpanDays('2026-02-31', '2026-03-02')).toBeNull()
 
-    const catalogCss = readFileSync(
+    const catalogCss = readExpandedCss(
       resolve(process.cwd(), 'src/client/catalog/Catalog.module.css'),
-      'utf8',
     )
     expect(catalogCss).toContain('justify-content: safe center;')
     const whereBlock = catalogCss.slice(0, catalogCss.indexOf('.row {'))

@@ -45,7 +45,7 @@ import {
   MERMAID_ZOOM_STEP,
   scaleMermaidZoomByWheel,
   stepMermaidZoom,
-} from '../src/client/catalog/ExtendedWidgets.tsx'
+} from '../src/client/catalog/widgets/MermaidWidget.tsx'
 import { LocaleFormatCurrencyImplementation } from '../src/client/catalog/functions.ts'
 import { dshReactCatalog } from '../src/client/catalog/index.ts'
 import { DshRowView, isHomogeneousStatRow } from '../src/client/catalog/LayoutWidgets.tsx'

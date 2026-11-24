@@ -1,0 +1,729 @@
+:global(.a2ui-dark) {
+  color-scheme: dark;
+}
+
+:global(.a2ui-light) {
+  color-scheme: light;
+}
+
+:global(:root),
+:global(.a2ui-dark),
+:global(.a2ui-light) {
+  --a2ui-mono: var(--dsw-font-family-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  --a2ui-fg: var(--dsw-alias-label-primary, inherit);
+  --a2ui-fg-2: var(--dsw-alias-label-secondary, inherit);
+  --a2ui-fg-3: var(--dsw-alias-label-tertiary, rgba(128, 128, 128, 0.82));
+  --a2ui-accent: var(--dsw-alias-state-business-primary, #3b82f6);
+  --a2ui-brand: var(--dsw-alias-brand-primary, #4d6bfe);
+  --a2ui-success: var(--dsw-alias-state-success-primary, #10b981);
+  --a2ui-warn: var(--dsw-alias-state-warn-primary, #f59e0b);
+  --a2ui-danger: var(--dsw-alias-state-error-primary, #ef4444);
+  --a2ui-bg-1: var(--dsw-alias-bg-layer-1, transparent);
+  --a2ui-bg-2: var(--dsw-alias-bg-layer-2, rgba(128, 128, 128, 0.06));
+  --a2ui-bg-3: var(--dsw-alias-bg-layer-3, rgba(128, 128, 128, 0.1));
+  --a2ui-bg-hover: var(--dsw-alias-interactive-bg-hover, rgba(128, 128, 128, 0.12));
+  --a2ui-bg-opaque: var(--dsw-alias-bg-base, light-dark(#ffffff, #18191e));
+  --a2ui-border-1: var(--dsw-alias-border-l1, rgba(128, 128, 128, 0.16));
+  --a2ui-border-2: var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.22));
+  --a2ui-r-sm: var(--dsw-radius-sm, 8px);
+  --a2ui-r-md: var(--dsw-radius-md, 10px);
+  --a2ui-r-lg: var(--dsw-radius-lg, 14px);
+  --a2ui-on-accent: light-dark(#ffffff, #0b1220);
+  --a2ui-warn-fg: var(--dsw-alias-state-warn-label, light-dark(#92400e, #fcd34d));
+}
+
+.containerHost {
+  container-type: inline-size;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+:where(
+  .card,
+  .chartCard,
+  .tableCard,
+  .diffCard,
+  .kvCard,
+  .fileTreeCard,
+  .jsonTreeCard,
+  .mermaidCard,
+  .comparisonCard,
+  .logCard,
+  .terminalCard,
+  .scheduleCard,
+  .matrixCard,
+  .metricRingCard,
+  .checkCardField,
+  .tabsWrap,
+  .accordion,
+  .approvalCard,
+  .apiCard,
+  .trackerCard,
+  .serviceGraphCard,
+  .timelineCard,
+  .sourceListCard,
+  .dateRangeCard,
+  .entityHeaderCard,
+  .callout,
+  .kanbanBoardWrap,
+  .resultCard,
+  .stepsWrap,
+  .codeWrap,
+  .switchCard,
+  .choiceGroup,
+  .field,
+  .checklistCard,
+  .sortableCard,
+  .kvEditorCard,
+  .imageCompareCard,
+  .annotationCard,
+  .column[data-a2ui-weighted="true"]
+) {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.row {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 12px;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  --a2ui-flex-basis: 0px;
+}
+
+.row > *,
+.listHorizontal > * {
+  --a2ui-flex-basis: 0px;
+}
+
+:is(
+    .column,
+    .listVertical,
+    .card,
+    .tabPanel,
+    .accordionPanel,
+    .calloutBody,
+    .resultChildWrap,
+    .timelineChildSlot,
+    .containerHost,
+    .responsiveGrid
+  )
+  > * {
+  --a2ui-flex-basis: auto;
+}
+
+:is(.row, .listHorizontal) > .field,
+:is(.row, .listHorizontal) > * > .field {
+  flex: 1 1 min(100%, 160px);
+  width: auto;
+  min-width: 0;
+  max-width: 100%;
+}
+
+:is(.row, .listHorizontal) > .statCard,
+:is(.row, .listHorizontal) > * > .statCard {
+  flex: 1 1 min(100%, 140px);
+  width: auto;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+:is(.row, .listHorizontal)
+  > :is(
+    .column,
+    .listVertical,
+    .card,
+    .chartCard,
+    .tableCard,
+    .diffCard,
+    .kvCard,
+    .fileTreeCard,
+    .jsonTreeCard,
+    .mermaidCard,
+    .comparisonCard,
+    .logCard,
+    .terminalCard,
+    .scheduleCard,
+    .matrixCard,
+    .metricRingCard,
+    .checkCardField,
+    .tabsWrap,
+    .accordion,
+    .approvalCard,
+    .apiCard,
+    .trackerCard,
+    .serviceGraphCard,
+    .timelineCard,
+    .sourceListCard,
+    .dateRangeCard,
+    .entityHeaderCard,
+    .callout,
+    .kanbanBoardWrap,
+    .resultCard,
+    .stepsWrap,
+    .codeWrap,
+    .switchCard,
+    .choiceGroup,
+    .checklistCard,
+    .sortableCard,
+    .kvEditorCard,
+    .imageCompareCard,
+    .annotationCard,
+    .containerHost,
+    .imageWrap:not([data-avatar="true"]),
+    [data-a2ui-modal-root],
+    [data-a2ui-segmented],
+    [data-a2ui-slider],
+    [data-a2ui-progress]
+  ),
+:is(.row, .listHorizontal)
+  > *
+  > :is(
+    .column,
+    .listVertical,
+    .card,
+    .chartCard,
+    .tableCard,
+    .diffCard,
+    .kvCard,
+    .fileTreeCard,
+    .jsonTreeCard,
+    .mermaidCard,
+    .comparisonCard,
+    .logCard,
+    .terminalCard,
+    .scheduleCard,
+    .matrixCard,
+    .metricRingCard,
+    .checkCardField,
+    .tabsWrap,
+    .accordion,
+    .approvalCard,
+    .apiCard,
+    .trackerCard,
+    .serviceGraphCard,
+    .timelineCard,
+    .sourceListCard,
+    .dateRangeCard,
+    .entityHeaderCard,
+    .callout,
+    .kanbanBoardWrap,
+    .resultCard,
+    .stepsWrap,
+    .codeWrap,
+    .switchCard,
+    .choiceGroup,
+    .checklistCard,
+    .sortableCard,
+    .kvEditorCard,
+    .imageCompareCard,
+    .annotationCard,
+    .containerHost,
+    .imageWrap:not([data-avatar="true"]),
+    [data-a2ui-modal-root],
+    [data-a2ui-segmented],
+    [data-a2ui-slider],
+    [data-a2ui-progress]
+  ) {
+  flex: 1 1 min(100%, 220px);
+  width: auto;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+:is(.row, .listHorizontal) > .audioPlayerField,
+:is(.row, .listHorizontal) > * > .audioPlayerField {
+  flex: 1 1 min(100%, 220px);
+  width: auto;
+  min-width: min(100%, 200px);
+  max-width: 100%;
+}
+
+.row[data-align="stretch"] > .badgeWrap,
+.row[data-align="stretch"] > * > .badgeWrap,
+.row[data-align="stretch"] > .icon,
+.row[data-align="stretch"] > * > .icon,
+.row[data-align="stretch"] > [data-a2ui-button],
+.row[data-align="stretch"] > * > [data-a2ui-button],
+.row[data-align="stretch"] > button:not(.imageWrap),
+.row[data-align="stretch"] > * > button:not(.imageWrap) {
+  align-self: center;
+}
+
+.row[data-kpi-grid="true"] {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.row[data-kpi-grid="true"][data-child-count="2"] {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.row[data-kpi-grid="true"][data-child-count="3"] {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.row[data-kpi-grid="true"][data-child-count="4"] {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.row[data-kpi-grid="true"][data-child-count="6"] {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.row[data-kpi-grid="true"] > .statCard,
+.row[data-kpi-grid="true"] > * > .statCard,
+.row[data-kpi-grid="true"] > .metricRingCard,
+.row[data-kpi-grid="true"] > * > .metricRingCard {
+  min-width: 0;
+  width: 100%;
+  height: 100%;
+  align-self: stretch;
+}
+
+@container (max-width: 680px) {
+  .row[data-kpi-grid="true"][data-child-count="4"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container (max-width: 480px) {
+  .row[data-kpi-grid="true"][data-child-count="3"] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .row[data-kpi-grid="true"][data-child-count="6"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container (max-width: 360px) {
+  .row[data-kpi-grid="true"],
+  .row[data-kpi-grid="true"][data-child-count] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  --a2ui-flex-basis: auto;
+}
+
+.column > .card,
+.column > * > .card,
+.listVertical > .card,
+.listVertical > * > .card,
+:is(.row, .listHorizontal) > .card,
+:is(.row, .listHorizontal) > * > .card,
+:is(.row, .listHorizontal) > .column,
+:is(.row, .listHorizontal) > * > .column,
+.responsiveGrid > .card,
+.responsiveGrid > * > .card,
+.responsiveGrid > .column,
+.responsiveGrid > * > .column,
+.card[data-a2ui-weighted="true"],
+.column[data-a2ui-weighted="true"] {
+  container-type: inline-size;
+}
+
+.listVertical {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.listHorizontal {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.card {
+  border: 1px solid var(--a2ui-border-2);
+  border-radius: var(--a2ui-r-lg);
+  background: var(--a2ui-bg-2);
+  padding: 14px 16px;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.card .card {
+  padding: 10px 12px;
+  background: var(--a2ui-bg-1);
+  container-type: inline-size;
+}
+
+.dividerH {
+  width: 100%;
+  height: 1px;
+  border: 0;
+  margin: 2px 0;
+  background: var(--a2ui-border-1);
+}
+
+.dividerV {
+  width: 1px;
+  align-self: stretch;
+  min-height: 16px;
+  background: var(--a2ui-border-1);
+}
+
+.textBody {
+  color: var(--a2ui-fg);
+  font-size: 13.5px;
+  line-height: 1.55;
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
+.textCaption {
+  color: var(--a2ui-fg-2);
+  font-size: 12px;
+  line-height: 1.45;
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
+.icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--a2ui-fg-2);
+  flex-shrink: 0;
+}
+
+.badgeWrap {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.imageWrap {
+  overflow: hidden;
+  border: none;
+  padding: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  border-radius: var(--a2ui-r-md);
+  background: var(--a2ui-bg-3);
+}
+
+.image {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.audioPlayerField {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.audioControl {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  height: 36px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  flex-shrink: 1;
+  box-sizing: border-box;
+}
+
+.checkboxField {
+  align-items: flex-start;
+  min-width: min(100%, 140px);
+}
+
+.checkboxField label {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.fieldHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px 8px;
+  min-width: 0;
+}
+
+.label {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--a2ui-fg-2);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.errorText {
+  font-size: 11.5px;
+  color: var(--dsw-alias-label-error, #ef4444);
+}
+
+.textarea {
+  width: 100%;
+  min-height: 76px;
+  padding: 8px 10px;
+  border-radius: var(--a2ui-r-sm);
+  border: 1px solid var(--a2ui-border-2);
+  background: var(--a2ui-bg-1);
+  color: var(--a2ui-fg);
+  font-family: var(--dsw-font-family, inherit);
+  font-size: 13px;
+  line-height: 1.5;
+  resize: vertical;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.textarea:focus {
+  border-color: var(--dsw-focus-ring-color, var(--a2ui-accent));
+}
+
+.textarea[aria-invalid="true"],
+.dateInput[aria-invalid="true"],
+.selectTrigger[aria-invalid="true"],
+.multiSelectTrigger[aria-invalid="true"],
+.dateRangeInputs[aria-invalid="true"],
+.kvEditorInput[aria-invalid="true"],
+.numberStepperBox:has([aria-invalid="true"]) {
+  border-color: var(--a2ui-danger);
+}
+
+.dateRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.dateInputWrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.dateInput {
+  width: 100%;
+  height: 34px;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 0 32px 0 10px;
+  border-radius: var(--a2ui-r-sm);
+  border: 1px solid var(--a2ui-border-2);
+  background: var(--a2ui-bg-1);
+  color: var(--a2ui-fg);
+  font-family: var(--dsw-font-family, inherit);
+  font-size: 13px;
+  outline: none;
+}
+
+.dateInput::-webkit-calendar-picker-indicator {
+  opacity: 0;
+  width: 0;
+  padding: 0;
+  margin: 0;
+  pointer-events: none;
+}
+
+.datePickerBtn {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--a2ui-fg-2);
+  cursor: pointer;
+}
+
+.datePickerBtn:hover:not(:disabled) {
+  background: var(--a2ui-bg-hover);
+  color: var(--a2ui-fg);
+}
+
+.datePickerBtn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.dateInput:focus {
+  border-color: var(--dsw-focus-ring-color, var(--a2ui-accent));
+}
+
+.choiceGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.pillGroup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.radioList {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.radioList label {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.radioItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  color: var(--a2ui-fg);
+  cursor: pointer;
+  user-select: none;
+}
+
+.radioItem[data-focus-visible] .radioDot {
+  box-shadow: 0 0 0 3px var(--dsw-focus-ring-color, rgba(59, 130, 246, 0.35));
+}
+
+.radioDot {
+  width: 15px;
+  height: 15px;
+  border-radius: 999px;
+  border: 1.5px solid var(--dsw-alias-border-l3, rgba(128, 128, 128, 0.45));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: border-color 120ms ease;
+}
+
+.radioItem[data-selected] .radioDot {
+  border-color: var(--a2ui-accent);
+}
+
+.radioItem[data-selected] .radioDot::after {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--a2ui-accent);
+}
+
+.slider {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.sliderHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 8px;
+  min-width: 0;
+}
+
+.sliderOutput {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+  color: var(--a2ui-fg);
+}
+
+.sliderTrack {
+  position: relative;
+  height: 22px;
+  width: 100%;
+  margin-inline: 0;
+  cursor: pointer;
+}
+
+.sliderTrack::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 11px;
+  right: 11px;
+  height: 5px;
+  transform: translateY(-50%);
+  border-radius: 999px;
+  background: var(--a2ui-bg-3);
+}
+
+.sliderFill {
+  position: absolute;
+  top: 50%;
+  left: 11px;
+  height: 5px;
+  transform: translateY(-50%);
+  border-radius: 999px;
+  background: var(--a2ui-accent);
+  pointer-events: none;
+}
+
+.sliderThumb {
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--dsw-alias-switch-thumb, #ffffff);
+  border: 2px solid var(--a2ui-accent);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
+  outline: none;
+  box-sizing: border-box;
+}
+
+.sliderThumb[data-focus-visible] {
+  box-shadow: 0 0 0 3px var(--dsw-focus-ring-color, rgba(59, 130, 246, 0.35));
+}

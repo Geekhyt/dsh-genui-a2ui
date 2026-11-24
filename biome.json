@@ -13,6 +13,7 @@
       "tests/**",
       "locale/**",
       "tsdown.config.ts",
+      "vitest.config.ts",
       "package.json",
       "tsconfig.json"
     ]
@@ -59,7 +60,7 @@
   },
   "overrides": [
     {
-      "includes": ["src/client/catalog/ExtendedWidgets.tsx"],
+      "includes": ["src/client/catalog/widgets/MermaidWidget.tsx"],
       "linter": {
         "rules": {
           "security": {

@@ -483,7 +483,23 @@ export function DshModal(props: {
   useDialogFocus(!hasHostModal && props.open, dialogRef)
   if (hasHostModal) {
     const HostModal = HostPrimitives.Modal
-    return <HostModal {...props} />
+    const themeCls = dark ? 'a2ui-dark' : 'a2ui-light'
+    return (
+      <HostModal
+        {...props}
+        footer={
+          props.footer !== undefined ? (
+            <div className={themeCls} style={{ display: 'contents' }}>
+              {props.footer}
+            </div>
+          ) : undefined
+        }
+      >
+        <div className={themeCls} style={{ display: 'contents' }}>
+          {props.children}
+        </div>
+      </HostModal>
+    )
   }
   if (!props.open || typeof document === 'undefined') return null
   return createPortal(

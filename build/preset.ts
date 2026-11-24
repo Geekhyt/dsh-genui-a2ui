@@ -354,6 +354,31 @@ function resolveCssFile(specifier: string, importer: string | undefined): string
   }
 }
 
+const LOCAL_CSS_IMPORT_RE = /^@import\s+['"](\.[^'"]+\.css)['"]\s*;\s*$/
+
+async function readExpandedCssSource(
+  filePath: string,
+  addWatchFile: (f: string) => void,
+  seen = new Set<string>(),
+): Promise<string> {
+  const abs = resolve(filePath)
+  if (seen.has(abs)) return ''
+  seen.add(abs)
+  addWatchFile(abs)
+  const raw = await readFile(abs, 'utf8')
+  const parts: string[] = []
+  for (const line of raw.split('\n')) {
+    const match = LOCAL_CSS_IMPORT_RE.exec(line.trim())
+    if (match?.[1]) {
+      const target = resolve(dirname(abs), match[1])
+      parts.push(await readExpandedCssSource(target, addWatchFile, seen))
+    } else {
+      parts.push(line)
+    }
+  }
+  return parts.join('\n')
+}
+
 function cssInlinePlugin(id: string) {
   const files = new Map<string, string>()
   return {
@@ -373,10 +398,13 @@ function cssInlinePlugin(id: string) {
       const rest = virtualId.slice(CSS_VIRTUAL_PREFIX.length, -CSS_VIRTUAL_SUFFIX.length)
       const isModule = rest.startsWith('module:')
       const file = files.get(virtualId) ?? rest.slice(isModule ? 7 : 7)
-      ;(this as unknown as { addWatchFile(f: string): void }).addWatchFile(file)
+      const addWatch = (f: string) => {
+        ;(this as unknown as { addWatchFile(dep: string): void }).addWatchFile(f)
+      }
+      const expandedCss = await readExpandedCssSource(file, addWatch)
       const { code, exports } = transform({
         filename: file,
-        code: await readFile(file),
+        code: Buffer.from(expandedCss, 'utf8'),
         cssModules: isModule ? { pattern: 'a2ui_[hash]_[local]' } : undefined,
         minify: true,
       })

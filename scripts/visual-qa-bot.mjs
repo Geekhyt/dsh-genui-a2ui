@@ -119,8 +119,66 @@ export function buildDomGeometryAuditExpression() {
     const buttonWrapViolations = [];
     const clippingViolations = [];
     const popoverViolations = [];
+    const contrastViolations = [];
     let canvasCount = 0;
     let svgCount = 0;
+
+    const parseRgba = (raw) => {
+      if (!raw || raw === 'transparent') return [0, 0, 0, 0];
+      const m = raw.match(/rgba?\\(\\s*([\\d.]+)[,\\s]+([\\d.]+)[,\\s]+([\\d.]+)(?:[,\\s/]+([\\d.]+))?\\s*\\)/i);
+      if (m) return [Number(m[1]), Number(m[2]), Number(m[3]), m[4] === undefined ? 1 : Number(m[4])];
+      const srgb = raw.match(/color\\(\\s*srgb\\s+([\\d.]+)\\s+([\\d.]+)\\s+([\\d.]+)(?:\\s*\\/\\s*([\\d.]+))?\\s*\\)/i);
+      if (srgb) return [Number(srgb[1]) * 255, Number(srgb[2]) * 255, Number(srgb[3]) * 255, srgb[4] === undefined ? 1 : Number(srgb[4])];
+      return null;
+    };
+    const compositeOver = (fg, bg) => {
+      const a = fg[3];
+      return [
+        fg[0] * a + bg[0] * (1 - a),
+        fg[1] * a + bg[1] * (1 - a),
+        fg[2] * a + bg[2] * (1 - a),
+        1,
+      ];
+    };
+    const relLum = (rgb) => {
+      const lin = (c) => {
+        const s = Math.max(0, Math.min(1, c / 255));
+        return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+      };
+      return 0.2126 * lin(rgb[0]) + 0.7152 * lin(rgb[1]) + 0.0722 * lin(rgb[2]);
+    };
+    const contrastOf = (a, b) => {
+      const la = relLum(a);
+      const lb = relLum(b);
+      return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+    };
+    const resolveEffectiveBg = (node) => {
+      const layers = [];
+      let cur = node;
+      while (cur && cur.nodeType === 1) {
+        const c = parseRgba(getComputedStyle(cur).backgroundColor);
+        if (c && c[3] > 0.01) {
+          layers.push(c);
+          if (c[3] >= 0.99) break;
+        }
+        cur = cur.parentElement;
+      }
+      const isDarkRoot =
+        document.documentElement.classList.contains('dark') ||
+        document.documentElement.dataset.theme === 'dark' ||
+        Boolean(node.closest('.a2ui-dark'));
+      let acc = isDarkRoot ? [24, 25, 30, 1] : [255, 255, 255, 1];
+      for (let i = layers.length - 1; i >= 0; i -= 1) {
+        acc = compositeOver(layers[i], acc);
+      }
+      return acc;
+    };
+    const hasDirectText = (node) => {
+      for (const ch of node.childNodes) {
+        if (ch.nodeType === 3 && (ch.textContent || '').trim().length > 0) return true;
+      }
+      return false;
+    };
 
     for (const el of a2uiNodes) {
       const style = getComputedStyle(el);
@@ -160,6 +218,32 @@ export function buildDomGeometryAuditExpression() {
             right: Math.round(rect.right),
             viewportWidth: window.innerWidth,
           });
+        }
+      }
+
+      const clsName = typeof el.className === 'string' ? el.className : '';
+      const isContrastTarget =
+        (el.tagName === 'BUTTON' ||
+          /(?:Badge|Bar|Pill|Tag|Chip|RatingScaleBtn|CheckCardIndicator|ResultEmblem)/.test(clsName)) &&
+        hasDirectText(el) &&
+        !el.hasAttribute('disabled') &&
+        el.getAttribute('aria-disabled') !== 'true' &&
+        style.visibility !== 'hidden' &&
+        Number(style.opacity || 1) >= 0.7;
+      if (isContrastTarget) {
+        const ownBg = parseRgba(style.backgroundColor);
+        const fg = parseRgba(style.color);
+        if (ownBg && ownBg[3] >= 0.4 && fg && fg[3] >= 0.5) {
+          const effBg = resolveEffectiveBg(el);
+          const effFg = fg[3] < 0.99 ? compositeOver(fg, effBg) : fg;
+          const ratio = contrastOf(effFg, effBg);
+          if (ratio < 3.0) {
+            contrastViolations.push({
+              cls: clsName.slice(0, 60),
+              text: (el.textContent || '').trim().slice(0, 24),
+              ratio: Number(ratio.toFixed(2)),
+            });
+          }
         }
       }
     }
@@ -213,6 +297,7 @@ export function buildDomGeometryAuditExpression() {
       buttonWrapViolations: buttonWrapViolations.slice(0, 12),
       clippingViolations: clippingViolations.slice(0, 12),
       popoverViolations: popoverViolations.slice(0, 12),
+      contrastViolations: contrastViolations.slice(0, 12),
     };
   })()`
 }
@@ -227,6 +312,8 @@ export function evaluateVisualQaReport(runs) {
       issues.push(`${r.buttonWrapViolations.length} vertical button wrap(s)`)
     if (r.clippingViolations.length > 0) issues.push(`${r.clippingViolations.length} viz clip(s)`)
     if (r.popoverViolations.length > 0) issues.push(`${r.popoverViolations.length} popover clip(s)`)
+    const contrastList = Array.isArray(r.contrastViolations) ? r.contrastViolations : []
+    if (contrastList.length > 0) issues.push(`${contrastList.length} contrast violation(s)`)
     if (r.consoleErrors.length > 0) issues.push(`${r.consoleErrors.length} console error(s)`)
     if (r.pageErrors.length > 0) issues.push(`${r.pageErrors.length} page error(s)`)
     if (issues.length > 0) {
@@ -556,7 +643,10 @@ function parseCliArgs(argv, rootDir) {
   for (const arg of argv) {
     if (arg === '--dry-run') opts.dryRun = true
     else if (arg === '--all') opts.cases = ALL_SHOWCASES
-    else if (arg === '--screenshots') opts.screenshots = true
+    else if (arg === '--narrow') {
+      opts.width = 1024
+      opts.height = 768
+    } else if (arg === '--screenshots') opts.screenshots = true
     else if (arg.startsWith('--url=')) opts.url = arg.slice(6)
     else if (arg.startsWith('--cases=')) {
       opts.cases = arg
@@ -673,18 +763,22 @@ async function runCli() {
           mkdirSync(dirname(dest), { recursive: true })
           writeFileSync(dest, Buffer.from(shot.data, 'base64'))
         }
+        const contrastCount = Array.isArray(metrics.contrastViolations)
+          ? metrics.contrastViolations.length
+          : 0
         const okTag =
           metrics.a2uiElementCount > 0 &&
           metrics.overflowViolations.length === 0 &&
           metrics.buttonWrapViolations.length === 0 &&
           metrics.clippingViolations.length === 0 &&
           metrics.popoverViolations.length === 0 &&
+          contrastCount === 0 &&
           consoleErrors.length === 0 &&
           pageErrors.length === 0
             ? 'PASS'
             : 'FAIL'
         console.log(
-          `[visual-qa-bot] ${okTag} ${showcase.padEnd(16)} (${theme.padEnd(5)}) els=${metrics.a2uiElementCount} canvas=${metrics.canvasCount} svg=${metrics.svgCount} overflow=${metrics.overflowViolations.length} wrap=${metrics.buttonWrapViolations.length} clip=${metrics.clippingViolations.length} errs=${consoleErrors.length + pageErrors.length}`,
+          `[visual-qa-bot] ${okTag} ${showcase.padEnd(16)} (${theme.padEnd(5)}) els=${metrics.a2uiElementCount} canvas=${metrics.canvasCount} svg=${metrics.svgCount} overflow=${metrics.overflowViolations.length} wrap=${metrics.buttonWrapViolations.length} clip=${metrics.clippingViolations.length} contrast=${contrastCount} errs=${consoleErrors.length + pageErrors.length}`,
         )
       }
     }
@@ -704,7 +798,7 @@ async function runCli() {
       process.exit(1)
     }
     console.log(
-      `[visual-qa-bot] OK: ${summary.passedRuns}/${summary.totalRuns} showcase/theme runs passed 4-point DOM geometry audit.`,
+      `[visual-qa-bot] OK: ${summary.passedRuns}/${summary.totalRuns} showcase/theme runs passed 5-point DOM geometry & contrast audit.`,
     )
   } finally {
     await browser.stop()

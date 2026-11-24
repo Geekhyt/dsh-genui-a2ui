@@ -12,14 +12,15 @@ import {
   checkCssInvariants,
   checkCssModuleKeyExists,
   checkLocaleParity,
+  checkModuleMaxLines,
   checkTsInvariants,
   runAllInvariantChecks,
 } from '../scripts/check-invariants.mjs'
 
 const ROOT_DIR = resolve(import.meta.dirname, '..')
 
-describe('Architectural invariant linter (23 rules)', () => {
-  it('passes all 23 rules on the live repository with zero violations', () => {
+describe('Architectural invariant linter (27 rules)', () => {
+  it('passes all 27 rules on the live repository with zero violations', () => {
     const report = runAllInvariantChecks(ROOT_DIR)
     expect(report.filesScanned).toBeGreaterThan(50)
     expect(report.violations).toEqual([])
@@ -202,6 +203,12 @@ describe('Architectural invariant linter (23 rules)', () => {
     )
     expect(stickyCssV.some((v) => v.rule === 'css-sticky-bg-opaque-layer')).toBe(true)
 
+    const rawWhiteOnAccentV = checkCssInvariants(
+      `.badPill { background: var(--a2ui-accent, #3b82f6); color: #ffffff; }`,
+      'src/client/catalog/BadAccent.module.css',
+    )
+    expect(rawWhiteOnAccentV.some((v) => v.rule === 'css-no-raw-white-on-state-primary')).toBe(true)
+
     const dupClipV = checkTsInvariants(
       `function copyToClipboardSafe(t: string) { void navigator.clipboard.writeText(t) }\nexport const x = copyToClipboardSafe`,
       'src/client/catalog/BadClip.tsx',
@@ -213,6 +220,32 @@ describe('Architectural invariant linter (23 rules)', () => {
       'src/client/action-protocol.ts',
     )
     expect(rawActionJsonV.some((v) => v.rule === 'no-raw-json-stringify-action-bridge')).toBe(true)
+
+    const redundantFallbackV = checkCssInvariants(
+      `.badTok { color: var(--a2ui-danger, #ef4444); border: 1px solid var(--a2ui-border-1, gray); }`,
+      'src/client/catalog/BadFallback.module.css',
+    )
+    expect(
+      redundantFallbackV.filter((v) => v.rule === 'css-no-redundant-a2ui-token-fallback'),
+    ).toHaveLength(2)
+
+    const oversizedWidgetV = checkModuleMaxLines(
+      `${'x\n'.repeat(905)}`,
+      'src/client/catalog/widgets/HugeWidget.tsx',
+    )
+    expect(oversizedWidgetV.some((v) => v.rule === 'module-max-lines')).toBe(true)
+
+    const oversizedCssV = checkModuleMaxLines(
+      `${'.a{}\n'.repeat(960)}`,
+      'src/client/catalog/styles/huge.module.css',
+    )
+    expect(oversizedCssV.some((v) => v.rule === 'module-max-lines')).toBe(true)
+
+    const directImplV = checkTsInvariants(
+      `import { createComponentImplementation } from '@a2ui/react'\nexport const Bad = createComponentImplementation({} as never, () => null)`,
+      'src/client/catalog/widgets/BadWidget.tsx',
+    )
+    expect(directImplV.some((v) => v.rule === 'catalog-define-component-only')).toBe(true)
   })
 
   it('verifies locale key parity across locale/*.json and TypeScript message tables', () => {

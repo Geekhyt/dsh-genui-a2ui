@@ -2,6 +2,31 @@
 
 All notable changes to `dsh-genui-a2ui` are documented in this file.
 
+## [0.5.4] - 2026-11-24
+
+### Added
+- **8 New Architectural Invariant Rules (`scripts/check-invariants.mjs`, `tests/invariants-lint.spec.ts`)**:
+  - Expanded the static invariant gate from **19 → 27 rules**, adding rules for theme-aware color contrast (`css-no-raw-white-on-state-primary`), module line-count ceilings (`module-max-lines`: widgets ≤900L, catalog ≤1000L, chunks ≤950L, CSS ≤950L), redundant token fallback elimination (`css-no-redundant-a2ui-token-fallback`), and collision-free widget registration (`catalog-define-component-only`).
+- **Real DOM Convergence, 156 White-Box ECharts SVG & Live Chrome E2E Suites (`vitest.config.ts`, `tests/interactive-dom-convergence.dom.spec.tsx`, `tests/echarts-svg-whitebox.spec.ts`, `tests/comprehensive-audit-v054.spec.ts`, `scripts/qa-e2e-bot.mjs`)**:
+  - Added multi-project Vitest runner (`node` + `happy-dom` React 18 real DOM environment) covering `TextField`, `Select`, `TableWidget`, `DshModal`, `A2uiAskDockView`, `A2uiToolView`, `useEChartsMount`, `isSafeStaticSvgImage`, and custom-element reload collision recovery.
+  - Added **156** deterministic white-box ECharts SVG assertions (26 chart kinds × 2 themes × 3 widths: `240px`/`276px`/`540px`) and `npm run qa:e2e` (**22/22** live DeepSeek Harness Chrome interactive + `1024px` narrow-desktop assertions).
+
+### Fixed
+- **Reload-Safe Custom Element Registration (`src/client/catalog/widget-helpers.tsx`)**:
+  - Replaced `@a2ui/react`'s un-namespaced `a2ui-react-*` auto-wrapper with plugin-namespaced `dsh-a2ui-<kebab-name>` host elements resolved via `resolveDshHostElement` (`customElements.get` → `globalThis.__dshA2uiHostElements__` singleton reuse → `display: contents` `HTMLElement` subclass), preventing `Custom element tag name collision for "a2ui-react-card"` across DeepSeek Harness HMR, plugin hot-reload/upgrades, and multi-plugin windows.
+- **Zero-Flicker ECharts Theme Switching (`src/client/dom-hooks.ts`)**:
+  - Suppressed entrance animation replay (`animation: false`) during Dark↔Light theme switch re-initialization in `useEChartsMount` while preserving user `dataZoom` windows and `legend.selected` state, eliminating half-wiped Sankey/Parallel renders and mid-animation Gauge resets.
+- **Security, Runtime Lifecycle, SVG Sanitization & 64-Widget Hardening (`src/shared/*`, `src/host/*`, `src/client/*`)**:
+  - Hardened `DOMParser`-based static SVG allowlist sanitization (`mermaid-safe.ts`), secret redaction across nested `@call`/template paths, workspace file-opening boundary enforcement (`ToolView.tsx`, `file-opener.tsx`), HITL `a2ui_ask` settlement isolation (`ask-tool.ts`, `AskToolView.tsx`), deterministic streaming/turn lifecycle guards (`streaming.ts`, `turn-surfaces.ts`, `SurfaceView.tsx`), and strict numeric/temporal parsing (`constants.ts`, `temporal.ts`, `express-preprocess.ts`).
+  - Audited and hardened all 64 catalog widgets and 26 ECharts chart kinds for `306px`/`276px` narrow-column geometry, WCAG AA Dark & Light contrast (upgraded `visual-qa-bot.mjs` to 5-point DOM geometry + WCAG contrast checks), keyboard arrow navigation (`handleOptionListArrowKey`), and popover viewport clamping.
+
+### Changed
+- **Modular Architecture Governance**:
+  - Split the ECharts engine (`src/client/chunks/echarts-chunk.ts`) into **10 cohesive modules** under `src/client/chunks/echarts/*` (`shared`, `legend`, `postprocess`, `radial`, `hierarchy`, `multivariate`, `cartesian-core`, `cartesian-statistical`, `cartesian-comparison`), all ≤846 lines.
+  - Refactored `src/client/catalog/Catalog.module.css` into an 11-line `@import` manifest backed by **11 domain CSS partials** (`src/client/catalog/styles/*.module.css`) and **21 unified design tokens**, removing 844 redundant `var()` fallbacks and reclaiming **13 kB** in `lib/client.runtime.js` (`1432.36 / 1445.31 kB` raw).
+  - Reorganized the 7 legacy version-named widget files into **13 domain modules** under `src/client/catalog/widgets/*.tsx` (429–751 lines each) and narrowed the `dangerouslySetInnerHTML` allowlist strictly to `src/client/catalog/widgets/MermaidWidget.tsx`.
+- Verified full automated & live release gate: **40 suites / 252 tests**, **27/27** architectural invariants, **0** comments, **4/4** TLA+ formal specs, **5/5** bundle budgets (`lib/client.js = 71.81 kB / 20.23 kB gzip`), `eval:check` (`31/31`, `64/64` components), `check:host-api`, **44/44** Dark & Light DOM geometry + contrast passes (`overflow=0 wrap=0 clip=0 contrast=0 errs=0`), and **22/22** live Chrome E2E checks (`0` console/page errors).
+
 ## [0.5.3] - 2026-11-23
 
 ### Added

@@ -61,16 +61,18 @@ import {
   computeArrayMin,
   computeArraySum,
 } from '../src/client/catalog/functions.ts'
+import { DshDiffViewImpl } from '../src/client/catalog/widgets/DiffAndSummaryWidgets.tsx'
 import {
-  DshAnnotationTextImpl,
   DshChecklistImpl,
-  DshImageCompareImpl,
   DshKvEditorImpl,
   DshRangeSliderImpl,
-  DshRatingImpl,
   DshSortableListImpl,
-} from '../src/client/catalog/NextGenWidgets.tsx'
-import { DshDiffViewImpl } from '../src/client/catalog/P0Widgets.tsx'
+} from '../src/client/catalog/widgets/InteractiveLists.tsx'
+import {
+  DshAnnotationTextImpl,
+  DshImageCompareImpl,
+  DshRatingImpl,
+} from '../src/client/catalog/widgets/RatingAndMediaCompare.tsx'
 import { normalizeDiffAnnotations, normalizeDiffFiles } from '../src/client/catalog/p0-helpers.ts'
 import { TableWidget } from '../src/client/catalog/TableWidget.tsx'
 import { normalizeHierarchyTree } from '../src/client/catalog/v5-helpers.ts'

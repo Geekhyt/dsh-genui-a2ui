@@ -16,6 +16,7 @@ export interface VisualQaRunResult {
   readonly buttonWrapViolations: readonly unknown[]
   readonly clippingViolations: readonly unknown[]
   readonly popoverViolations: readonly unknown[]
+  readonly contrastViolations?: readonly unknown[] | undefined
   readonly consoleErrors: readonly string[]
   readonly pageErrors: readonly string[]
 }

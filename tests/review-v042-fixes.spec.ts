@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readExpandedCss } from '../scripts/check-invariants.mjs'
 import { resolve } from 'node:path'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
@@ -41,7 +41,7 @@ vi.mock('../src/client/chunks/mermaid-chunk.ts', () => ({
 }))
 
 import { SHOWCASE_V042_QA_UI } from '../scripts/mock-llm.mjs'
-import { DshMatrixImpl } from '../src/client/catalog/EnterpriseWidgets.tsx'
+import { DshMatrixImpl } from '../src/client/catalog/widgets/PlanningAndMatrixWidgets.tsx'
 import { formatTableToCsv, normalizeMatrixData } from '../src/client/catalog/v4-helpers.ts'
 import { getMermaidDiagramSnapshot, subscribeMermaidDiagram } from '../src/client/chunk-loader.ts'
 import { buildChartOption } from '../src/client/chunks/echarts-chunk.ts'
@@ -393,9 +393,8 @@ describe('v0.4.2 Review Remediation (H-01..H-08 & Visual Polish)', () => {
   })
 
   it('H-08 & Visual Polish: CSS guards LogViewer 306px toggle, amber AAA contrast, DateTimeInput, compact charts, and showcase-26 compiles', () => {
-    const cssText = readFileSync(
+    const cssText = readExpandedCss(
       resolve(import.meta.dirname, '../src/client/catalog/Catalog.module.css'),
-      'utf8',
     )
     expect(cssText).not.toContain('.logRowMain > :last-child')
     const baseLogMsgIdx = cssText.indexOf('.logMessage {\n  color:')

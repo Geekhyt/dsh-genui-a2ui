@@ -1,3 +1,4 @@
+import { readExpandedCss } from '../scripts/check-invariants.mjs'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { createElement, type ReactElement, type ReactNode, useState } from 'react'
@@ -45,7 +46,7 @@ import {
   DshButtonView,
   DshCheckBoxView,
   DshTextFieldView,
-} from '../src/client/catalog/InputWidgets.tsx'
+} from '../src/client/catalog/widgets/FormFields.tsx'
 import { DshModalView } from '../src/client/catalog/LayoutWidgets.tsx'
 import {
   ModalCloseContext,
@@ -81,9 +82,8 @@ function findElements(
 
 describe('E2E audit fixes (Items 2–5): Callout/CheckBox layout, Modal & readOnly isolation, deferred validation, and check/Table docs', () => {
   it('Item 2: prevents Callout header overflow and CheckBox flex collapse in Row and Column layouts', () => {
-    const cssSource = readFileSync(
+    const cssSource = readExpandedCss(
       resolve(process.cwd(), 'src/client/catalog/Catalog.module.css'),
-      'utf8',
     )
 
     expect(cssSource).toMatch(/\.callout\s*\{[^}]*flex-shrink:\s*0;[^}]*overflow:\s*hidden;/s)
@@ -354,12 +354,11 @@ describe('E2E audit fixes (Items 2–5): Callout/CheckBox layout, Modal & readOn
   })
 
   it('Mermaid zoom upgrade: uses explicit vector dimensions (--mermaid-zoom-w/h), grab-to-pan cursors, and 96vw×94vh fullscreen', () => {
-    const cssSource = readFileSync(
+    const cssSource = readExpandedCss(
       resolve(process.cwd(), 'src/client/catalog/Catalog.module.css'),
-      'utf8',
     )
     const widgetSource = readFileSync(
-      resolve(process.cwd(), 'src/client/catalog/ExtendedWidgets.tsx'),
+      resolve(process.cwd(), 'src/client/catalog/widgets/MermaidWidget.tsx'),
       'utf8',
     )
 

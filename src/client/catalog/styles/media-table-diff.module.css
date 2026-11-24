@@ -1,0 +1,713 @@
+.progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.progressHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  font-size: 12px;
+  color: var(--a2ui-fg-2);
+}
+
+.progressValue {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+  color: var(--a2ui-fg);
+}
+
+.progressTrack {
+  width: 100%;
+  height: 7px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--a2ui-bg-3);
+}
+
+.progressFill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 180ms ease;
+  background: var(--a2ui-accent);
+}
+
+.progressFill[data-tone="success"] {
+  background: var(--a2ui-success);
+}
+
+.progressFill[data-tone="warning"] {
+  background: var(--a2ui-warn);
+}
+
+.progressFill[data-tone="danger"] {
+  background: var(--a2ui-danger);
+}
+
+.tabsWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.tabsHeaderScroll {
+  overflow-x: auto;
+  max-width: 100%;
+  min-width: 0;
+  padding: 2px 0;
+  scrollbar-width: thin;
+}
+
+.tabsHeaderScroll [role="tablist"] {
+  width: max-content;
+  min-width: 100%;
+}
+
+.tabsHeaderScroll [role="tab"] {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.tabPanel {
+  min-width: 0;
+  container-type: inline-size;
+}
+
+.tabPanel[hidden],
+.accordionPanel[hidden],
+.calloutBody[hidden] {
+  display: none;
+}
+
+.modalTrigger {
+  display: inline-flex;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.statCard {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: var(--a2ui-r-md);
+  border: 1px solid var(--a2ui-border-1);
+  background: var(--a2ui-bg-1);
+  min-width: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.statLabel {
+  font-size: 12px;
+  color: var(--a2ui-fg-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.statValueRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.statValue {
+  font-size: 18px;
+  font-weight: 650;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+  color: var(--a2ui-fg);
+}
+
+.statCaption {
+  font-size: 11.5px;
+  color: var(--a2ui-fg-3);
+  margin-top: auto;
+  overflow-wrap: anywhere;
+}
+
+.tableCard {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--a2ui-border-2);
+  border-radius: var(--a2ui-r-md);
+  background: var(--a2ui-bg-1);
+  overflow: hidden;
+  min-width: 0;
+  container-type: inline-size;
+}
+
+.tableToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--a2ui-border-1);
+  flex-wrap: wrap;
+}
+
+.tableTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--a2ui-fg);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.tableSearch {
+  width: 210px;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.tableSearch > *,
+.tableSearch input {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.tableScroll {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.th {
+  padding: 8px 12px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--a2ui-fg-2);
+  background: var(--a2ui-bg-2);
+  border-bottom: 1px solid var(--a2ui-border-1);
+  white-space: nowrap;
+  user-select: none;
+}
+
+.thSortable {
+  cursor: pointer;
+}
+
+.thSortable:hover {
+  background: var(--a2ui-bg-hover);
+}
+
+.td {
+  padding: 8px 12px;
+  color: var(--a2ui-fg);
+  border-bottom: 1px solid var(--a2ui-border-1);
+  vertical-align: middle;
+}
+
+.tdNowrap {
+  white-space: nowrap;
+}
+
+.tdProse {
+  min-width: 180px;
+  max-width: 340px;
+  white-space: normal;
+  overflow-wrap: break-word;
+}
+
+.table tbody tr:last-child .td {
+  border-bottom: none;
+}
+
+.table tbody tr:hover .td {
+  background: var(--a2ui-bg-hover);
+}
+
+.tdNum {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+@container (max-width: 420px) {
+  .table {
+    font-size: 11.5px;
+  }
+
+  .th,
+  .td {
+    padding: 6px 7px;
+  }
+}
+
+.emptyCell {
+  padding: 18px 12px;
+  text-align: center;
+  color: var(--a2ui-fg-3);
+  font-size: 12.5px;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: auto;
+  padding: 8px 12px;
+  border-top: 1px solid var(--a2ui-border-1);
+  font-size: 12px;
+  color: var(--a2ui-fg-2);
+}
+
+.pageButtons {
+  display: flex;
+  gap: 6px;
+}
+
+.chartCard {
+  border: 1px solid var(--a2ui-border-1);
+  border-radius: var(--a2ui-r-md);
+  background: var(--a2ui-bg-1);
+  min-width: 0;
+  container-type: inline-size;
+}
+
+.chartInner {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  min-width: 0;
+}
+
+.chartHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 8px;
+  min-width: 0;
+}
+
+.chartTitleGroup {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1 1 140px;
+}
+
+.chartTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--a2ui-fg);
+  min-width: 0;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+
+.chartActions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.chartActionBtn {
+  appearance: none;
+  border: 1px solid var(--a2ui-border-1);
+  background: var(--a2ui-bg-opaque);
+  color: var(--a2ui-fg-2);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.25;
+  padding: 2px 7px;
+  border-radius: var(--a2ui-r-sm);
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease;
+}
+
+.chartActionBtn:hover {
+  background: var(--a2ui-bg-hover);
+  color: var(--a2ui-fg);
+  border-color: var(--a2ui-border-2);
+}
+
+.crossFilterChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.3;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--a2ui-brand) 14%, transparent);
+  color: var(--a2ui-brand);
+  border: 1px solid color-mix(in srgb, var(--a2ui-brand) 32%, transparent);
+  white-space: nowrap;
+  flex-shrink: 0;
+  max-width: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.crossFilterChip > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.crossFilterClear {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: 13px;
+  line-height: 1;
+  padding: 0 2px;
+  cursor: pointer;
+  opacity: 0.78;
+  flex-shrink: 0;
+}
+
+.crossFilterClear:hover {
+  opacity: 1;
+}
+
+@container (max-width: 340px) {
+  .chartInner {
+    padding: 10px 10px;
+  }
+
+  .chartTitle {
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
+  .chartActions {
+    gap: 3px;
+  }
+
+  .chartActionBtn {
+    padding: 2px 6px;
+    font-size: 10.5px;
+  }
+}
+
+.chartCanvas {
+  width: 100%;
+  min-height: 140px;
+}
+
+.diffCard {
+  border: 1px solid var(--a2ui-border-1);
+  border-radius: var(--a2ui-r-md);
+  background: var(--a2ui-bg-1);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  container-type: inline-size;
+}
+
+.diffToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 12px;
+  background: var(--a2ui-bg-2);
+  border-bottom: 1px solid var(--a2ui-border-1);
+}
+
+.diffTitleGroup {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.diffTitle {
+  font-size: 12.5px;
+  font-weight: 600;
+  font-family: var(--a2ui-mono);
+  color: var(--a2ui-fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.diffLang {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  background: var(--a2ui-bg-hover);
+  color: var(--a2ui-fg-2);
+}
+
+.diffStatsGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.diffStatAdd {
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  flex-shrink: 0;
+  color: var(--a2ui-success);
+}
+
+.diffStatDel {
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  flex-shrink: 0;
+  color: var(--a2ui-danger);
+}
+
+.diffActions {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.diffModeSwitch {
+  display: inline-flex;
+  flex-shrink: 0;
+  border: 1px solid var(--a2ui-border-1);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.diffModeBtn {
+  border: none;
+  background: transparent;
+  color: var(--a2ui-fg-2);
+  font-size: 11.5px;
+  padding: 2px 8px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.diffModeBtn[data-active="true"] {
+  background: var(--a2ui-bg-hover);
+  color: var(--a2ui-fg);
+  font-weight: 600;
+}
+
+.diffCopyBtn {
+  border: 1px solid var(--a2ui-border-1);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--a2ui-fg-2);
+  font-size: 11.5px;
+  padding: 2px 8px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.diffCopyBtn:hover {
+  background: var(--a2ui-bg-hover);
+  color: var(--a2ui-fg);
+}
+
+.diffScroll {
+  overflow-x: auto;
+  max-height: 380px;
+  overflow-y: auto;
+}
+
+.diffTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--a2ui-mono);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.diffRow[data-kind="add"] {
+  background: color-mix(in srgb, var(--a2ui-success) 12%, transparent);
+}
+
+.diffRow[data-kind="remove"] {
+  background: color-mix(in srgb, var(--a2ui-danger) 12%, transparent);
+}
+
+.diffGutter {
+  width: 38px;
+  min-width: 38px;
+  padding: 1px 8px;
+  text-align: right;
+  vertical-align: top;
+  white-space: nowrap;
+  overflow: hidden;
+  user-select: none;
+  box-sizing: border-box;
+  color: var(--a2ui-fg-3);
+  border-right: 1px solid var(--a2ui-border-1);
+  font-variant-numeric: tabular-nums;
+}
+
+.diffSplitGutterCol {
+  width: 38px;
+}
+
+.diffGutterCol {
+  width: 38px;
+}
+
+.diffMarkerCol {
+  width: 20px;
+}
+
+.diffGutter[data-kind="add"],
+.diffSplitCell[data-kind="add"] {
+  background: color-mix(in srgb, var(--a2ui-success) 12%, transparent);
+}
+
+.diffGutter[data-kind="remove"],
+.diffSplitCell[data-kind="remove"] {
+  background: color-mix(in srgb, var(--a2ui-danger) 12%, transparent);
+}
+
+.diffGutter[data-kind="empty"],
+.diffSplitCell[data-kind="empty"] {
+  background: rgba(128, 128, 128, 0.04);
+}
+
+.diffMarker {
+  width: 20px;
+  padding: 1px 4px;
+  text-align: center;
+  vertical-align: top;
+  user-select: none;
+  color: var(--a2ui-fg-2);
+}
+
+.diffCode {
+  padding: 1px 10px 1px 4px;
+  vertical-align: top;
+  white-space: pre;
+  color: var(--a2ui-fg);
+}
+
+.diffSplitTable {
+  table-layout: fixed;
+}
+
+.diffSplitTr {
+  border-bottom: 1px solid var(--a2ui-border-1);
+}
+
+.diffSplitCell {
+  padding: 1px 10px;
+  vertical-align: top;
+  white-space: pre;
+  color: var(--a2ui-fg);
+  border-right: 1px solid var(--a2ui-border-1);
+}
+
+@container (max-width: 720px) {
+  .diffSplitCell {
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+  }
+}
+
+@container (max-width: 440px) {
+  .diffUnifiedTable {
+    table-layout: fixed;
+  }
+
+  .diffSplitGutterCol {
+    width: 30px;
+  }
+
+  .diffGutterCol {
+    width: 24px;
+  }
+
+  .diffMarkerCol {
+    width: 18px;
+  }
+
+  .diffGutter {
+    width: 24px;
+    min-width: 24px;
+    padding: 1px 3px;
+    font-size: 9.5px;
+    overflow: hidden;
+  }
+
+  .diffSplitTable .diffGutter {
+    width: 30px;
+    min-width: 30px;
+  }
+
+  .diffMarker {
+    width: 18px;
+    min-width: 18px;
+    padding: 1px 2px;
+    box-sizing: border-box;
+  }
+
+  .diffSplitCell {
+    padding: 2px 6px;
+    font-size: 11px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+  }
+
+  .diffCode {
+    padding: 2px 6px;
+    font-size: 11px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+  }
+}

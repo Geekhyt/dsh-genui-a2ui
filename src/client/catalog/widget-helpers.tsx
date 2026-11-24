@@ -9,6 +9,7 @@ import {
   createContext,
   type FC,
   Fragment,
+  type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
   useCallback,
   useContext,
@@ -172,13 +173,72 @@ export function useSurfaceActionRunner<Opts = ActionDispatchOptions>(
   return typeof action === 'function' ? runner : undefined
 }
 
+const DSH_HOST_ELEMENTS_KEY = '__dshA2uiHostElements__'
+
+export function toDshCustomElementTag(name: string): string {
+  const parts = name
+    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean)
+  return `dsh-a2ui-${parts.length > 0 ? parts.join('-') : 'widget'}`
+}
+
+function getGlobalHostElementStore(): Map<string, CustomElementConstructor> {
+  const g = globalThis as Record<string, unknown>
+  const existing = g[DSH_HOST_ELEMENTS_KEY]
+  if (existing instanceof Map) {
+    return existing as Map<string, CustomElementConstructor>
+  }
+  const next = new Map<string, CustomElementConstructor>()
+  g[DSH_HOST_ELEMENTS_KEY] = next
+  return next
+}
+
+export function resolveDshHostElement(tagName: string): CustomElementConstructor {
+  if (typeof customElements !== 'undefined' && typeof customElements.get === 'function') {
+    const registered = customElements.get(tagName)
+    if (typeof registered === 'function') {
+      getGlobalHostElementStore().set(tagName, registered)
+      return registered
+    }
+  }
+  const store = getGlobalHostElementStore()
+  const cached = store.get(tagName)
+  const hasRealHtmlElement = typeof HTMLElement === 'function'
+  if (
+    typeof cached === 'function' &&
+    (!hasRealHtmlElement || cached.prototype instanceof HTMLElement)
+  ) {
+    return cached
+  }
+  const Base = (hasRealHtmlElement ? HTMLElement : class {}) as unknown as CustomElementConstructor
+  const HostElement = class extends Base {
+    connectedCallback(): void {
+      if (this.style) this.style.display = 'contents'
+    }
+  }
+  store.set(tagName, HostElement)
+  return HostElement
+}
+
 export function defineComponent<Props>(
   api: ComponentApi,
   render: FC<ReactA2uiComponentProps<Props>>,
 ): ReactCatalogComponent {
-  return Object.assign(createComponentImplementation(api as never, render as never), {
+  const tagName = toDshCustomElementTag(api.name)
+  const impl = Object.assign(createComponentImplementation(api as never, render as never), {
     rawRender: render,
+    tagName,
   })
+  Object.defineProperty(impl, 'element', {
+    enumerable: true,
+    configurable: true,
+    get() {
+      return resolveDshHostElement(tagName)
+    },
+  })
+  return impl
 }
 
 export function weightStyle(weight: number | undefined, minWidth = 0): CSSProperties | undefined {
@@ -337,6 +397,36 @@ export function isSafeImageUrl(raw: unknown): raw is string {
 
 export function isSafeMediaUrl(raw: unknown): raw is string {
   return isSafeImageUrl(raw)
+}
+
+export function handleOptionListArrowKey(
+  e: ReactKeyboardEvent<HTMLElement>,
+  container: HTMLElement | null,
+  roleSelector = '[role="option"]',
+): void {
+  if (!container) return
+  if (
+    (e.key === 'Home' || e.key === 'End') &&
+    typeof HTMLInputElement !== 'undefined' &&
+    e.target instanceof HTMLInputElement
+  ) {
+    return
+  }
+  if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp' && e.key !== 'Home' && e.key !== 'End') return
+  const items = Array.from(container.querySelectorAll<HTMLButtonElement>(roleSelector))
+  if (items.length === 0) return
+  const active = typeof document !== 'undefined' ? document.activeElement : null
+  const idx = items.indexOf(active as HTMLButtonElement)
+  e.preventDefault()
+  if (e.key === 'Home') {
+    items[0]?.focus()
+  } else if (e.key === 'End') {
+    items[items.length - 1]?.focus()
+  } else if (e.key === 'ArrowDown') {
+    items[idx >= 0 ? (idx + 1) % items.length : 0]?.focus()
+  } else if (e.key === 'ArrowUp') {
+    items[idx > 0 ? idx - 1 : items.length - 1]?.focus()
+  }
 }
 
 export { NativeDateField } from './NativeDateField.tsx'

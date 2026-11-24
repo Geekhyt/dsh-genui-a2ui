@@ -35,7 +35,7 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => ({
 }))
 
 import { startMockLlmServer } from '../scripts/mock-llm.mjs'
-import { safeStringifyJson } from '../src/client/catalog/ExtendedWidgets.tsx'
+import { safeStringifyJson } from '../src/client/catalog/widgets/StructuredTrees.tsx'
 import {
   cleanupA2uiRuntimeStyles,
   ensureA2uiRuntimeStyles,

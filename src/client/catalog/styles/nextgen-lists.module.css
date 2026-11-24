@@ -1,0 +1,467 @@
+.diffFileTabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--a2ui-border-1);
+  background: var(--a2ui-bg-2);
+}
+
+.diffFileTab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border-radius: 6px;
+  border: 1px solid var(--a2ui-border-1);
+  background: transparent;
+  color: var(--a2ui-fg-2);
+  font-size: 11.5px;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  min-width: 0;
+  box-sizing: border-box;
+  max-width: 100%;
+}
+
+.diffFileTab[data-active="true"] {
+  background: color-mix(in srgb, var(--a2ui-accent) 14%, transparent);
+  border-color: var(--a2ui-accent);
+  color: var(--a2ui-fg);
+  font-weight: 600;
+}
+
+.diffFileTabName {
+  font-family: var(--a2ui-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 180px;
+}
+
+.diffFileTabStats {
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--a2ui-fg-3);
+}
+
+.diffAnnRow {
+  background: transparent;
+}
+
+.diffAnnCell {
+  padding: 4px 10px 6px;
+  border-top: 1px solid var(--a2ui-border-1);
+  border-bottom: 1px solid var(--a2ui-border-1);
+}
+
+.diffAnnBanner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border-left: 3px solid var(--a2ui-accent);
+  background: color-mix(in srgb, var(--a2ui-accent) 10%, transparent);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.diffAnnBanner[data-tone="warning"] {
+  border-left-color: var(--a2ui-warn);
+  background: color-mix(in srgb, var(--a2ui-warn) 12%, transparent);
+}
+
+.diffAnnBanner[data-tone="danger"] {
+  border-left-color: var(--a2ui-danger);
+  background: color-mix(in srgb, var(--a2ui-danger) 12%, transparent);
+}
+
+.diffAnnBanner[data-tone="success"] {
+  border-left-color: var(--a2ui-success);
+  background: color-mix(in srgb, var(--a2ui-success) 12%, transparent);
+}
+
+.diffAnnAuthor {
+  font-weight: 600;
+  color: var(--a2ui-fg);
+  white-space: nowrap;
+}
+
+.diffAnnMsg {
+  color: var(--a2ui-fg);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.rangeSliderField {
+  gap: 6px;
+}
+
+.rangeTrackWrap {
+  position: relative;
+  height: 28px;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+}
+
+.rangeRail {
+  position: absolute;
+  left: 9px;
+  right: 9px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--a2ui-bg-3);
+}
+
+.rangeFill {
+  position: absolute;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--a2ui-accent);
+}
+
+.rangeInput {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 28px;
+  margin: 0;
+  background: transparent;
+  pointer-events: none;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.rangeInput::-webkit-slider-thumb {
+  pointer-events: auto;
+  appearance: none;
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--dsw-alias-bg-layer-1, light-dark(#ffffff, #1e293b));
+  border: 2px solid var(--a2ui-accent);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.22);
+  cursor: pointer;
+}
+
+.rangeInput::-moz-range-thumb {
+  pointer-events: auto;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--dsw-alias-bg-layer-1, light-dark(#ffffff, #1e293b));
+  border: 2px solid var(--a2ui-accent);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.22);
+  cursor: pointer;
+}
+
+.rangeAxisTicks {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--a2ui-fg-3);
+}
+
+.checklistCard {
+  display: flex;
+  flex-direction: column;
+  container-type: inline-size;
+  border-radius: var(--a2ui-r-md);
+  border: 1px solid var(--a2ui-border-2);
+  background: var(--a2ui-bg-1);
+  overflow: hidden;
+  min-width: 0;
+}
+
+.checklistInner {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  min-width: 0;
+}
+
+.checklistHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.checklistTitle {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--a2ui-fg);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.checklistCount {
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--a2ui-fg-2);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.checklistBarTrack {
+  width: 100%;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--a2ui-bg-2);
+  overflow: hidden;
+}
+
+.checklistBarFill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--a2ui-accent);
+  transition: width 160ms ease;
+}
+
+.checklistBarFill[data-complete="true"] {
+  background: var(--a2ui-success);
+}
+
+.checklistList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.checklistRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--a2ui-border-1);
+  background: var(--a2ui-bg-2);
+  min-width: 0;
+}
+
+.checklistRow[data-checked="true"] {
+  background: color-mix(in srgb, var(--a2ui-success) 8%, transparent);
+  border-color: color-mix(in srgb, var(--a2ui-success) 28%, transparent);
+}
+
+.checklistMain {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  flex: 1 1 0;
+}
+
+.checklistDesc {
+  font-size: 11.5px;
+  color: var(--a2ui-fg-2);
+  padding-left: 24px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.checklistMeta {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+.checklistFooter {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--a2ui-border-1);
+}
+
+.checklistWarnHint {
+  font-size: 11.5px;
+  color: var(--a2ui-warn-fg);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+@container (max-width: 380px) {
+  .checklistInner {
+    padding: 10px;
+  }
+
+  .checklistRow {
+    flex-direction: column;
+  }
+
+  .checklistMeta {
+    padding-left: 24px;
+  }
+}
+
+.sortableCard {
+  container-type: inline-size;
+  border-radius: var(--a2ui-r-md);
+  border: 1px solid var(--a2ui-border-2);
+  background: var(--a2ui-bg-1);
+  overflow: hidden;
+  min-width: 0;
+}
+
+.sortableInner {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  min-width: 0;
+}
+
+.sortableHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sortableTitle {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--a2ui-fg);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.sortableList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+}
+
+.sortableRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--a2ui-border-1);
+  background: var(--a2ui-bg-2);
+  min-width: 0;
+  cursor: grab;
+}
+
+.sortableRow[data-dragging="true"] {
+  opacity: 0.45;
+}
+
+.sortableRow[data-over="true"] {
+  border-color: var(--a2ui-accent);
+  box-shadow: 0 0 0 1px var(--a2ui-accent);
+}
+
+.sortableGrip {
+  color: var(--a2ui-fg-3);
+  font-size: 12px;
+  letter-spacing: -1px;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.sortableRank {
+  font-family: var(--a2ui-mono);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--a2ui-accent) 14%, transparent);
+  color: var(--a2ui-accent);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.sortableContent {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.sortableItemTitle {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--a2ui-fg);
+  overflow-wrap: anywhere;
+}
+
+.sortableItemSub {
+  font-size: 11.5px;
+  color: var(--a2ui-fg-2);
+  overflow-wrap: anywhere;
+}
+
+.sortableControls {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.sortableMoveBtn {
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  border: 1px solid var(--a2ui-border-1);
+  background: var(--a2ui-bg-1);
+  color: var(--a2ui-fg);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.sortableMoveBtn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+@container (max-width: 360px) {
+  .sortableInner {
+    padding: 10px;
+  }
+
+  .sortableRow {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+
+  .sortableGrip {
+    display: none;
+  }
+}

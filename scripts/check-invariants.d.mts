@@ -23,4 +23,8 @@ export function checkTsInvariants(source: string, relPath: string): InvariantVio
 
 export function checkLocaleParity(rootDir: string): InvariantViolation[]
 
+export function checkModuleMaxLines(source: string, relPath: string): InvariantViolation[]
+
+export function readExpandedCss(filePath: string): string
+
 export function runAllInvariantChecks(rootDir: string): InvariantReport

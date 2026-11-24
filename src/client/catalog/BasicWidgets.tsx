@@ -1,40 +1,5 @@
 import type { ReactCatalogComponent } from '@a2ui/react'
 import {
-  DshCheckCardImpl,
-  DshDateRangeImpl,
-  DshMultiSelectImpl,
-  DshNumberInputImpl,
-  DshTreeImpl,
-  DshTreeSelectImpl,
-} from './AntdParityWidgets.tsx'
-import {
-  DshApiEndpointImpl,
-  DshApprovalCardImpl,
-  DshEntityHeaderImpl,
-  DshMatrixImpl,
-  DshResultImpl,
-  DshScheduleImpl,
-  DshTerminalImpl,
-  DshTrackerImpl,
-} from './EnterpriseWidgets.tsx'
-import {
-  DshAccordionImpl,
-  DshFileTreeImpl,
-  DshJsonTreeImpl,
-  DshMermaidImpl,
-} from './ExtendedWidgets.tsx'
-import {
-  DshButtonImpl,
-  DshCheckBoxImpl,
-  DshChoicePickerImpl,
-  DshDateTimeInputImpl,
-  DshSegmentedImpl,
-  DshSelectImpl,
-  DshSliderImpl,
-  DshSwitchImpl,
-  DshTextFieldImpl,
-} from './InputWidgets.tsx'
-import {
   DshCardImpl,
   DshColumnImpl,
   DshDividerImpl,
@@ -58,24 +23,62 @@ import {
   DshVideoImpl,
 } from './MediaAndDataWidgets.tsx'
 import {
-  DshAnnotationTextImpl,
+  DshDateRangeImpl,
+  DshMultiSelectImpl,
+  DshNumberInputImpl,
+} from './widgets/AdvancedPickers.tsx'
+import {
+  DshApiEndpointImpl,
+  DshApprovalCardImpl,
+  DshTerminalImpl,
+  DshTrackerImpl,
+} from './widgets/DevOpsActionWidgets.tsx'
+import {
+  DshCalloutImpl,
+  DshDiffViewImpl,
+  DshKeyValueImpl,
+  DshStepsImpl,
+} from './widgets/DiffAndSummaryWidgets.tsx'
+import {
+  DshButtonImpl,
+  DshCheckBoxImpl,
+  DshChoicePickerImpl,
+  DshDateTimeInputImpl,
+  DshSliderImpl,
+  DshTextFieldImpl,
+} from './widgets/FormFields.tsx'
+import {
   DshChecklistImpl,
-  DshImageCompareImpl,
   DshKvEditorImpl,
   DshRangeSliderImpl,
-  DshRatingImpl,
   DshSortableListImpl,
-} from './NextGenWidgets.tsx'
+} from './widgets/InteractiveLists.tsx'
+import { DshMermaidImpl } from './widgets/MermaidWidget.tsx'
 import {
   DshComparisonImpl,
   DshKanbanImpl,
   DshLogViewerImpl,
+  DshTimelineImpl,
+} from './widgets/OpsTimelineWidgets.tsx'
+import {
+  DshEntityHeaderImpl,
+  DshMatrixImpl,
+  DshResultImpl,
+  DshScheduleImpl,
+} from './widgets/PlanningAndMatrixWidgets.tsx'
+import {
+  DshAnnotationTextImpl,
+  DshImageCompareImpl,
+  DshRatingImpl,
+} from './widgets/RatingAndMediaCompare.tsx'
+import { DshSegmentedImpl, DshSelectImpl, DshSwitchImpl } from './widgets/SelectControls.tsx'
+import { DshAccordionImpl, DshFileTreeImpl, DshJsonTreeImpl } from './widgets/StructuredTrees.tsx'
+import {
   DshMetricRingImpl,
   DshServiceGraphImpl,
   DshSourceListImpl,
-  DshTimelineImpl,
-} from './OpsAndInsightWidgets.tsx'
-import { DshCalloutImpl, DshDiffViewImpl, DshKeyValueImpl, DshStepsImpl } from './P0Widgets.tsx'
+} from './widgets/TelemetryVisualWidgets.tsx'
+import { DshCheckCardImpl, DshTreeImpl, DshTreeSelectImpl } from './widgets/TreeAndCardPickers.tsx'
 
 export {
   DshAccordionImpl,
