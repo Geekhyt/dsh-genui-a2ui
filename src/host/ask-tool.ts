@@ -5,15 +5,15 @@ import { isDangerousObjectKey, isSecretKey } from '../shared/constants.ts'
 import { HOST_MESSAGES, resolveHostLocale } from '../shared/i18n.ts'
 import {
   buildTemplatePathMap,
-  collectKvSecretsFromValue,
+  collectKvSecretsForDataModelUpdate,
   collectSecretsFromNode,
   escapeJsonPointerSegment,
-  extractBindingPointer,
   isBindingExpression,
   isPointerObscured,
   isScrubbableNumericSecret,
   normalizePointerPath,
   referencesObscuredPointer,
+  resolveTemplateKvPointers,
   resolveTemplateObscuredPointers,
   scrubSecretString,
 } from '../shared/redaction.ts'
@@ -38,27 +38,6 @@ const MAX_ANSWER_STR_LEN = 32_000
 const MAX_ANSWER_ARRAY_LEN = 200
 const MAX_ANSWER_KEYS = 200
 let fallbackAskSeq = 0
-
-function getValueAtPointer(root: unknown, pointer: string): unknown {
-  const norm = normalizePointerPath(pointer)
-  if (norm === '/') return root
-  const parts = norm.slice(1).split('/')
-  let cur: unknown = root
-  for (const rawSeg of parts) {
-    if (cur === null || cur === undefined || typeof cur !== 'object') return undefined
-    const seg = rawSeg.replace(/~1/g, '/').replace(/~0/g, '~')
-    if (Array.isArray(cur)) {
-      const idx = Number(seg)
-      if (!Number.isInteger(idx) || idx < 0 || idx >= cur.length) return undefined
-      cur = cur[idx]
-    } else {
-      const rec = cur as Record<string, unknown>
-      if (!Object.hasOwn(rec, seg)) return undefined
-      cur = rec[seg]
-    }
-  }
-  return cur
-}
 
 export function collectObscuredContextPointersFromMessages(
   messages: readonly AgentToRendererMessage[],
@@ -125,41 +104,11 @@ export function collectObscuredContextPointersFromMessages(
   return out
 }
 
-function collectKvEditorPointersFromMessages(
-  messages: readonly AgentToRendererMessage[],
-): Set<string> {
-  const kvPointers = new Set<string>()
-  const inspectComponents = (list: unknown) => {
-    if (!Array.isArray(list)) return
-    for (const item of list) {
-      if (typeof item !== 'object' || item === null) continue
-      const rec = item as Record<string, unknown>
-      if (rec.component !== 'KvEditor') continue
-      const p = extractBindingPointer(rec.items)
-      if (p !== null) kvPointers.add(p)
-    }
-  }
-  for (const msg of messages) {
-    const rec = msg as unknown as Record<string, unknown>
-    if (rec.createSurface && typeof rec.createSurface === 'object') {
-      inspectComponents((rec.createSurface as Record<string, unknown>).components)
-    }
-    if (rec.updateComponents && typeof rec.updateComponents === 'object') {
-      inspectComponents((rec.updateComponents as Record<string, unknown>).components)
-    }
-  }
-  return kvPointers
-}
-
 export function collectObscuredPointersFromMessages(
   messages: readonly AgentToRendererMessage[],
   extraKvPointers?: ReadonlySet<string>,
 ): Set<string> {
   const obscured = new Set<string>()
-  const kvPointers = collectKvEditorPointersFromMessages(messages)
-  if (extraKvPointers) {
-    for (const ptr of extraKvPointers) kvPointers.add(ptr)
-  }
   const allComponents: Record<string, unknown>[] = []
   const collectComponents = (list: unknown) => {
     if (!Array.isArray(list)) return
@@ -169,63 +118,34 @@ export function collectObscuredPointersFromMessages(
       }
     }
   }
-  const inspectDataModel = (dmPath: string, dmValue: unknown) => {
-    for (const kvPtr of kvPointers) {
-      const normKv = normalizePointerPath(kvPtr)
-      if (dmPath === normKv) {
-        collectKvSecretsFromValue(dmValue, normKv, obscured, new Set(), new Set())
-      } else if (dmPath === '/') {
-        const val = getValueAtPointer(dmValue, normKv)
-        if (val !== undefined) {
-          collectKvSecretsFromValue(val, normKv, obscured, new Set(), new Set())
-        }
-      } else if (normKv.startsWith(`${dmPath}/`)) {
-        const suffix = normKv.slice(dmPath.length)
-        const val = getValueAtPointer(dmValue, suffix)
-        if (val !== undefined) {
-          collectKvSecretsFromValue(val, normKv, obscured, new Set(), new Set())
-        }
-      } else if (normKv === '/' ? dmPath !== '/' : dmPath.startsWith(`${normKv}/`)) {
-        const relStart = normKv === '/' ? 1 : normKv.length + 1
-        const relParts = dmPath.slice(relStart).split('/')
-        const firstSeg = relParts[0]?.replace(/~1/g, '/').replace(/~0/g, '~') ?? ''
-        if (firstSeg !== '' && isSecretKey(firstSeg)) {
-          obscured.add(dmPath)
-        } else if (
-          typeof dmValue === 'object' &&
-          dmValue !== null &&
-          !Array.isArray(dmValue) &&
-          relParts.length === 1
-        ) {
-          const rec = dmValue as Record<string, unknown>
-          const k =
-            typeof rec.key === 'string' ? rec.key : typeof rec.name === 'string' ? rec.name : ''
-          if (k !== '' && isSecretKey(k)) {
-            obscured.add(`${dmPath}/value`)
-          }
-        }
-      }
-    }
-  }
   for (const msg of messages) {
     const rec = msg as unknown as Record<string, unknown>
     if (rec.createSurface && typeof rec.createSurface === 'object') {
-      const cs = rec.createSurface as Record<string, unknown>
-      collectComponents(cs.components)
-      if (kvPointers.size > 0 && cs.dataModel !== undefined) {
-        inspectDataModel('/', cs.dataModel)
-      }
+      collectComponents((rec.createSurface as Record<string, unknown>).components)
     }
     if (rec.updateComponents && typeof rec.updateComponents === 'object') {
       collectComponents((rec.updateComponents as Record<string, unknown>).components)
     }
-    if (kvPointers.size > 0 && rec.updateDataModel && typeof rec.updateDataModel === 'object') {
-      const dm = rec.updateDataModel as { path?: unknown; value?: unknown }
-      const dmPath = normalizePointerPath(typeof dm.path === 'string' ? dm.path : '/')
-      inspectDataModel(dmPath, dm.value)
+  }
+  const kvPointers = new Set<string>(extraKvPointers ?? [])
+  resolveTemplateKvPointers(allComponents, kvPointers)
+  resolveTemplateObscuredPointers(allComponents, obscured)
+  if (kvPointers.size > 0) {
+    for (const msg of messages) {
+      const rec = msg as unknown as Record<string, unknown>
+      if (rec.createSurface && typeof rec.createSurface === 'object') {
+        const cs = rec.createSurface as Record<string, unknown>
+        if (cs.dataModel !== undefined) {
+          collectKvSecretsForDataModelUpdate('/', cs.dataModel, kvPointers, obscured)
+        }
+      }
+      if (rec.updateDataModel && typeof rec.updateDataModel === 'object') {
+        const dm = rec.updateDataModel as { path?: unknown; value?: unknown }
+        const dmPath = normalizePointerPath(typeof dm.path === 'string' ? dm.path : '/')
+        collectKvSecretsForDataModelUpdate(dmPath, dm.value, kvPointers, obscured)
+      }
     }
   }
-  resolveTemplateObscuredPointers(allComponents, obscured)
   return obscured
 }
 
@@ -336,6 +256,7 @@ interface PendingEntry {
   readonly sessionId: string
   readonly callId: string
   readonly defaultSurfaceId: string
+  readonly allowedSurfaceIds: ReadonlySet<string> | null
   readonly obscuredPointers: ReadonlySet<string>
   readonly obscuredContextPointers: ReadonlySet<string>
   resolve(settlement: AskSettlement): void
@@ -346,6 +267,25 @@ interface PendingEntry {
 export class PendingAskRegistry {
   private readonly entriesBySession = new Map<string, Map<string, PendingEntry>>()
   private disposed = false
+
+  assertCanWait(sessionId: string, signal?: AbortSignal | undefined, callId?: string): void {
+    if (this.disposed) {
+      throw new Error('dsh-genui-a2ui plugin disposed')
+    }
+    if (signal?.aborted) {
+      const reason = signal.reason
+      throw reason instanceof Error ? reason : new Error('a2ui_ask aborted')
+    }
+    const sessionMap = this.entriesBySession.get(sessionId)
+    const isReplacingExisting = Boolean(callId && sessionMap?.has(callId))
+    if (
+      !isReplacingExisting &&
+      ((sessionMap?.size ?? 0) >= MAX_PENDING_PER_SESSION ||
+        this.totalPendingCount() >= MAX_PENDING_TOTAL)
+    ) {
+      throw new Error('Too many concurrent pending a2ui_ask requests')
+    }
+  }
 
   private totalPendingCount(): number {
     let total = 0
@@ -378,6 +318,7 @@ export class PendingAskRegistry {
     readonly sessionId: string
     readonly callId: string
     readonly defaultSurfaceId: string
+    readonly allowedSurfaceIds?: readonly string[] | undefined
     readonly timeoutSeconds: number
     readonly signal?: AbortSignal | undefined
     readonly obscuredPointers?: ReadonlySet<string> | undefined
@@ -387,6 +328,7 @@ export class PendingAskRegistry {
       sessionId,
       callId,
       defaultSurfaceId,
+      allowedSurfaceIds,
       timeoutSeconds,
       signal,
       obscuredPointers,
@@ -461,6 +403,8 @@ export class PendingAskRegistry {
         sessionId,
         callId,
         defaultSurfaceId,
+        allowedSurfaceIds:
+          allowedSurfaceIds && allowedSurfaceIds.length > 0 ? new Set(allowedSurfaceIds) : null,
         obscuredPointers: obscuredPointers ?? new Set<string>(),
         obscuredContextPointers: obscuredContextPointers ?? obscuredPointers ?? new Set<string>(),
         resolve: (settlement) => {
@@ -524,6 +468,29 @@ export class PendingAskRegistry {
         ? (scrubSecretString(rawUserMessage, blockedExact, blockedSubstrings) ?? '')
         : ''
 
+    const scopedDataModels = (() => {
+      if (
+        target.allowedSurfaceIds === null ||
+        typeof input.dataModels !== 'object' ||
+        input.dataModels === null ||
+        Array.isArray(input.dataModels)
+      ) {
+        return input.dataModels
+      }
+      const filtered: Record<string, unknown> = {}
+      for (const [sidKey, val] of Object.entries(input.dataModels as Record<string, unknown>)) {
+        if (target.allowedSurfaceIds.has(sidKey)) {
+          Object.defineProperty(filtered, sidKey, {
+            value: val,
+            enumerable: true,
+            writable: true,
+            configurable: true,
+          })
+        }
+      }
+      return filtered
+    })()
+
     target.resolve({
       status: 'answered',
       action: trimCap(input.action, 256) || 'submit',
@@ -538,7 +505,7 @@ export class PendingAskRegistry {
         blockedSubstrings,
       ),
       dataModels: sanitizePayloadObject(
-        input.dataModels,
+        scopedDataModels,
         target.obscuredPointers,
         true,
         blockedExact,
@@ -631,11 +598,10 @@ export function readAskArgs(args: unknown): {
   }
   let timeout = DEFAULT_ASK_TIMEOUT_SECONDS
   if (typeof parsed.data.timeout === 'number' && Number.isInteger(parsed.data.timeout)) {
-    if (
-      parsed.data.timeout === -1 ||
-      (parsed.data.timeout >= 1 && parsed.data.timeout <= MAX_TIMEOUT_SECONDS)
-    ) {
-      timeout = parsed.data.timeout
+    if (parsed.data.timeout === -1) {
+      timeout = -1
+    } else if (parsed.data.timeout >= 1) {
+      timeout = Math.min(parsed.data.timeout, MAX_TIMEOUT_SECONDS)
     }
   }
   return {
@@ -725,12 +691,25 @@ export function createAskTool(sessions: SurfaceSessions, asks: PendingAskRegistr
         throw reason instanceof Error ? reason : new Error('a2ui_ask aborted')
       }
 
+      const sid = sessionIdOf(exec)
       const { ui, title, timeout } = readAskArgs(args)
       if (ui === undefined || ui.trim() === '') {
+        const fails = sessions.recordCompileFailure(sid, 'ask')
+        if (fails > A2UI_LIMITS.maxRepairsPerTurn) {
+          sessions.clearCompileFailures(sid, 'ask')
+          throw new Error(
+            `a2ui_ask: \`ui\` must be a non-empty A2UI Express program.\nRepair limit (${A2UI_LIMITS.maxRepairsPerTurn}) reached for this turn. STOP calling a2ui_ask and ask the user concisely in plain text.`,
+          )
+        }
         throw new Error('a2ui_ask: `ui` must be a non-empty A2UI Express program.')
       }
 
-      const sid = sessionIdOf(exec)
+      const callId =
+        typeof exec?.callId === 'string' && exec.callId.trim() !== ''
+          ? exec.callId.trim()
+          : `ask_${Date.now()}_${++fallbackAskSeq}`
+      asks.assertCanWait(sid, exec?.signal, callId)
+
       let messages: AgentToRendererMessage[]
       try {
         messages = sessions.compile(sid, ui)
@@ -766,24 +745,23 @@ export function createAskTool(sessions: SurfaceSessions, asks: PendingAskRegistr
       sessions.clearCompileFailures(sid, 'ask')
       const surfaceIds = surfaceIdsOf(messages)
       const sessionRedaction = sessions.getSessionRedactionState(sid, surfaceIds)
+      const allSessionRedaction = sessions.getSessionRedactionState(sid)
       const obscuredPointers = collectObscuredPointersFromMessages(
         messages,
         sessionRedaction.kvPointers,
       )
       for (const p of sessionRedaction.obscuredPointers) obscuredPointers.add(p)
+      for (const p of allSessionRedaction.obscuredPointers) obscuredPointers.add(p)
       const obscuredContextPointers = collectObscuredContextPointersFromMessages(
         messages,
         obscuredPointers,
         sessionRedaction.components,
       )
-      const callId =
-        typeof exec?.callId === 'string' && exec.callId.trim() !== ''
-          ? exec.callId.trim()
-          : `ask_${Date.now()}_${++fallbackAskSeq}`
       const settlement = await asks.wait({
         sessionId: sid,
         callId,
         defaultSurfaceId: surfaceIds[0] ?? 'default',
+        allowedSurfaceIds: surfaceIds,
         timeoutSeconds: timeout,
         signal: exec?.signal,
         obscuredPointers,

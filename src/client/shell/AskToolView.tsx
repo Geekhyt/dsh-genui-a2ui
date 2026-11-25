@@ -43,10 +43,7 @@ export const A2uiAskDockView = memo(function A2uiAskDockView({
   const msg = useShellMessages()
   const dark = useDarkTheme()
   const [submittingKeys, setSubmittingKeys] = useState<ReadonlySet<string>>(() => new Set())
-  const [errorState, setErrorState] = useState<{
-    readonly callId: string
-    readonly message: string
-  } | null>(null)
+  const [errorsByKey, setErrorsByKey] = useState<Readonly<Record<string, string>>>({})
 
   const subscribe = useCallback(
     (listener: () => void) => (chatStore ? chatStore.subscribe(listener) : NOOP_SUBSCRIBE()),
@@ -97,7 +94,9 @@ export const A2uiAskDockView = memo(function A2uiAskDockView({
   } | null>(null)
   const submitting = compositeCallKey !== '' && submittingKeys.has(compositeCallKey)
   const submitError =
-    compositeCallKey !== '' && errorState?.callId === compositeCallKey ? errorState.message : null
+    compositeCallKey !== '' && Object.hasOwn(errorsByKey, compositeCallKey)
+      ? (errorsByKey[compositeCallKey] ?? null)
+      : null
 
   const clearAskDrafts = useCallback(
     (
@@ -132,19 +131,43 @@ export const A2uiAskDockView = memo(function A2uiAskDockView({
     return undefined
   }, [clearAskDrafts, draftSessionId, liveVisibleIds, sessionId])
 
-  useEffectCallback(() => {
-    for (const k of [...inFlightKeysRef.current]) {
-      if (k !== compositeCallKey) inFlightKeysRef.current.delete(k)
+  const addBoundedKey = useCallback((targetKey: string) => {
+    inFlightKeysRef.current.add(targetKey)
+    while (inFlightKeysRef.current.size > 32) {
+      const oldest = inFlightKeysRef.current.values().next().value
+      if (oldest === undefined || oldest === targetKey) break
+      inFlightKeysRef.current.delete(oldest)
     }
     setSubmittingKeys((prev) => {
-      if (prev.size === 0) return prev
-      if (compositeCallKey !== '' && prev.size === 1 && prev.has(compositeCallKey)) return prev
-      const next = new Set<string>()
-      if (compositeCallKey !== '' && prev.has(compositeCallKey)) next.add(compositeCallKey)
+      const next = new Set(prev)
+      next.add(targetKey)
+      while (next.size > 32) {
+        const oldest = next.values().next().value
+        if (oldest === undefined || oldest === targetKey) break
+        next.delete(oldest)
+      }
       return next
     })
-    return undefined
-  }, [compositeCallKey])
+  }, [])
+
+  const setKeyError = useCallback((targetKey: string, message: string | null) => {
+    setErrorsByKey((prev) => {
+      if (message === null) {
+        if (!Object.hasOwn(prev, targetKey)) return prev
+        const copy = { ...prev }
+        delete copy[targetKey]
+        return copy
+      }
+      const keys = Object.keys(prev)
+      const copy = { ...prev }
+      while (keys.length >= 32) {
+        const oldest = keys.shift()
+        if (oldest !== undefined && oldest !== targetKey) delete copy[oldest]
+      }
+      copy[targetKey] = message
+      return copy
+    })
+  }, [])
 
   const removeSubmittingKey = useCallback((targetKey: string) => {
     setSubmittingKeys((prev) => {
@@ -173,13 +196,8 @@ export const A2uiAskDockView = memo(function A2uiAskDockView({
       const targetKey = compositeCallKey
       const targetDraftSessionId = draftSessionId
       const targetSurfaceIds = liveVisibleIds ? [...liveVisibleIds] : []
-      inFlightKeysRef.current.add(targetKey)
-      setSubmittingKeys((prev) => {
-        const next = new Set(prev)
-        next.add(targetKey)
-        return next
-      })
-      setErrorState(null)
+      addBoundedKey(targetKey)
+      setKeyError(targetKey, null)
       return submitAskAnswer({
         callId: targetCallId,
         action: raw.name,
@@ -196,28 +214,27 @@ export const A2uiAskDockView = memo(function A2uiAskDockView({
           }
           inFlightKeysRef.current.delete(targetKey)
           removeSubmittingKey(targetKey)
-          setErrorState({ callId: targetKey, message: msg.askSubmitRetry })
+          setKeyError(targetKey, msg.askSubmitRetry)
           return false
         },
         (err: unknown) => {
           inFlightKeysRef.current.delete(targetKey)
           removeSubmittingKey(targetKey)
-          setErrorState({
-            callId: targetKey,
-            message: err instanceof Error ? err.message : msg.askSubmitFailed,
-          })
+          setKeyError(targetKey, err instanceof Error ? err.message : msg.askSubmitFailed)
           return false
         },
       )
     },
     [
       activeCallId,
+      addBoundedKey,
       clearAskDrafts,
       compositeCallKey,
       draftSessionId,
       liveVisibleIds,
       msg,
       removeSubmittingKey,
+      setKeyError,
       submitAskAnswer,
       submitting,
     ],
@@ -236,13 +253,8 @@ export const A2uiAskDockView = memo(function A2uiAskDockView({
     const targetKey = compositeCallKey
     const targetDraftSessionId = draftSessionId
     const targetSurfaceIds = liveVisibleIds ? [...liveVisibleIds] : []
-    inFlightKeysRef.current.add(targetKey)
-    setSubmittingKeys((prev) => {
-      const next = new Set(prev)
-      next.add(targetKey)
-      return next
-    })
-    setErrorState(null)
+    addBoundedKey(targetKey)
+    setKeyError(targetKey, null)
     void submitAskAnswer({ callId: targetCallId, skipped: true }).then(
       (ok) => {
         if (ok) {
@@ -251,25 +263,24 @@ export const A2uiAskDockView = memo(function A2uiAskDockView({
         }
         inFlightKeysRef.current.delete(targetKey)
         removeSubmittingKey(targetKey)
-        setErrorState({ callId: targetKey, message: msg.askSkipRetry })
+        setKeyError(targetKey, msg.askSkipRetry)
       },
       (err: unknown) => {
         inFlightKeysRef.current.delete(targetKey)
         removeSubmittingKey(targetKey)
-        setErrorState({
-          callId: targetKey,
-          message: err instanceof Error ? err.message : msg.askSkipFailed,
-        })
+        setKeyError(targetKey, err instanceof Error ? err.message : msg.askSkipFailed)
       },
     )
   }, [
     activeCallId,
+    addBoundedKey,
     clearAskDrafts,
     compositeCallKey,
     draftSessionId,
     liveVisibleIds,
     msg,
     removeSubmittingKey,
+    setKeyError,
     submitAskAnswer,
     submitting,
   ])

@@ -527,10 +527,30 @@ async function run() {
       const maxScroll = scrollBox.scrollWidth - scrollBox.clientWidth;
       scrollBox.scrollLeft = Math.min(180, maxScroll);
       await new Promise((r) => setTimeout(r, 180));
-      return { ok: maxScroll > 20, maxScroll, scrollLeft: scrollBox.scrollLeft };
+      const stickyCells = [...scrollBox.querySelectorAll('[class*="tableStickyCol"]')];
+      const transparentStickies = stickyCells
+        .map((el) => getComputedStyle(el).backgroundColor)
+        .filter((bg) => {
+          const m = bg.match(/rgba\\([^,]+,[^,]+,[^,]+,\\s*([\\d.]+)\\)/i);
+          if (m) return Number(m[1]) < 0.99;
+          const srgb = bg.match(/color\\(\\s*srgb[^/]+\\/\\s*([\\d.]+)\\s*\\)/i);
+          if (srgb) return Number(srgb[1]) < 0.99;
+          return bg === 'transparent';
+        });
+      return {
+        ok: maxScroll > 20 && stickyCells.length > 0 && transparentStickies.length === 0,
+        maxScroll,
+        scrollLeft: scrollBox.scrollLeft,
+        stickyCount: stickyCells.length,
+        transparentStickies: transparentStickies.slice(0, 3),
+      };
     })()`)
     await snap(cdp, 'interactive-sticky-table-scrolled-dark')
-    check('Sticky ProTable horizontal scroll', stickyScrollRes.ok, JSON.stringify(stickyScrollRes))
+    check(
+      'Sticky ProTable horizontal scroll & opaque sticky backing',
+      stickyScrollRes.ok,
+      JSON.stringify(stickyScrollRes),
+    )
 
     await cdp.evaluate(`(async () => {
       const btn = [...document.querySelectorAll('button')].find((b) => (b.textContent || '').includes('打开 Modal 组合压测'));
@@ -768,6 +788,105 @@ async function run() {
       'Showcase-42 live DOM semantics (Mermaid SQL + Log TZ + ProTable Bool/SLA + ServiceGraph)',
       audit42.ok && svgClips42 === 0 && geom42.overflowViolations.length === 0,
       JSON.stringify({ ...audit42, svgClips42, overflow42: geom42.overflowViolations.length }),
+    )
+
+    await freshChat(cdp)
+    await sendPrompt(cdp, 'showcase-43')
+    await setTheme(cdp, 'dark')
+    const audit43 = await cdp.evaluate(`(() => {
+      const canvases = [...document.querySelectorAll('[data-a2ui-chart] canvas')];
+      const sized = canvases.filter((c) => {
+        const r = c.getBoundingClientRect();
+        return r.width > 80 && r.height > 80;
+      });
+      const alerts = [...document.querySelectorAll('[data-a2ui-chart] [role="alert"]')];
+      return {
+        ok: sized.length >= 10 && alerts.length === 0,
+        canvasCount: canvases.length,
+        sizedCount: sized.length,
+        alertCount: alerts.length,
+      };
+    })()`)
+    check('Showcase-43 adversarial ECharts suite live render', audit43.ok, JSON.stringify(audit43))
+
+    await freshChat(cdp)
+    await sendPrompt(cdp, 'showcase-44')
+    await setTheme(cdp, 'dark')
+    const audit44 = await cdp.evaluate(`(async () => {
+      const scrollBox = document.querySelector('[class*="tableScroll"]');
+      let stickyOpaqueOk = false;
+      let negatedBadgesOk = false;
+      if (scrollBox) {
+        const firstCb = scrollBox.querySelector('tbody tr input[type="checkbox"]');
+        if (firstCb && !firstCb.checked) {
+          firstCb.click();
+          await new Promise((r) => setTimeout(r, 150));
+        }
+        scrollBox.scrollLeft = Math.min(180, scrollBox.scrollWidth - scrollBox.clientWidth);
+        await new Promise((r) => setTimeout(r, 150));
+        const stickies = [...scrollBox.querySelectorAll('tbody tr [class*="tableStickyCol"]')];
+        stickyOpaqueOk =
+          stickies.length > 0 &&
+          stickies.every((el) => {
+            const bg = getComputedStyle(el).backgroundColor;
+            const m = bg.match(/rgba\\([^,]+,[^,]+,[^,]+,\\s*([\\d.]+)\\)/i);
+            return !m || Number(m[1]) >= 0.99;
+          });
+        const badgeNodes = [...scrollBox.querySelectorAll('[data-a2ui-badge-tone]')];
+        const healthyTexts = ['无异常', '0 failed', 'No error'];
+        negatedBadgesOk = healthyTexts.every((txt) =>
+          badgeNodes.some(
+            (n) =>
+              (n.textContent || '').trim() === txt &&
+              n.getAttribute('data-a2ui-badge-tone') === 'success',
+          ),
+        );
+      }
+      const logBadges = [
+        ...document.querySelectorAll('[data-a2ui-logviewer] [class*="logBadgeWrap"]'),
+      ].map((el) => (el.textContent || '').trim());
+      const logsOk =
+        logBadges.length >= 3 &&
+        logBadges[0] === 'ERROR' &&
+        logBadges[1] === 'INFO' &&
+        logBadges[2] === 'WARN';
+
+      const revealBtn = document.querySelector('[class*="kvEditorRevealBtn"]');
+      let kvRevealOk = false;
+      if (revealBtn) {
+        const input = revealBtn.parentElement?.querySelector('input');
+        const beforeType = input?.getAttribute('type');
+        revealBtn.click();
+        await new Promise((r) => setTimeout(r, 100));
+        const afterType = input?.getAttribute('type');
+        kvRevealOk = beforeType === 'password' && afterType === 'text';
+      }
+
+      const rangeInputs = [...document.querySelectorAll('input[type="range"][class*="rangeInput"]')];
+      let rangeOk = false;
+      if (rangeInputs.length >= 2) {
+        const endInput = rangeInputs[1];
+        const proto = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+        proto?.set?.call(endInput, '95');
+        endInput.dispatchEvent(new Event('input', { bubbles: true }));
+        await new Promise((r) => setTimeout(r, 100));
+        rangeOk = Number(endInput.value) === 95;
+      }
+
+      return {
+        ok: stickyOpaqueOk && negatedBadgesOk && logsOk && kvRevealOk && rangeOk,
+        stickyOpaqueOk,
+        negatedBadgesOk,
+        logsOk,
+        logBadges,
+        kvRevealOk,
+        rangeOk,
+      };
+    })()`)
+    check(
+      'Showcase-44 adversarial widgets (Sticky + Negated Badges + Logs + KvReveal + RangeSlider)',
+      audit44.ok,
+      JSON.stringify(audit44),
     )
 
     for (const sc of [

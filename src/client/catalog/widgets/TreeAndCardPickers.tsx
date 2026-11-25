@@ -91,9 +91,20 @@ function TreeSelectOptionBranch(props: {
         <button
           type="button"
           role="treeitem"
+          aria-level={depth + 1}
           aria-selected={isSelected}
           aria-expanded={isBranch ? isOpen : undefined}
           className={css.treeSelectNodeBtn}
+          onKeyDown={(e) => {
+            if (!isBranch || forceExpanded) return
+            if (e.key === 'ArrowRight' && !isOpen) {
+              e.preventDefault()
+              setExpanded(true)
+            } else if (e.key === 'ArrowLeft' && isOpen) {
+              e.preventDefault()
+              setExpanded(false)
+            }
+          }}
           onClick={() => {
             if (isBranch && !selectableBranch) {
               if (!forceExpanded) setExpanded((v) => !v)
@@ -109,8 +120,9 @@ function TreeSelectOptionBranch(props: {
           {isSelected ? <span className={css.selectOptionCheck}>{CHECK_ICON_12}</span> : null}
         </button>
       </div>
-      {isBranch && isOpen
-        ? node.children.map((child) => (
+      {isBranch && isOpen ? (
+        <div role="group">
+          {node.children.map((child) => (
             <TreeSelectOptionBranch
               key={child.id}
               node={child}
@@ -119,8 +131,9 @@ function TreeSelectOptionBranch(props: {
               forceExpanded={forceExpanded}
               onSelect={onSelect}
             />
-          ))
-        : null}
+          ))}
+        </div>
+      ) : null}
     </Fragment>
   )
 }
@@ -137,6 +150,7 @@ export const DshTreeSelectImpl = defineComponent<{
   weight?: number
 }>(TreeSelectApi, function DshTreeSelect({ props, context }) {
   const fieldId = useId()
+  const treeId = useId()
   const msg = useRuntimeMessages()
   const dark = useDarkTheme()
   const readOnly = useContext(SurfaceReadOnlyContext)
@@ -196,10 +210,17 @@ export const DshTreeSelectImpl = defineComponent<{
         className={css.selectTrigger}
         disabled={readOnly}
         aria-haspopup="tree"
+        aria-controls={effectiveOpen ? treeId : undefined}
         aria-expanded={effectiveOpen}
         aria-invalid={showError || undefined}
         data-placeholder={breadcrumb || selectedVal ? 'false' : 'true'}
         onClick={handleToggleOpen}
+        onKeyDown={(e) => {
+          if (!effectiveOpen && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+            e.preventDefault()
+            handleToggleOpen()
+          }
+        }}
       >
         <span className={css.selectTriggerText}>{breadcrumb ?? (selectedVal || placeholder)}</span>
         <span className={css.selectTriggerChevron} aria-hidden="true">
@@ -223,10 +244,16 @@ export const DshTreeSelectImpl = defineComponent<{
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={msg.treeSearchPlaceholder}
+              aria-label={msg.treeSearchPlaceholder}
             />
           </div>
         ) : null}
-        <div role="tree" aria-label={label || placeholder} className={css.selectOptionList}>
+        <div
+          id={treeId}
+          role="tree"
+          aria-label={label || placeholder}
+          className={css.selectOptionList}
+        >
           {filteredTree.length === 0 ? (
             <div className={css.selectEmpty}>{msg.treeEmpty}</div>
           ) : (
@@ -274,14 +301,11 @@ export const DshCheckCardImpl = defineComponent<{
 
   const options = useMemo(() => normalizeCheckCardOptions(props.options), [props.options])
   const hasWritableValue = isWritableProp(context, 'value', props.setValue)
-  const [hadInitialLiteralValue] = useState(
-    () =>
-      props.value !== undefined &&
-      props.value !== null &&
-      (Array.isArray(props.value) ? props.value.length > 0 : String(props.value) !== ''),
-  )
-  const isPromptMode =
-    typeof props.action === 'function' && !hasWritableValue && !hadInitialLiteralValue
+  const hasLiteralValue =
+    props.value !== undefined &&
+    props.value !== null &&
+    (Array.isArray(props.value) ? props.value.length > 0 : String(props.value) !== '')
+  const isPromptMode = typeof props.action === 'function' && !hasWritableValue && !hasLiteralValue
   const isFormBound = !isPromptMode
   const multiple = Boolean(props.multiple)
   const [selectedVal, commitSelectedVal] = useWritablePropState<unknown>(
@@ -324,7 +348,9 @@ export const DshCheckCardImpl = defineComponent<{
       }
     }
     if (typeof props.action === 'function') {
-      if (props.isValid === false) {
+      const willBeEmpty =
+        isFormBound && multiple && selectedSet.has(opt.value) && selectedSet.size === 1
+      if (props.isValid === false && (!isFormBound || willBeEmpty)) {
         markSubmitAttempted()
         return
       }
@@ -632,6 +658,7 @@ export const DshTreeImpl = defineComponent<{
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={msg.treeSearchPlaceholder}
+            aria-label={msg.treeSearchPlaceholder}
           />
         </div>
       ) : null}

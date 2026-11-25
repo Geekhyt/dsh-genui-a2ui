@@ -10,7 +10,6 @@ import {
   rowPaginationFeature,
   rowSortingFeature,
   type SortingState,
-  sortFn_alphanumeric,
   sortFn_basic,
   tableFeatures,
   useTable,
@@ -35,6 +34,7 @@ import {
   getOwnProp,
   isEmptyTableCell,
   normalizeCrossFilterTokens,
+  resolveTableBadgeTone,
 } from './v4-helpers.ts'
 import { copyTextToClipboard, weightStyle } from './widget-helpers.tsx'
 
@@ -51,8 +51,7 @@ const TABLE_FEATURES = tableFeatures({
   filterFns: { includesString: filterFn_includesString },
   sortFns: {
     alphanumeric: (rowA, rowB, columnId) =>
-      compareTableAlphanumericCells(rowA.getValue(columnId), rowB.getValue(columnId)) ??
-      sortFn_alphanumeric(rowA, rowB, columnId),
+      compareTableAlphanumericCells(rowA.getValue(columnId), rowB.getValue(columnId)),
     basic: sortFn_basic,
     formattedNumeric: (rowA, rowB, columnId) =>
       compareFormattedNumericCells(rowA.getValue(columnId), rowB.getValue(columnId)),
@@ -129,46 +128,19 @@ function formatExpandDetail(value: unknown): string {
 function parseNumericScalarForBar(value: unknown): number | null {
   if (typeof value === 'number') return Number.isFinite(value) ? value : null
   if (typeof value === 'string') {
-    const cleaned = value.replace(/[¥$€£,%\s]/g, '').trim()
-    if (cleaned === '' || cleaned === '-' || cleaned === '—') return null
+    const norm = value.trim().replace(/\u2212/g, '-')
+    if (norm === '' || norm === '-' || norm === '—' || norm === '±0')
+      return norm === '±0' ? 0 : null
+    const cleaned = norm
+      .replace(/^±/, '')
+      .replace(/[¥$€£,\s%]/g, '')
+      .replace(/(?:ms|us|ns|s|kb|mb|gb|tb|pts|bp|bps)$/i, '')
+      .trim()
+    if (cleaned === '' || cleaned === '-' || cleaned === '+') return null
     const num = Number(cleaned)
     return Number.isFinite(num) ? num : null
   }
   return null
-}
-
-function resolveBadgeCellTone(rawText: string): { readonly label: string; readonly tone: TagTone } {
-  const trimmed = rawText.trim()
-  const lower = trimmed.toLowerCase()
-  if (lower.startsWith('ok:')) return { label: trimmed.slice(3).trim(), tone: 'success' }
-  if (lower.startsWith('warn:')) return { label: trimmed.slice(5).trim(), tone: 'warning' }
-  if (lower.startsWith('no:') || lower.startsWith('err:')) {
-    const idx = trimmed.indexOf(':')
-    return { label: trimmed.slice(idx + 1).trim(), tone: 'danger' }
-  }
-  if (lower.startsWith('info:')) return { label: trimmed.slice(5).trim(), tone: 'info' }
-  if (
-    /(?:未通过|不通过|未达标|未上线|不健康|不正常|异常|失败|高危|故障|错误|超限|熔断|拒绝|\b(?:error|fail|failed|critical|down|danger|rejected|unhealthy|broken|offline|crash|crashed|timeout)\b)/i.test(
-      trimmed,
-    )
-  ) {
-    return { label: trimmed, tone: 'danger' }
-  }
-  if (
-    /(?:预警|降级|审批中|待|警告|缓慢|\b(?:warn|warning|degraded|pending|review|slow|inactive|paused|disabled)\b)/i.test(
-      trimmed,
-    )
-  ) {
-    return { label: trimmed, tone: 'warning' }
-  }
-  if (
-    /(?:正常|健康|成功|通过|已回款|达标|上线|\b(?:healthy|ok|pass|passed|done|active|success|online)\b)/i.test(
-      trimmed,
-    )
-  ) {
-    return { label: trimmed, tone: 'success' }
-  }
-  return { label: trimmed, tone: 'neutral' }
 }
 
 function parseSparklineCellPoints(value: unknown): readonly number[] {
@@ -195,8 +167,12 @@ function renderFormattedTableCell(
   if (format === 'badge') {
     const text = formatCellValue(value, msg)
     if (text === '—' || text === '') return '—'
-    const { label, tone } = resolveBadgeCellTone(text)
-    return <DshTag tone={tone}>{label}</DshTag>
+    const { label, tone } = resolveTableBadgeTone(text)
+    return (
+      <span data-a2ui-badge-tone={tone}>
+        <DshTag tone={tone as TagTone}>{label}</DshTag>
+      </span>
+    )
   }
   if (format === 'code') {
     const text = formatCellValue(value, msg)
@@ -204,13 +180,16 @@ function renderFormattedTableCell(
   }
   if (format === 'delta') {
     const text = formatCellValue(value, msg)
+    const trimmed = text.trim()
     const num = parseNumericScalarForBar(value)
+    const hasNegSign = trimmed.startsWith('-') || trimmed.startsWith('\u2212')
+    const hasPosSign = trimmed.startsWith('+')
     const dir =
-      num === 0 || text === '-' || text === '—' || text === ''
+      num === 0 || trimmed === '-' || trimmed === '—' || trimmed === '' || trimmed.startsWith('±')
         ? 'neutral'
-        : text.startsWith('+') || (num !== null && num > 0 && !text.startsWith('-'))
+        : hasPosSign || (num !== null && num > 0 && !hasNegSign)
           ? 'up'
-          : text.startsWith('-') || (num !== null && num < 0)
+          : hasNegSign || (num !== null && num < 0)
             ? 'down'
             : 'neutral'
     return (
@@ -424,11 +403,23 @@ export const TableWidget = memo(function TableWidget({
         continue
       }
       let maxFound = 0
+      let nonEmptyCount = 0
+      let allPercent = true
       for (const r of normalizedData) {
-        const n = parseNumericScalarForBar(getOwnProp(r, col.key))
-        if (n !== null && n > maxFound) maxFound = n
+        const rawCell = getOwnProp(r, col.key)
+        const n = parseNumericScalarForBar(rawCell)
+        if (n !== null) {
+          nonEmptyCount += 1
+          if (n > maxFound) maxFound = n
+          if (typeof rawCell !== 'string' || !rawCell.trim().endsWith('%')) {
+            allPercent = false
+          }
+        }
       }
-      map.set(col.key, maxFound > 0 ? maxFound : 100)
+      map.set(
+        col.key,
+        nonEmptyCount > 0 && allPercent && maxFound <= 100 ? 100 : maxFound > 0 ? maxFound : 100,
+      )
     }
     return map
   }, [inferredCols, normalizedData])
@@ -528,9 +519,11 @@ export const TableWidget = memo(function TableWidget({
 
   const allPageSelected =
     selectable && pageRows.length > 0 && pageRows.every((r) => selectedIndices.has(r.index))
+  const somePageSelected =
+    selectable && pageRows.length > 0 && pageRows.some((r) => selectedIndices.has(r.index))
   const selectedRowsList = useMemo(
-    () => data.filter((_, idx) => selectedIndices.has(idx)),
-    [data, selectedIndices],
+    () => filteredRows.filter((r) => selectedIndices.has(r.index)).map((r) => r.original),
+    [filteredRows, selectedIndices],
   )
 
   const toggleRowIndex = (idx: number) => {
@@ -714,8 +707,12 @@ export const TableWidget = memo(function TableWidget({
                     style={stickyFirstColumn ? stickyVar(checkStickyLeft) : undefined}
                   >
                     <input
+                      ref={(el) => {
+                        if (el) el.indeterminate = somePageSelected && !allPageSelected
+                      }}
                       type="checkbox"
                       checked={allPageSelected}
+                      disabled={pageRows.length === 0}
                       onChange={toggleSelectPage}
                       aria-label={msg.tableSelectAllAria}
                       className={css.proCheckbox}

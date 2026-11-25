@@ -386,12 +386,23 @@ function decodeSvgDataUri(uri: string): string | null {
   if (payload.length > 256_000) return null
   try {
     if (isBase64) {
+      const compact = payload.replace(/\s+/g, '')
       if (typeof atob === 'function') {
-        return atob(payload.replace(/\s+/g, ''))
+        const binary = atob(compact)
+        if (typeof TextDecoder === 'function') {
+          const bytes = new Uint8Array(binary.length)
+          for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+          return new TextDecoder('utf-8').decode(bytes)
+        }
+        return binary
       }
-      return Buffer.from(payload, 'base64').toString('utf8')
+      return Buffer.from(compact, 'base64').toString('utf8')
     }
-    return decodeURIComponent(payload)
+    try {
+      return decodeURIComponent(payload)
+    } catch {
+      return payload.includes('<') ? payload : null
+    }
   } catch {
     return null
   }
@@ -452,28 +463,32 @@ function moveRovingFocus(
   const isNext = k === 'ArrowDown' || (allowHorizontal && k === 'ArrowRight')
   const isPrev = k === 'ArrowUp' || (allowHorizontal && k === 'ArrowLeft')
   if (!isNext && !isPrev && k !== 'Home' && k !== 'End') return
-  const items = Array.from(container.querySelectorAll<HTMLButtonElement>(selector)).filter(
-    (el) => !allowHorizontal || (!el.disabled && el.getAttribute('aria-disabled') !== 'true'),
-  )
-  if (items.length === 0) return
-  const idx = items.indexOf(
-    (typeof document !== 'undefined' ? document.activeElement : null) as HTMLButtonElement,
-  )
+  const allItems = Array.from(container.querySelectorAll<HTMLButtonElement>(selector))
+  const enabled = allItems
+    .map((el, origIdx) => ({ el, origIdx }))
+    .filter(({ el }) => !el.disabled && el.getAttribute('aria-disabled') !== 'true')
+  if (enabled.length === 0) return
+  const activeEl = (
+    typeof document !== 'undefined' ? document.activeElement : null
+  ) as HTMLButtonElement | null
+  const idx = enabled.findIndex(({ el }) => el === activeEl)
   e.preventDefault()
-  const nextIdx =
+  const nextPos =
     k === 'Home'
       ? 0
       : k === 'End'
-        ? items.length - 1
+        ? enabled.length - 1
         : isNext
           ? idx >= 0
-            ? (idx + 1) % items.length
+            ? (idx + 1) % enabled.length
             : 0
           : idx > 0
             ? idx - 1
-            : items.length - 1
-  items[nextIdx]?.focus()
-  onSelectIndex?.(nextIdx)
+            : enabled.length - 1
+  const target = enabled[nextPos]
+  if (!target) return
+  target.el.focus()
+  onSelectIndex?.(target.origIdx)
 }
 
 export function handleOptionListArrowKey(

@@ -378,7 +378,11 @@ export const DshMultiSelectImpl = defineComponent<{
         data-disabled={readOnly ? 'true' : 'false'}
         onClick={openPopover}
         onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
+          if (
+            e.key === 'Enter' ||
+            e.key === ' ' ||
+            (!effectiveOpen && (e.key === 'ArrowDown' || e.key === 'ArrowUp'))
+          ) {
             e.preventDefault()
             openPopover()
           }
@@ -448,6 +452,7 @@ export const DshMultiSelectImpl = defineComponent<{
                 }
               }}
               placeholder={allowCreate ? msg.multiSelectSearchCreate : msg.multiSelectSearchOnly}
+              aria-label={allowCreate ? msg.multiSelectSearchCreate : msg.multiSelectSearchOnly}
             />
           </div>
         ) : null}
@@ -458,32 +463,69 @@ export const DshMultiSelectImpl = defineComponent<{
           aria-label={label || placeholder}
           className={css.selectOptionList}
         >
-          {filteredOptions.length === 0 ? (
-            <div className={css.selectEmpty}>{msg.selectNoResults}</div>
-          ) : (
-            filteredOptions.map((opt) => {
-              const active = selectedSet.has(opt.value)
-              return (
-                <button
-                  key={opt.value}
-                  type="button"
-                  role="option"
-                  aria-selected={active}
-                  className={css.selectOptionBtn}
-                  data-selected={active ? 'true' : 'false'}
-                  onClick={() => toggleValue(opt.value)}
-                >
-                  <span className={css.selectOptionCopy}>
-                    <span className={css.selectOptionLabel}>{opt.label}</span>
-                    {opt.description ? (
-                      <span className={css.selectOptionDesc}>{opt.description}</span>
-                    ) : null}
-                  </span>
-                  {active ? <span className={css.selectOptionCheck}>{CHECK_ICON_12}</span> : null}
-                </button>
+          {(() => {
+            const cleanQuery = query.trim()
+            const canCreateQuery =
+              allowCreate &&
+              cleanQuery !== '' &&
+              !allOptions.some(
+                (o) =>
+                  o.value.toLowerCase() === cleanQuery.toLowerCase() ||
+                  o.label.toLowerCase() === cleanQuery.toLowerCase(),
               )
-            })
-          )}
+            return (
+              <>
+                {canCreateQuery ? (
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={false}
+                    className={css.selectOptionBtn}
+                    onClick={() => {
+                      if (readOnly) return
+                      if (!selectedSet.has(cleanQuery)) {
+                        setTouched(true)
+                        commitSelected([...selected, cleanQuery])
+                      }
+                      setQuery('')
+                    }}
+                  >
+                    <span className={css.selectOptionLabel}>
+                      + {msg.multiSelectCreateOption(cleanQuery)}
+                    </span>
+                  </button>
+                ) : null}
+                {filteredOptions.length === 0 && !canCreateQuery ? (
+                  <div className={css.selectEmpty}>{msg.selectNoResults}</div>
+                ) : (
+                  filteredOptions.map((opt) => {
+                    const active = selectedSet.has(opt.value)
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        role="option"
+                        aria-selected={active}
+                        className={css.selectOptionBtn}
+                        data-selected={active ? 'true' : 'false'}
+                        onClick={() => toggleValue(opt.value)}
+                      >
+                        <span className={css.selectOptionCopy}>
+                          <span className={css.selectOptionLabel}>{opt.label}</span>
+                          {opt.description ? (
+                            <span className={css.selectOptionDesc}>{opt.description}</span>
+                          ) : null}
+                        </span>
+                        {active ? (
+                          <span className={css.selectOptionCheck}>{CHECK_ICON_12}</span>
+                        ) : null}
+                      </button>
+                    )
+                  })
+                )}
+              </>
+            )
+          })()}
         </div>
       </PortalPopoverShell>
     </div>

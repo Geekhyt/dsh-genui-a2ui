@@ -12,6 +12,7 @@ import {
   resolveYRange,
   sanitizeChartLabel,
   scanSampleKeys,
+  toFiniteNum,
   toNumber,
 } from './shared.ts'
 
@@ -67,24 +68,23 @@ export function buildCartesianCoreChartOption(ctx: ChartBuildContext): echarts.E
     const alignSeriesByCategory = (fieldKey: string, allowNull = false): Array<number | null> => {
       if (categories.length === rows.length) {
         return rows.map((r) => {
-          const raw = r[fieldKey]
-          if (allowNull && (raw === null || raw === undefined || raw === '')) return null
-          return toNumber(raw)
+          const parsed = toFiniteNum(r[fieldKey])
+          return parsed === null ? (allowNull ? null : 0) : parsed
         })
       }
       const sums = new Map<string, number>()
       const counts = new Map<string, number>()
       for (const r of rows) {
-        const raw = r[fieldKey]
-        if (allowNull && (raw === null || raw === undefined || raw === '')) continue
+        const parsed = toFiniteNum(r[fieldKey])
+        if (parsed === null) continue
         const cat = sanitizeChartLabel(r[xKey])
-        sums.set(cat, (sums.get(cat) ?? 0) + toNumber(raw))
+        sums.set(cat, (sums.get(cat) ?? 0) + parsed)
         counts.set(cat, (counts.get(cat) ?? 0) + 1)
       }
       return categories.map((cat) => {
         if (!sums.has(cat)) return allowNull ? null : 0
         const c = counts.get(cat) ?? 1
-        return allowNull ? Number((sums.get(cat)! / c).toFixed(4)) : sums.get(cat)!
+        return allowNull ? Number((sums.get(cat)! / c).toPrecision(10)) : sums.get(cat)!
       })
     }
 
@@ -122,7 +122,7 @@ export function buildCartesianCoreChartOption(ctx: ChartBuildContext): echarts.E
       props.referenceLine <= 0
         ? undefined
         : props.referenceLine
-    const refLine = buildRefLine(theme.danger, comboMarkPos, comboRefValue)
+    const refLine = buildRefLine(theme.textDanger, comboMarkPos, comboRefValue)
 
     const barSeries = barKeys.map((k, idx) => {
       const rawArr = barDataList[idx] ?? []
@@ -158,8 +158,8 @@ export function buildCartesianCoreChartOption(ctx: ChartBuildContext): echarts.E
 
     const lineVals = lineDataList.flat().filter((v): v is number => typeof v === 'number')
     const leftBounds =
-      lineKeys.length === 0 && !comboUseLog
-        ? computeRefAxisBounds(stackedComboVals, props.referenceLine)
+      lineKeys.length === 0
+        ? computeRefAxisBounds(stackedComboVals, comboRefValue, false, comboUseLog)
         : {}
     const rightBounds =
       lineKeys.length > 0 ? computeRefAxisBounds(lineVals, props.referenceLine) : {}
@@ -206,10 +206,15 @@ export function buildCartesianCoreChartOption(ctx: ChartBuildContext): echarts.E
       Math.floor(((containerWidth ?? 276) - 44) / Math.min(6, Math.max(2, categories.length))),
     )
     const comboCatFmt = buildCompactCategoryFormatter(categories, comboCatW, isCompact)
+    const leftAllNonNeg = stackedComboVals.every((v) => v >= 0)
+    const rightAllNonNeg = lineVals.every((v) => v >= 0)
     const leftYAxis = {
       type: comboUseLog ? ('log' as const) : ('value' as const),
       ...leftBounds,
-      ...(leftBounds.max !== undefined && leftBounds.min === undefined && !comboUseLog
+      ...(leftBounds.max !== undefined &&
+      leftBounds.min === undefined &&
+      !comboUseLog &&
+      leftAllNonNeg
         ? { interval: computeEvenAxisInterval(leftBounds.max, isCompact) }
         : { splitNumber: isCompact ? 3 : undefined }),
       splitLine: dashedLine,
@@ -220,7 +225,7 @@ export function buildCartesianCoreChartOption(ctx: ChartBuildContext): echarts.E
     const rightYAxis = {
       type: 'value' as const,
       ...rightBounds,
-      ...(rightBounds.max !== undefined && rightBounds.min === undefined
+      ...(rightBounds.max !== undefined && rightBounds.min === undefined && rightAllNonNeg
         ? { interval: computeEvenAxisInterval(rightBounds.max, isCompact) }
         : { splitNumber: isCompact ? 3 : undefined }),
       splitLine: { show: false },
@@ -293,10 +298,10 @@ export function buildCartesianCoreChartOption(ctx: ChartBuildContext): echarts.E
     for (const r of rows) {
       const cat = sanitizeChartLabel(r[xKey])
       const grp = sanitizeChartLabel(r[groupField])
-      const rawVal = r[primaryY]
-      if (rawVal === undefined || rawVal === null || rawVal === '') continue
+      const parsedVal = toFiniteNum(r[primaryY])
+      if (parsedVal === null) continue
       const key = `${grp}\u0000${cat}`
-      groupedSums.set(key, (groupedSums.get(key) ?? 0) + toNumber(rawVal))
+      groupedSums.set(key, (groupedSums.get(key) ?? 0) + parsedVal)
     }
     const missingVal = echartsType === 'line' ? null : 0
     rawSeriesVals = groups.map((group) => ({
@@ -312,16 +317,16 @@ export function buildCartesianCoreChartOption(ctx: ChartBuildContext): echarts.E
       let dataValues: Array<number | null>
       if (categories.length === rows.length) {
         dataValues = rows.map((r) => {
-          const rawV = r[k]
-          return rawV === undefined || rawV === null || rawV === '' ? missingVal : toNumber(rawV)
+          const parsedV = toFiniteNum(r[k])
+          return parsedV === null ? missingVal : parsedV
         })
       } else {
         const sums = new Map<string, number>()
         for (const r of rows) {
-          const rawV = r[k]
-          if (rawV === undefined || rawV === null || rawV === '') continue
+          const parsedV = toFiniteNum(r[k])
+          if (parsedV === null) continue
           const cat = sanitizeChartLabel(r[xKey])
-          sums.set(cat, (sums.get(cat) ?? 0) + toNumber(rawV))
+          sums.set(cat, (sums.get(cat) ?? 0) + parsedV)
         }
         dataValues = categories.map((cat) => (sums.has(cat) ? sums.get(cat)! : missingVal))
       }
@@ -434,9 +439,7 @@ export function buildCartesianCoreChartOption(ctx: ChartBuildContext): echarts.E
             ? {}
             : { interval: pctStep }),
         }
-    : useLogAxis
-      ? {}
-      : computeRefAxisBounds(cartesianVals, effectiveCartRef)
+    : computeRefAxisBounds(cartesianVals, effectiveCartRef, false, useLogAxis)
   const cartMarkPos = isHorizontal
     ? 'insideEndTop'
     : pickMarkLinePosition(
@@ -448,12 +451,12 @@ export function buildCartesianCoreChartOption(ctx: ChartBuildContext): echarts.E
     isHorizontal && effectiveCartRef !== undefined
       ? pickVerticalMarkLineAlign(
           effectiveCartRef,
-          cartesianBounds.min ?? Math.min(0, ...cartesianVals),
-          cartesianBounds.max ?? Math.max(...cartesianVals, effectiveCartRef, 1),
+          cartesianBounds.min ?? Math.min(0, ...cartesianVals, effectiveCartRef),
+          cartesianBounds.max ?? Math.max(...cartesianVals, effectiveCartRef),
         )
       : undefined
   const refLine = buildRefLine(
-    theme.danger,
+    theme.textDanger,
     cartMarkPos,
     effectiveCartRef,
     props.referenceLabel,

@@ -24,13 +24,13 @@ import {
 import { isDangerousObjectKey } from '../../shared/constants.ts'
 import {
   buildTemplatePathMap,
-  collectKvSecretsFromValue,
+  collectKvSecretsForDataModelUpdate,
   collectSecretsFromNode,
-  extractBindingPointer,
   isBindingExpression,
   isScrubbableNumericSecret,
   recordSecretPrimitive,
   referencesObscuredPointer,
+  resolveTemplateKvPointers,
   resolveTemplateObscuredPointers,
   scrubSecretString,
 } from '../../shared/redaction.ts'
@@ -102,21 +102,13 @@ export function collectObscuredPointers(
         id,
         component: comp.type,
       })
-      if (comp.type === 'KvEditor') {
-        const ptr = extractBindingPointer(comp.properties?.items)
-        if (ptr !== null) kvPointers.add(ptr)
-      }
     }
     resolveTemplateObscuredPointers(componentRecords, pointers)
+    resolveTemplateKvPointers(componentRecords, kvPointers)
     if (kvPointers.size > 0) {
-      const scratchExact = new Set<string>()
-      const scratchSub = new Set<string>()
-      for (const kvPtr of kvPointers) {
-        const normKv = normalizePointerPath(kvPtr)
-        const kvVal = surface.dataModel.get(normKv)
-        if (kvVal !== undefined) {
-          collectKvSecretsFromValue(kvVal, normKv, pointers, scratchExact, scratchSub)
-        }
+      const rootData = surface.dataModel.get('/')
+      if (rootData !== undefined) {
+        collectKvSecretsForDataModelUpdate('/', rootData, kvPointers, pointers)
       }
     }
   } catch (err) {
@@ -776,10 +768,9 @@ export class SurfaceSessionStore {
       !options.skipDraftIo &&
       !options.readOnly &&
       !options.streaming &&
-      isExtension &&
       this.fingerprint !== '' &&
-      this.fingerprint !== options.fingerprint &&
-      this.sessionId === options.sessionId
+      ((isExtension && this.fingerprint !== options.fingerprint) ||
+        (this.sessionId !== undefined && this.sessionId !== options.sessionId))
     ) {
       this.flushPendingDraftWrites()
     }

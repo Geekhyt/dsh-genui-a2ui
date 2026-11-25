@@ -6,6 +6,21 @@ import {
   resolveClientLocale,
 } from '../../../shared/chart-i18n.ts'
 import { sanitizeInlineUrlText } from '../../../shared/constants.ts'
+import { quantile, truncateByVisualWidth } from './scale-helpers.ts'
+
+export {
+  type HistogramBin,
+  buildCompactCategoryFormatter,
+  canUseLogScale,
+  computeEvenAxisInterval,
+  computeHistogramBins,
+  computeRefAxisBounds,
+  formatCompactTickNum,
+  niceUpperBound,
+  quantile,
+  truncateByVisualWidth,
+  visualWidthOf,
+} from './scale-helpers.ts'
 
 export type EChartsInstance = echarts.ECharts
 
@@ -40,6 +55,10 @@ export interface ChartPalette {
   readonly success: string
   readonly warn: string
   readonly danger: string
+  readonly textBrand: string
+  readonly textSuccess: string
+  readonly textWarn: string
+  readonly textDanger: string
   readonly colors: string[]
   readonly textPrimary: string
   readonly textSecondary: string
@@ -104,6 +123,7 @@ export interface ChartBuildContext {
     count: number,
     minW?: number,
     maxCols?: number,
+    categories?: readonly string[],
   ) => Record<string, unknown>
   readonly valAxis: (extra?: Record<string, unknown>, dashed?: boolean) => Record<string, unknown>
   readonly legend: (spec: LegendSpec) => Record<string, unknown>
@@ -128,28 +148,6 @@ export interface ChartBuildContext {
 export function sanitizeChartLabel(input: unknown): string {
   if (typeof input === 'number' && !Number.isFinite(input)) return ''
   return sanitizeInlineUrlText(input)
-}
-
-export function visualWidthOf(raw: string): number {
-  let units = 0
-  for (const ch of raw) {
-    units += (ch.codePointAt(0) ?? 0) > 0xff ? 2 : 1
-  }
-  return units
-}
-
-export function truncateByVisualWidth(raw: string, maxUnits: number): string {
-  let units = 0
-  let out = ''
-  for (const ch of raw) {
-    const w = (ch.codePointAt(0) ?? 0) > 0xff ? 2 : 1
-    if (units + w > maxUnits) {
-      return `${out}…`
-    }
-    out += ch
-    units += w
-  }
-  return raw
 }
 
 export function toFiniteNum(input: unknown): number | null {
@@ -230,16 +228,6 @@ export function inferFields(
   }
 }
 
-export function quantile(sorted: readonly number[], q: number): number {
-  if (sorted.length === 0) return 0
-  if (sorted.length === 1) return sorted[0]!
-  const pos = (sorted.length - 1) * q
-  const base = Math.floor(pos)
-  const rest = pos - base
-  const next = sorted[base + 1] ?? sorted[base]!
-  return Number((sorted[base]! + rest * (next - sorted[base]!)).toPrecision(10))
-}
-
 export const FILLED_SHAPE_LABEL = {
   color: '#ffffff',
   fontWeight: 600,
@@ -252,28 +240,36 @@ export const FILLED_SHAPE_LABEL = {
 
 export function extractBoxplotFive(
   row: Record<string, unknown>,
+  explicitField?: string,
 ): [number, number, number, number, number] {
-  if (Array.isArray(row.values) && row.values.length === 5) {
-    const nums = row.values.map(toNumber).sort((a, b) => a - b)
-    return [nums[0]!, nums[1]!, nums[2]!, nums[3]!, nums[4]!]
-  }
+  const customArr = explicitField && Array.isArray(row[explicitField]) ? row[explicitField] : null
   const sampleArr =
-    Array.isArray(row.values) && row.values.length > 0
-      ? row.values
-      : Array.isArray(row.samples)
-        ? row.samples
-        : Array.isArray(row.data)
-          ? row.data
-          : null
-  if (sampleArr && sampleArr.length > 0) {
-    const sorted = sampleArr.map(toNumber).sort((a, b) => a - b)
-    return [
-      quantile(sorted, 0),
-      quantile(sorted, 0.25),
-      quantile(sorted, 0.5),
-      quantile(sorted, 0.75),
-      quantile(sorted, 1),
-    ]
+    customArr && customArr.length > 0
+      ? customArr
+      : Array.isArray(row.values) && row.values.length > 0
+        ? row.values
+        : Array.isArray(row.samples) && row.samples.length > 0
+          ? row.samples
+          : Array.isArray(row.data) && row.data.length > 0
+            ? row.data
+            : null
+  if (sampleArr) {
+    const sorted = sampleArr
+      .map(toFiniteNum)
+      .filter((n): n is number => n !== null)
+      .sort((a, b) => a - b)
+    if (sorted.length === 5 && sampleArr.length === 5) {
+      return [sorted[0]!, sorted[1]!, sorted[2]!, sorted[3]!, sorted[4]!]
+    }
+    if (sorted.length > 0) {
+      return [
+        quantile(sorted, 0),
+        quantile(sorted, 0.25),
+        quantile(sorted, 0.5),
+        quantile(sorted, 0.75),
+        quantile(sorted, 1),
+      ]
+    }
   }
   const min = toNumber(row.min ?? row.low ?? row.p10 ?? row.q0)
   const q1 = toNumber(row.q1 ?? row.p25 ?? row.open ?? min)
@@ -344,125 +340,6 @@ export function buildZoomConfig(
           borderColor: border,
         },
       ]
-}
-
-export function computeEvenAxisInterval(maxVal: number, isCompact: boolean): number | undefined {
-  if (!Number.isFinite(maxVal) || maxVal <= 0) return undefined
-  const mag = 10 ** Math.floor(Math.log10(maxVal))
-  const scaled = Math.round((maxVal / mag) * 1000)
-  const divs = isCompact ? [4, 3, 2, 5] : [5, 4, 3, 2]
-  for (const d of divs) {
-    if (scaled % d === 0) return Number((maxVal / d).toPrecision(6))
-  }
-  return Number((maxVal / (isCompact ? 3 : 4)).toPrecision(6))
-}
-
-export function buildCompactCategoryFormatter(
-  categories: readonly string[],
-  maxWidthPx: number,
-  isCompact: boolean,
-): ((val: string) => string) | undefined {
-  if (!isCompact || categories.length < 2) return undefined
-  const maxUnits = Math.max(4, Math.floor(maxWidthPx / 6.2))
-  const unique = [...new Set(categories)]
-  if (unique.length < 2) return undefined
-  const seen = new Set<string>()
-  let collides = false
-  for (const c of unique) {
-    const t = truncateByVisualWidth(c, maxUnits)
-    if (seen.has(t)) {
-      collides = true
-      break
-    }
-    seen.add(t)
-  }
-  if (!collides) return undefined
-  if (unique.every((c) => /^\d{4}-\d{2}$/.test(c))) {
-    const sameYear = unique.every((c) => c.slice(0, 5) === unique[0]!.slice(0, 5))
-    return (v: string) => (sameYear && maxUnits < 5 ? v.slice(5) : v.slice(2))
-  }
-  if (unique.every((c) => /^\d{4}-\d{2}-\d{2}$/.test(c))) {
-    const sameYear = unique.every((c) => c.slice(0, 5) === unique[0]!.slice(0, 5))
-    if (sameYear) return (v: string) => v.slice(5)
-  }
-  let lcp = unique[0]!
-  for (let i = 1; i < unique.length && lcp.length > 0; i++) {
-    const cur = unique[i]!
-    let j = 0
-    while (j < lcp.length && j < cur.length && lcp[j] === cur[j]) j++
-    lcp = lcp.slice(0, j)
-  }
-  let delimIdx = -1
-  for (const sep of '-/_: ') delimIdx = Math.max(delimIdx, lcp.lastIndexOf(sep))
-  const cut = delimIdx >= 2 ? delimIdx + 1 : lcp.length >= 4 ? lcp.length : 0
-  if (cut > 0) {
-    return (v: string) => {
-      const tail = v.startsWith(lcp.slice(0, cut)) ? v.slice(cut) : v
-      return truncateByVisualWidth(tail || v, maxUnits)
-    }
-  }
-  return undefined
-}
-
-const NICE_STEPS = [1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10] as const
-
-export function niceUpperBound(v: number): number {
-  if (v <= 0) return 0
-  const mag = 10 ** Math.floor(Math.log10(v))
-  const norm = v / mag
-  const step = NICE_STEPS.find((s) => norm <= s) ?? 10
-  return Number((step * mag).toPrecision(6))
-}
-
-export function computeRefAxisBounds(
-  values: readonly number[],
-  refLine: number | undefined,
-  scale = false,
-): { min?: number | undefined; max?: number | undefined } {
-  if (refLine === undefined || !Number.isFinite(refLine)) return {}
-  const finiteVals = values.filter(Number.isFinite)
-  const rawMax = finiteVals.length > 0 ? Math.max(...finiteVals) : 0
-  const rawMin = finiteVals.length > 0 ? Math.min(...finiteVals) : 0
-  const dataMax = scale ? rawMax : Math.max(0, rawMax)
-  const dataMin = scale ? rawMin : Math.min(0, rawMin)
-
-  let max: number | undefined
-  let min: number | undefined
-
-  const rawSpan = dataMax - dataMin
-  const magRef = Math.max(Math.abs(dataMax), Math.abs(dataMin), Math.abs(refLine))
-  const dataSpan = rawSpan > 0 ? rawSpan : magRef > 0 ? magRef * 0.2 : 1
-
-  if (refLine > 0 && refLine >= dataMax * 0.94) {
-    if (scale && dataSpan < dataMax * 0.35) {
-      const target = Math.max(dataMax, refLine) + dataSpan * 0.28
-      const step = 10 ** Math.floor(Math.log10(Math.max(1e-9, dataSpan)) - 1)
-      max = Number((Math.ceil(target / step) * step).toPrecision(6))
-    } else {
-      max = niceUpperBound(Math.max(dataMax, refLine) * 1.1)
-    }
-  } else if (scale && refLine <= 0 && refLine > dataMax) {
-    max = Number(
-      (refLine + Math.max(dataSpan * 0.12, Math.abs(dataMin - refLine) * 0.12)).toPrecision(6),
-    )
-  }
-
-  if (refLine < 0 && refLine <= dataMin * 0.94) {
-    min = -niceUpperBound(Math.abs(Math.min(dataMin, refLine)) * 1.1)
-  } else if (scale && refLine < dataMin) {
-    if (refLine >= 0 && dataSpan < dataMax * 0.35) {
-      const target = Math.max(0, refLine - dataSpan * 0.22)
-      const step = 10 ** Math.floor(Math.log10(Math.max(1e-9, dataSpan)) - 1)
-      min = Number((Math.floor(target / step) * step).toPrecision(6))
-    } else {
-      min =
-        refLine >= 0
-          ? Number((refLine * 0.92).toPrecision(6))
-          : -niceUpperBound(Math.abs(refLine) * 1.1)
-    }
-  }
-
-  return { min, max }
 }
 
 export function pickMarkLinePosition(
@@ -616,19 +493,31 @@ export function buildHierarchyTree(
   const groupField = props.seriesField ?? implicitGroup
 
   if (rows.some((r) => Array.isArray(r.children))) {
-    const mapNode = (node: Record<string, unknown>): Record<string, unknown> => ({
-      name: sanitizeChartLabel(node[nameField] ?? node.name ?? node.label),
-      value:
-        node[valField] !== undefined || node.value !== undefined
-          ? Math.max(0, toNumber(node[valField] ?? node.value))
-          : undefined,
-      children: Array.isArray(node.children)
+    const mapNode = (
+      node: Record<string, unknown>,
+    ): { item: Record<string, unknown>; sum: number } => {
+      const mappedChildren = Array.isArray(node.children)
         ? (node.children as Record<string, unknown>[])
             .filter((c) => c && typeof c === 'object')
             .map(mapNode)
-        : undefined,
-    })
-    return rows.map(mapNode)
+        : undefined
+      const rawVal =
+        node[valField] !== undefined || node.value !== undefined
+          ? Math.max(0, toNumber(node[valField] ?? node.value))
+          : undefined
+      const childSum = mappedChildren ? mappedChildren.reduce((acc, c) => acc + c.sum, 0) : 0
+      const hasChildren = Boolean(mappedChildren && mappedChildren.length > 0)
+      const keepVal = rawVal !== undefined && (!hasChildren || (rawVal > 0 && rawVal >= childSum))
+      return {
+        item: {
+          name: sanitizeChartLabel(node[nameField] ?? node.name ?? node.label),
+          ...(keepVal ? { value: rawVal } : {}),
+          ...(hasChildren ? { children: mappedChildren!.map((c) => c.item) } : {}),
+        },
+        sum: keepVal ? rawVal! : childSum,
+      }
+    }
+    return rows.map((r) => mapNode(r).item)
   }
 
   if (groupField) {
@@ -752,10 +641,10 @@ export function buildMarkAreaOption(
   if (!Array.isArray(rawMarkArea) || rawMarkArea.length === 0) return undefined
   const catSet = categories ? new Set(categories) : null
   const toneMap: Record<string, readonly [string, string, string]> = {
-    danger: ['rgba(248, 113, 113, 0.16)', 'rgba(239, 68, 68, 0.11)', theme.danger],
-    warning: ['rgba(251, 191, 36, 0.16)', 'rgba(245, 158, 11, 0.12)', theme.warn],
-    success: ['rgba(52, 211, 153, 0.15)', 'rgba(16, 185, 129, 0.11)', theme.success],
-    info: ['rgba(96, 165, 250, 0.14)', 'rgba(37, 99, 235, 0.09)', theme.brand],
+    danger: ['rgba(248, 113, 113, 0.16)', 'rgba(239, 68, 68, 0.11)', theme.textDanger],
+    warning: ['rgba(251, 191, 36, 0.16)', 'rgba(245, 158, 11, 0.12)', theme.textWarn],
+    success: ['rgba(52, 211, 153, 0.15)', 'rgba(16, 185, 129, 0.11)', theme.textSuccess],
+    info: ['rgba(96, 165, 250, 0.14)', 'rgba(37, 99, 235, 0.09)', theme.textBrand],
   }
   const toneFill = (tone: string) => {
     const entry = toneMap[tone] ?? toneMap.info!
@@ -763,13 +652,15 @@ export function buildMarkAreaOption(
   }
   const shiftY = (v: unknown): unknown =>
     yOffset !== 0 && typeof v === 'number' && Number.isFinite(v)
-      ? Number((v + yOffset).toFixed(4))
+      ? Number((v + yOffset).toPrecision(10))
       : v
-  const isValidCatBound = (v: unknown): boolean => {
-    if (!catSet) return true
-    if (catSet.size === 0) return false
-    if (typeof v === 'number') return Number.isInteger(v) && v >= 0 && v < catSet.size
-    return catSet.has(sanitizeChartLabel(v))
+  const resolveCatBound = (v: unknown): string | number | null => {
+    if (!catSet) return typeof v === 'number' ? v : sanitizeChartLabel(v)
+    if (catSet.size === 0) return null
+    const lbl = sanitizeChartLabel(v)
+    if (catSet.has(lbl)) return lbl
+    if (typeof v === 'number' && Number.isInteger(v) && v >= 0 && v < catSet.size) return v
+    return null
   }
   const areas: unknown[] = []
   for (const raw of rawMarkArea) {
@@ -782,9 +673,11 @@ export function buildMarkAreaOption(
     const { fill, labelColor } = toneFill(tone)
     const lbl = rec.label !== undefined && rec.label !== null ? sanitizeChartLabel(rec.label) : ''
     const isY = rec.axis === 'y'
-    if (!isY && (!isValidCatBound(startVal) || !isValidCatBound(endVal))) continue
-    const sVal = isY ? shiftY(startVal) : startVal
-    const eVal = isY ? shiftY(endVal) : endVal
+    const catStart = !isY ? resolveCatBound(startVal) : null
+    const catEnd = !isY ? resolveCatBound(endVal) : null
+    if (!isY && (catStart === null || catEnd === null)) continue
+    const sVal = isY ? shiftY(startVal) : catStart
+    const eVal = isY ? shiftY(endVal) : catEnd
     if (
       isY &&
       useLog &&
@@ -823,112 +716,4 @@ export function buildMarkAreaOption(
   }
   if (areas.length === 0) return undefined
   return { silent: true, animation: false, data: areas }
-}
-
-export function formatCompactTickNum(v: number, span?: number): string {
-  if (!Number.isFinite(v)) return '0'
-  if (span !== undefined && span > 0 && span < 2) {
-    const digits = span < 0.05 ? 4 : span < 0.5 ? 3 : 2
-    return String(Number(v.toFixed(digits)))
-  }
-  const abs = Math.abs(v)
-  if (abs >= 1e9) return `${Number((v / 1e9).toFixed(1))}B`
-  if (abs >= 1e6) return `${Number((v / 1e6).toFixed(1))}M`
-  if (abs >= 1e4) return `${Number((v / 1e3).toFixed(1))}K`
-  if (abs >= 1000) return String(Math.round(v))
-  if (abs >= 10) return String(Number(v.toFixed(1)))
-  if (abs > 0 && abs < 0.01) return String(Number(v.toPrecision(2)))
-  return String(Number(v.toFixed(2)))
-}
-
-export interface HistogramBin {
-  readonly label: string
-  readonly start: number
-  readonly end: number
-  readonly count: number
-  readonly pct: number
-}
-
-export function computeHistogramBins(
-  rawValues: readonly number[],
-  requestedBins: number | undefined,
-  isCompact: boolean,
-): readonly HistogramBin[] {
-  const finite = rawValues.filter(Number.isFinite).sort((a, b) => a - b)
-  if (finite.length === 0) return []
-  const minVal = finite[0]!
-  const maxVal = finite[finite.length - 1]!
-  const span = maxVal - minVal
-  if (span <= 0) {
-    return [
-      {
-        label: formatCompactTickNum(minVal),
-        start: minVal,
-        end: maxVal,
-        count: finite.length,
-        pct: 100,
-      },
-    ]
-  }
-  const q1 = quantile(finite, 0.25)
-  const q3 = quantile(finite, 0.75)
-  const iqr = q3 - q1
-  let autoBins = Math.ceil(Math.log2(finite.length) + 1)
-  if (iqr > 0) {
-    const fdWidth = (2 * iqr) / Math.cbrt(finite.length)
-    if (fdWidth > 0) {
-      autoBins = Math.ceil(span / fdWidth)
-    }
-  }
-  const maxAuto = isCompact ? 8 : 14
-  const hasExplicitBins = typeof requestedBins === 'number' && Number.isFinite(requestedBins)
-  let binCount = hasExplicitBins
-    ? Math.max(2, Math.min(isCompact ? 12 : 40, Math.trunc(requestedBins)))
-    : Math.max(4, Math.min(maxAuto, autoBins))
-  let binStart = minVal
-  let binEnd = maxVal
-  let step = span / binCount
-  if (!hasExplicitBins) {
-    const rawStep = span / binCount
-    const mag = 10 ** Math.floor(Math.log10(rawStep))
-    for (const mult of [1, 2, 2.5, 5, 10]) {
-      const cand = mult * mag
-      const lo = Math.floor(minVal / cand + 1e-9) * cand
-      const hi = Math.ceil(maxVal / cand - 1e-9) * cand
-      const cnt = Math.round((hi - lo) / cand)
-      if (cnt >= 4 && cnt <= maxAuto) {
-        step = cand
-        binStart = lo
-        binEnd = hi
-        binCount = cnt
-        break
-      }
-    }
-  }
-  const counts = new Array<number>(binCount).fill(0)
-  for (const v of finite) {
-    const idx = Math.min(binCount - 1, Math.max(0, Math.floor((v - binStart) / step + 1e-9)))
-    counts[idx] = (counts[idx] ?? 0) + 1
-  }
-  const cleanNum = (n: number): number =>
-    Math.abs(n) < step * 1e-9 ? 0 : Number(n.toPrecision(10))
-  return counts.map((count, i) => {
-    const start = cleanNum(binStart + i * step)
-    const end = i === binCount - 1 ? cleanNum(binEnd) : cleanNum(binStart + (i + 1) * step)
-    return {
-      label: `${formatCompactTickNum(start)}–${formatCompactTickNum(end)}`,
-      start,
-      end,
-      count,
-      pct: Number(((count / finite.length) * 100).toFixed(1)),
-    }
-  })
-}
-
-export function canUseLogScale(
-  yScale: 'linear' | 'log' | undefined,
-  values: readonly number[],
-): boolean {
-  if (yScale !== 'log') return false
-  return values.some((v) => Number.isFinite(v) && v > 0)
 }

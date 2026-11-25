@@ -404,6 +404,7 @@ export interface RuntimeUiMessages {
   readonly multiSelectPlaceholder: string
   readonly multiSelectSearchCreate: string
   readonly multiSelectSearchOnly: string
+  readonly multiSelectCreateOption: (val: string) => string
   readonly multiSelectSelectedCount: (count: number) => string
   readonly multiSelectClearAll: string
   readonly dateRangePresetToday: string
@@ -441,6 +442,9 @@ export interface RuntimeUiMessages {
   readonly kvEditorValuePlaceholder: string
   readonly kvEditorAddItem: string
   readonly kvEditorRemoveAria: string
+  readonly kvEditorRevealAria: string
+  readonly kvEditorHideAria: string
+  readonly kvEditorDuplicateKeyHint: string
   readonly kvEditorEmpty: string
   readonly ratingAria: string
   readonly ratingScoreOf: (val: number, max: number) => string
@@ -610,6 +614,7 @@ export const RUNTIME_MESSAGES: Record<UiLocale, RuntimeUiMessages> = {
     multiSelectPlaceholder: '请选择多项…',
     multiSelectSearchCreate: '搜索选项，或输入新标签按 Enter 创建…',
     multiSelectSearchOnly: '搜索多选条目…',
+    multiSelectCreateOption: (val) => `创建 "${val}"`,
     multiSelectSelectedCount: (count) => `已选 ${count} 项`,
     multiSelectClearAll: '清空',
     dateRangePresetToday: '今日',
@@ -647,6 +652,9 @@ export const RUNTIME_MESSAGES: Record<UiLocale, RuntimeUiMessages> = {
     kvEditorValuePlaceholder: '输入值…',
     kvEditorAddItem: '新增一项',
     kvEditorRemoveAria: '删除此项',
+    kvEditorRevealAria: '显示敏感值',
+    kvEditorHideAria: '隐藏敏感值',
+    kvEditorDuplicateKeyHint: '存在重复键名',
     kvEditorEmpty: '点击右上角按钮新增配置项',
     ratingAria: '评分',
     ratingScoreOf: (val, max) => `${val} / ${max}`,
@@ -814,6 +822,7 @@ export const RUNTIME_MESSAGES: Record<UiLocale, RuntimeUiMessages> = {
     multiSelectPlaceholder: 'Select options…',
     multiSelectSearchCreate: 'Search or press Enter to create tag…',
     multiSelectSearchOnly: 'Search options…',
+    multiSelectCreateOption: (val) => `Create "${val}"`,
     multiSelectSelectedCount: (count) => `${count} selected`,
     multiSelectClearAll: 'Clear',
     dateRangePresetToday: 'Today',
@@ -851,6 +860,9 @@ export const RUNTIME_MESSAGES: Record<UiLocale, RuntimeUiMessages> = {
     kvEditorValuePlaceholder: 'Enter value…',
     kvEditorAddItem: 'Add row',
     kvEditorRemoveAria: 'Remove row',
+    kvEditorRevealAria: 'Show secret value',
+    kvEditorHideAria: 'Hide secret value',
+    kvEditorDuplicateKeyHint: 'Duplicate key detected',
     kvEditorEmpty: 'Click the button above to add a key-value entry',
     ratingAria: 'Rating',
     ratingScoreOf: (val, max) => `${val} / ${max}`,

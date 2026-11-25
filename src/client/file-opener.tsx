@@ -106,20 +106,35 @@ const URI_SCHEME_RE = /^[A-Za-z][A-Za-z0-9+.-]*:/
 const CONTROL_CHAR_RE = /[\u0000-\u001f\u007f]/
 const ENCODED_TRAVERSAL_RE = /%(?:2e|2f|5c|00)/i
 
+function decodeSafePercentEscapes(value: string): string {
+  try {
+    return decodeURIComponent(value)
+  } catch {
+    return value.replace(/%[0-9a-f]{2}/gi, (hex) => {
+      try {
+        return decodeURIComponent(hex)
+      } catch {
+        return hex
+      }
+    })
+  }
+}
+
 function hasEncodedTraversalOrControl(raw: string): boolean {
   if (ENCODED_TRAVERSAL_RE.test(raw)) return true
   let cur = raw
   for (let pass = 0; pass < 3; pass++) {
     if (!cur.includes('%')) break
-    let decoded: string
-    try {
-      decoded = decodeURIComponent(cur)
-    } catch {
+    const decoded = decodeSafePercentEscapes(cur)
+    if (decoded === cur) break
+    if (
+      ENCODED_TRAVERSAL_RE.test(decoded) ||
+      CONTROL_CHAR_RE.test(decoded) ||
+      hasPathTraversalSegment(decoded) ||
+      decoded.replace(/\\/g, '/').startsWith('//')
+    ) {
       return true
     }
-    if (decoded === cur) break
-    if (CONTROL_CHAR_RE.test(decoded) || hasPathTraversalSegment(decoded)) return true
-    if (decoded.replace(/\\/g, '/').startsWith('//')) return true
     cur = decoded
   }
   return false

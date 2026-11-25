@@ -47,10 +47,12 @@ import {
   type ChartPalette,
   type EChartsInstance,
   type HistogramBin,
+  buildCompactCategoryFormatter,
   buildMarkAreaOption,
   buildReferenceMarkLine,
   buildZoomConfig,
   computeHistogramBins,
+  formatCompactTickNum,
   inferFields,
   normalizeChartRows,
   sanitizeChartLabel,
@@ -312,6 +314,10 @@ function resolvePalette(dark: boolean) {
     success,
     warn,
     danger,
+    textBrand: dark ? brand : '#1d4ed8',
+    textSuccess: dark ? success : '#047857',
+    textWarn: dark ? warn : '#b45309',
+    textDanger: dark ? danger : '#dc2626',
     colors,
     textPrimary: readToken('--dsw-alias-label-primary', dark ? '#e5e7eb' : '#111827'),
     textSecondary: readToken('--dsw-alias-label-secondary', dark ? '#9ca3af' : '#4b5563'),
@@ -378,26 +384,48 @@ export function buildChartOption(
     chartHeight: Math.min(640, Math.max(140, props.height ?? 260)),
     chartWidth: (fallback: number) =>
       containerWidth !== undefined && containerWidth > 0 ? containerWidth : fallback,
-    compactCatLabel: (count: number, minW = 36, maxCols = 6) => ({
-      ...axisLabelBase,
-      ...(isCompact
-        ? {
-            width: Math.max(
-              minW,
-              Math.floor(((containerWidth ?? 276) - 44) / Math.min(maxCols, Math.max(2, count))),
-            ),
-            overflow: 'truncate' as const,
-            ellipsis: '…',
-          }
-        : {}),
-    }),
-    valAxis: (extra?: Record<string, unknown>, dashed = false) => ({
-      type: 'value' as const,
-      splitNumber: isCompact ? 3 : undefined,
-      splitLine: dashed ? dashedLine : borderLine,
-      axisLabel: axisLabelBase,
-      ...extra,
-    }),
+    compactCatLabel: (count: number, minW = 36, maxCols = 6, categories?: readonly string[]) => {
+      const slotW = Math.max(
+        minW,
+        Math.floor(((containerWidth ?? 276) - 44) / Math.min(maxCols, Math.max(2, count))),
+      )
+      const fmt =
+        categories && isCompact
+          ? buildCompactCategoryFormatter(categories, slotW, isCompact)
+          : undefined
+      return {
+        ...axisLabelBase,
+        ...(isCompact
+          ? {
+              width: slotW,
+              overflow: 'truncate' as const,
+              ellipsis: '…',
+              ...(fmt ? { formatter: fmt } : {}),
+            }
+          : {}),
+      }
+    },
+    valAxis: (extra?: Record<string, unknown>, dashed = false) => {
+      const extraLabel =
+        extra && typeof extra.axisLabel === 'object' && extra.axisLabel !== null
+          ? (extra.axisLabel as Record<string, unknown>)
+          : undefined
+      const defaultAxisLabel =
+        extraLabel?.formatter !== undefined
+          ? { ...axisLabelBase, ...extraLabel }
+          : {
+              ...axisLabelBase,
+              formatter: (v: number) => formatCompactTickNum(v),
+              ...extraLabel,
+            }
+      return {
+        type: 'value' as const,
+        splitNumber: isCompact ? 3 : undefined,
+        splitLine: dashed ? dashedLine : borderLine,
+        ...extra,
+        axisLabel: defaultAxisLabel,
+      }
+    },
     legend: (spec) =>
       buildLegendOption({
         isCompact,

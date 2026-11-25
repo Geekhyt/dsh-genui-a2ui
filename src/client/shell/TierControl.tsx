@@ -89,12 +89,12 @@ export const A2uiTierControl = memo(function A2uiTierControl({
     const prevWatermark = getLastAppliedCommandSeq(targetSessionId)
     setBusyBySession((cur) => ({ ...cur, [targetKey]: reqId }))
     const rollback = () => {
-      if (globalDefaultReqSeqRef.current === defaultReqId) {
+      const curWatermark = getLastAppliedCommandSeq(targetSessionId)
+      const supersededByCommand = curWatermark > Math.max(prevWatermark, cmdSeq ?? -1)
+      if (!supersededByCommand && globalDefaultReqSeqRef.current === defaultReqId) {
         setA2uiEnabled(undefined, prevDefault, undefined, true)
       }
-      if (reqSeqBySessionRef.current.get(targetKey) !== reqId) return
-      const curWatermark = getLastAppliedCommandSeq(targetSessionId)
-      if (curWatermark > Math.max(prevWatermark, cmdSeq ?? -1)) return
+      if (reqSeqBySessionRef.current.get(targetKey) !== reqId || supersededByCommand) return
       if (targetSessionId) {
         setA2uiEnabled(targetSessionId, prev, cmdSeq, false)
       }

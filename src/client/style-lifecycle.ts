@@ -25,12 +25,15 @@ export function mountPluginCssSheets(pluginId = DEFAULT_PLUGIN_ID): void {
   reg.mounted = true
   if (typeof document === 'undefined' || !document.head) return
   for (const [tagId, css] of reg.sheets.entries()) {
-    if (document.querySelector(`style[data-plugin-css=${JSON.stringify(tagId)}]`) === null) {
+    const existing = document.querySelector(`style[data-plugin-css=${JSON.stringify(tagId)}]`)
+    if (existing === null) {
       const tag = document.createElement('style')
       tag.dataset.plugin = pluginId
       tag.dataset.pluginCss = tagId
       tag.textContent = css
       document.head.appendChild(tag)
+    } else if (existing.textContent !== css) {
+      existing.textContent = css
     }
   }
 }

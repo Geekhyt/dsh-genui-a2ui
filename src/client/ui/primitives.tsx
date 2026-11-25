@@ -388,7 +388,8 @@ export function DshSegmentedTabs<Value extends string = string>(props: {
         background: 'var(--dsw-alias-bg-layer-2, rgba(128,128,128,0.1))',
       }}
     >
-      {props.items.map((item) => {
+      {props.items.map((item, idx) => {
+        const hasMatch = props.items.some((it) => it.value === props.value)
         const selected = item.value === props.value
         return (
           <button
@@ -396,7 +397,7 @@ export function DshSegmentedTabs<Value extends string = string>(props: {
             id={item.id}
             role="tab"
             type="button"
-            tabIndex={selected ? 0 : -1}
+            tabIndex={selected || (!hasMatch && idx === 0) ? 0 : -1}
             aria-selected={selected}
             aria-controls={item.panelId}
             onClick={() => props.onChange(item.value)}
@@ -535,6 +536,7 @@ export function DshModal(props: {
   const hasHostModal = hasComponent(raw.Modal)
   const dark = useDarkTheme()
   const dialogRef = useRef<HTMLDivElement | null>(null)
+  const backdropDownRef = useRef(false)
   useEscapeKey(!hasHostModal && props.open, props.onClose)
   useDialogFocus(!hasHostModal && props.open, dialogRef)
   if (hasHostModal) {
@@ -564,10 +566,17 @@ export function DshModal(props: {
       aria-modal="true"
       aria-label={props.title}
       data-a2ui-overlay=""
+      data-a2ui-managed-overlay=""
       className={dark ? 'a2ui-dark' : 'a2ui-light'}
+      onMouseDown={(e) => {
+        backdropDownRef.current = e.target === e.currentTarget
+      }}
       onClick={(e) => {
         e.stopPropagation()
-        props.onClose()
+        if (backdropDownRef.current && e.target === e.currentTarget) {
+          props.onClose()
+        }
+        backdropDownRef.current = false
       }}
       style={{
         position: 'fixed',
@@ -1206,6 +1215,7 @@ export function DshMenu(props: {
               <div
                 ref={menuPopoverRef}
                 role="menu"
+                data-a2ui-managed-overlay=""
                 onClick={(e) => e.stopPropagation()}
                 onKeyDown={handleMenuKeyDown}
                 style={{
@@ -1484,6 +1494,7 @@ export function DshImageLightbox(props: {
       aria-modal="true"
       aria-label={props.dialogLabel}
       data-a2ui-overlay=""
+      data-a2ui-managed-overlay=""
       className={dark ? 'a2ui-dark' : 'a2ui-light'}
       onClick={(e) => {
         e.stopPropagation()

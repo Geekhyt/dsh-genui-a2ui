@@ -134,12 +134,12 @@
   padding: 1px 6px;
   border-radius: 5px;
   background: color-mix(in srgb, var(--a2ui-success) 14%, transparent);
-  color: var(--a2ui-success);
+  color: var(--a2ui-success-fg);
 }
 
 .terminalExitBadge[data-failed="true"] {
   background: color-mix(in srgb, var(--a2ui-danger) 14%, transparent);
-  color: var(--a2ui-danger);
+  color: var(--a2ui-danger-fg);
 }
 
 .terminalStdout,
@@ -156,7 +156,7 @@
 
 .terminalStderr {
   border-left-color: var(--a2ui-danger);
-  color: var(--a2ui-danger);
+  color: var(--a2ui-danger-fg);
 }
 
 .approvalCard {
@@ -348,11 +348,11 @@
   font-weight: 600;
   white-space: nowrap;
   flex-shrink: 0;
-  color: var(--a2ui-success);
+  color: var(--a2ui-success-fg);
 }
 
 .apiStatusPill[data-ok="err"] {
-  color: var(--a2ui-danger);
+  color: var(--a2ui-danger-fg);
 }
 
 .apiStatusPill[data-ok="warn"] {
@@ -411,14 +411,14 @@
 }
 
 .apiParamReq {
-  color: var(--a2ui-danger);
+  color: var(--a2ui-danger-fg);
   margin-left: 2px;
 }
 
 .apiParamType {
   font-family: var(--a2ui-mono);
   font-size: 11px;
-  color: var(--a2ui-brand);
+  color: var(--a2ui-accent-fg);
   white-space: nowrap;
 }
 

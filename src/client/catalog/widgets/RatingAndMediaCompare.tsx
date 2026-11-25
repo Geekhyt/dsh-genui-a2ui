@@ -1,5 +1,5 @@
 import type { ActionDispatchOptions } from '@a2ui/web_core/v1_0'
-import { useContext, useMemo, useState } from 'react'
+import { useContext, useMemo, useRef, useState } from 'react'
 import { AnnotationTextApi, ImageCompareApi, RatingApi } from '../../../shared/catalog-schema.ts'
 import { useRuntimeMessages } from '../../i18n.ts'
 import { DshHoverCard, DshHoverCardGroup, DshTag, type TagTone } from '../../ui/primitives.tsx'
@@ -146,6 +146,28 @@ export const DshRatingImpl = defineComponent<{
           aria-invalid={showError || undefined}
           onKeyDown={(e) => {
             if (readOnly) return
+            if (allowHalf) {
+              const k = e.key
+              let next: number | null = null
+              if (k === 'ArrowRight' || k === 'ArrowUp') {
+                next = score <= 0 ? 0.5 : Math.min(max, Math.round((score + 0.5) * 2) / 2)
+              } else if (k === 'ArrowLeft' || k === 'ArrowDown') {
+                next = score <= 0.5 ? 0.5 : Math.max(0.5, Math.round((score - 0.5) * 2) / 2)
+              } else if (k === 'Home') {
+                next = 0.5
+              } else if (k === 'End') {
+                next = max
+              }
+              if (next !== null) {
+                e.preventDefault()
+                selectScore(next)
+                const focusIdx = Math.max(0, Math.min(max - 1, Math.ceil(next) - 1))
+                e.currentTarget
+                  .querySelectorAll<HTMLButtonElement>('[role="radio"]')
+                  [focusIdx]?.focus()
+              }
+              return
+            }
             handleHorizontalArrowKey(e, e.currentTarget, '[role="radio"]', (idx) => {
               selectScore(idx + 1)
             })
@@ -158,6 +180,8 @@ export const DshRatingImpl = defineComponent<{
               score >= fullVal ? 'full' : allowHalf && score >= halfVal ? 'half' : 'empty'
             const isHalfChecked = allowHalf && score === halfVal
             const isChecked = score === fullVal || isHalfChecked
+            const itemDesc = labels[idx]
+            const valLabel = isHalfChecked ? halfVal : fullVal
             const tabIdx = readOnly ? -1 : isChecked || (score === 0 && idx === 0) ? 0 : -1
             return (
               <button
@@ -166,16 +190,29 @@ export const DshRatingImpl = defineComponent<{
                 role="radio"
                 tabIndex={tabIdx}
                 aria-checked={isChecked}
-                aria-label={msg.ratingScoreOf(isHalfChecked ? halfVal : fullVal, max)}
+                aria-label={
+                  itemDesc
+                    ? `${itemDesc} (${msg.ratingScoreOf(valLabel, max)})`
+                    : msg.ratingScoreOf(valLabel, max)
+                }
                 disabled={readOnly}
                 className={css.ratingStarBtn}
                 data-filled={fill !== 'empty' ? 'true' : 'false'}
-                onClick={() => {
-                  if (allowHalf && score === fullVal) {
-                    selectScore(halfVal)
-                  } else {
-                    selectScore(fullVal)
+                onClick={(e) => {
+                  if (allowHalf) {
+                    if (e.detail > 0) {
+                      const rect = e.currentTarget.getBoundingClientRect()
+                      if (rect.width > 0 && e.clientX - rect.left < rect.width / 2) {
+                        selectScore(halfVal)
+                        return
+                      }
+                      selectScore(fullVal)
+                      return
+                    }
+                    selectScore(score === fullVal ? halfVal : fullVal)
+                    return
                   }
+                  selectScore(fullVal)
                 }}
               >
                 <StarGlyph fill={fill} />
@@ -201,6 +238,8 @@ export const DshImageCompareImpl = defineComponent<{
 }>(ImageCompareApi, function DshImageCompare({ props }) {
   const msg = useRuntimeMessages()
   const initialPos = clampImageComparePosition(props.initialPosition)
+  const stageRef = useRef<HTMLDivElement | null>(null)
+  const draggingRef = useRef(false)
   const [prevInit, setPrevInit] = useState(initialPos)
   const [pos, setPos] = useState(initialPos)
   const [brokenSrcs, setBrokenSrcs] = useState<ReadonlySet<string>>(() => new Set())
@@ -230,6 +269,13 @@ export const DshImageCompareImpl = defineComponent<{
       ? Math.max(160, Math.min(520, props.height))
       : 260
 
+  const updatePosFromClientX = (clientX: number) => {
+    const rect = stageRef.current?.getBoundingClientRect()
+    if (!rect || rect.width <= 0) return
+    const next = clampImageComparePosition(((clientX - rect.left) / rect.width) * 100)
+    setPos(next)
+  }
+
   return (
     <div
       className={css.imageCompareCard}
@@ -242,32 +288,48 @@ export const DshImageCompareImpl = defineComponent<{
           <span className={css.imageComparePct}>{pos}%</span>
         </div>
       ) : null}
-      <div className={css.imageCompareStage} style={{ minHeight: height }}>
+      <div
+        ref={stageRef}
+        className={css.imageCompareStage}
+        style={{ minHeight: height }}
+        onPointerDown={(e) => {
+          draggingRef.current = true
+          e.currentTarget.setPointerCapture?.(e.pointerId)
+          updatePosFromClientX(e.clientX)
+        }}
+        onPointerMove={(e) => {
+          if (!draggingRef.current) return
+          updatePosFromClientX(e.clientX)
+        }}
+        onPointerUp={(e) => {
+          draggingRef.current = false
+          if (e.currentTarget.hasPointerCapture?.(e.pointerId)) {
+            e.currentTarget.releasePointerCapture(e.pointerId)
+          }
+        }}
+        onPointerCancel={() => {
+          draggingRef.current = false
+        }}
+      >
         {afterFailed ? (
-          <div className={css.emptyCell} style={{ minHeight: height }}>
-            {afterLabel}
-          </div>
+          <div className={css.imageCompareFallback}>{afterLabel}</div>
         ) : (
           <img
             src={afterSrc}
             alt={afterLabel}
             className={css.imageCompareImg}
-            loading="lazy"
             draggable={false}
             onError={() => markBroken(afterSrc)}
           />
         )}
         <div className={css.imageCompareOverlay} style={{ clipPath: `inset(0 ${100 - pos}% 0 0)` }}>
           {beforeFailed ? (
-            <div className={css.emptyCell} style={{ minHeight: height }}>
-              {beforeLabel}
-            </div>
+            <div className={css.imageCompareFallback}>{beforeLabel}</div>
           ) : (
             <img
               src={beforeSrc}
               alt={beforeLabel}
               className={css.imageCompareImg}
-              loading="lazy"
               draggable={false}
               onError={() => markBroken(beforeSrc)}
             />

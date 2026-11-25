@@ -191,8 +191,12 @@ export interface NormalizedLogEntry {
   readonly line?: number | undefined
 }
 
-const RAW_LOG_RE =
-  /^(?:\[?(\d{2,4}[-/:]\d{2}[-/:]\d{2}[T\s]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?|\d{2}:\d{2}:\d{2}(?:\.\d+)?)\]?\s+)?(?:\[?(ERROR|ERR|FATAL|CRITICAL|WARN|WARNING|INFO|DEBUG|TRACE)\]?:?\s+)?(?:\[([^\]]+)\]:?\s+)?([\s\S]*)$/i
+const LOG_TIME_PREFIX_RE =
+  /^\[?(\d{2,4}[-/:]\d{2}[-/:]\d{2}[T\s]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?(?:Z|[+-]\d{2}:?\d{2})?|\d{2}:\d{2}:\d{2}(?:[.,]\d+)?)\]?\s+/
+const LOG_BRACKET_LEVEL_RE = /^\[(ERROR|ERR|FATAL|CRITICAL|WARN|WARNING|INFO|DEBUG|TRACE)\]:?\s+/i
+const LOG_UPPER_LEVEL_RE = /^(ERROR|ERR|FATAL|CRITICAL|WARN|WARNING|INFO|DEBUG|TRACE)(?:[:\s]+|$)/
+const LOG_TITLE_COLON_LEVEL_RE = /^(Error|Err|Fatal|Critical|Warn|Warning|Info|Debug|Trace):\s+/
+const LOG_SERVICE_BRACKET_RE = /^\[([^\]]+)\]:?\s+/
 
 function normalizeLogLevel(raw: unknown): LogLevel {
   const s = typeof raw === 'string' ? raw.trim().toLowerCase() : ''
@@ -200,6 +204,63 @@ function normalizeLogLevel(raw: unknown): LogLevel {
   if (s === 'warn' || s === 'warning') return 'warn'
   if (s === 'debug' || s === 'trace' || s === 'verbose') return 'debug'
   return 'info'
+}
+
+function parseRawLogLine(raw: string): {
+  time: string
+  level: LogLevel
+  service: string
+  message: string
+} {
+  let rest = raw.trim()
+  let time = ''
+  let rawLevel: string | undefined
+  let service = ''
+
+  const tm = LOG_TIME_PREFIX_RE.exec(rest)
+  if (tm) {
+    time = tm[1]!
+    rest = rest.slice(tm[0].length)
+  }
+
+  for (let pass = 0; pass < 2; pass++) {
+    if (!rawLevel) {
+      const bm = LOG_BRACKET_LEVEL_RE.exec(rest)
+      if (bm) {
+        rawLevel = bm[1]
+        rest = rest.slice(bm[0].length)
+        continue
+      }
+      const um = LOG_UPPER_LEVEL_RE.exec(rest)
+      if (um) {
+        rawLevel = um[1]
+        rest = rest.slice(um[0].length)
+        continue
+      }
+      const cm = LOG_TITLE_COLON_LEVEL_RE.exec(rest)
+      if (cm) {
+        rawLevel = cm[1]
+        rest = rest.slice(cm[0].length)
+        continue
+      }
+    }
+    if (!service) {
+      const sm = LOG_SERVICE_BRACKET_RE.exec(rest)
+      if (sm && !LOG_BRACKET_LEVEL_RE.test(rest)) {
+        service = sm[1]!
+        rest = rest.slice(sm[0].length)
+        continue
+      }
+    }
+    break
+  }
+
+  return {
+    time,
+    level: normalizeLogLevel(rawLevel),
+    service,
+    message: rest.trim() || raw.trim(),
+  }
 }
 
 export function normalizeLogEntries(raw: unknown): readonly NormalizedLogEntry[] {
@@ -217,13 +278,13 @@ export function normalizeLogEntries(raw: unknown): readonly NormalizedLogEntry[]
   const nextId = makeUniqueIdFactory()
   list.forEach((item, idx) => {
     if (typeof item === 'string') {
-      const m = RAW_LOG_RE.exec(item)
+      const parsed = parseRawLogLine(item)
       out.push({
         id: nextId(`log_${idx}`),
-        time: m?.[1] ?? '',
-        level: normalizeLogLevel(m?.[2]),
-        service: m?.[3] ?? '',
-        message: (m?.[4] ?? item).trim(),
+        time: parsed.time,
+        level: parsed.level,
+        service: parsed.service,
+        message: parsed.message,
         detail: '',
       })
       return

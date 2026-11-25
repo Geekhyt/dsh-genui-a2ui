@@ -1,5 +1,10 @@
 import type * as echarts from 'echarts/core'
-import { type ChartPalette, extractCategoryAxisLabels, sanitizeChartLabel } from './shared.ts'
+import {
+  type ChartPalette,
+  extractCategoryAxisLabels,
+  sanitizeChartLabel,
+  visualWidthOf,
+} from './shared.ts'
 
 function asObj(v: unknown): Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v)
@@ -65,8 +70,9 @@ function applyHierarchyCrossFilter(
       itemStyle: {
         ...asObj(rec.itemStyle),
         opacity: isMatch ? 1 : 0.3,
-        ...(selfMatch ? { borderColor: highlightBorder, borderWidth: 1.5 } : {}),
+        ...(selfMatch ? { borderColor: highlightBorder, borderWidth: 2.5 } : {}),
       },
+      ...(isMatch ? {} : { label: { ...asObj(rec.label), opacity: 0.35 } }),
     }
   })
   return { nodes: mapped, matched: anyMatched }
@@ -330,6 +336,33 @@ export function applyCrossFilterSelection(
   return { ...opt, series: nextSeries }
 }
 
+function wrapRichTooltipText(raw: string, maxUnits: number): string {
+  const safe = raw.replace(/\{([A-Za-z0-9_]+)\|/g, '{\u200B$1|')
+  if (maxUnits <= 8) return safe
+  const out: string[] = []
+  for (const line of safe.split('\n')) {
+    if (visualWidthOf(line) <= maxUnits) {
+      out.push(line)
+      continue
+    }
+    let cur = ''
+    let units = 0
+    for (const ch of line) {
+      const w = (ch.codePointAt(0) ?? 0) > 0xff ? 2 : 1
+      if (cur !== '' && units + w > maxUnits) {
+        out.push(cur)
+        cur = ch
+        units = w
+      } else {
+        cur += ch
+        units += w
+      }
+    }
+    if (cur !== '') out.push(cur)
+  }
+  return out.join('\n')
+}
+
 export function applyDarkSafeThemeDefaults(
   option: echarts.EChartsCoreOption,
   dark: boolean,
@@ -339,6 +372,24 @@ export function applyDarkSafeThemeDefaults(
   const opt = { ...(option as Record<string, unknown>) }
   if (opt.color === undefined) opt.color = theme.colors
   const handleFill = dark ? '#334155' : '#ffffff'
+
+  if (opt.tooltip && typeof opt.tooltip === 'object' && !Array.isArray(opt.tooltip)) {
+    const tt = opt.tooltip as Record<string, unknown>
+    if (typeof tt.formatter === 'function') {
+      const origFmt = tt.formatter as (...args: unknown[]) => unknown
+      const ts = asObj(tt.textStyle)
+      const maxPx = typeof ts.width === 'number' && ts.width > 0 ? ts.width : 280
+      const fontSize = typeof ts.fontSize === 'number' && ts.fontSize > 0 ? ts.fontSize : 11
+      const maxUnits = Math.max(20, Math.floor(maxPx / (fontSize * 0.58)))
+      opt.tooltip = {
+        ...tt,
+        formatter: (...args: unknown[]) => {
+          const res = origFmt(...args)
+          return typeof res === 'string' ? wrapRichTooltipText(res, maxUnits) : res
+        },
+      }
+    }
+  }
 
   if (opt.legend && typeof opt.legend === 'object' && !Array.isArray(opt.legend)) {
     opt.legend = {

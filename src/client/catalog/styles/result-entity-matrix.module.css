@@ -192,10 +192,22 @@
   color: var(--a2ui-fg);
 }
 
+.entityStatusPill[data-status="healthy"] {
+  background: color-mix(in srgb, var(--a2ui-success) 14%, transparent);
+  border-color: color-mix(in srgb, var(--a2ui-success) 36%, transparent);
+  color: var(--a2ui-success-fg);
+}
+
 .entityStatusPill[data-status="warning"] {
   background: color-mix(in srgb, var(--a2ui-warn) 16%, transparent);
   border-color: color-mix(in srgb, var(--a2ui-warn) 40%, transparent);
   color: var(--a2ui-warn-fg);
+}
+
+.entityStatusPill[data-status="error"] {
+  background: color-mix(in srgb, var(--a2ui-danger) 14%, transparent);
+  border-color: color-mix(in srgb, var(--a2ui-danger) 38%, transparent);
+  color: var(--a2ui-danger-fg);
 }
 
 .entitySubtitle {
@@ -240,7 +252,7 @@
 }
 
 .entityMetricValue[data-tone="success"] {
-  color: var(--a2ui-success);
+  color: var(--a2ui-success-fg);
 }
 
 .entityMetricValue[data-tone="warning"] {
@@ -248,11 +260,11 @@
 }
 
 .entityMetricValue[data-tone="danger"] {
-  color: var(--a2ui-danger);
+  color: var(--a2ui-danger-fg);
 }
 
 .entityMetricValue[data-tone="info"] {
-  color: var(--a2ui-brand);
+  color: var(--a2ui-accent-fg);
 }
 
 .matrixCard {
@@ -314,7 +326,7 @@
 }
 
 .matrixValTd[data-kind="ok"] {
-  color: var(--a2ui-success);
+  color: var(--a2ui-success-fg);
   font-weight: 700;
 }
 
@@ -324,7 +336,7 @@
 }
 
 .matrixValTd[data-kind="no"] {
-  color: var(--a2ui-danger);
+  color: var(--a2ui-danger-fg);
 }
 
 .matrixValTd[data-kind="empty"] {
@@ -334,6 +346,13 @@
 .matrixTotalTd {
   font-weight: 700;
   background: var(--a2ui-bg-2);
+}
+
+.matrixRowText {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 @container (max-width: 390px) {

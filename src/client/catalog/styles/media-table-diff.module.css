@@ -213,7 +213,7 @@
   cursor: pointer;
 }
 
-.thSortable:hover {
+.thSortable:not(.tableStickyCol):hover {
   background: var(--a2ui-bg-hover);
 }
 
@@ -239,7 +239,7 @@
   border-bottom: none;
 }
 
-.table tbody tr:hover .td {
+.table tbody tr:hover .td:not(.tableStickyCol) {
   background: var(--a2ui-bg-hover);
 }
 
@@ -371,7 +371,7 @@
   padding: 2px 7px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--a2ui-brand) 14%, transparent);
-  color: var(--a2ui-brand);
+  color: var(--a2ui-accent-fg);
   border: 1px solid color-mix(in srgb, var(--a2ui-brand) 32%, transparent);
   white-space: nowrap;
   flex-shrink: 0;
@@ -493,7 +493,7 @@
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   flex-shrink: 0;
-  color: var(--a2ui-success);
+  color: var(--a2ui-success-fg);
 }
 
 .diffStatDel {
@@ -502,7 +502,7 @@
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   flex-shrink: 0;
-  color: var(--a2ui-danger);
+  color: var(--a2ui-danger-fg);
 }
 
 .diffActions {

@@ -73,10 +73,14 @@ export function loadRuntimeChunk(): Promise<RuntimeChunkModule> {
       },
       (err: unknown) => {
         runtimePromise = null
-        const errMsg =
-          err instanceof Error && err.message ? err.message : RUNTIME_LOAD_ERROR_SENTINEL
-        runtimeSnapshot = Object.freeze({ chunk: null, error: errMsg })
-        notifySubscribers(runtimeListeners, 'Chunk store')
+        if (runtimeListeners.size > 0) {
+          const errMsg =
+            err instanceof Error && err.message ? err.message : RUNTIME_LOAD_ERROR_SENTINEL
+          runtimeSnapshot = Object.freeze({ chunk: null, error: errMsg })
+          notifySubscribers(runtimeListeners, 'Chunk store')
+        } else {
+          runtimeSnapshot = PENDING_RUNTIME_SNAPSHOT
+        }
         throw err
       },
     )
@@ -155,9 +159,14 @@ export function loadEchartsChunk(): Promise<EchartsChunkModule> {
       },
       (err: unknown) => {
         echartsPromise = null
-        const errMsg = err instanceof Error && err.message ? err.message : CHART_LOAD_ERROR_SENTINEL
-        echartsSnapshot = Object.freeze({ chunk: null, error: errMsg })
-        notifySubscribers(echartsListeners, 'Chunk store')
+        if (echartsListeners.size > 0) {
+          const errMsg =
+            err instanceof Error && err.message ? err.message : CHART_LOAD_ERROR_SENTINEL
+          echartsSnapshot = Object.freeze({ chunk: null, error: errMsg })
+          notifySubscribers(echartsListeners, 'Chunk store')
+        } else {
+          echartsSnapshot = PENDING_ECHARTS_SNAPSHOT
+        }
         throw err
       },
     )

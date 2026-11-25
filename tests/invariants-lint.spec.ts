@@ -19,8 +19,8 @@ import {
 
 const ROOT_DIR = resolve(import.meta.dirname, '..')
 
-describe('Architectural invariant linter (34 rules)', () => {
-  it('passes all 34 rules on the live repository with zero violations', () => {
+describe('Architectural invariant linter (36 rules)', () => {
+  it('passes all 36 rules on the live repository with zero violations', () => {
     const report = runAllInvariantChecks(ROOT_DIR)
     expect(report.filesScanned).toBeGreaterThan(50)
     expect(report.violations).toEqual([])
@@ -288,6 +288,20 @@ describe('Architectural invariant linter (34 rules)', () => {
       'src/client/catalog/v4-helpers.ts',
     )
     expect(rawCurlV.some((v) => v.rule === 'no-raw-curl-data-flag')).toBe(true)
+
+    const stickyShorthandV = checkCssInvariants(
+      `.table tbody tr.trSelected .td { background: color-mix(in srgb, var(--a2ui-brand) 8%, transparent); }`,
+      'src/client/catalog/BadStickyRow.module.css',
+    )
+    expect(stickyShorthandV.some((v) => v.rule === 'css-sticky-no-shorthand-override')).toBe(true)
+
+    const pieTplTooltipV = checkTsInvariants(
+      `export const opt = { tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' } }`,
+      'src/client/chunks/echarts/radial.ts',
+    )
+    expect(pieTplTooltipV.some((v) => v.rule === 'echarts-no-pie-string-template-tooltip')).toBe(
+      true,
+    )
   })
 
   it('verifies locale key parity across locale/*.json and TypeScript message tables', () => {

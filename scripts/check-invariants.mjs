@@ -229,6 +229,7 @@ function extractCssBlocks(cssText) {
   }
 
   const stickyTransparentBgRules = []
+  const stickyShorthandOverrideRules = []
   const opaqueControlBgRules = []
   const fixedTablePreCellRules = []
   const rawWhiteOnStatePrimaryRules = []
@@ -239,6 +240,9 @@ function extractCssBlocks(cssText) {
   const TRANSLUCENT_LAYER_BG_RE =
     /background(?:-color)?\s*:\s*var\(\s*--(?:dsw-alias-bg-layer-1|a2ui-bg-1)\b/
   const RAW_PRE_RE = /\bwhite-space\s*:\s*pre\s*(?:;|$)/
+  const TABLE_STATE_CELL_RE =
+    /(?:(?:^|[\s>+~])(?:\.thSortable\b[^,]*:|(?:\.table\b|\.proSummaryRow\b)[^,]*(?:[\s>+~])(?:\.td\b|td\b|\.th\b|th\b)))/
+  const BG_SHORTHAND_RE = /(?:^|[;{\s])background\s*:/
   for (const rule of topRules) {
     if (!rule.header.startsWith('@') && /\btable-layout\s*:\s*fixed\b/.test(rule.body)) {
       for (const sel of rule.header.split(',')) {
@@ -281,6 +285,18 @@ function extractCssBlocks(cssText) {
       }
       if (STATE_PRIMARY_BG_RE.test(rule.body) && RAW_WHITE_COLOR_RE.test(rule.body)) {
         rawWhiteOnStatePrimaryRules.push({ line: rule.startLine, header: rule.header })
+      }
+      if (BG_SHORTHAND_RE.test(rule.body)) {
+        for (const sel of rule.header.split(',')) {
+          const trimmedSel = sel.trim()
+          if (
+            TABLE_STATE_CELL_RE.test(trimmedSel) &&
+            !trimmedSel.includes(':not(.tableStickyCol)') &&
+            !trimmedSel.includes('.tableStickyCol')
+          ) {
+            stickyShorthandOverrideRules.push({ line: rule.startLine, header: trimmedSel })
+          }
+        }
       }
     }
   }
@@ -351,6 +367,7 @@ function extractCssBlocks(cssText) {
     mediaWidthRules,
     shadowedResponsiveRules,
     stickyTransparentBgRules,
+    stickyShorthandOverrideRules,
     opaqueControlBgRules,
     fixedTablePreCellRules,
     rawWhiteOnStatePrimaryRules,
@@ -365,6 +382,7 @@ export function checkCssInvariants(source, relPath) {
     mediaWidthRules,
     shadowedResponsiveRules,
     stickyTransparentBgRules,
+    stickyShorthandOverrideRules,
     opaqueControlBgRules,
     fixedTablePreCellRules,
     rawWhiteOnStatePrimaryRules,
@@ -392,6 +410,15 @@ export function checkCssInvariants(source, relPath) {
     })
   }
 
+  for (const so of stickyShorthandOverrideRules) {
+    violations.push({
+      rule: 'css-sticky-no-shorthand-override',
+      file: relPath,
+      line: so.line,
+      message: `Table state cell selector "${so.header}" sets background shorthand without :not(.tableStickyCol), which wipes opaque sticky backing and causes scroll bleed-through.`,
+    })
+  }
+
   for (const oc of opaqueControlBgRules) {
     violations.push({
       rule: 'css-opaque-control-bg',
@@ -411,7 +438,7 @@ export function checkCssInvariants(source, relPath) {
   }
 
   const REDUNDANT_ROOT_TOKEN_FALLBACK_RE =
-    /\bvar\(\s*(--a2ui-(?:mono|fg|fg-2|fg-3|accent|brand|success|warn|danger|bg-1|bg-2|bg-3|bg-hover|bg-opaque|border-1|border-2|r-sm|r-md|r-lg|on-accent|warn-fg))\s*,/g
+    /\bvar\(\s*(--a2ui-(?:mono|fg|fg-2|fg-3|accent|accent-fg|brand|success|success-fg|warn|warn-fg|danger|danger-fg|bg-1|bg-2|bg-3|bg-hover|bg-opaque|border-1|border-2|r-sm|r-md|r-lg|on-accent))\s*,/g
   for (const m of source.matchAll(REDUNDANT_ROOT_TOKEN_FALLBACK_RE)) {
     const line = source.slice(0, m.index ?? 0).split('\n').length
     violations.push({
@@ -775,6 +802,27 @@ export function checkTsInvariants(source, relPath) {
             : ''
         if (propName === 'markLine' || propName === 'edgeLabel') {
           checkRawEchartsFormatterSubtree(node.initializer)
+        } else if (propName === 'tooltip' && ts.isObjectLiteralExpression(node.initializer)) {
+          for (const tp of node.initializer.properties) {
+            if (!ts.isPropertyAssignment(tp)) continue
+            const tpName = ts.isIdentifier(tp.name)
+              ? tp.name.text
+              : ts.isStringLiteral(tp.name)
+                ? tp.name.text
+                : ''
+            if (
+              tpName === 'formatter' &&
+              (ts.isStringLiteral(tp.initializer) ||
+                ts.isNoSubstitutionTemplateLiteral(tp.initializer)) &&
+              /\{[a-d]\}/.test(tp.initializer.text)
+            ) {
+              report(
+                'echarts-no-pie-string-template-tooltip',
+                tp,
+                'ECharts tooltip formatters must be functions instead of "{b}/{c}/{d}" template strings so special characters and long labels do not HTML-escape or clip in richText mode.',
+              )
+            }
+          }
         }
       }
       if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
@@ -1388,7 +1436,7 @@ function runCli() {
     process.exit(1)
   }
   console.log(
-    `[check-invariants] OK: 34 architectural invariant rules verified across ${report.filesScanned} source/CSS file(s) and locale tables.`,
+    `[check-invariants] OK: 36 architectural invariant rules verified across ${report.filesScanned} source/CSS file(s) and locale tables.`,
   )
 }
 

@@ -290,7 +290,7 @@ const UNSAFE_CSS_VALUE_RE =
   /\\|@import\b|expression\s*\(|(?:-webkit-)?image-set\s*\(|\bsrc\s*\(|javascript\s*:|vbscript\s*:/i
 const CSS_URL_START_RE = /\burl\s*\(/gi
 const SAFE_FRAGMENT_URL_RE =
-  /^\s*(?:"(#[A-Za-z0-9_.:-]+)"|'(#[A-Za-z0-9_.:-]+)'|(#[A-Za-z0-9_.:-]+))\s*\)/
+  /^\s*(?:"(#[A-Za-z0-9_.:-]+)"|'(#[A-Za-z0-9_.:-]+)'|(?:&quot;|&#34;)(#[A-Za-z0-9_.:-]+)(?:&quot;|&#34;)|(?:&#39;|&apos;)(#[A-Za-z0-9_.:-]+)(?:&#39;|&apos;)|(#[A-Za-z0-9_.:-]+))\s*\)/i
 
 function stripCssComments(cssText: string): string {
   return cssText.replace(/\/\*[\s\S]*?\*\//g, '')
@@ -439,7 +439,7 @@ function filterScopedCssBlock(body: string, rootId: string): string {
 }
 
 const UNSAFE_INLINE_STYLE_PROP_RE =
-  /^(?:position|z-index|inset|top|right|bottom|left|behavior|-moz-binding)$/i
+  /^(?:position|z-index|inset(?:-(?:block|inline)(?:-(?:start|end))?)?|top|right|bottom|left|behavior|-moz-binding)$/i
 
 function filterInlineStyleDeclarations(cssText: string): string {
   const clean = stripCssComments(cssText)

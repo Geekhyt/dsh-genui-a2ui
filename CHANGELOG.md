@@ -2,6 +2,29 @@
 
 All notable changes to `dsh-genui-a2ui` are documented in this file.
 
+## [0.5.6] - 2026-11-25
+
+### Added
+- **2 New Architectural Invariant Rules (`scripts/check-invariants.mjs`, `tests/invariants-lint.spec.ts`)**:
+  - Expanded the static invariant gate from **34 → 36 rules**, adding `css-sticky-no-shorthand-override` (forbidding table state-row `background` shorthands that wipe sticky-column opaque backing) and `echarts-no-pie-string-template-tooltip` (requiring function formatters over `{b}/{c}/{d}` tooltip templates).
+- **Shared ECharts Scale Helpers, Regression Suite & Live Showcases (`src/client/chunks/echarts/scale-helpers.ts`, `tests/comprehensive-audit-v056.spec.ts`, `scripts/{mock-llm,qa-e2e-bot,visual-qa-bot}.mjs`)**:
+  - Extracted pure ECharts scale, tick-formatting, and histogram helpers (`computeRefAxisBounds`, `formatCompactTickNum`, `computeHistogramBins`, `canUseLogScale`) into `scale-helpers.ts`.
+  - Added `showcase-43` (12-chart generalized `276px`/full-width ECharts stress matrix) and `showcase-44` (sticky-column scroll, negated badge tones, light-mode contrast, log parsing, KvEditor reveal, RangeSlider), expanding live Chrome E2E to **26/26** checks and full Visual QA to **90/90** Dark & Light runs.
+
+### Fixed
+- **ProTable Sticky Bleed-Through, Dual-Theme Contrast & Widget Helpers (`src/client/catalog/{styles/*.module.css,TableWidget.tsx,v3-helpers.ts,v4-helpers.ts,widgets/*.tsx}`)**:
+  - Scoped `.trSelected`/`.trHover` cell backgrounds with `:not(.tableStickyCol)` so sticky first columns stay 100% opaque during horizontal scroll.
+  - Added `light-dark(...)` semantic foreground tokens (`--a2ui-{accent,success,warn,danger}-fg`) to lift WCAG AA contrast across Light Mode badges, links, diff stats, logs, and status dots; fixed `RangeSlider` track overflow (`width: 100%` + `11px` inset), `Rating` interactive button accessibility, `SortableList` keyboard/ARIA handling, `ImageCompare` focus/drag ergonomics, and `KvEditor` secret reveal toggles.
+  - Fixed negated status badges (`无异常`, `0 failed`, `No error` → `success`), Unicode minus (`−12.5%`) & leading-dot (`.5`) numeric parsing, transitive alphanumeric sorting, 5-decimal SLA summaries (`99.99997%`), comma-millisecond & `[service]` `LogViewer` parsing, `Schedule` `24:00`/invalid-range handling, `ApiEndpoint` `curl -g` + query encoding, and `Terminal` multi-line `\` continuations.
+- **26-Kind ECharts `276px` Generalized Engine (`src/client/chunks/echarts/*.ts`)**:
+  - Generalized `Treemap` parent `value: 0` auto-aggregation, `Boxplot` `null`/`NaN` filtering & 5-category wrapping, `Heatmap` 7-digit compact cell/visualMap labels, `Candlestick` cross-year `MM/DD` date formatting, horizontal `bar` sub-1 `referenceLine` right-edge alignment, `Gauge` & `Bullet` compact `K`/`M`/`B` formatting, `Histogram` narrow-decimal bin precision, `Sankey` `276px` right-leaf width clamping, `Parallel` high-base precision ticks & right-axis anti-collision, `Combo` negative-value dual-axis scaling, `Pie` function tooltip/outer-label formatters preventing HTML entity escaping (`&`/`'`), `Waterfall` contrast tokens & `+0` suppression, and `Graph` dangling-link pruning with preserved `category`/`value`.
+- **Client Runtime Lifecycle, Overlays, Mermaid Sandbox & Host Security (`src/client/{dom-hooks,file-opener,mermaid-safe,chunk-loader,style-lifecycle}.ts`, `src/client/{runtime,shell,ui}/*`, `src/host/*`, `src/shared/{constants,express-preprocess,redaction,catalog-schema,i18n}.ts`)**:
+  - Hoisted `inlineSupersededIds` `useMemo` above early returns in `ToolView.tsx` (preventing React Error #300 on tool-error/dock transitions), marked A2UI-owned modal/menu/lightbox portals with `data-a2ui-managed-overlay=""` so Escape closes Mermaid fullscreen & popovers without hijacking foreign Host dialogs, and cleared stale snapshots on streaming error in `StreamingExpressSession`.
+  - Blocked multiline Billion Laughs expansion, bare `$__proto__` / collapsed `$/a//__proto__` pointers, and cross-surface `a2ui_ask` `dataModels` leakage (`allowedSurfaceIds`, `assertCanWait`, `MAX_TIMEOUT_SECONDS`); hardened template `KvEditor` secret redaction (`resolveTemplateKvPointers`), 4-digit PIN scrubbing, `//` pointer normalization, `data:users` inline URL preservation, `%`-containing workspace file paths (`100%_cpu.log`), Mermaid `inset-block`/`inset-inline` CSS stripping, `data-on*`/`&quot;` static SVG allowlisting, and `namespaceSvgIds` `data-id`/`aria-labelledby`/`@media` handling.
+
+### Changed
+- Verified full automated & live release gate: **43 suites / 270 tests**, **36/36** architectural invariants, **0** comments, **4/4** TLA+ formal specs, **5/5** bundle budgets (`lib/client.js = 75.66 kB / 21.08 kB gzip`), `eval:check` (`31/31`, `64/64` components), `check:host-api`, **26/26** live Chrome E2E checks, and **90/90** Dark & Light Visual QA runs (`overflow=0 wrap=0 clip=0 contrast=0 svgclip=0 errs=0`).
+
 ## [0.5.5] - 2026-11-25
 
 ### Added

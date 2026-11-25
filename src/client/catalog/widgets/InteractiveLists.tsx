@@ -123,7 +123,7 @@ export const DshRangeSliderImpl = defineComponent<{
   const startOnTop =
     state.start === state.end
       ? state.start >= state.max || (state.end > state.min && activeThumb === 'start')
-      : activeThumb === 'start' || state.startPct > 85
+      : activeThumb === 'start'
 
   return (
     <div
@@ -425,6 +425,7 @@ export const DshSortableListImpl = defineComponent<{
     setLocalItems(propItems)
   }
   const activeItems = hasWritableItems ? propItems : localItems
+  const listRef = useRef<HTMLOListElement | null>(null)
   const [dragIdx, setDragIdx] = useState<number | null>(null)
   const [overIdx, setOverIdx] = useState<number | null>(null)
 
@@ -434,13 +435,22 @@ export const DshSortableListImpl = defineComponent<{
       ? Math.max(140, Math.min(640, props.maxHeight))
       : 360
 
-  const commitMove = (fromIdx: number, toIdx: number) => {
+  const commitMove = (fromIdx: number, toIdx: number, preserveBoundaryFocus = false) => {
     if (readOnly || fromIdx === toIdx) return
     const nextNormalized = reorderListItems(activeItems, fromIdx, toIdx)
     if (hasWritableItems) {
       props.setItems?.(nextNormalized.map((item) => item.raw))
     } else {
       setLocalItems(nextNormalized)
+    }
+    if (preserveBoundaryFocus && (toIdx === 0 || toIdx === nextNormalized.length - 1)) {
+      queueMicrotask(() => {
+        const targetLi = listRef.current?.children[toIdx] as HTMLElement | undefined
+        const btns = targetLi?.querySelectorAll<HTMLButtonElement>('button')
+        if (!btns || btns.length < 2) return
+        const fallbackBtn = toIdx === 0 ? btns[1] : btns[0]
+        if (fallbackBtn && !fallbackBtn.disabled) fallbackBtn.focus()
+      })
     }
   }
 
@@ -472,7 +482,7 @@ export const DshSortableListImpl = defineComponent<{
         {activeItems.length === 0 ? (
           <div className={css.emptyCell}>{msg.sortableEmpty}</div>
         ) : (
-          <ol className={css.sortableList} style={{ maxHeight }}>
+          <ol ref={listRef} className={css.sortableList} style={{ maxHeight }}>
             {activeItems.map((item, idx) => (
               <li
                 key={item.id}
@@ -491,6 +501,14 @@ export const DshSortableListImpl = defineComponent<{
                   e.preventDefault()
                   if (overIdx !== idx) setOverIdx(idx)
                 }}
+                onDragLeave={(e) => {
+                  if (
+                    !e.currentTarget.contains(e.relatedTarget as Node | null) &&
+                    overIdx === idx
+                  ) {
+                    setOverIdx(null)
+                  }
+                }}
                 onDrop={(e) => {
                   if (readOnly || dragIdx === null) return
                   e.preventDefault()
@@ -505,9 +523,11 @@ export const DshSortableListImpl = defineComponent<{
                   setOverIdx(null)
                 }}
               >
-                <span className={css.sortableGrip} aria-hidden="true">
-                  ⋮⋮
-                </span>
+                {!readOnly ? (
+                  <span className={css.sortableGrip} aria-hidden="true">
+                    ⋮⋮
+                  </span>
+                ) : null}
                 <span className={css.sortableRank}>#{idx + 1}</span>
                 <div className={css.sortableContent}>
                   <span className={css.sortableItemTitle}>{item.title}</span>
@@ -523,7 +543,7 @@ export const DshSortableListImpl = defineComponent<{
                       className={css.sortableMoveBtn}
                       disabled={idx === 0}
                       aria-label={msg.sortableMoveUpAria}
-                      onClick={() => commitMove(idx, idx - 1)}
+                      onClick={() => commitMove(idx, idx - 1, true)}
                     >
                       ↑
                     </button>
@@ -532,7 +552,7 @@ export const DshSortableListImpl = defineComponent<{
                       className={css.sortableMoveBtn}
                       disabled={idx === activeItems.length - 1}
                       aria-label={msg.sortableMoveDownAria}
-                      onClick={() => commitMove(idx, idx + 1)}
+                      onClick={() => commitMove(idx, idx + 1, true)}
                     >
                       ↓
                     </button>
@@ -565,6 +585,7 @@ export const DshKvEditorImpl = defineComponent<{
   const readOnly = useContext(SurfaceReadOnlyContext)
   const { submitAttempted } = useContext(SurfaceValidationContext)
   const [touched, setTouched] = useState(false)
+  const [revealedIds, setRevealedIds] = useState<ReadonlySet<number>>(() => new Set())
 
   const hasWritableItems = isWritableProp(context, 'items', props.setItems)
   const isObjectBacked =
@@ -642,7 +663,6 @@ export const DshKvEditorImpl = defineComponent<{
 
   const duplicateKeySet = useMemo(() => {
     const dups = new Set<string>()
-    if (!isObjectBacked) return dups
     const seen = new Set<string>()
     for (const r of rows) {
       if (r.key === '') continue
@@ -650,7 +670,16 @@ export const DshKvEditorImpl = defineComponent<{
       else seen.add(r.key)
     }
     return dups
-  }, [isObjectBacked, rows])
+  }, [rows])
+
+  const toggleReveal = (id: number) => {
+    setRevealedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
 
   const commitRows = (nextRows: readonly KvDraftRow[], nextId = draftState.nextId) => {
     setTouched(true)
@@ -773,23 +802,41 @@ export const DshKvEditorImpl = defineComponent<{
                       commitRows(next)
                     }}
                   />
-                  <input
-                    type={row.sensitive ? 'password' : 'text'}
-                    autoComplete={row.sensitive ? 'off' : undefined}
-                    className={css.kvEditorInput}
-                    value={row.value}
-                    disabled={readOnly}
-                    aria-invalid={showError || undefined}
-                    placeholder={valuePlaceholder}
-                    aria-label={`${valueLabel} #${idx + 1}`}
-                    onChange={(e) => {
-                      if (readOnly) return
-                      const next = rows.map((r) =>
-                        r.id === row.id ? { ...r, value: e.target.value } : r,
-                      )
-                      commitRows(next)
-                    }}
-                  />
+                  <div className={row.sensitive ? css.kvEditorValWrap : undefined}>
+                    <input
+                      type={row.sensitive && !revealedIds.has(row.id) ? 'password' : 'text'}
+                      autoComplete={row.sensitive ? 'off' : undefined}
+                      className={css.kvEditorInput}
+                      value={row.value}
+                      disabled={readOnly}
+                      aria-invalid={showError || undefined}
+                      placeholder={valuePlaceholder}
+                      aria-label={`${valueLabel} #${idx + 1}`}
+                      onChange={(e) => {
+                        if (readOnly) return
+                        const next = rows.map((r) =>
+                          r.id === row.id ? { ...r, value: e.target.value } : r,
+                        )
+                        commitRows(next)
+                      }}
+                    />
+                    {row.sensitive ? (
+                      <button
+                        type="button"
+                        className={css.kvEditorRevealBtn}
+                        aria-pressed={revealedIds.has(row.id)}
+                        aria-label={
+                          revealedIds.has(row.id) ? msg.kvEditorHideAria : msg.kvEditorRevealAria
+                        }
+                        title={
+                          revealedIds.has(row.id) ? msg.kvEditorHideAria : msg.kvEditorRevealAria
+                        }
+                        onClick={() => toggleReveal(row.id)}
+                      >
+                        {revealedIds.has(row.id) ? '◉' : '◎'}
+                      </button>
+                    ) : null}
+                  </div>
                   {!readOnly ? (
                     <button
                       type="button"
@@ -805,7 +852,13 @@ export const DshKvEditorImpl = defineComponent<{
             })}
           </div>
         )}
-        {err ? <span className={css.errorText}>{err}</span> : null}
+        {err ? (
+          <span className={css.errorText}>{err}</span>
+        ) : duplicateKeySet.size > 0 ? (
+          <span className={css.errorText} role="alert">
+            {msg.kvEditorDuplicateKeyHint}
+          </span>
+        ) : null}
       </div>
     </div>
   )

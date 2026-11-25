@@ -60,6 +60,10 @@
   flex-wrap: wrap;
   align-items: baseline;
   gap: 6px;
+  max-width: calc(100cqi - 24px);
+  position: sticky;
+  left: 8px;
+  box-sizing: border-box;
   padding: 6px 10px;
   border-radius: 6px;
   border-left: 3px solid var(--a2ui-accent);
@@ -408,7 +412,7 @@
   padding: 1px 6px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--a2ui-accent) 14%, transparent);
-  color: var(--a2ui-accent);
+  color: var(--a2ui-accent-fg);
   white-space: nowrap;
   flex-shrink: 0;
 }
@@ -475,5 +479,9 @@
 
   .sortableGrip {
     display: none;
+  }
+
+  .sortableContent {
+    flex: 1 1 120px;
   }
 }

@@ -12,7 +12,7 @@
   --a2ui-mono: var(--dsw-font-family-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
   --a2ui-fg: var(--dsw-alias-label-primary, inherit);
   --a2ui-fg-2: var(--dsw-alias-label-secondary, inherit);
-  --a2ui-fg-3: var(--dsw-alias-label-tertiary, rgba(128, 128, 128, 0.82));
+  --a2ui-fg-3: var(--dsw-alias-label-tertiary, light-dark(#646a73, #9ca3af));
   --a2ui-accent: var(--dsw-alias-state-business-primary, #3b82f6);
   --a2ui-brand: var(--dsw-alias-brand-primary, #4d6bfe);
   --a2ui-success: var(--dsw-alias-state-success-primary, #10b981);
@@ -29,7 +29,10 @@
   --a2ui-r-md: var(--dsw-radius-md, 10px);
   --a2ui-r-lg: var(--dsw-radius-lg, 14px);
   --a2ui-on-accent: light-dark(#ffffff, #0b1220);
-  --a2ui-warn-fg: var(--dsw-alias-state-warn-label, light-dark(#92400e, #fcd34d));
+  --a2ui-accent-fg: light-dark(#1d4ed8, #60a5fa);
+  --a2ui-success-fg: light-dark(#047857, #34d399);
+  --a2ui-warn-fg: light-dark(#92400e, #fcd34d);
+  --a2ui-danger-fg: light-dark(#b91c1c, #f87171);
 }
 
 .containerHost {
@@ -425,6 +428,11 @@
   background: var(--a2ui-bg-3);
 }
 
+.imageWrap:not([data-avatar="true"]) {
+  display: block;
+  width: 100%;
+}
+
 .image {
   display: block;
   width: 100%;
@@ -484,7 +492,7 @@
 
 .errorText {
   font-size: 11.5px;
-  color: var(--dsw-alias-label-error, #ef4444);
+  color: var(--a2ui-danger-fg);
 }
 
 .textarea {
@@ -512,6 +520,8 @@
 .selectTrigger[aria-invalid="true"],
 .multiSelectTrigger[aria-invalid="true"],
 .dateRangeInputs[aria-invalid="true"],
+.dateRangeInputs:has([aria-invalid="true"]),
+.field input[aria-invalid="true"],
 .kvEditorInput[aria-invalid="true"],
 .numberStepperBox:has([aria-invalid="true"]) {
   border-color: var(--a2ui-danger);

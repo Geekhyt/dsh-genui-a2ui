@@ -54,6 +54,7 @@ export function NativeDateField(props: {
         disabled={props.disabled}
         tabIndex={-1}
         aria-label={props.ariaLabel ?? props.type}
+        onMouseDown={(e) => e.preventDefault()}
         onClick={openNativePicker}
       >
         <svg width={iconSize} height={iconSize} viewBox="0 0 16 16" fill="none" aria-hidden="true">

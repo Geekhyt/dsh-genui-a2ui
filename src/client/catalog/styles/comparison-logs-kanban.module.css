@@ -130,15 +130,15 @@
 }
 
 .comparisonSemanticIcon[data-semantic="ok"] {
-  color: var(--a2ui-success);
+  color: var(--a2ui-success-fg);
 }
 
 .comparisonSemanticIcon[data-semantic="warn"] {
-  color: var(--a2ui-warn);
+  color: var(--a2ui-warn-fg);
 }
 
 .comparisonSemanticIcon[data-semantic="no"] {
-  color: var(--a2ui-danger);
+  color: var(--a2ui-danger-fg);
 }
 
 .comparisonFooterDimTd,
@@ -314,7 +314,7 @@
 }
 
 .logService {
-  color: var(--a2ui-brand);
+  color: var(--a2ui-accent-fg);
   font-size: 11.5px;
   min-width: 0;
   max-width: 100%;
@@ -334,7 +334,7 @@
 .logDetailToggle {
   border: none;
   background: transparent;
-  color: var(--a2ui-brand);
+  color: var(--a2ui-accent-fg);
   font-size: 11px;
   cursor: pointer;
   padding: 1px 4px;

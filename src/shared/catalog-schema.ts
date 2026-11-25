@@ -1921,7 +1921,7 @@ export const CalcApi = {
   name: 'calc' as const,
   returnType: 'number' as const,
   description:
-    'Evaluates an algebraic formula string safely at 0ms client latency (`+ - * / ^ % ( ) ? : == != < <= > >= && ||` plus `pow, sqrt, exp, log, ln, log10, abs, min, max, clamp, round, floor, ceil, pmt(ratePerPeriod, nper, pv)`) against `vars` (`{ name: $/path }`), validated statically at compile time.',
+    'Evaluates an algebraic formula string safely at 0ms client latency (`+ - * / ^ % ( ) ? : == != < <= > >= && ||` plus `pow, sqrt, exp, log, ln, log10, abs, min, max, clamp, round, floor, ceil, sin, cos, tan, pmt(ratePerPeriod, nper, pv)`) against `vars` (`{ name: $/path }`), validated statically at compile time.',
   schema: spec(
     z.object({
       expr: z

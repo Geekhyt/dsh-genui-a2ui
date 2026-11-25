@@ -196,6 +196,7 @@ export const DshMetricRingImpl = defineComponent<{
           role="meter"
           aria-label={label}
           aria-valuenow={safeAriaNow}
+          aria-valuetext={`${geom.displayNumber}${unit}`}
           aria-valuemin={0}
           aria-valuemax={maxVal}
         >
@@ -300,7 +301,7 @@ export const DshServiceGraphImpl = defineComponent<{
   const availW = viewportW > 8 ? viewportW - 4 : 0
   const fitScale =
     availW > 0 && layout.width > availW && availW / layout.width >= 0.72 ? availW / layout.width : 1
-  const scaledW = Math.floor(layout.width * fitScale)
+  const scaledW = Math.ceil(layout.width * fitScale)
   const scaledH = Math.ceil(layout.height * fitScale)
 
   const statusText = (s: ServiceHealthStatus) =>

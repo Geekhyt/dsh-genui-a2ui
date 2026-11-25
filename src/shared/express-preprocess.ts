@@ -913,7 +913,7 @@ function invalidateDependents(
 
 export function flattenChainedCalc(ui: string): string {
   if (!ui.includes('calc(')) return ui
-  const stmts = splitTopLevel(ui, '\n')
+  const stmts = splitExpressLogicalLines(ui)
   const localMaps = new Map<string, Record<string, string>>()
   const calcDefs = new Map<string, CalcDef>()
   let aliasSeq = 0
@@ -951,7 +951,26 @@ export function flattenChainedCalc(ui: string): string {
       return rewrittenCode
     }
 
-    const inlined = inlineSingleCalcCall(rhs, localMaps, calcDefs, nextAlias)
+    let preparedRhs = rhs
+    let nestedRewrote = false
+    if (rhs.startsWith('calc(') && rhs.indexOf('calc(', 5) !== -1) {
+      const bMap = buildBracketMap(rhs)
+      if (bMap[4] === rhs.length - 1) {
+        const innerRewritten = rewriteInlineCalcsInStatement(
+          rhs.slice(5, -1),
+          localMaps,
+          calcDefs,
+          nextAlias,
+        )
+        const cand = `calc(${innerRewritten})`
+        if (cand !== rhs) {
+          preparedRhs = cand
+          nestedRewrote = true
+        }
+      }
+    }
+
+    const inlined = inlineSingleCalcCall(preparedRhs, localMaps, calcDefs, nextAlias)
     if (!inlined) {
       const rewritten = rewriteInlineCalcsInStatement(rawPart, localMaps, calcDefs, nextAlias)
       calcDefs.delete(varName)
@@ -963,7 +982,7 @@ export function flattenChainedCalc(ui: string): string {
     localMaps.delete(varName)
     invalidateDependents(varName, localMaps, calcDefs)
     calcDefs.set(varName, inlined.def)
-    if (!inlined.didInline) return rawPart
+    if (!inlined.didInline && !nestedRewrote) return rawPart
 
     const lead = /^\s*/.exec(rawPart)?.[0] ?? ''
     const { trail: trailSpace } = splitTrailingWhitespace(rawPart)
@@ -1125,10 +1144,12 @@ export function extractUpdateSurfaceIds(cleanedUi: string): string[] {
         const args = splitTopLevel(cleanedUi.slice(i + 8, closeIdx), ',')
         let surfaceId: string | null = null
         let isUpdate = false
-        for (let idx = 0; idx < args.length; idx++) {
-          const arg = args[idx]!.trim()
+        let posIdx = 0
+        for (const rawArg of args) {
+          const arg = stripAllComments(rawArg).trim()
+          if (arg === '') continue
           const eqIdx = findTopLevelChar(arg, '=')
-          if (eqIdx !== -1) {
+          if (eqIdx !== -1 && arg[eqIdx + 1] !== '=' && !/[!<>]/.test(arg[eqIdx - 1] ?? '')) {
             const k = arg.slice(0, eqIdx).trim()
             const v = arg.slice(eqIdx + 1).trim()
             if (k === 'id' || k === 'surfaceId') {
@@ -1136,8 +1157,13 @@ export function extractUpdateSurfaceIds(cleanedUi: string): string[] {
             } else if (k === 'update' && v === 'true') {
               isUpdate = true
             }
-          } else if (idx === 0) {
-            surfaceId = parseJsonStringLiteral(arg)
+          } else {
+            if (posIdx === 0) {
+              surfaceId = parseJsonStringLiteral(arg)
+            } else if (posIdx === 1 && arg === 'true') {
+              isUpdate = true
+            }
+            posIdx += 1
           }
         }
         if (surfaceId !== null && surfaceId !== '') {
@@ -1196,9 +1222,33 @@ function decodeExpressStringKey(raw: string): string | null {
   return parseJsonStringLiteral(raw)
 }
 
+const CONTINUATION_END_RE = /[=+\-*/%,:?|&!<>]$/
+const CONTINUATION_START_RE = /^(?:[+?:.]|&&|\|\|)/
+
+function splitExpressLogicalLines(ui: string): string[] {
+  const rawLines = splitTopLevel(ui, '\n')
+  const merged: string[] = []
+  let activeClean = ''
+  for (const line of rawLines) {
+    const cleanLine = stripAllComments(line).trim()
+    const shouldJoin =
+      merged.length > 0 &&
+      activeClean !== '' &&
+      (CONTINUATION_END_RE.test(activeClean) || CONTINUATION_START_RE.test(cleanLine))
+    if (shouldJoin) {
+      merged[merged.length - 1] = `${merged[merged.length - 1]!}\n${line}`
+      if (cleanLine !== '') activeClean = `${activeClean} ${cleanLine}`
+    } else {
+      merged.push(line)
+      activeClean = cleanLine
+    }
+  }
+  return merged
+}
+
 function splitTopLevelStatements(ui: string): string[] {
   const out: string[] = []
-  for (const line of splitTopLevel(ui, '\n')) {
+  for (const line of splitExpressLogicalLines(ui)) {
     for (const part of splitTopLevel(line, ';')) {
       out.push(part)
     }
@@ -1208,7 +1258,52 @@ function splitTopLevelStatements(ui: string): string[] {
 
 const SPLIT_DATA_PATH_CONT_RE = /^[ \t]*\r?\n[ \t]*([A-Za-z0-9_~./-]+)/
 
+function scanRawExpressPointers(ui: string): string | null {
+  let i = 0
+  while (i < ui.length) {
+    const ch = ui[i]!
+    if (ch === '$' && (i === 0 || !isIdentChar(ui[i - 1]))) {
+      const next = ui[i + 1]
+      if (next === '/' || (next !== undefined && !POINTER_STOP_CHARS.has(next))) {
+        let j = next === '/' ? i + 2 : i + 1
+        let pointerBody = ''
+        while (j < ui.length) {
+          const segStart = j
+          while (j < ui.length && !POINTER_STOP_CHARS.has(ui[j]!)) j += 1
+          pointerBody += ui.slice(segStart, j)
+          const endsWithSlash = pointerBody === '' || pointerBody.endsWith('/')
+          if (endsWithSlash) {
+            const cont = SPLIT_DATA_PATH_CONT_RE.exec(ui.slice(j))
+            if (cont) {
+              j += cont[0].length - cont[1]!.length
+              continue
+            }
+          }
+          break
+        }
+        const pointer = next === '/' ? `$/${pointerBody}` : `$${pointerBody}`
+        const segs = pointerBody.split('/')
+        for (const rawSeg of segs) {
+          const seg = rawSeg.replace(/~1/g, '/').replace(/~0/g, '~')
+          if (isDangerousObjectKey(seg)) return pointer
+        }
+        i = j
+        continue
+      }
+    }
+    const skipped = scanStringOrComment(ui, i)
+    if (skipped !== -1) {
+      i = skipped
+      continue
+    }
+    i += 1
+  }
+  return null
+}
+
 export function findDangerousExpressPointer(ui: string): string | null {
+  const rawPointerHit = scanRawExpressPointers(ui)
+  if (rawPointerHit !== null) return rawPointerHit
   const clean = stripAllComments(ui)
   let i = 0
   while (i < clean.length) {
@@ -1227,32 +1322,6 @@ export function findDangerousExpressPointer(ui: string): string | null {
         if (decoded === '__proto__') return decoded
       }
       i = end
-      continue
-    }
-    if (ch === '$' && clean[i + 1] === '/' && (i === 0 || !isIdentChar(clean[i - 1]))) {
-      let j = i + 2
-      let pointerBody = ''
-      while (j < clean.length) {
-        const segStart = j
-        while (j < clean.length && !POINTER_STOP_CHARS.has(clean[j]!)) j += 1
-        pointerBody += clean.slice(segStart, j)
-        const endsWithSlash = pointerBody === '' || pointerBody.endsWith('/')
-        if (endsWithSlash) {
-          const cont = SPLIT_DATA_PATH_CONT_RE.exec(clean.slice(j))
-          if (cont) {
-            j += cont[0].length - cont[1]!.length
-            continue
-          }
-        }
-        break
-      }
-      const pointer = `$/${pointerBody}`
-      const segs = pointerBody.split('/')
-      for (const rawSeg of segs) {
-        const seg = rawSeg.replace(/~1/g, '/').replace(/~0/g, '~')
-        if (isDangerousObjectKey(seg)) return pointer
-      }
-      i = j
       continue
     }
     if ((i === 0 || !isIdentChar(clean[i - 1])) && ch === '_') {

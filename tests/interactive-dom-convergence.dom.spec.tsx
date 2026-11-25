@@ -542,4 +542,103 @@ describe('Real Interactive DOM Convergence Tests (happy-dom + React 18)', () => 
       </DshModal>,
     )
   })
+
+  it('supports RangeSlider high-range adjustment, KvEditor reveal/duplicate warning, Rating half-step keyboard, ImageCompare fallback, CheckCard first-click, MultiSelect create option, and Table negated badges/bar scaling', () => {
+    const sessions = new SurfaceSessions()
+    const messages = sessions.compile(
+      'dom-audit-v056',
+      [
+        'surface("dom_audit")',
+        '$/range_s = 88',
+        '$/range_e = 90',
+        '$/kv = [{"key": "API_TOKEN", "value": "sk-secret-42", "secret": true}, {"key": "API_TOKEN", "value": "dup-val"}]',
+        '$/rating = 3.5',
+        '$/tags = ["core"]',
+        '$/card_pick = []',
+        'tbl = Table(title="T", selectable=true, searchable=true, columns=[{"key":"svc","label":"Svc"},{"key":"st","label":"St","format":"badge"},{"key":"cpu","label":"CPU","format":"bar"}], rows=[{"svc":"A","st":"无异常","cpu":"42%"},{"svc":"B","st":"0 failed","cpu":"80%"}])',
+        'rng = RangeSlider(label="R", min=0, max=100, start=$/range_s, end=$/range_e)',
+        'kv = KvEditor(title="Env", items=$/kv)',
+        'rat = Rating(label="Score", max=5, allowHalf=true, value=$/rating)',
+        'cmp = ImageCompare(beforeUrl="https://example.com/b.png", afterUrl="https://example.com/a.png", beforeLabel="Before", afterLabel="After")',
+        'chk = CheckCard(label="Plan", options=[{"value":"pro","title":"Pro"}], value=$/card_pick)',
+        'ms = MultiSelect(label="Tags", allowCreate=true, options=[{"value":"core","label":"Core"}], value=$/tags)',
+        'root = Column([tbl, rng, kv, rat, cmp, chk, ms])',
+      ].join('\n'),
+    )
+    const { container } = mount(<SurfaceGroupView messages={messages} sessionId="dom-audit-v056" />)
+
+    const badges = Array.from(container.querySelectorAll('[data-a2ui-badge-tone]'))
+    expect(badges.map((b) => b.getAttribute('data-a2ui-badge-tone'))).toEqual([
+      'success',
+      'success',
+    ])
+
+    const barFills = Array.from(container.querySelectorAll<HTMLElement>('[class*="tableBarFill"]'))
+    expect(barFills[0]?.style.width).toBe('42.0%')
+    expect(barFills[1]?.style.width).toBe('80.0%')
+
+    const rangeInputs = Array.from(
+      container.querySelectorAll<HTMLInputElement>('input[type="range"][class*="rangeInput"]'),
+    )
+    expect(rangeInputs).toHaveLength(2)
+    act(() => {
+      setNativeInputValue(rangeInputs[1]!, '96')
+    })
+    expect(rangeInputs[1]?.value).toBe('96')
+
+    const revealBtn = container.querySelector<HTMLButtonElement>('[class*="kvEditorRevealBtn"]')
+    expect(revealBtn).not.toBeNull()
+    const secretInput = revealBtn?.parentElement?.querySelector<HTMLInputElement>('input')
+    expect(secretInput?.type).toBe('password')
+    act(() => {
+      revealBtn?.click()
+    })
+    expect(secretInput?.type).toBe('text')
+    expect(container.textContent).toMatch(/重复键|Duplicate/i)
+
+    const starRadio = container.querySelector<HTMLButtonElement>(
+      '[role="radiogroup"] [role="radio"][aria-checked="true"]',
+    )
+    expect(starRadio).not.toBeNull()
+    act(() => {
+      starRadio?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
+    })
+    expect(container.textContent).toContain('4 / 5')
+
+    const cmpImg = container.querySelector<HTMLImageElement>('[data-a2ui-imagecompare] img')
+    expect(cmpImg).not.toBeNull()
+    act(() => {
+      cmpImg?.dispatchEvent(new Event('error'))
+    })
+    expect(container.querySelector('[class*="imageCompareFallback"]')).not.toBeNull()
+
+    const checkCardBtn = container.querySelector<HTMLButtonElement>('[class*="checkCardItem"]')
+    expect(checkCardBtn).not.toBeNull()
+    act(() => {
+      checkCardBtn?.click()
+    })
+    expect(checkCardBtn?.getAttribute('aria-pressed')).toBe('true')
+    expect(checkCardBtn?.getAttribute('data-checked')).toBe('true')
+
+    const msTrigger = container.querySelector<HTMLButtonElement>('[aria-haspopup="listbox"]')
+    expect(msTrigger).not.toBeNull()
+    act(() => {
+      msTrigger?.click()
+    })
+    const searchInput = document.body.querySelector<HTMLInputElement>(
+      '[class*="selectPopover"] input, [data-a2ui-select-popover] input',
+    )
+    expect(searchInput).not.toBeNull()
+    act(() => {
+      setNativeInputValue(searchInput!, 'edge-tag')
+    })
+    const createOpt = Array.from(document.body.querySelectorAll('[role="option"]')).find((el) =>
+      (el.textContent || '').includes('edge-tag'),
+    ) as HTMLElement | undefined
+    expect(createOpt).toBeTruthy()
+    act(() => {
+      createOpt?.click()
+    })
+    expect(container.textContent).toContain('edge-tag')
+  })
 })

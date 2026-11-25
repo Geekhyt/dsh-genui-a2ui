@@ -19,7 +19,7 @@ export const ALLOWED_MERMAID_KINDS = [
 const FORBIDDEN_SVG_TAG_RE =
   /<(?:[a-z][a-z0-9._-]*:)?(?:script|iframe|object|embed|applet|meta|base|dialog|animate|animateTransform|animateMotion|animateColor|set|discard|handler|img|image|feImage)\b/i
 
-const TAG_EVENT_HANDLER_RE = /<(?:"[^"]*"|'[^']*'|[^'">])*\bon[a-z]+\s*=/i
+const TAG_EVENT_HANDLER_RE = /<(?:"[^"]*"|'[^']*'|[^'">])*[\s/]on[a-z]+\s*=/i
 
 const OBFUSCATED_URI_RE =
   /(?:javascript|vbscript)\s*:|data\s*:\s*(?:text\/html|image\/svg\+xml|application\/xhtml\+xml)/i
@@ -41,6 +41,8 @@ const NAMED_ENTITY_MAP: Record<string, string> = {
   rpar: ')',
   semi: ';',
   sol: '/',
+  quot: '"',
+  apos: "'",
 }
 
 function decodeHtmlEntities(input: string): string {
@@ -123,7 +125,8 @@ function hasExternalUrlInStaticSvg(svg: string): boolean {
     while ((m = SVG_URL_CALL_RE.exec(candidate)) !== null) {
       const inner = (m[1] ?? '')
         .trim()
-        .replace(/^['"]|['"]$/g, '')
+        .replace(/^(?:['"]|&quot;|&apos;|&#0*(?:34|39);|&#x0*(?:22|27);)/i, '')
+        .replace(/(?:['"]|&quot;|&apos;|&#0*(?:34|39);|&#x0*(?:22|27);)$/i, '')
         .trim()
       if (inner !== '' && !inner.startsWith('#')) return true
     }
@@ -519,13 +522,25 @@ export function prepareMermaidSvg(rawSvg: string): PreparedMermaidSvg {
 
 const SVG_OPEN_TAG_RE = /<(?:"[^"]*"|'[^']*'|[^'">])*>/g
 
+function rewriteCssUrlRefs(text: string, idMap: ReadonlyMap<string, string>): string {
+  return text.replace(
+    /url\(\s*(["']|&quot;|&#34;|&#39;|&apos;)?#([^)"'&]+)\1\s*\)/gi,
+    (_full, q: string | undefined, oldId: string) => {
+      const quote = q ?? ''
+      return `url(${quote}#${idMap.get(oldId) ?? oldId}${quote})`
+    },
+  )
+}
+
 function rewriteCssSelectorIds(cssBody: string, idMap: ReadonlyMap<string, string>): string {
   let out = ''
   let depth = 0
   let quote: '"' | "'" | null = null
   let segStart = 0
+  let blockHeader = ''
   const flushSelector = (end: number) => {
     const chunk = cssBody.slice(segStart, end)
+    blockHeader = chunk.trim()
     out += chunk.replace(/#([A-Za-z_][A-Za-z0-9_-]*)/g, (hit, oldId: string) => {
       const next = idMap.get(oldId)
       return next ? `#${next}` : hit
@@ -550,27 +565,32 @@ function rewriteCssSelectorIds(cssBody: string, idMap: ReadonlyMap<string, strin
     if (ch === '{') {
       if (depth === 0) {
         flushSelector(i)
-        segStart = i
+        segStart = i + 1
       }
       depth += 1
     } else if (ch === '}') {
       if (depth > 0) depth -= 1
       if (depth === 0) {
-        out += cssBody.slice(segStart, i + 1)
+        const inner = cssBody.slice(segStart, i)
+        const rewrittenInner = /^@(?:media|supports|layer)\b/i.test(blockHeader)
+          ? rewriteCssSelectorIds(inner, idMap)
+          : rewriteCssUrlRefs(inner, idMap)
+        out += `{${rewrittenInner}}`
+        blockHeader = ''
         segStart = i + 1
       }
     }
   }
   if (segStart < cssBody.length) {
     if (depth === 0) flushSelector(cssBody.length)
-    else out += cssBody.slice(segStart)
+    else out += `{${rewriteCssUrlRefs(cssBody.slice(segStart), idMap)}`
   }
   return out
 }
 
 export function namespaceSvgIds(markup: string, prefix: string): string {
   const idMap = new Map<string, string>()
-  const idDeclRe = /\bid=(["'])([^"']+)\1/g
+  const idDeclRe = /(?<=[\s])id=(["'])([^"']+)\1/g
   SVG_OPEN_TAG_RE.lastIndex = 0
   let tagMatch: RegExpExecArray | null = SVG_OPEN_TAG_RE.exec(markup)
   while (tagMatch !== null) {
@@ -592,17 +612,24 @@ export function namespaceSvgIds(markup: string, prefix: string): string {
   let out = markup.replace(SVG_OPEN_TAG_RE, (tag) => {
     if (tag.startsWith('</') || tag.startsWith('<!') || tag.startsWith('<?')) return tag
     let nextTag = tag.replace(
-      /\bid=(["'])([^"']+)\1/g,
+      /(?<=[\s])id=(["'])([^"']+)\1/g,
       (_full, q: string, oldId: string) => `id=${q}${idMap.get(oldId) ?? oldId}${q}`,
     )
+    nextTag = rewriteCssUrlRefs(nextTag, idMap)
     nextTag = nextTag.replace(
-      /url\(\s*(["']?)#([^)"']+)\1\s*\)/g,
-      (_full, q: string, oldId: string) => `url(${q}#${idMap.get(oldId) ?? oldId}${q})`,
-    )
-    nextTag = nextTag.replace(
-      /\b((?:xlink:)?href)=(["'])#([^"']+)\2/g,
+      /(?<=[\s])((?:xlink:)?href)=(["'])#([^"']+)\2/g,
       (_full, attr: string, q: string, oldId: string) =>
         `${attr}=${q}#${idMap.get(oldId) ?? oldId}${q}`,
+    )
+    nextTag = nextTag.replace(
+      /(?<=[\s])(aria-(?:labelledby|describedby))=(["'])([^"']+)\2/gi,
+      (_full, attr: string, q: string, list: string) => {
+        const mapped = list
+          .split(/\s+/)
+          .map((tok) => idMap.get(tok) ?? tok)
+          .join(' ')
+        return `${attr}=${q}${mapped}${q}`
+      },
     )
     return nextTag
   })

@@ -47,7 +47,9 @@ export function buildStatisticalChartOption(
 
   if (props.kind === 'boxplot') {
     const categories = rows.map((r) => sanitizeChartLabel(r[xKey] ?? r.name ?? r.label))
-    const boxData = rows.map((r) => extractBoxplotFive(r))
+    const boxYField =
+      typeof props.yField === 'string' && props.yField !== '' ? props.yField : undefined
+    const boxData = rows.map((r) => extractBoxplotFive(r, boxYField))
     const zoomCfg = zoom()
     const boxHighs = boxData.map((b) => b[4] ?? 0)
     const boxMarkPos = pickMarkLinePosition(
@@ -55,12 +57,47 @@ export function buildStatisticalChartOption(
       boxHighs.slice(Math.max(0, boxHighs.length - 2)),
       props.referenceLine,
     )
-    const refLine = buildRefLine(theme.danger, boxMarkPos)
+    const refLine = buildRefLine(theme.textDanger, boxMarkPos)
     const bounds = computeRefAxisBounds(boxData.flat(), props.referenceLine)
     const compactWrapCat = isCompact && categories.length >= 2 && categories.length <= 5
     const estW = chartWidth(520)
-    const catSlotPx = Math.max(38, Math.floor((estW - 44) / Math.max(1, categories.length)) - 4)
+    const catSlotPx = Math.max(32, Math.floor((estW - 56) / Math.max(1, categories.length)) - 6)
+    const measureBoxPx = (s: string) => {
+      let px = 0
+      for (const ch of s) px += (ch.codePointAt(0) ?? 0) > 0xff ? 9.5 : 5.89
+      return px
+    }
+    const clipBoxLine = (s: string): string => {
+      if (measureBoxPx(s) <= catSlotPx) return s
+      let out = ''
+      let px = 0
+      for (const ch of s) {
+        const w = (ch.codePointAt(0) ?? 0) > 0xff ? 9.5 : 5.89
+        if (px + w + 5.5 > catSlotPx) return `${out}…`
+        out += ch
+        px += w
+      }
+      return out
+    }
     const formatCompactCat = (raw: string): string => {
+      if (measureBoxPx(raw) <= catSlotPx) return raw
+      let splitAt = -1
+      let keepSep = false
+      for (let i = 1; i < raw.length - 1; i++) {
+        const ch = raw[i]!
+        if (ch === '-' || ch === '/' || ch === '_' || ch === ' ') {
+          const head = ch === ' ' ? raw.slice(0, i) : raw.slice(0, i + 1)
+          if (measureBoxPx(head) <= catSlotPx) {
+            splitAt = i
+            keepSep = ch !== ' '
+          }
+        }
+      }
+      if (splitAt > 0) {
+        const l1 = keepSep ? raw.slice(0, splitAt + 1) : raw.slice(0, splitAt)
+        const l2 = raw.slice(splitAt + 1).trimStart()
+        return l2 ? `${l1}\n${clipBoxLine(l2)}` : l1
+      }
       let l1 = ''
       let l2 = ''
       let px = 0
@@ -129,16 +166,30 @@ export function buildStatisticalChartOption(
 
   if (props.kind === 'candlestick') {
     const dateField = props.xField ?? 'date'
-    const categories = rows.map((r) =>
-      sanitizeChartLabel(r[dateField] ?? r[xKey] ?? r.time ?? r.name),
-    )
-    const ohlc = rows.map((r) => {
-      const open = toNumber(r.open ?? r.o ?? r.start)
-      const close = toNumber(r.close ?? r.c ?? r.end ?? open)
-      const low = toNumber(r.low ?? r.l ?? r.min ?? Math.min(open, close))
-      const high = toNumber(r.high ?? r.h ?? r.max ?? Math.max(open, close))
-      return [open, close, Math.min(low, open, close), Math.max(high, open, close)]
-    })
+    const parsedCandles = rows
+      .map((r) => {
+        const o = toFiniteNum(r.open ?? r.o ?? r.start)
+        const c = toFiniteNum(r.close ?? r.c ?? r.end)
+        const l = toFiniteNum(r.low ?? r.l ?? r.min)
+        const h = toFiniteNum(r.high ?? r.h ?? r.max)
+        const open = o ?? c ?? l ?? h
+        if (open === null) return null
+        const close = c ?? open
+        const low = l ?? Math.min(open, close)
+        const high = h ?? Math.max(open, close)
+        return {
+          cat: sanitizeChartLabel(r[dateField] ?? r[xKey] ?? r.time ?? r.name),
+          tuple: [open, close, Math.min(low, open, close), Math.max(high, open, close)] as [
+            number,
+            number,
+            number,
+            number,
+          ],
+        }
+      })
+      .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
+    const categories = parsedCandles.map((entry) => entry.cat)
+    const ohlc = parsedCandles.map((entry) => entry.tuple)
     const zoomCfg = zoom()
     const candleHighs = ohlc.map((c) => c[3] ?? 0)
     const candlePos = pickMarkLinePosition(
@@ -146,7 +197,7 @@ export function buildStatisticalChartOption(
       candleHighs.slice(-2),
       props.referenceLine,
     )
-    const refLine = buildRefLine(theme.warn, candlePos)
+    const refLine = buildRefLine(theme.textWarn, candlePos)
     const bounds = computeRefAxisBounds(ohlc.flat(), props.referenceLine, true)
     const ohlcMsg = msg
     return {
@@ -174,7 +225,7 @@ export function buildStatisticalChartOption(
       xAxis: {
         type: 'category',
         data: categories,
-        axisLabel: compactCatLabel(categories.length, 40, 5),
+        axisLabel: compactCatLabel(categories.length, 40, 5, categories),
       },
       yAxis: valAxis({ scale: true, ...bounds }),
       series: [
@@ -229,7 +280,7 @@ export function buildStatisticalChartOption(
     const firstNonNullX = rows.find(
       (r) => r[scatterXKey] !== undefined && r[scatterXKey] !== null,
     )?.[scatterXKey]
-    const numericX = typeof firstNonNullX === 'number' && Number.isFinite(firstNonNullX)
+    const numericX = toFiniteNum(firstNonNullX) !== null
     const validRows = numericX ? rows.filter((r) => toFiniteNum(r[scatterXKey]) !== null) : rows
     const rawSizes = sizeKey ? validRows.map((r) => Math.max(0, toNumber(r[sizeKey]))) : []
     const maxSize = rawSizes.length > 0 ? Math.max(...rawSizes, 1) : 1
@@ -240,8 +291,9 @@ export function buildStatisticalChartOption(
     }
 
     const zoomCfg = zoom()
+    const activeYKeys = props.seriesField ? [scatterPrimaryY] : scatterYKeys
     const scatterYVals = validRows.flatMap((r) =>
-      scatterYKeys.map((k) => toFiniteNum(r[k])).filter((n): n is number => n !== null),
+      activeYKeys.map((k) => toFiniteNum(r[k])).filter((n): n is number => n !== null),
     )
     const scatterUseLog = canUseLogScale(props.yScale, scatterYVals)
     const effectiveScatterRefY =
@@ -249,10 +301,15 @@ export function buildStatisticalChartOption(
         ? undefined
         : props.referenceLine
     const sortedByX = validRows
-      .map((r, i) => ({
-        x: numericX ? toNumber(r[scatterXKey]) : i,
-        y: Math.max(...scatterYKeys.map((k) => toNumber(r[k])), 0),
-      }))
+      .map((r, i) => {
+        const yList = activeYKeys
+          .map((k) => toFiniteNum(r[k]))
+          .filter((n): n is number => n !== null)
+        return {
+          x: numericX ? toNumber(r[scatterXKey]) : i,
+          y: yList.length > 0 ? Math.max(...yList) : 0,
+        }
+      })
       .sort((a, b) => a.x - b.x)
     const midIdx = Math.max(1, Math.floor(sortedByX.length / 2))
     const scatterMarkPos = pickMarkLinePosition(
@@ -260,16 +317,22 @@ export function buildStatisticalChartOption(
       sortedByX.slice(midIdx).map((p) => p.y),
       effectiveScatterRefY,
     )
-    const refLineY = buildRefLine(theme.danger, scatterMarkPos, effectiveScatterRefY)
+    const refLineY = buildRefLine(theme.textDanger, scatterMarkPos, effectiveScatterRefY)
     const scatterXVals = numericX ? validRows.map((r) => toNumber(r[scatterXKey])) : []
     const allNonNegX = scatterXVals.length > 0 && scatterXVals.every((v) => v >= 0)
     const xBounds = numericX ? computeRefAxisBounds(scatterXVals, props.referenceX, false) : {}
     const xRangeMin = xBounds.min ?? (allNonNegX ? 0 : Math.min(0, ...scatterXVals))
-    const xRangeMax = xBounds.max ?? Math.max(...scatterXVals, props.referenceX ?? 0, 1)
+    const xMaxCandidates = [
+      ...scatterXVals,
+      ...(props.referenceX !== undefined && Number.isFinite(props.referenceX)
+        ? [props.referenceX]
+        : []),
+    ]
+    const xRangeMax = xBounds.max ?? (xMaxCandidates.length > 0 ? Math.max(...xMaxCandidates) : 1)
     const refLineX =
       numericX && props.referenceX !== undefined && Number.isFinite(props.referenceX)
         ? buildRefLine(
-            theme.brand,
+            theme.textBrand,
             'end',
             props.referenceX,
             props.referenceXLabel,
@@ -295,7 +358,7 @@ export function buildStatisticalChartOption(
             ],
           }
         : (refLineY ?? refLineX)
-    const bounds = scatterUseLog ? {} : computeRefAxisBounds(scatterYVals, effectiveScatterRefY)
+    const bounds = computeRefAxisBounds(scatterYVals, effectiveScatterRefY, false, scatterUseLog)
     const scatterCategories = numericX
       ? undefined
       : [...new Set(validRows.map((r) => sanitizeChartLabel(r[scatterXKey])))]
@@ -512,15 +575,19 @@ export function buildStatisticalChartOption(
           const raw = r[midKey]
           return raw !== undefined && raw !== null
             ? toNumber(raw)
-            : Number((((orderedLows[i] ?? 0) + (orderedHighs[i] ?? 0)) / 2).toFixed(2))
+            : Number((((orderedLows[i] ?? 0) + (orderedHighs[i] ?? 0)) / 2).toPrecision(10))
         })
-      : orderedLows.map((lo, i) => Number(((lo + (orderedHighs[i] ?? lo)) / 2).toFixed(2)))
+      : orderedLows.map((lo, i) => Number(((lo + (orderedHighs[i] ?? lo)) / 2).toPrecision(10)))
     const minLow = orderedLows.length > 0 ? Math.min(...orderedLows) : 0
+    const maxHigh = orderedHighs.length > 0 ? Math.max(...orderedHighs) : 0
+    const rawRangeSpan = maxHigh - minLow
     const baseline = minLow < 0 ? -niceUpperBound(Math.abs(minLow)) : 0
-    const baseData = orderedLows.map((lo) => Number((lo - baseline).toFixed(4)))
-    const spanData = orderedHighs.map((hi, i) => Number((hi - (orderedLows[i] ?? 0)).toFixed(4)))
-    const shiftedHighs = orderedHighs.map((hi) => Number((hi - baseline).toFixed(4)))
-    const shiftedMid = midVals.map((m) => Number((m - baseline).toFixed(4)))
+    const baseData = orderedLows.map((lo) => Number((lo - baseline).toPrecision(10)))
+    const spanData = orderedHighs.map((hi, i) =>
+      Number((hi - (orderedLows[i] ?? 0)).toPrecision(10)),
+    )
+    const shiftedHighs = orderedHighs.map((hi) => Number((hi - baseline).toPrecision(10)))
+    const shiftedMid = midVals.map((m) => Number((m - baseline).toPrecision(10)))
     const rangeStep = props.step ? ('end' as const) : false
     const shiftedRef =
       props.referenceLine !== undefined && Number.isFinite(props.referenceLine)
@@ -543,7 +610,7 @@ export function buildStatisticalChartOption(
       [...shiftedMid.slice(-2), ...shiftedHighs.slice(-2)],
       shiftedRef,
     )
-    const refLine = buildRefLine(theme.danger, rangeMarkPos, shiftedRef, rangeRefLabel)
+    const refLine = buildRefLine(theme.textDanger, rangeMarkPos, shiftedRef, rangeRefLabel)
     const estW = chartWidth(540)
     const maxCatW = isCompact
       ? Math.max(40, Math.floor((estW - 44) / Math.min(6, Math.max(2, categories.length))))
@@ -614,7 +681,7 @@ export function buildStatisticalChartOption(
         splitLine: borderLine,
         axisLabel: {
           ...axisLabelBase,
-          formatter: (val: number) => formatCompactTickNum(val + baseline),
+          formatter: (val: number) => formatCompactTickNum(val + baseline, rawRangeSpan),
         },
       },
       series: [
@@ -719,7 +786,7 @@ export function buildStatisticalChartOption(
           ? sanitizeChartLabel(props.referenceLabel)
           : String(props.referenceLine)
       refMarkLine = buildRefLine(
-        theme.danger,
+        theme.textDanger,
         'end',
         targetIdx,
         refLbl,

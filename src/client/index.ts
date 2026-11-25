@@ -24,6 +24,7 @@ import {
 } from './file-opener.tsx'
 import {
   getA2uiEnabled,
+  getDefaultA2uiEnabled,
   publishCommandNotice,
   setA2uiEnabled,
   setFallbackDefaultEnabled,
@@ -382,7 +383,9 @@ export function apply(ctx: Context, config: ClientConfig = {}): void {
           const parsedEnabled = parseA2uiEnabledFromStatusText(text)
           if (parsedEnabled !== null) {
             const latestSeq = resolveLatestA2uiCommandState(snapshot)?.seq
-            const changed = parsedEnabled !== getA2uiEnabled(sessionId)
+            const changed =
+              parsedEnabled !== getA2uiEnabled(sessionId) ||
+              parsedEnabled !== getDefaultA2uiEnabled()
             setA2uiEnabled(sessionId, parsedEnabled, latestSeq, changed)
           }
         }

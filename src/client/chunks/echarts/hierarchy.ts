@@ -241,7 +241,7 @@ export function buildHierarchyChartOption(
       (estSankeyW - 12 - rightPadding - nodeW * (maxStage + 1)) / maxStage,
     )
     const stageGap = Math.max(24, rawStageGap)
-    const leafLabelMaxW = Math.max(44, rightPadding - 12)
+    const leafLabelMaxW = Math.max(40, rightPadding - 18)
     const midLabelMaxW = Math.max(24, stageGap - 4)
 
     const sankeyLabelBase = {
@@ -326,6 +326,13 @@ export function buildHierarchyChartOption(
       }
     }
     if (rawObj && Array.isArray(rawObj.nodes) && rawObj.nodes.length > 0) {
+      const rawCatList = Array.isArray(rawObj.categories)
+        ? (rawObj.categories as unknown[]).map((c) =>
+            typeof c === 'object' && c !== null && 'name' in c
+              ? sanitizeChartLabel((c as { name?: unknown }).name)
+              : sanitizeChartLabel(c),
+          )
+        : []
       const seenNodeIds = new Set<string>()
       nodes = []
       for (const n of rawObj.nodes as Record<string, unknown>[]) {
@@ -333,26 +340,41 @@ export function buildHierarchyChartOption(
         const id = sanitizeChartLabel(n.id ?? n.name)
         if (!id || seenNodeIds.has(id)) continue
         seenNodeIds.add(id)
+        const rawCat = n.group ?? n.category
+        const resolvedCat =
+          typeof rawCat === 'number' &&
+          Number.isInteger(rawCat) &&
+          rawCat >= 0 &&
+          rawCat < rawCatList.length
+            ? rawCatList[rawCat]
+            : rawCat !== undefined
+              ? sanitizeChartLabel(rawCat)
+              : undefined
         nodes.push({
           id,
           name: sanitizeChartLabel(n.name ?? n.id),
+          ...(n.value !== undefined ? { value: n.value } : {}),
           symbolSize: Math.round(
             (n.size ? Math.min(54, Math.max(18, toNumber(n.size))) : 30) * sizeScale,
           ),
-          category:
-            n.group !== undefined || n.category !== undefined
-              ? sanitizeChartLabel(n.group ?? n.category)
-              : undefined,
+          category: resolvedCat,
         })
       }
       links = Array.isArray(rawObj.links ?? rawObj.edges)
         ? ((rawObj.links ?? rawObj.edges) as Record<string, unknown>[])
             .filter((e) => e && typeof e === 'object')
-            .map((e) => ({
-              source: sanitizeChartLabel(e.source ?? e.from),
-              target: sanitizeChartLabel(e.target ?? e.to),
-              label: buildEdgeLabel(e.label),
-            }))
+            .map((e) => {
+              const source = sanitizeChartLabel(e.source ?? e.from)
+              const target = sanitizeChartLabel(e.target ?? e.to)
+              const edgeVal = e.value ?? e.weight
+              return {
+                source,
+                target,
+                ...(edgeVal !== undefined ? { value: edgeVal } : {}),
+                label: buildEdgeLabel(e.label),
+              }
+            })
+            .filter((l) => seenNodeIds.has(l.source) && seenNodeIds.has(l.target))
         : []
     } else {
       const srcField = props.xField ?? 'source'

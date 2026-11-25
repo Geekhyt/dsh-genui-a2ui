@@ -70,7 +70,7 @@
 .stepDot[data-status="done"] {
   border-color: var(--a2ui-success);
   background: color-mix(in srgb, var(--a2ui-success) 16%, transparent);
-  color: var(--a2ui-success);
+  color: var(--a2ui-success-fg);
 }
 
 .stepDot[data-status="active"] {
@@ -82,7 +82,7 @@
 .stepDot[data-status="error"] {
   border-color: var(--a2ui-danger);
   background: color-mix(in srgb, var(--a2ui-danger) 16%, transparent);
-  color: var(--a2ui-danger);
+  color: var(--a2ui-danger-fg);
 }
 
 .stepConnector {
@@ -196,15 +196,15 @@
 }
 
 .callout[data-tone="success"] .calloutIcon {
-  color: var(--a2ui-success);
+  color: var(--a2ui-success-fg);
 }
 
 .callout[data-tone="warning"] .calloutIcon {
-  color: var(--a2ui-warn);
+  color: var(--a2ui-warn-fg);
 }
 
 .callout[data-tone="danger"] .calloutIcon {
-  color: var(--a2ui-danger);
+  color: var(--a2ui-danger-fg);
 }
 
 .calloutMain {

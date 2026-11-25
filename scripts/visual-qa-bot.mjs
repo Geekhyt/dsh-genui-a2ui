@@ -51,6 +51,8 @@ export const ALL_SHOWCASES = [
   'showcase-40',
   'showcase-41',
   'showcase-42',
+  'showcase-43',
+  'showcase-44',
 ]
 
 export const DEFAULT_AUDIT_SHOWCASES = [
@@ -77,6 +79,8 @@ export const DEFAULT_AUDIT_SHOWCASES = [
   'showcase-40',
   'showcase-41',
   'showcase-42',
+  'showcase-43',
+  'showcase-44',
 ]
 
 export const SCREENSHOT_SHOWCASE_MAP = {
@@ -226,9 +230,15 @@ export function buildDomGeometryAuditExpression() {
       }
 
       const clsName = typeof el.className === 'string' ? el.className : '';
+      const isSemanticFgTarget =
+        /(?:tableDeltaCell|trackerSummary|diffStatAdd|diffStatDel|entityMetricValue|entityStatusPill|matrixValTd|apiStatusPill|terminalExitBadge|sourceScorePill)/.test(
+          clsName,
+        );
+      const isTintedBadgeTarget = /(?:Badge|Pill|Tag|Chip|Status)/.test(clsName);
       const isContrastTarget =
         (el.tagName === 'BUTTON' ||
-          /(?:Badge|Bar|Pill|Tag|Chip|RatingScaleBtn|CheckCardIndicator|ResultEmblem)/.test(clsName)) &&
+          /(?:Badge|Bar|Pill|Tag|Chip|RatingScaleBtn|CheckCardIndicator|ResultEmblem)/.test(clsName) ||
+          isSemanticFgTarget) &&
         hasDirectText(el) &&
         !el.hasAttribute('disabled') &&
         el.getAttribute('aria-disabled') !== 'true' &&
@@ -237,11 +247,13 @@ export function buildDomGeometryAuditExpression() {
       if (isContrastTarget) {
         const ownBg = parseRgba(style.backgroundColor);
         const fg = parseRgba(style.color);
-        if (ownBg && ownBg[3] >= 0.4 && fg && fg[3] >= 0.5) {
+        const minBgAlpha = isSemanticFgTarget ? 0 : isTintedBadgeTarget ? 0.05 : 0.4;
+        const minRatio = isSemanticFgTarget ? 4.0 : 3.0;
+        if (ownBg && ownBg[3] >= minBgAlpha && fg && fg[3] >= 0.5) {
           const effBg = resolveEffectiveBg(el);
           const effFg = fg[3] < 0.99 ? compositeOver(fg, effBg) : fg;
           const ratio = contrastOf(effFg, effBg);
-          if (ratio < 3.0) {
+          if (ratio < minRatio) {
             contrastViolations.push({
               cls: clsName.slice(0, 60),
               text: (el.textContent || '').trim().slice(0, 24),

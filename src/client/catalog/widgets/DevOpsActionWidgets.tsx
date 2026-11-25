@@ -32,6 +32,7 @@ import {
 import {
   copyTextToClipboard,
   defineComponent,
+  handleHorizontalArrowKey,
   SurfaceReadOnlyContext,
   SurfaceValidationContext,
   useSurfaceActionRunner,
@@ -145,6 +146,12 @@ export const DshTrackerImpl = defineComponent<{
             gap: slices.length > 90 ? 0 : slices.length > 48 ? 1 : slices.length > 28 ? 2 : 3,
             gridTemplateColumns: `repeat(${slices.length}, minmax(0, 1fr))`,
           }}
+          onKeyDown={(e) => {
+            handleHorizontalArrowKey(e, e.currentTarget, 'button', (idx) => {
+              const sl = slices[idx]
+              if (sl) setActiveSliceId(sl.id)
+            })
+          }}
           onMouseLeave={() => setActiveSliceId(null)}
           onBlur={(e) => {
             if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
@@ -152,8 +159,9 @@ export const DshTrackerImpl = defineComponent<{
             }
           }}
         >
-          {slices.map((s) => {
+          {slices.map((s, idx) => {
             const detail = s.note || statusText(s.status)
+            const isTabTarget = activeSliceId ? activeSliceId === s.id : idx === 0
             return (
               <DshHoverCard
                 key={s.id}
@@ -169,6 +177,7 @@ export const DshTrackerImpl = defineComponent<{
                 anchor={
                   <button
                     type="button"
+                    tabIndex={isTabTarget ? 0 : -1}
                     className={css.trackerSliceBtn}
                     data-status={s.status}
                     aria-label={`${s.label}: ${detail}`}
@@ -542,6 +551,7 @@ export const DshApiEndpointImpl = defineComponent<{
       method,
       path: pathStr,
       baseUrl: props.baseUrl ? String(props.baseUrl) : undefined,
+      params: props.params,
       headers: props.headers,
       requestBody: props.requestBody,
     })
@@ -617,10 +627,25 @@ export const DshApiEndpointImpl = defineComponent<{
 
       {hasResp || hasReq || hasParams ? (
         <>
-          <div className={css.apiTabBar} role="tablist">
+          <div
+            className={css.apiTabBar}
+            role="tablist"
+            onKeyDown={(e) => {
+              const tabOrder: Array<'resp' | 'req' | 'params'> = [
+                ...(hasResp ? (['resp'] as const) : []),
+                ...(hasReq ? (['req'] as const) : []),
+                ...(hasParams ? (['params'] as const) : []),
+              ]
+              handleHorizontalArrowKey(e, e.currentTarget, '[role="tab"]', (idx) => {
+                const next = tabOrder[idx]
+                if (next) setTab(next)
+              })
+            }}
+          >
             {hasResp ? (
               <DshPill
                 role="tab"
+                tabIndex={activeTab === 'resp' ? 0 : -1}
                 aria-selected={activeTab === 'resp'}
                 active={activeTab === 'resp'}
                 onClick={() => setTab('resp')}
@@ -631,6 +656,7 @@ export const DshApiEndpointImpl = defineComponent<{
             {hasReq ? (
               <DshPill
                 role="tab"
+                tabIndex={activeTab === 'req' ? 0 : -1}
                 aria-selected={activeTab === 'req'}
                 active={activeTab === 'req'}
                 onClick={() => setTab('req')}
@@ -641,6 +667,7 @@ export const DshApiEndpointImpl = defineComponent<{
             {hasParams ? (
               <DshPill
                 role="tab"
+                tabIndex={activeTab === 'params' ? 0 : -1}
                 aria-selected={activeTab === 'params'}
                 active={activeTab === 'params'}
                 onClick={() => setTab('params')}

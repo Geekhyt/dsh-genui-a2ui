@@ -126,7 +126,7 @@
   white-space: nowrap;
   flex-shrink: 0;
   background: color-mix(in srgb, var(--a2ui-success) 14%, transparent);
-  color: var(--a2ui-success);
+  color: var(--a2ui-success-fg);
 }
 
 .sourceMetaRow {
@@ -413,7 +413,8 @@
   padding: 8px 10px;
   border-radius: 9px;
   border: 1.2px solid var(--a2ui-border-2);
-  background: var(--a2ui-bg-2);
+  background-color: var(--a2ui-bg-opaque);
+  background-image: linear-gradient(var(--a2ui-bg-2), var(--a2ui-bg-2));
   color: var(--a2ui-fg);
   text-align: left;
   cursor: pointer;
@@ -428,7 +429,10 @@
 
 .serviceNodeBox[data-status="error"] {
   border-color: color-mix(in srgb, var(--a2ui-danger) 62%, transparent);
-  background: color-mix(in srgb, var(--a2ui-danger) 7%, transparent);
+  background-image: linear-gradient(
+    color-mix(in srgb, var(--a2ui-danger) 7%, transparent),
+    color-mix(in srgb, var(--a2ui-danger) 7%, transparent)
+  );
 }
 
 .serviceNodeBox[data-selected="true"] {
@@ -578,19 +582,24 @@
   cursor: pointer;
 }
 
-.table tbody tr.trSelected .td,
-.table tbody tr.trInteractive:hover .td,
-.table tbody tr.trInteractive:focus-visible .td {
+.table tbody tr.trSelected .td:not(.tableStickyCol),
+.table tbody tr.trInteractive:hover .td:not(.tableStickyCol),
+.table tbody tr.trInteractive:focus-visible .td:not(.tableStickyCol) {
   background: color-mix(in srgb, var(--a2ui-brand) 8%, transparent);
 }
 
-.table tbody tr.trSelected:hover .td {
+.table tbody tr.trSelected:hover .td:not(.tableStickyCol) {
   background: color-mix(in srgb, var(--a2ui-brand) 13%, transparent);
 }
 
-.proSummaryRow td {
+.proSummaryRow td:not(.tableStickyCol) {
   border-top: 1.5px solid var(--a2ui-border-2);
   background: var(--a2ui-bg-2);
+  font-weight: 600;
+}
+
+.proSummaryRow td.tableStickyCol {
+  border-top: 1.5px solid var(--a2ui-border-2);
   font-weight: 600;
 }
 
@@ -604,6 +613,7 @@
   background: var(--a2ui-bg-1);
   overflow: hidden;
   min-width: 0;
+  container-type: inline-size;
 }
 
 .trackerHeader {
@@ -634,7 +644,7 @@
   font-size: 12px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-  color: var(--a2ui-success);
+  color: var(--a2ui-success-fg);
 }
 
 .trackerSummary[data-status="warning"] {
@@ -642,11 +652,11 @@
 }
 
 .trackerSummary[data-status="error"] {
-  color: var(--a2ui-danger);
+  color: var(--a2ui-danger-fg);
 }
 
 .trackerSummary[data-status="pending"] {
-  color: var(--a2ui-fg-3);
+  color: var(--a2ui-fg-2);
 }
 
 .trackerStrip {

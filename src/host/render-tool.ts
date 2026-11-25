@@ -227,12 +227,19 @@ export function createRenderTool(sessions: SurfaceSessions) {
         )
       }
 
+      const sid = sessionIdOf(exec)
       const { ui, title, placement } = readArgs(args)
       if (ui === undefined || ui.trim() === '') {
+        const fails = sessions.recordCompileFailure(sid, 'render')
+        if (fails > A2UI_LIMITS.maxRepairsPerTurn) {
+          sessions.clearCompileFailures(sid, 'render')
+          throw new Error(
+            `a2ui_render: \`ui\` must be a non-empty A2UI Express program.\nRepair limit (${A2UI_LIMITS.maxRepairsPerTurn}) reached for this turn. STOP calling a2ui_render now and answer the user directly in concise Markdown.`,
+          )
+        }
         throw new Error('a2ui_render: `ui` must be a non-empty A2UI Express program.')
       }
 
-      const sid = sessionIdOf(exec)
       let messages: AgentToRendererMessage[]
       try {
         messages = sessions.compile(sid, ui)

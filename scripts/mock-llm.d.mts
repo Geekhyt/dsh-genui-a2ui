@@ -50,5 +50,7 @@ export declare const SHOWCASE_COMBO_AUDIT_V050_CHARTS_UI: string
 export declare const SHOWCASE_COMBO_AUDIT_V053_CHARTS_UI: string
 export declare const SHOWCASE_COMBO_AUDIT_V053_WIDGETS_UI: string
 export declare const SHOWCASE_COMPREHENSIVE_AUDIT_V055_UI: string
+export declare const SHOWCASE_COMPREHENSIVE_AUDIT_V056_ECHARTS_UI: string
+export declare const SHOWCASE_COMPREHENSIVE_AUDIT_V056_WIDGETS_UI: string
 
 export declare function startMockLlmServer(port?: number): Promise<Server>

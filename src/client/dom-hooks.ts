@@ -74,43 +74,57 @@ export function useTransientKey<T>(durationMs = 1500): readonly [T | null, (key:
   return [activeKey, trigger] as const
 }
 
-const escapeHandlerStack: Array<() => void> = []
+interface GlobalOverlayState {
+  readonly escapeHandlerStack: Array<() => void>
+  readonly dialogFocusStack: DialogFocusEntry[]
+  readonly dispatchTopEscape: (e: KeyboardEvent) => void
+}
 
 function isInsideUnmanagedHostOverlay(): boolean {
   if (typeof document === 'undefined') return false
   const active = document.activeElement
   if (!(active instanceof HTMLElement)) return false
+  const nearestManaged = active.closest('[data-a2ui-managed-overlay], [data-a2ui-portal-popover]')
+  const nearestOverlay = active.closest('[role="dialog"], [role="alertdialog"], [role="menu"]')
+  if (!nearestOverlay) return false
   if (
-    active.closest(
-      '[data-a2ui-overlay], [data-a2ui-portal-popover], [data-dsh-a2ui-card], [data-a2ui-dock], [data-a2ui-ask-dock]',
-    ) !== null
+    nearestOverlay.hasAttribute('data-a2ui-managed-overlay') ||
+    nearestOverlay.hasAttribute('data-a2ui-portal-popover')
   ) {
     return false
   }
-  const overlay = active.closest('[role="dialog"], [role="alertdialog"], [role="menu"]')
-  if (!overlay) return false
-  if (
-    overlay.hasAttribute('data-a2ui-overlay') ||
-    overlay.hasAttribute('data-a2ui-portal-popover')
-  ) {
+  if (nearestManaged && nearestOverlay.contains(nearestManaged)) {
     return false
   }
   return true
 }
 
-function dispatchTopEscape(e: KeyboardEvent): void {
-  if (e.key !== 'Escape' || escapeHandlerStack.length === 0) return
-  if (isInsideUnmanagedHostOverlay()) return
-  const top = escapeHandlerStack[escapeHandlerStack.length - 1]
-  if (!top) return
-  e.preventDefault()
-  e.stopPropagation()
-  e.stopImmediatePropagation()
-  top()
+function getGlobalOverlayState(): GlobalOverlayState {
+  const key = '__dshA2uiOverlayState__'
+  const bag = globalThis as unknown as Record<string, GlobalOverlayState | undefined>
+  let state = bag[key]
+  if (!state) {
+    const escapeHandlerStack: Array<() => void> = []
+    const dialogFocusStack: DialogFocusEntry[] = []
+    const dispatchTopEscape = (e: KeyboardEvent): void => {
+      if (e.key !== 'Escape' || escapeHandlerStack.length === 0) return
+      if (isInsideUnmanagedHostOverlay()) return
+      const top = escapeHandlerStack[escapeHandlerStack.length - 1]
+      if (!top) return
+      e.preventDefault()
+      e.stopPropagation()
+      e.stopImmediatePropagation()
+      top()
+    }
+    state = { escapeHandlerStack, dialogFocusStack, dispatchTopEscape }
+    bag[key] = state
+  }
+  return state
 }
 
 function registerEscapeHandler(handler: () => void): () => void {
   if (typeof window === 'undefined') return () => {}
+  const { escapeHandlerStack, dispatchTopEscape } = getGlobalOverlayState()
   if (escapeHandlerStack.length === 0) {
     window.addEventListener('keydown', dispatchTopEscape, { capture: true })
   }
@@ -185,7 +199,8 @@ function isVisibleFocusable(el: HTMLElement): boolean {
 
 function focusTriggerSafely(trigger: HTMLElement): void {
   if (isTriggerClippedOut(trigger)) {
-    const topDialog = dialogFocusStack[dialogFocusStack.length - 1]?.dialogRef.current
+    const stack = getGlobalOverlayState().dialogFocusStack
+    const topDialog = stack[stack.length - 1]?.dialogRef.current
     topDialog?.focus?.()
     return
   }
@@ -305,14 +320,13 @@ interface DialogFocusEntry {
   prevFocused: HTMLElement | null
 }
 
-const dialogFocusStack: DialogFocusEntry[] = []
-
 export function useDialogFocus(open: boolean, dialogRef: RefObject<HTMLElement | null>): void {
   useEffect(() => {
     if (typeof document === 'undefined') return
     if (!open) {
       return
     }
+    const { dialogFocusStack } = getGlobalOverlayState()
     const active = document.activeElement
     const entry: DialogFocusEntry = {
       dialogRef,
@@ -333,24 +347,22 @@ export function useDialogFocus(open: boolean, dialogRef: RefObject<HTMLElement |
       const root = dialogRef.current
       if (!root) return
       const cur = document.activeElement
-      if (
-        cur instanceof HTMLElement &&
-        cur.closest('[data-a2ui-portal-popover], [role="listbox"], [role="menu"]') !== null &&
-        !root.contains(cur)
-      ) {
-        return
-      }
-      const focusables = Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
-        isVisibleFocusable,
-      )
+      const portalPop =
+        cur instanceof HTMLElement && !root.contains(cur)
+          ? cur.closest<HTMLElement>('[data-a2ui-portal-popover], [role="listbox"], [role="menu"]')
+          : null
+      const trapRoot = portalPop ?? root
+      const focusables = Array.from(
+        trapRoot.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
+      ).filter(isVisibleFocusable)
       if (focusables.length === 0) {
         e.preventDefault()
-        root.focus?.()
+        trapRoot.focus?.()
         return
       }
       const first = focusables[0]!
       const last = focusables[focusables.length - 1]!
-      if (!cur || cur === root || !root.contains(cur)) {
+      if (!cur || cur === trapRoot || !trapRoot.contains(cur)) {
         e.preventDefault()
         ;(e.shiftKey ? last : first).focus()
       } else if (e.shiftKey && cur === first) {
@@ -375,6 +387,13 @@ export function useDialogFocus(open: boolean, dialogRef: RefObject<HTMLElement |
       const prev = entry.prevFocused
       entry.prevFocused = null
       if (!wasTop) return
+      const curActive = document.activeElement
+      const focusStillInsideOrBody =
+        curActive === null ||
+        curActive === document.body ||
+        curActive === document.documentElement ||
+        dialogRef.current?.contains(curActive) === true
+      if (!focusStillInsideOrBody) return
       const topDialog = dialogFocusStack[dialogFocusStack.length - 1]?.dialogRef.current ?? null
       if (
         prev?.isConnected &&
@@ -592,7 +611,7 @@ export function useEChartsMount(params: {
       }
       const captured = captureChartInteractiveState(chartRef.current)
       savedInteractiveRef.current = captured
-        ? { kind: chartKindRef.current, dataId: dataIdRef.current, state: captured }
+        ? { kind: prevKindRef.current, dataId: prevDataIdRef.current, state: captured }
         : null
       chartRef.current?.dispose()
       chartRef.current = null

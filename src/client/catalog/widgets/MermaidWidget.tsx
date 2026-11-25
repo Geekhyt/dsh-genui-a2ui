@@ -1,6 +1,7 @@
 import {
   type CSSProperties,
   type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
   useCallback,
   useContext,
   useId,
@@ -102,6 +103,12 @@ export function DshMermaidView({ props }: { props: MermaidWidgetProps }) {
   const [dialogPannable, setDialogPannable] = useState(false)
   const [fullscreen, setFullscreen] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
+  const [prevCode, setPrevCode] = useState(code)
+  if (prevCode !== code) {
+    setPrevCode(code)
+    if (inlineZoomMode !== 'fit') setInlineZoomMode('fit')
+    if (dialogZoomMode !== 'fit') setDialogZoomMode('fit')
+  }
 
   if (readOnly && fullscreen) {
     setFullscreen(false)
@@ -389,8 +396,8 @@ export function DshMermaidView({ props }: { props: MermaidWidgetProps }) {
     [applyZoomAtPoint, canZoom],
   )
 
-  const handlePanMouseDown = useCallback(
-    (e: ReactMouseEvent<HTMLDivElement>, inDialog: boolean) => {
+  const handlePanPointerDown = useCallback(
+    (e: ReactPointerEvent<HTMLDivElement>, inDialog: boolean) => {
       if (!canZoom || e.button !== 0 || typeof window === 'undefined') return
       const viewport = inDialog ? dialogViewportRef.current : inlineViewportRef.current
       if (!viewport) return
@@ -406,18 +413,27 @@ export function DshMermaidView({ props }: { props: MermaidWidgetProps }) {
         viewport.scrollHeight > viewport.clientHeight + 2
       if (!overflows) return
 
+      const pointerId = e.pointerId
       const startX = e.clientX
       const startY = e.clientY
       const startLeft = viewport.scrollLeft
       const startTop = viewport.scrollTop
       let moved = false
+      let captured = false
 
-      const onMove = (ev: globalThis.MouseEvent) => {
+      const onMove = (ev: globalThis.PointerEvent) => {
+        if (ev.pointerId !== pointerId) return
         const dx = ev.clientX - startX
         const dy = ev.clientY - startY
         if (!moved && Math.hypot(dx, dy) > 3) {
           moved = true
           setIsDragging(true)
+          if (!captured) {
+            try {
+              viewport.setPointerCapture(pointerId)
+              captured = true
+            } catch {}
+          }
         }
         if (moved) {
           ev.preventDefault()
@@ -427,16 +443,28 @@ export function DshMermaidView({ props }: { props: MermaidWidgetProps }) {
       }
 
       const cleanup = () => {
-        window.removeEventListener('mousemove', onMove)
-        window.removeEventListener('mouseup', cleanup)
+        window.removeEventListener('pointermove', onMove)
+        window.removeEventListener('pointerup', onUp)
+        window.removeEventListener('pointercancel', onUp)
+        if (captured) {
+          try {
+            if (viewport.hasPointerCapture(pointerId)) viewport.releasePointerCapture(pointerId)
+          } catch {}
+        }
         dragCleanupRef.current = null
         setIsDragging(false)
       }
 
+      const onUp = (ev: globalThis.PointerEvent) => {
+        if (ev.pointerId !== pointerId) return
+        cleanup()
+      }
+
       dragCleanupRef.current?.()
       dragCleanupRef.current = cleanup
-      window.addEventListener('mousemove', onMove)
-      window.addEventListener('mouseup', cleanup)
+      window.addEventListener('pointermove', onMove)
+      window.addEventListener('pointerup', onUp)
+      window.addEventListener('pointercancel', onUp)
     },
     [canZoom],
   )
@@ -551,7 +579,7 @@ export function DshMermaidView({ props }: { props: MermaidWidgetProps }) {
         data-zoomed={isManualZoom && canZoom ? 'true' : 'false'}
         data-pannable={activePannable && canZoom ? 'true' : 'false'}
         data-dragging={isDragging ? 'true' : 'false'}
-        onMouseDown={(e) => handlePanMouseDown(e, inDialog)}
+        onPointerDown={(e) => handlePanPointerDown(e, inDialog)}
         onDoubleClick={(e) => handleDoubleClick(e, inDialog)}
       >
         {code === '' ? (
@@ -631,6 +659,7 @@ export function DshMermaidView({ props }: { props: MermaidWidgetProps }) {
               className={`${css.mermaidFullscreenMask} ${dark ? 'a2ui-dark' : 'a2ui-light'}`}
               data-a2ui-mermaid-dialog=""
               data-a2ui-overlay=""
+              data-a2ui-managed-overlay=""
               onClick={(e) => {
                 e.stopPropagation()
                 handleCloseFullscreen()

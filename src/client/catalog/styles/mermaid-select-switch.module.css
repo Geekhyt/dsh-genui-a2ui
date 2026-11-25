@@ -170,7 +170,7 @@
 }
 
 @container (max-width: 720px) {
-  .mermaidBody g[class~="grid"] > g[class~="tick"]:nth-of-type(even) text {
+  .mermaidBody[data-zoomed="false"] g[class~="grid"] > g[class~="tick"]:nth-of-type(even) text {
     display: none;
   }
 }
@@ -193,6 +193,7 @@
 }
 
 .mermaidFullscreenCard {
+  container-type: inline-size;
   width: 96vw;
   height: 94vh;
   max-width: 96vw;

@@ -356,7 +356,12 @@ export const DshLogViewerImpl = defineComponent<{
           <span className={css.logTitle}>{title}</span>
           <span className={css.logCountMeta}>{msg.logEntryCount(filtered.length)}</span>
         </div>
-        <button type="button" className={css.diffCopyBtn} onClick={handleCopyVisible}>
+        <button
+          type="button"
+          className={css.diffCopyBtn}
+          disabled={filtered.length === 0}
+          onClick={handleCopyVisible}
+        >
           {copiedAll ? msg.copiedCheck : msg.logCopyAll}
         </button>
       </div>
@@ -412,7 +417,16 @@ export const DshLogViewerImpl = defineComponent<{
               >
                 <div
                   className={css.logRowMain}
-                  onClick={hasExtra ? () => toggleExpand(entry.id) : undefined}
+                  onClick={
+                    hasExtra
+                      ? () => {
+                          if (typeof window !== 'undefined' && window.getSelection()?.toString()) {
+                            return
+                          }
+                          toggleExpand(entry.id)
+                        }
+                      : undefined
+                  }
                   style={{ cursor: hasExtra ? 'pointer' : 'default' }}
                 >
                   {entry.time ? <span className={css.logTime}>{entry.time}</span> : null}
@@ -502,20 +516,33 @@ export const DshTimelineImpl = defineComponent<{
         Boolean(item && typeof item === 'object'),
       )
     : []
-  const [openDetails, setOpenDetails] = useState<ReadonlySet<number>>(() => new Set())
+  const [openDetails, setOpenDetails] = useState<ReadonlySet<string>>(() => new Set())
 
   if (items.length === 0) return null
 
   const headerTitle = props.title !== undefined && props.title !== null ? String(props.title) : ''
   const headerBadge = props.badge !== undefined && props.badge !== null ? String(props.badge) : ''
 
-  const toggleDetail = (idx: number) => {
+  const toggleDetail = (key: string) => {
     setOpenDetails((prev) => {
       const next = new Set(prev)
-      if (next.has(idx)) next.delete(idx)
-      else next.add(idx)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
       return next
     })
+  }
+
+  const normalizeTimelineStatus = (
+    raw: unknown,
+  ): 'info' | 'success' | 'warning' | 'danger' | 'pending' => {
+    const s = typeof raw === 'string' ? raw.trim().toLowerCase() : ''
+    if (s === 'success' || s === 'ok' || s === 'done' || s === 'healthy') return 'success'
+    if (s === 'warning' || s === 'warn' || s === 'degraded') return 'warning'
+    if (s === 'danger' || s === 'error' || s === 'err' || s === 'critical' || s === 'failed') {
+      return 'danger'
+    }
+    if (s === 'pending' || s === 'queued' || s === 'waiting') return 'pending'
+    return 'info'
   }
 
   return (
@@ -528,21 +555,24 @@ export const DshTimelineImpl = defineComponent<{
       ) : null}
       <ol className={css.timelineList}>
         {items.map((item, idx) => {
-          const status = item.status ?? 'info'
+          const status = normalizeTimelineStatus(item.status)
           const time = item.time !== undefined && item.time !== null ? String(item.time) : ''
           const title = item.title !== undefined && item.title !== null ? String(item.title) : ''
           const desc =
             item.description !== undefined && item.description !== null
               ? String(item.description)
               : ''
-          const actor = item.actor !== undefined && item.actor !== null ? String(item.actor) : ''
+          const rawActor =
+            item.actor !== undefined && item.actor !== null ? String(item.actor).trim() : ''
+          const actor = rawActor ? (rawActor.startsWith('@') ? rawActor : `@${rawActor}`) : ''
           const tag = item.tag !== undefined && item.tag !== null ? String(item.tag) : ''
           const detail =
             item.detail !== undefined && item.detail !== null ? String(item.detail) : ''
-          const detailOpen = openDetails.has(idx)
+          const itemKey = `${time}\u0000${title}\u0000${idx}`
+          const detailOpen = openDetails.has(itemKey)
 
           return (
-            <li key={`${title}-${idx}`} className={css.timelineItem} data-status={status}>
+            <li key={itemKey} className={css.timelineItem} data-status={status}>
               <div className={css.timelineRail}>
                 <span className={css.timelineNodeDot} data-status={status} aria-hidden="true" />
                 {idx < items.length - 1 ? <span className={css.timelineConnector} /> : null}
@@ -568,7 +598,7 @@ export const DshTimelineImpl = defineComponent<{
                       </DshTag>
                     ) : null}
                   </div>
-                  {actor ? <span className={css.timelineActor}>@{actor}</span> : null}
+                  {actor ? <span className={css.timelineActor}>{actor}</span> : null}
                 </div>
                 {desc ? (
                   <div className={css.timelineDesc}>
@@ -581,7 +611,7 @@ export const DshTimelineImpl = defineComponent<{
                       type="button"
                       className={css.logDetailToggle}
                       aria-expanded={detailOpen}
-                      onClick={() => toggleDetail(idx)}
+                      onClick={() => toggleDetail(itemKey)}
                     >
                       {detailOpen ? msg.timelineCollapseDetail : msg.timelineExpandDetail}
                     </button>

@@ -7,7 +7,9 @@ export function escapeJsonPointerSegment(key: string): string {
 export function normalizePointerPath(pointer: string): string {
   const trimmed = pointer.trim()
   if (trimmed === '' || trimmed === '/') return '/'
-  const withSlash = trimmed.startsWith('/') ? trimmed : `/${trimmed}`
+  const collapsed = trimmed.replace(/\/{2,}/g, '/')
+  if (collapsed === '/') return '/'
+  const withSlash = collapsed.startsWith('/') ? collapsed : `/${collapsed}`
   let end = withSlash.length
   while (end > 1 && withSlash[end - 1] === '/') {
     end -= 1
@@ -388,6 +390,133 @@ function isPointerObscuredInScope(
   return false
 }
 
+export function resolveTemplateKvPointers(
+  components: readonly Record<string, unknown>[],
+  outKvPointers: Set<string>,
+): void {
+  const templatePathByCompId = buildTemplatePathMap(components)
+  for (const comp of components) {
+    if (comp.component !== 'KvEditor') continue
+    const rawPtr = extractRawBindingPointer(comp.items)
+    if (rawPtr === null) continue
+    if (rawPtr.startsWith('/')) {
+      outKvPointers.add(normalizePointerPath(rawPtr))
+      continue
+    }
+    const id = typeof comp.id === 'string' ? comp.id : ''
+    const tplPaths = id !== '' ? templatePathByCompId.get(id) : undefined
+    if (tplPaths && tplPaths.size > 0) {
+      for (const tp of tplPaths) {
+        outKvPointers.add(composeTemplatePath(tp, rawPtr))
+      }
+    } else {
+      outKvPointers.add(rawPtr === '' ? '/' : normalizePointerPath(rawPtr))
+    }
+  }
+}
+
+function walkWildcardPointer(
+  root: unknown,
+  segs: readonly string[],
+  idx: number,
+  curPath: string,
+  out: Array<{ readonly path: string; readonly value: unknown }>,
+  depth = 0,
+): void {
+  if (depth > 16 || out.length >= 256 || root === undefined || root === null) return
+  if (idx >= segs.length) {
+    out.push({ path: curPath || '/', value: root })
+    return
+  }
+  if (typeof root !== 'object') return
+  const rawSeg = segs[idx]!
+  if (rawSeg === '*') {
+    if (Array.isArray(root)) {
+      for (let i = 0; i < root.length; i += 1) {
+        walkWildcardPointer(root[i], segs, idx + 1, `${curPath}/${i}`, out, depth + 1)
+      }
+    } else {
+      for (const [k, v] of Object.entries(root as Record<string, unknown>)) {
+        walkWildcardPointer(
+          v,
+          segs,
+          idx + 1,
+          `${curPath}/${escapeJsonPointerSegment(k)}`,
+          out,
+          depth + 1,
+        )
+      }
+    }
+    return
+  }
+  const seg = rawSeg.replace(/~1/g, '/').replace(/~0/g, '~')
+  if (Array.isArray(root)) {
+    const n = Number(seg)
+    if (!Number.isInteger(n) || n < 0 || n >= root.length) return
+    walkWildcardPointer(root[n], segs, idx + 1, `${curPath}/${seg}`, out, depth + 1)
+  } else {
+    const rec = root as Record<string, unknown>
+    if (!Object.hasOwn(rec, seg)) return
+    walkWildcardPointer(rec[seg], segs, idx + 1, `${curPath}/${rawSeg}`, out, depth + 1)
+  }
+}
+
+export function collectKvSecretsForDataModelUpdate(
+  dmPath: string,
+  dmValue: unknown,
+  kvPointers: ReadonlySet<string>,
+  outObscured: Set<string>,
+): void {
+  const normDm = normalizePointerPath(dmPath)
+  const dmSegs = normDm === '/' ? [] : normDm.slice(1).split('/')
+  const scratchExact = new Set<string>()
+  const scratchSub = new Set<string>()
+  for (const rawKv of kvPointers) {
+    const normKv = normalizePointerPath(rawKv)
+    const kvSegs = normKv === '/' ? [] : normKv.slice(1).split('/')
+    const commonLen = Math.min(dmSegs.length, kvSegs.length)
+    let prefixMatch = true
+    for (let i = 0; i < commonLen; i += 1) {
+      if (kvSegs[i] !== '*' && kvSegs[i] !== dmSegs[i]) {
+        prefixMatch = false
+        break
+      }
+    }
+    if (!prefixMatch) continue
+    if (dmSegs.length <= kvSegs.length) {
+      const hits: Array<{ readonly path: string; readonly value: unknown }> = []
+      walkWildcardPointer(
+        dmValue,
+        kvSegs.slice(dmSegs.length),
+        0,
+        normDm === '/' ? '' : normDm,
+        hits,
+      )
+      for (const hit of hits) {
+        collectKvSecretsFromValue(hit.value, hit.path, outObscured, scratchExact, scratchSub)
+      }
+    } else {
+      const relParts = dmSegs.slice(kvSegs.length)
+      const firstSeg = relParts[0]?.replace(/~1/g, '/').replace(/~0/g, '~') ?? ''
+      if (firstSeg !== '' && isSecretKey(firstSeg)) {
+        outObscured.add(normDm)
+      } else if (
+        typeof dmValue === 'object' &&
+        dmValue !== null &&
+        !Array.isArray(dmValue) &&
+        relParts.length === 1
+      ) {
+        const rec = dmValue as Record<string, unknown>
+        const k =
+          typeof rec.key === 'string' ? rec.key : typeof rec.name === 'string' ? rec.name : ''
+        if (k !== '' && isSecretKey(k)) {
+          outObscured.add(`${normDm}/value`)
+        }
+      }
+    }
+  }
+}
+
 export function referencesObscuredPointer(
   node: unknown,
   obscured: ReadonlySet<string>,
@@ -405,7 +534,7 @@ export function referencesObscuredPointer(
     return node.some((el) => referencesObscuredPointer(el, obscured, depth + 1, templatePrefixes))
   }
   if (typeof node === 'object') {
-    const bound = extractBindingPointer(node)
+    const bound = extractRawBindingPointer(node)
     if (bound !== null && isPointerObscuredInScope(bound, obscured, templatePrefixes)) return true
     for (const val of Object.values(node as Record<string, unknown>)) {
       if (referencesObscuredPointer(val, obscured, depth + 1, templatePrefixes)) return true
@@ -445,9 +574,10 @@ export function recordSecretPrimitive(
     if (trimmed.length >= 4) outSubstrings.add(trimmed)
   } else if (typeof v === 'number' && Number.isFinite(v)) {
     const s = String(v)
-    if (s.length >= 6) {
+    const minDigits = allowShortExact ? 4 : 6
+    if (s.length >= minDigits) {
       outExact.add(s)
-      outSubstrings.add(s)
+      if (s.length >= 6) outSubstrings.add(s)
     }
   }
 }
@@ -455,7 +585,7 @@ export function recordSecretPrimitive(
 export function isScrubbableNumericSecret(v: number, blockedExact: ReadonlySet<string>): boolean {
   if (!Number.isFinite(v)) return false
   const s = String(v)
-  return s.length >= 6 && blockedExact.has(s)
+  return s.length >= 4 && blockedExact.has(s)
 }
 
 export function collectKvSecretsFromValue(
@@ -527,9 +657,6 @@ export function collectSecretsFromNode(
       for (const [k, v] of Object.entries(rec)) {
         const childSecret =
           withinSecret || (!isSurfaceRoot && (isSecretKey(k) || (isKvSecret && k === 'value')))
-        if (childSecret && (typeof v === 'string' || typeof v === 'number')) {
-          recordSecretPrimitive(v, outExact, outSubstrings, false)
-        }
         const seg = escapeJsonPointerSegment(k)
         const nextPath = isSurfaceRoot ? '' : path === '' ? `/${seg}` : `${path}/${seg}`
         walk(v, nextPath, isSurfaceRoot ? depth : depth + 1, false, childSecret)

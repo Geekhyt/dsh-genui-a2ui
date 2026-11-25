@@ -135,9 +135,14 @@ export function normalizeTerminalCommands(raw: unknown): readonly NormalizedTerm
   if (typeof raw === 'string') {
     const lines = raw.split(/\r?\n/)
     const hasDollarPrompt = lines.some((l) => l.trim().startsWith('$ '))
+    const firstCmdLine = lines.find((l) => {
+      const t = l.trim()
+      return t !== '' && !t.startsWith('#')
+    })
+    const hasAnglePrompt = !hasDollarPrompt && Boolean(firstCmdLine?.trim().startsWith('> '))
     const isPromptLine = (trimmed: string): boolean =>
-      hasDollarPrompt ? trimmed.startsWith('$ ') : trimmed.startsWith('> ')
-    const hasPromptPrefix = hasDollarPrompt || lines.some((l) => l.trim().startsWith('> '))
+      hasDollarPrompt ? trimmed.startsWith('$ ') : hasAnglePrompt && trimmed.startsWith('> ')
+    const hasPromptPrefix = hasDollarPrompt || hasAnglePrompt
     const nextNonCommentIsPrompt = (startIdx: number): boolean => {
       for (let j = startIdx + 1; j < lines.length; j++) {
         const nt = lines[j]!.trim()
@@ -150,6 +155,7 @@ export function normalizeTerminalCommands(raw: unknown): readonly NormalizedTerm
     let curCmd = ''
     let curComment = ''
     let curOut: string[] = []
+    let inContinuation = false
     const flush = () => {
       if (curCmd) {
         steps.push({
@@ -162,22 +168,33 @@ export function normalizeTerminalCommands(raw: unknown): readonly NormalizedTerm
         curCmd = ''
         curComment = ''
         curOut = []
+        inContinuation = false
       }
+    }
+    const startOrExtendCmd = (chunk: string, isCont: boolean) => {
+      const hasTrail = /\\$/.test(chunk)
+      const body = hasTrail ? chunk.slice(0, -1).trimEnd() : chunk
+      curCmd = isCont && curCmd ? `${curCmd} ${body.trim()}` : body
+      inContinuation = hasTrail
     }
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i]!
       const trimmed = line.trim()
       if (!trimmed) continue
+      if (inContinuation && curCmd) {
+        startOrExtendCmd(trimmed, true)
+        continue
+      }
       if (hasPromptPrefix) {
         if (isPromptLine(trimmed)) {
           flush()
-          curCmd = trimmed.slice(2).trim()
+          startOrExtendCmd(trimmed.slice(2).trim(), false)
         } else if (trimmed.startsWith('#') && (!curCmd || nextNonCommentIsPrompt(i))) {
           flush()
           const text = trimmed.replace(/^#+\s*/, '')
           curComment = curComment ? `${curComment} ${text}` : text
         } else if (!curCmd) {
-          curCmd = trimmed
+          startOrExtendCmd(trimmed, false)
         } else {
           curOut.push(line)
         }
@@ -187,7 +204,7 @@ export function normalizeTerminalCommands(raw: unknown): readonly NormalizedTerm
         curComment = curComment ? `${curComment} ${text}` : text
       } else {
         flush()
-        curCmd = trimmed
+        startOrExtendCmd(trimmed, false)
       }
     }
     flush()
@@ -320,11 +337,12 @@ export function buildEndpointCurl(params: {
   readonly method: string
   readonly path: string
   readonly baseUrl?: string | undefined
+  readonly params?: unknown
   readonly headers?: unknown
   readonly requestBody?: unknown
 }): string {
   const origin = normalizeSafeBaseUrl(params.baseUrl)
-  const cleanedRawPath = stripCrlf(params.path)
+  const cleanedRawPath = stripCrlf(params.path).replace(/ /g, '%20')
   let targetUrl: string
   if (/^https?:\/\//i.test(cleanedRawPath)) {
     try {
@@ -338,28 +356,65 @@ export function buildEndpointCurl(params: {
     const cleanPath = cleanedRawPath.startsWith('/') ? cleanedRawPath : `/${cleanedRawPath}`
     targetUrl = `${origin}${cleanPath}`
   }
-  const rawMethod = typeof params.method === 'string' ? params.method.trim().toUpperCase() : 'GET'
-  const safeMethod = /^[A-Z]+$/.test(rawMethod) ? rawMethod : 'GET'
-  const parts: string[] = [`curl -X ${safeMethod} ${shellEscapeSingle(targetUrl)}`]
 
-  let hasContentType = false
-  if (Array.isArray(params.headers)) {
-    for (const item of params.headers) {
+  const extraHeaders: Array<readonly [string, string]> = []
+  const queryParts: string[] = []
+  if (Array.isArray(params.params)) {
+    for (const item of params.params) {
       if (typeof item !== 'object' || item === null) continue
       const rec = item as Record<string, unknown>
       const name = stripCrlf(String(rec.name ?? rec.key ?? ''))
       if (!name) continue
-      if (name.toLowerCase() === 'content-type') hasContentType = true
-      const val = stripCrlf(String(rec.value ?? rec.example ?? ''))
-      parts.push(`-H ${shellEscapeSingle(`${name}: ${val}`)}`)
+      const loc = String(rec.in ?? rec.location ?? 'query')
+        .trim()
+        .toLowerCase()
+      const rawSample = rec.example ?? rec.default ?? rec.value
+      const sample =
+        rawSample !== undefined && rawSample !== null && String(rawSample).trim() !== ''
+          ? stripCrlf(String(rawSample))
+          : `<${name}>`
+      if (loc === 'query') {
+        queryParts.push(`${encodeURIComponent(name)}=${encodeURIComponent(sample)}`)
+      } else if (loc === 'header') {
+        extraHeaders.push([name, sample])
+      }
+    }
+  }
+  if (queryParts.length > 0 && !targetUrl.includes('?')) {
+    targetUrl = `${targetUrl}?${queryParts.join('&')}`
+  }
+
+  const rawMethod = typeof params.method === 'string' ? params.method.trim().toUpperCase() : 'GET'
+  const safeMethod = /^[A-Z]+$/.test(rawMethod) ? rawMethod : 'GET'
+  const needsNoGlob = /[{}[\]]/.test(targetUrl)
+  const parts: string[] = [
+    `curl${needsNoGlob ? ' -g' : ''} -X ${safeMethod} ${shellEscapeSingle(targetUrl)}`,
+  ]
+
+  let hasContentType = false
+  const seenHeaderNames = new Set<string>()
+  const pushHeader = (name: string, val: string) => {
+    const safeK = stripCrlf(name)
+    if (!safeK) return
+    const lower = safeK.toLowerCase()
+    if (seenHeaderNames.has(lower)) return
+    seenHeaderNames.add(lower)
+    if (lower === 'content-type') hasContentType = true
+    parts.push(`-H ${shellEscapeSingle(`${safeK}: ${stripCrlf(val)}`)}`)
+  }
+  if (Array.isArray(params.headers)) {
+    for (const item of params.headers) {
+      if (typeof item !== 'object' || item === null) continue
+      const rec = item as Record<string, unknown>
+      pushHeader(String(rec.name ?? rec.key ?? ''), String(rec.value ?? rec.example ?? ''))
     }
   } else if (typeof params.headers === 'object' && params.headers !== null) {
     for (const [k, v] of Object.entries(params.headers as Record<string, unknown>)) {
-      const safeK = stripCrlf(k)
-      if (!safeK) continue
-      if (safeK.toLowerCase() === 'content-type') hasContentType = true
-      parts.push(`-H ${shellEscapeSingle(`${safeK}: ${stripCrlf(String(v ?? ''))}`)}`)
+      pushHeader(k, String(v ?? ''))
     }
+  }
+  for (const [hk, hv] of extraHeaders) {
+    pushHeader(hk, hv)
   }
   if (params.requestBody !== undefined && params.requestBody !== null) {
     if (!hasContentType) {
@@ -399,6 +454,9 @@ export interface NormalizedScheduleModel {
 
 const HHMM_RE = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/
 const SCHEDULE_DATE_ONLY_RE = /^(\d{4})-(\d{1,2})-(\d{1,2})$/
+const SCHEDULE_ISO_DATETIME_RE =
+  /^\d{4}-\d{1,2}-\d{1,2}[T\s]\d{1,2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?$/i
+const SCHEDULE_SLASH_DATE_RE = /^\d{4}\/\d{1,2}\/\d{1,2}(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?$/
 
 function parseTemporalPosition(
   val: unknown,
@@ -413,33 +471,41 @@ function parseTemporalPosition(
     const h = Number.parseInt(hm[1]!, 10)
     const m = Number.parseInt(hm[2]!, 10)
     const sec = hm[3] ? Number.parseInt(hm[3], 10) : 0
-    if (h > 23 || m > 59 || sec > 59) return null
+    const isEndOfDay = h === 24 && m === 0 && sec === 0
+    if (!isEndOfDay && (h > 23 || m > 59 || sec > 59)) return null
     return { numeric: h * 60 + m + sec / 60, kind: 'hhmm' }
   }
   if (/^-?\d+(?:\.\d+)?$/.test(s)) {
     return { numeric: Number.parseFloat(s), kind: 'num' }
   }
-  if (SCHEDULE_DATE_ONLY_RE.test(s)) {
+  if (SCHEDULE_DATE_ONLY_RE.test(s) || SCHEDULE_ISO_DATETIME_RE.test(s)) {
     const localDate = tryParseLocalDate(s)
     return localDate !== null ? { numeric: localDate.getTime(), kind: 'date' } : null
   }
-  const ts = Date.parse(s)
-  if (!Number.isNaN(ts)) {
-    return { numeric: ts, kind: 'date' }
+  if (SCHEDULE_SLASH_DATE_RE.test(s)) {
+    const ts = Date.parse(s)
+    if (!Number.isNaN(ts)) return { numeric: ts, kind: 'date' }
   }
   return null
 }
 
-function formatTickValue(val: number, kind: 'hhmm' | 'date' | 'num', span = 0): string {
+function formatTickValue(
+  val: number,
+  kind: 'hhmm' | 'date' | 'num',
+  span = 0,
+  preserve24 = false,
+): string {
   if (kind === 'hhmm') {
-    const mins = ((Math.round(val) % 1440) + 1440) % 1440
+    const rounded = Math.round(val)
+    if (preserve24 && rounded === 1440) return '24:00'
+    const mins = ((rounded % 1440) + 1440) % 1440
     const hh = String(Math.floor(mins / 60)).padStart(2, '0')
     const mm = String(mins % 60).padStart(2, '0')
     return `${hh}:${mm}`
   }
   if (kind === 'date') {
     const d = new Date(val)
-    if (span > 0 && span <= 86_400_000) {
+    if (span > 0 && span < 86_400_000) {
       const hh = String(d.getHours()).padStart(2, '0')
       const mm = String(d.getMinutes()).padStart(2, '0')
       return `${hh}:${mm}`
@@ -541,12 +607,14 @@ export function normalizeScheduleItems(
     rangeEnd.kind === 'hhmm' &&
     rangeEnd.numeric < rangeStart.numeric
   const anyItemOvernightHhmm =
-    kind === 'hhmm' && sameKindParsed.some((p) => p.kind === 'hhmm' && p.eNum >= 1440)
+    kind === 'hhmm' && sameKindParsed.some((p) => p.kind === 'hhmm' && p.eNum > 1440)
+  const hasDaytimeShift =
+    kind === 'hhmm' && sameKindParsed.some((p) => p.sNum >= 360 && p.sNum < 1080 && p.eNum <= 1320)
   let overnightAnchor: number | null = null
   if (kind === 'hhmm') {
     if (rangeIsOvernightHhmm && rangeStart) {
       overnightAnchor = rangeStart.numeric
-    } else if (anyItemOvernightHhmm) {
+    } else if (anyItemOvernightHhmm && !hasDaytimeShift) {
       const eveningStarts = sameKindParsed.filter((p) => p.sNum >= 720).map((p) => p.sNum)
       overnightAnchor =
         eveningStarts.length > 0 ? Math.min(...eveningStarts) : sameKindParsed[0]!.sNum
@@ -603,7 +671,9 @@ export function normalizeScheduleItems(
     }
   })
 
-  const axisTicks = [0, 0.3333, 0.6667, 1].map((t) => formatTickValue(minB + span * t, kind, span))
+  const axisTicks = [0, 1 / 3, 2 / 3, 1].map((t, idx) =>
+    formatTickValue(minB + span * t, kind, span, idx === 3 && minB < 1440),
+  )
 
   let nowPct: number | undefined
   let nowLabel: string | undefined
@@ -641,8 +711,15 @@ export interface NormalizedMatrixModel {
 function formatMatrixCellNumber(v: number): string {
   if (Number.isInteger(v)) return String(v)
   const abs = Math.abs(v)
-  if ((abs > 99 && abs < 100) || (abs > 0 && abs < 0.1)) {
-    return String(Number(v.toFixed(3)))
+  if (abs > 99 && abs < 100) {
+    for (const d of [3, 4, 5, 6]) {
+      const cand = Number(v.toFixed(d))
+      if (Math.abs(cand) < 100) return String(cand)
+    }
+    return String(Math.trunc(v * 1e6) / 1e6)
+  }
+  if (abs > 0 && abs < 0.1) {
+    return String(Number(v.toPrecision(3)))
   }
   return String(Number(v.toFixed(2)))
 }
@@ -698,12 +775,13 @@ export function normalizeMatrixData(params: {
 
     for (let c = 0; c < colLabels.length; c++) {
       const v = rowArr[c]
+      const trimmedStr = typeof v === 'string' ? v.trim() : null
       if (
         v === undefined ||
         v === null ||
-        v === '' ||
-        v === '—' ||
-        v === '-' ||
+        trimmedStr === '' ||
+        trimmedStr === '—' ||
+        trimmedStr === '-' ||
         (typeof v === 'number' && !Number.isFinite(v))
       ) {
         rowOut.push({ kind: 'empty', display: '—', intensityPct: 0, ratio: 0 })
@@ -767,7 +845,10 @@ export function normalizeMatrixData(params: {
     cells.push(rowOut)
     if (params.showTotals) {
       if (rowNums.length > 0) {
-        const avg = rowNums.reduce((a, b) => a + b, 0) / rowNums.length
+        let avg = 0
+        for (let i = 0; i < rowNums.length; i++) {
+          avg += (rowNums[i]! - avg) / (i + 1)
+        }
         const avgStr = formatMatrixCellNumber(avg)
         rowSummaries.push(`${avgStr}${unit}`)
       } else {
@@ -836,34 +917,78 @@ export function formatTableToMarkdown(
   return [head, sep, ...body].join('\n')
 }
 
-const NUMERIC_LIKE_RE = /^[+-]?\s*[¥$€£]?\s*[+-]?\s*\d[\d,]*(?:\.\d+)?\s*%?$/
+const NUMERIC_LIKE_RE =
+  /^[+-]?\s*[¥$€£]?\s*[+-]?\s*(?:(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?|\.\d+)\s*%?$/
+
+const TABLE_ALPHA_COLLATOR = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
 
 export function parseFormattedNumericCell(raw: unknown): number | null {
   if (typeof raw === 'number') return Number.isFinite(raw) ? raw : null
   if (typeof raw !== 'string') return null
-  const t = raw.trim()
+  const t = raw.trim().replace(/\u2212/g, '-')
   if (t === '' || !NUMERIC_LIKE_RE.test(t)) return null
   const cleaned = t.replace(/[¥$€£,\s%]/g, '')
   const n = Number(cleaned)
   return Number.isFinite(n) ? n : null
 }
 
-export function compareTableAlphanumericCells(a: unknown, b: unknown): number | null {
-  if (typeof a === 'boolean' && typeof b === 'boolean') {
-    return a === b ? 0 : a ? 1 : -1
+export function resolveTableBadgeTone(rawText: string): {
+  readonly label: string
+  readonly tone: 'neutral' | 'info' | 'success' | 'warning' | 'danger'
+} {
+  const trimmed = rawText.trim()
+  const lower = trimmed.toLowerCase()
+  if (lower.startsWith('ok:')) return { label: trimmed.slice(3).trim(), tone: 'success' }
+  if (lower.startsWith('warn:')) return { label: trimmed.slice(5).trim(), tone: 'warning' }
+  if (lower.startsWith('no:') || lower.startsWith('err:')) {
+    const idx = trimmed.indexOf(':')
+    return { label: trimmed.slice(idx + 1).trim(), tone: 'danger' }
+  }
+  if (lower.startsWith('info:')) return { label: trimmed.slice(5).trim(), tone: 'info' }
+  if (
+    /(?:无异常|无故障|无错误|零故障|零异常|零错误|未发现异常|\b(?:0|no|zero)\s+(?:errors?|fails?|failed|failures?|issues?|faults?|alerts?|incidents?)\b)/i.test(
+      trimmed,
+    )
+  ) {
+    return { label: trimmed, tone: 'success' }
   }
   if (
-    (typeof a !== 'string' && typeof a !== 'number') ||
-    (typeof b !== 'string' && typeof b !== 'number')
+    /(?:未通过|不通过|未达标|未上线|不健康|不正常|异常|失败|高危|故障|错误|超限|熔断|拒绝|\b(?:error|fail|failed|critical|down|danger|rejected|unhealthy|broken|offline|crash|crashed|timeout)\b)/i.test(
+      trimmed,
+    )
   ) {
-    const toStr = (v: unknown): string => {
-      if (typeof v === 'boolean') return v ? '1' : '0'
-      if (typeof v === 'object' && v !== null) return safeStringifyJson(v, 0)
-      return String(v ?? '')
-    }
-    return toStr(a).localeCompare(toStr(b), undefined, { numeric: true, sensitivity: 'base' })
+    return { label: trimmed, tone: 'danger' }
   }
-  return null
+  if (
+    /(?:预警|降级|审批中|待|警告|缓慢|\b(?:warn|warning|degraded|pending|review|slow|inactive|paused|disabled)\b)/i.test(
+      trimmed,
+    )
+  ) {
+    return { label: trimmed, tone: 'warning' }
+  }
+  if (
+    /(?:正常|健康|成功|通过|已回款|达标|上线|\b(?:healthy|ok|pass|passed|done|active|success|online)\b)/i.test(
+      trimmed,
+    )
+  ) {
+    return { label: trimmed, tone: 'success' }
+  }
+  return { label: trimmed, tone: 'neutral' }
+}
+
+function toTableSortString(v: unknown): string {
+  if (v === null || v === undefined) return ''
+  if (typeof v === 'boolean') return v ? '1' : '0'
+  if (typeof v === 'object') return safeStringifyJson(v, 0)
+  return String(v)
+}
+
+export function compareTableAlphanumericCells(a: unknown, b: unknown): number {
+  const sa = toTableSortString(a)
+  const sb = toTableSortString(b)
+  const cmp = TABLE_ALPHA_COLLATOR.compare(sa, sb)
+  if (cmp !== 0) return cmp
+  return sa < sb ? -1 : sa > sb ? 1 : 0
 }
 
 export function compareFormattedNumericCells(a: unknown, b: unknown): number {
@@ -917,6 +1042,7 @@ export function computeTableNumericSummary(
   for (const col of columns) {
     if (!numericKeys.has(col.key)) continue
     let sum = 0
+    let runningMean = 0
     let count = 0
     let nonNumericCount = 0
     let allPercent = true
@@ -938,11 +1064,13 @@ export function computeTableNumericSummary(
           if (!prefix) prefix = curMatch[0]!
           else if (curMatch[0] !== prefix) mixedCurrency = true
         }
+        count += 1
         sum += n
-        count += 1
+        runningMean += (n - runningMean) / count
       } else if (typeof v === 'number' && Number.isFinite(v)) {
-        sum += v
         count += 1
+        sum += v
+        runningMean += (v - runningMean) / count
         allPercent = false
       } else {
         nonNumericCount += 1
@@ -950,19 +1078,28 @@ export function computeTableNumericSummary(
     }
     if (count > 0 && nonNumericCount === 0) {
       if (allPercent) {
-        const avg = sum / count
+        const avg = runningMean
         const absAvg = Math.abs(avg)
-        const pctStr =
-          absAvg > 99.9 && absAvg < 100
-            ? String(Number(avg.toFixed(4)))
-            : absAvg > 0 && absAvg < 0.01
-              ? String(Number(avg.toFixed(3)))
-              : absAvg > 0 && absAvg < 0.1
-                ? avg.toFixed(2)
-                : avg.toFixed(1)
+        let pctStr: string
+        if (absAvg > 99.9 && absAvg < 100) {
+          pctStr = String(Math.trunc(avg * 1e6) / 1e6)
+          for (const d of [4, 5, 6]) {
+            const cand = Number(avg.toFixed(d))
+            if (Math.abs(cand) < 100) {
+              pctStr = String(cand)
+              break
+            }
+          }
+        } else if (absAvg > 0 && absAvg < 0.01) {
+          pctStr = String(Number(avg.toFixed(3)))
+        } else if (absAvg > 0 && absAvg < 0.1) {
+          pctStr = avg.toFixed(2)
+        } else {
+          pctStr = avg.toFixed(1)
+        }
         summary[col.key] = formatAvg(`${pctStr}%`)
       } else if (col.format === 'bar' && col.max === 100) {
-        const avg = sum / count
+        const avg = runningMean
         const formatted = Number.isInteger(avg) ? String(avg) : avg.toFixed(1)
         summary[col.key] = formatAvg(formatted)
       } else {

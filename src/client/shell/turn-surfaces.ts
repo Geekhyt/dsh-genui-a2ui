@@ -321,6 +321,31 @@ export function findCallSeq(
   return best
 }
 
+export function resolveSupersededSurfaceIdsAfterCall(
+  snapshot: ChatTargetSnapshot | undefined,
+  surfaceIds: readonly string[],
+  callSeq: number | undefined,
+): ReadonlySet<string> {
+  if (snapshot === undefined || callSeq === undefined || surfaceIds.length === 0) {
+    return new Set()
+  }
+  const targetSet = new Set(surfaceIds)
+  const superseded = new Set<string>()
+  for (const call of collectOrderedCalls(snapshot)) {
+    if (call.seq <= callSeq) continue
+    for (const id of call.surfaceIds) {
+      if (targetSet.has(id)) superseded.add(id)
+    }
+    for (const msg of call.messages) {
+      const del = (msg as { deleteSurface?: { surfaceId?: unknown } }).deleteSurface
+      if (del && typeof del.surfaceId === 'string' && targetSet.has(del.surfaceId)) {
+        superseded.add(del.surfaceId)
+      }
+    }
+  }
+  return superseded
+}
+
 export function buildReplayMessagesForSurfaceCall(
   snapshot: ChatTargetSnapshot | undefined,
   currentMessages: readonly AgentToRendererMessage[],

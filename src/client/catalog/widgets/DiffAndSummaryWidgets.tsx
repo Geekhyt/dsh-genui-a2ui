@@ -19,6 +19,7 @@ import {
   type ChildRef,
   copyTextToClipboard,
   defineComponent,
+  handleHorizontalArrowKey,
   renderChildRef,
   weightStyle,
 } from '../widget-helpers.tsx'
@@ -161,7 +162,15 @@ export const DshDiffViewImpl = defineComponent<{
       </div>
 
       {isMultiFile ? (
-        <div className={css.diffFileTabs} role="tablist">
+        <div
+          className={css.diffFileTabs}
+          role="tablist"
+          onKeyDown={(e) => {
+            handleHorizontalArrowKey(e, e.currentTarget, '[role="tab"]', (idx) => {
+              setActiveFileIdx(idx)
+            })
+          }}
+        >
           {multiFiles.map((file, idx) => {
             const st = multiStats?.[idx]
             return (
@@ -169,6 +178,7 @@ export const DshDiffViewImpl = defineComponent<{
                 key={`${file.path}-${idx}`}
                 type="button"
                 role="tab"
+                tabIndex={idx === safeFileIdx ? 0 : -1}
                 aria-selected={idx === safeFileIdx}
                 className={css.diffFileTab}
                 data-active={idx === safeFileIdx ? 'true' : 'false'}

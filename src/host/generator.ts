@@ -14,11 +14,10 @@ import {
 type SchemaCatalogInput = ConstructorParameters<typeof CatalogConfig>[0]
 
 import { validateCalcExpression } from '../shared/calc-engine.ts'
-import { isSecretKey } from '../shared/constants.ts'
 import {
-  collectKvSecretsFromValue,
-  extractBindingPointer,
+  collectKvSecretsForDataModelUpdate,
   normalizePointerPath,
+  resolveTemplateKvPointers,
   resolveTemplateObscuredPointers,
 } from '../shared/redaction.ts'
 import { A2UI_LIMITS, ASK_TOOL, dshSchemaCatalog, RENDER_TOOL } from '../shared/catalog-schema.ts'
@@ -394,27 +393,6 @@ interface SurfaceRedactionRecord {
   readonly componentsById: Map<string, Record<string, unknown>>
 }
 
-function getAtPointerLocal(root: unknown, pointer: string): unknown {
-  const norm = normalizePointerPath(pointer)
-  if (norm === '/') return root
-  const parts = norm.slice(1).split('/')
-  let cur: unknown = root
-  for (const rawSeg of parts) {
-    if (cur === null || cur === undefined || typeof cur !== 'object') return undefined
-    const seg = rawSeg.replace(/~1/g, '/').replace(/~0/g, '~')
-    if (Array.isArray(cur)) {
-      const idx = Number(seg)
-      if (!Number.isInteger(idx) || idx < 0 || idx >= cur.length) return undefined
-      cur = cur[idx]
-    } else {
-      const rec = cur as Record<string, unknown>
-      if (!Object.hasOwn(rec, seg)) return undefined
-      cur = rec[seg]
-    }
-  }
-  return cur
-}
-
 export class SurfaceSessions {
   private readonly states = new Map<string, RendererState>()
   private readonly enabledBySession = new Map<string, boolean>()
@@ -478,67 +456,26 @@ export class SurfaceSessions {
             ? comp.id
             : `anon_${rec.componentsById.size}`
         rec.componentsById.set(id, comp)
-        if (comp.component === 'KvEditor') {
-          const p = extractBindingPointer(comp.items)
-          if (p !== null) rec.kvPointers.add(p)
-        }
       }
-      resolveTemplateObscuredPointers([...rec.componentsById.values()], rec.obscuredPointers)
+      const allComps = [...rec.componentsById.values()]
+      resolveTemplateObscuredPointers(allComps, rec.obscuredPointers)
+      resolveTemplateKvPointers(allComps, rec.kvPointers)
     }
     const ingestDataModel = (surfaceId: string, dmPath: string, dmValue: unknown) => {
       const rec = bySurface.get(surfaceId)
       if (!rec || rec.kvPointers.size === 0) return
-      for (const kvPtr of rec.kvPointers) {
-        const normKv = normalizePointerPath(kvPtr)
-        if (dmPath === normKv) {
-          collectKvSecretsFromValue(dmValue, normKv, rec.obscuredPointers, new Set(), new Set())
-        } else if (dmPath === '/') {
-          const val = getAtPointerLocal(dmValue, normKv)
-          if (val !== undefined) {
-            collectKvSecretsFromValue(val, normKv, rec.obscuredPointers, new Set(), new Set())
-          }
-        } else if (normKv.startsWith(`${dmPath}/`)) {
-          const val = getAtPointerLocal(dmValue, normKv.slice(dmPath.length))
-          if (val !== undefined) {
-            collectKvSecretsFromValue(val, normKv, rec.obscuredPointers, new Set(), new Set())
-          }
-        } else if (normKv === '/' ? dmPath !== '/' : dmPath.startsWith(`${normKv}/`)) {
-          const relStart = normKv === '/' ? 1 : normKv.length + 1
-          const relParts = dmPath.slice(relStart).split('/')
-          const seg = relParts[0]?.replace(/~1/g, '/').replace(/~0/g, '~') ?? ''
-          if (seg !== '' && isSecretKey(seg)) {
-            rec.obscuredPointers.add(dmPath)
-          } else if (
-            typeof dmValue === 'object' &&
-            dmValue !== null &&
-            !Array.isArray(dmValue) &&
-            relParts.length === 1
-          ) {
-            const valRec = dmValue as Record<string, unknown>
-            const k =
-              typeof valRec.key === 'string'
-                ? valRec.key
-                : typeof valRec.name === 'string'
-                  ? valRec.name
-                  : ''
-            if (k !== '' && isSecretKey(k)) {
-              rec.obscuredPointers.add(`${dmPath}/value`)
-            }
-          }
-        }
-      }
+      collectKvSecretsForDataModelUpdate(dmPath, dmValue, rec.kvPointers, rec.obscuredPointers)
     }
     const prescanKvPointers = (surfaceId: string, list: unknown) => {
       if (!Array.isArray(list)) return
       const rec = ensureSurface(surfaceId)
+      const listComps: Record<string, unknown>[] = []
       for (const item of list) {
-        if (typeof item !== 'object' || item === null) continue
-        const comp = item as Record<string, unknown>
-        if (comp.component === 'KvEditor') {
-          const p = extractBindingPointer(comp.items)
-          if (p !== null) rec.kvPointers.add(p)
+        if (typeof item === 'object' && item !== null) {
+          listComps.push(item as Record<string, unknown>)
         }
       }
+      resolveTemplateKvPointers(listComps, rec.kvPointers)
     }
     for (const msg of messages) {
       const rec = msg as unknown as Record<string, unknown>

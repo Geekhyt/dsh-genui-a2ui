@@ -11,11 +11,11 @@
       "maxGzipBytes": 24000
     },
     "lib/client.runtime.js": {
-      "maxRawBytes": 1480000,
+      "maxRawBytes": 1500000,
       "maxGzipBytes": 395000
     },
     "lib/client.echarts.js": {
-      "maxRawBytes": 940000,
+      "maxRawBytes": 950000,
       "maxGzipBytes": 315000
     },
     "lib/client.mermaid.js": {

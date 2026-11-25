@@ -6,9 +6,31 @@ import {
   formatCompactTickNum,
   niceUpperBound,
   sanitizeChartLabel,
+  toFiniteNum,
   toNumber,
   truncateByVisualWidth,
 } from './shared.ts'
+
+function formatPieTooltip(isCompact: boolean) {
+  return (p: unknown) => {
+    const rec = p as { name?: unknown; value?: unknown; percent?: unknown }
+    const n = sanitizeChartLabel(rec?.name)
+    const v = sanitizeChartLabel(rec?.value)
+    const pct =
+      typeof rec?.percent === 'number' && Number.isFinite(rec.percent) ? ` (${rec.percent}%)` : ''
+    return isCompact ? `${n}\n${v}${pct}` : `${n}: ${v}${pct}`
+  }
+}
+
+function formatPieOuterLabel(maxWidthPx: number) {
+  return (p: unknown) => {
+    const rec = p as { name?: unknown; percent?: unknown }
+    const pct =
+      typeof rec?.percent === 'number' && Number.isFinite(rec.percent) ? ` ${rec.percent}%` : ''
+    const maxUnits = Math.max(4, Math.floor((maxWidthPx - pct.length * 6.5) / 6.5))
+    return `${truncateByVisualWidth(sanitizeChartLabel(rec?.name), maxUnits)}${pct}`
+  }
+}
 
 export function buildRadialChartOption(ctx: ChartBuildContext): echarts.EChartsCoreOption | null {
   const {
@@ -53,8 +75,7 @@ export function buildRadialChartOption(ctx: ChartBuildContext): echarts.EChartsC
       tooltip: {
         ...baseTooltip,
         trigger: 'item',
-        formatter:
-          props.kind === 'pie' ? (isCompact ? '{b}\n{c} ({d}%)' : '{b}: {c} ({d}%)') : undefined,
+        formatter: props.kind === 'pie' ? formatPieTooltip(isCompact) : undefined,
       },
       legend: legend({
         scroll: isCompact || items.length >= 4,
@@ -95,7 +116,7 @@ export function buildRadialChartOption(ctx: ChartBuildContext): echarts.EChartsC
                 label: {
                   color: theme.textSecondary,
                   fontSize: 11.5,
-                  formatter: '{b} {d}%',
+                  formatter: formatPieOuterLabel(pieOuterLabelW),
                   overflow: 'truncate',
                   width: pieOuterLabelW,
                 },
@@ -172,6 +193,7 @@ export function buildRadialChartOption(ctx: ChartBuildContext): echarts.EChartsC
       : sanitizeChartLabel(props.title ?? '')
     const arcWidth = isCompact ? 9 : 12
     const estGaugeW = chartWidth(480)
+    const gaugeSpan = gaugeMax - gaugeMin
     return {
       tooltip: itemTooltip,
       series: [
@@ -197,13 +219,16 @@ export function buildRadialChartOption(ctx: ChartBuildContext): echarts.EChartsC
             color: theme.textSecondary,
             fontSize: isCompact ? 9 : 10,
             distance: isCompact ? 12 : 15,
-            formatter: (v: number) => formatCompactTickNum(v),
+            formatter: (v: number) => formatCompactTickNum(v, gaugeSpan),
           },
           detail: {
             valueAnimation: true,
-            fontSize: isCompact ? 16 : 20,
+            fontSize: isCompact ? 14 : 18,
             color: theme.textPrimary,
-            offsetCenter: [0, isCompact ? '58%' : '62%'],
+            offsetCenter: [0, isCompact ? '54%' : '58%'],
+            width: Math.max(76, Math.floor(estGaugeW * 0.56)),
+            overflow: 'truncate',
+            formatter: (v: number) => formatCompactTickNum(v, gaugeSpan),
           },
           title: {
             color: theme.textSecondary,
@@ -253,14 +278,32 @@ export function buildRadialChartOption(ctx: ChartBuildContext): echarts.EChartsC
           ? 0
           : 100
     const radarFloor = rawRadarMin < 0 ? Math.floor(rawRadarMin * 1.15) : undefined
-    const indicator = radarAxes.map((axName) => ({
-      name: axName,
-      max: radarCeiling,
-      ...(radarFloor !== undefined ? { min: radarFloor } : {}),
-    }))
+    const explicitAxisMax = new Map<string, number>()
+    for (const r of rows) {
+      const m = toFiniteNum(r.max)
+      if (m !== null && m > 0) {
+        const ax = sanitizeChartLabel(r[xKey])
+        const prev = explicitAxisMax.get(ax) ?? 0
+        if (m > prev) explicitAxisMax.set(ax, m)
+      }
+    }
+    const indicator = radarAxes.map((axName, axIdx) => {
+      const axisPeak = Math.max(
+        ...radarSeriesItems.map((it) => it.value[axIdx] ?? 0),
+        radarFloor ?? 0,
+      )
+      const rowMax = explicitAxisMax.get(axName)
+      return {
+        name: axName,
+        max: rowMax !== undefined && rowMax >= axisPeak ? rowMax : radarCeiling,
+        ...(radarFloor !== undefined ? { min: radarFloor } : {}),
+      }
+    })
     const isUltraNarrow = containerWidth !== undefined && containerWidth > 0 && containerWidth < 300
     const showRadarLegend = radarSeriesItems.length > 1
-    const radiusPct = isUltraNarrow ? 0.38 : isCompact ? 0.48 : showRadarLegend ? 0.58 : 0.65
+    const baseRadiusPct = isUltraNarrow ? 0.38 : isCompact ? 0.48 : showRadarLegend ? 0.58 : 0.65
+    const radiusPct =
+      chartHeight < 210 ? Math.min(baseRadiusPct, isUltraNarrow ? 0.36 : 0.44) : baseRadiusPct
     const estW = chartWidth(520)
     const estH = chartHeight
     const rPx = (Math.min(estW, estH) / 2) * radiusPct
@@ -374,7 +417,7 @@ export function buildRadialChartOption(ctx: ChartBuildContext): echarts.EChartsC
       tooltip: {
         ...baseTooltip,
         trigger: 'item',
-        formatter: isCompact ? '{b}\n{c} ({d}%)' : '{b}: {c} ({d}%)',
+        formatter: formatPieTooltip(isCompact),
       },
       legend: legend({
         scroll: isCompact || items.length >= 4,
@@ -392,7 +435,7 @@ export function buildRadialChartOption(ctx: ChartBuildContext): echarts.EChartsC
             : {
                 color: theme.textSecondary,
                 fontSize: 11,
-                formatter: '{b} {d}%',
+                formatter: formatPieOuterLabel(roseOuterLabelW),
                 overflow: 'truncate',
                 width: roseOuterLabelW,
               },
@@ -420,9 +463,17 @@ export function buildRadialChartOption(ctx: ChartBuildContext): echarts.EChartsC
     const trackBg = dark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(15, 23, 42, 0.07)'
     const denseRadial = items.length >= 6
     const useLegendMode = denseRadial
-    const radialBarW = isCompact
-      ? Math.max(3.5, Math.min(10, Math.floor((denseRadial ? 42 : 46) / Math.max(1, items.length))))
-      : Math.max(3.5, Math.min(12, Math.floor(64 / Math.max(1, items.length))))
+    const radialFitW = Math.floor(
+      (Math.min(chartWidth(520), chartHeight) * 0.28) / Math.max(1, items.length),
+    )
+    const radialBarW = Math.max(
+      3.5,
+      Math.min(
+        isCompact ? 10 : 12,
+        radialFitW,
+        Math.floor((isCompact ? (denseRadial ? 42 : 46) : 64) / Math.max(1, items.length)),
+      ),
+    )
     return {
       tooltip: {
         ...baseTooltip,

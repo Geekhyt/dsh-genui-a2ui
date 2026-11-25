@@ -3,6 +3,7 @@ import { resolveClientLocale } from '../../../shared/chart-i18n.ts'
 import {
   type ChartBuildContext,
   FILLED_SHAPE_LABEL,
+  formatCompactTickNum,
   normalizeIsoDate,
   sanitizeChartLabel,
   scanSampleKeys,
@@ -81,9 +82,18 @@ export function buildMultivariateChartOption(
     const minVal = finiteVals.length > 0 ? Math.min(...finiteVals) : 0
     const maxVal = finiteVals.length > 0 ? Math.max(...finiteVals) : 100
     const valSpan = Math.max(1e-9, maxVal - minVal)
-    const showCellLabels = isCompact
-      ? xCats.length <= 6 && yCats.length <= 6 && dedupEntries.length <= 36
-      : dedupEntries.length <= 48
+    const estHeatW = chartWidth(520)
+    const estCellW = (estHeatW - (isCompact ? 76 : 112)) / Math.max(1, xCats.length)
+    const cellFontSize = estCellW < 42 ? 8.5 : isCompact ? 9.5 : 11
+    const showCellLabels =
+      estCellW >= 28 &&
+      (isCompact
+        ? xCats.length <= 6 && yCats.length <= 6 && dedupEntries.length <= 36
+        : dedupEntries.length <= 48)
+    const formatHeatCell = (p: unknown) => {
+      const v = (p as { value?: unknown })?.value
+      return Array.isArray(v) && typeof v[2] === 'number' ? formatCompactTickNum(v[2], valSpan) : ''
+    }
 
     const cells = dedupEntries.map((entry) => {
       const norm = (entry.val - minVal) / valSpan
@@ -93,11 +103,10 @@ export function buildMultivariateChartOption(
         value: [entry.xIdx, entry.yIdx, entry.val],
         label:
           norm >= 0.45
-            ? { ...FILLED_SHAPE_LABEL, fontSize: isCompact ? 9.5 : 11 }
-            : { color: theme.textPrimary, fontSize: isCompact ? 9.5 : 11 },
+            ? { ...FILLED_SHAPE_LABEL, fontSize: cellFontSize, formatter: formatHeatCell }
+            : { color: theme.textPrimary, fontSize: cellFontSize, formatter: formatHeatCell },
       }
     })
-    const estHeatW = chartWidth(520)
     const splitAreaColors = dark
       ? ['rgba(255, 255, 255, 0.02)', 'rgba(255, 255, 255, 0.05)']
       : ['rgba(15, 23, 42, 0.02)', 'rgba(15, 23, 42, 0.045)']
@@ -162,6 +171,7 @@ export function buildMultivariateChartOption(
         itemHeight: isCompact ? 76 : 96,
         itemGap: 14,
         textStyle: { color: theme.textPrimary, fontSize: 10.5 },
+        formatter: (v: number) => formatCompactTickNum(v, valSpan),
         inRange: {
           color: [theme.heatLow, theme.brand],
         },
@@ -172,7 +182,8 @@ export function buildMultivariateChartOption(
           data: cells,
           label: {
             show: showCellLabels,
-            fontSize: isCompact ? 9.5 : 11,
+            fontSize: cellFontSize,
+            formatter: formatHeatCell,
           },
           itemStyle: {
             borderRadius: 3,
@@ -239,9 +250,16 @@ export function buildMultivariateChartOption(
         ],
       }
     }
-    const padLeft = isCompact ? 14 : 36
-    const padRight = isCompact ? 38 : 50
+    const padLeft = isCompact ? 10 : 36
     const estWidth = chartWidth(600)
+    const prelimGap = Math.max(
+      22,
+      Math.floor(
+        (estWidth - padLeft - (isCompact ? 38 : 50)) / Math.max(1, effectiveDims.length - 1),
+      ),
+    )
+    const lastAxisOutside = prelimGap < 72
+    const padRight = lastAxisOutside ? (isCompact ? 42 : 54) : isCompact ? 38 : 50
     const axisGap = Math.max(
       22,
       Math.floor((estWidth - padLeft - padRight) / Math.max(1, effectiveDims.length - 1)),
@@ -250,6 +268,12 @@ export function buildMultivariateChartOption(
     const baseMaxTitleW = staggerHeaders
       ? Math.max(40, Math.floor(axisGap * 1.15))
       : Math.max(38, Math.floor(axisGap * 0.82))
+    const readDimVal = (r: Record<string, unknown>, k: string): number | null => {
+      const raw = r[k]
+      if (raw === null || raw === undefined || raw === '') return null
+      const n = typeof raw === 'number' ? raw : Number(String(raw).replace(/,/g, '').trim())
+      return Number.isFinite(n) ? n : null
+    }
 
     const parallelAxis = effectiveDims.map((dimKey, idx) => {
       const isLast = idx === effectiveDims.length - 1
@@ -267,6 +291,8 @@ export function buildMultivariateChartOption(
           ? baseMaxTitleW
           : Math.max(38, Math.floor(axisGap * 0.44))
         : baseMaxTitleW
+      const dimNums = rows.map((r) => readDimVal(r, dimKey)).filter((v): v is number => v !== null)
+      const dimSpan = dimNums.length > 1 ? Math.max(...dimNums) - Math.min(...dimNums) : undefined
       return {
         dim: idx,
         name: sanitizeChartLabel(dimKey),
@@ -283,29 +309,21 @@ export function buildMultivariateChartOption(
           width: axisTitleW,
           overflow: 'truncate' as const,
         },
-        ...(isLast
-          ? {
-              axisLabel: {
-                color: theme.textSecondary,
-                fontSize: isCompact ? 9.5 : 10,
-                hideOverlap: true,
-                align: 'right' as const,
-                margin: 6,
-                inside: true,
-                textBorderColor: haloColor,
-                textBorderWidth: 1.5,
-              },
-            }
-          : {}),
+        axisLabel: {
+          color: theme.textSecondary,
+          fontSize: isCompact ? 9.5 : 10,
+          hideOverlap: true,
+          textBorderColor: haloColor,
+          textBorderWidth: 1.5,
+          formatter: (v: number) => formatCompactTickNum(v, dimSpan),
+          ...(isLast
+            ? lastAxisOutside
+              ? { align: 'left' as const, margin: 6, inside: false }
+              : { align: 'right' as const, margin: 6, inside: true }
+            : {}),
+        },
       }
     })
-
-    const readDimVal = (r: Record<string, unknown>, k: string): number | null => {
-      const raw = r[k]
-      if (raw === null || raw === undefined || raw === '') return null
-      const n = typeof raw === 'number' ? raw : Number(String(raw).replace(/,/g, '').trim())
-      return Number.isFinite(n) ? n : null
-    }
     const showPerRowLegend = rows.length > 0 && rows.length <= 10
     const parallelSeries = showPerRowLegend
       ? rows.map((r, idx) => ({
@@ -441,7 +459,8 @@ export function buildMultivariateChartOption(
           ? ['日', '一', '', '三', '', '五', '']
           : ['', 'M', '', 'W', '', 'F', '']
         : localeTag
-    const cellBorderW = estCellW < 7 ? 0.8 : estCellW < 10 ? 1.2 : estCellW < 15 ? 1.8 : 2.5
+    const cellBorderW =
+      estCellW < 4 ? 0 : estCellW < 7 ? 0.8 : estCellW < 10 ? 1.2 : estCellW < 15 ? 1.8 : 2.5
     const monthSlotPx = estCellW * 4.33
     const monthNameMap =
       monthSlotPx < 14
@@ -511,6 +530,7 @@ export function buildMultivariateChartOption(
         itemWidth: 10,
         itemHeight: isCompact ? 52 : 68,
         textStyle: { color: theme.textSecondary, fontSize: 10 },
+        formatter: (v: number) => formatCompactTickNum(v, vmMax - vmMin),
         inRange: { color: greenRamp },
       },
       calendar: {

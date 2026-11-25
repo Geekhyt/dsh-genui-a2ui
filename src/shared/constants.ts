@@ -449,7 +449,7 @@ export function sanitizeInlineUrlText(input: unknown): string {
   if (input === null || input === undefined) return ''
   return String(input)
     .replace(
-      /(?:image|https?|file|blob):\/\/\S+|(?:javascript|vbscript|data):[ \t]*[^\s"'<>]*/gi,
+      /(?:image|https?|file|blob):\/\/\S+|(?:javascript|vbscript):[ \t]*[^\s"'<>]*|data:[ \t]*(?:[a-z0-9.+-]+\/[a-z0-9.+-]+)?(?:[;,][^\s"'<>]*)/gi,
       '',
     )
     .replace(/[ \t]{2,}/g, ' ')

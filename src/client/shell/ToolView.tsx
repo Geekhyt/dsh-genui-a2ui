@@ -14,6 +14,7 @@ import {
   type ChatTargetSnapshot,
   findCallSeq,
   parseRenderMeta,
+  resolveSupersededSurfaceIdsAfterCall,
 } from './turn-surfaces.ts'
 import { DshAppsIcon, DshDisclosureRow } from '../ui/primitives.tsx'
 
@@ -98,15 +99,7 @@ export const A2uiToolView = memo(function A2uiToolView({
 
   const needsChatReplay = useMemo(() => {
     if (phase !== 'result') return true
-    if (settledMeta === null || placement !== 'inline') return false
-    const created = new Set<string>()
-    for (const m of settledMeta.messages) {
-      const rec = m as unknown as { createSurface?: { surfaceId?: unknown } }
-      if (typeof rec?.createSurface?.surfaceId === 'string') {
-        created.add(rec.createSurface.surfaceId)
-      }
-    }
-    return settledMeta.surfaceIds.some((id) => !created.has(id))
+    return settledMeta !== null && placement === 'inline'
   }, [phase, settledMeta, placement])
 
   const subscribe = useCallback(
@@ -161,6 +154,14 @@ export const A2uiToolView = memo(function A2uiToolView({
 
   const msg = useShellMessages()
   const title = settledMeta?.title ?? argTitle ?? 'A2UI'
+
+  const inlineSupersededIds = useMemo(
+    () =>
+      placement === 'inline' && phase === 'result' && settledMeta !== null
+        ? resolveSupersededSurfaceIdsAfterCall(chatSnapshot, settledMeta.surfaceIds, callSeq)
+        : undefined,
+    [callSeq, chatSnapshot, phase, placement, settledMeta],
+  )
 
   if (phase === 'result' && block.isError) {
     const stopped = block.error?.code === 'interrupted'
@@ -229,8 +230,16 @@ export const A2uiToolView = memo(function A2uiToolView({
   }
 
   if (placement === 'inline' && phase === 'result' && settledMeta !== null) {
+    const allInlineSuperseded =
+      inlineSupersededIds !== undefined &&
+      settledMeta.surfaceIds.length > 0 &&
+      settledMeta.surfaceIds.every((id) => inlineSupersededIds.has(id))
     return (
-      <div data-tool="a2ui_render" data-placement="inline" data-state="inline-settled">
+      <div
+        data-tool="a2ui_render"
+        data-placement="inline"
+        data-state={allInlineSuperseded ? 'inline-superseded' : 'inline-settled'}
+      >
         <DshDisclosureRow
           icon={APPS_ICON_14}
           title={msg.inlineCardTitle}
@@ -253,6 +262,10 @@ export const A2uiToolView = memo(function A2uiToolView({
             sessionId={sessionId}
             variant="bare"
             streaming={false}
+            readOnly={allInlineSuperseded}
+            readOnlySurfaceIds={
+              inlineSupersededIds && inlineSupersededIds.size > 0 ? inlineSupersededIds : undefined
+            }
             onAction={sendAction}
             openWorkspaceFile={effectiveOpenFile}
           />

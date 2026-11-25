@@ -71,14 +71,21 @@ export function buildLegendOption(opts: {
     uniqueNames.length <= 2 &&
     uniqueNames.every((n) => visualWidthOf(n) <= 14)
 
+  const effectiveScroll = scroll || (uniqueNames.length > 1 && estNaturalTotalPx > availW - 6)
+  const mayPaginateScroll =
+    effectiveScroll &&
+    uniqueNames.length >= 2 &&
+    !fitsNaturallyWithoutScroll &&
+    estNaturalTotalPx > availW - 6
+
   const perPage = estContainerW < 340 ? 2 : 3
   const dynSlotUnits = Math.max(
     9,
     Math.min(16, Math.floor((availW - 60) / (perPage * fontSize * 0.62))),
   )
   let compactFormatter: ((name: string) => string) | undefined
-  if (isCompact) {
-    const baseMaxUnits = estContainerW < 340 ? 8 : dynSlotUnits
+  if (isCompact || mayPaginateScroll) {
+    const baseMaxUnits = estContainerW < 340 ? 8 : Math.min(11, dynSlotUnits)
     const collided = new Set<string>()
     if (uniqueNames.length > 1) {
       const seen = new Map<string, string>()
@@ -99,7 +106,7 @@ export function buildLegendOption(opts: {
       }
       if (collided.has(name)) {
         if (wideTwoSeriesFit) return name
-        return truncateMiddleByVisualWidth(name, Math.min(16, Math.max(12, dynSlotUnits)))
+        return truncateMiddleByVisualWidth(name, Math.min(13, Math.max(11, dynSlotUnits)))
       }
       return truncateByVisualWidth(name, baseMaxUnits)
     }
@@ -115,18 +122,17 @@ export function buildLegendOption(opts: {
   const estFormattedTotalMax =
     formattedMaxWidths.length > 0 ? formattedMaxWidths.reduce((sum, w) => sum + w + 8, -8) : 0
 
-  const effectiveScroll = scroll || (uniqueNames.length > 1 && estNaturalTotalPx > availW - 6)
   const willPaginateScroll =
-    isCompact &&
     effectiveScroll &&
-    uniqueNames.length >= 3 &&
+    uniqueNames.length >= 2 &&
     !fitsNaturallyWithoutScroll &&
     estFormattedTotalMax > availW - 6
-  const clipWMax = Math.max(96, availW - 44)
-  const clipWMin = Math.max(96, availW - 68)
+  const clipWMax = Math.max(84, availW - 76)
+  const clipWMin = Math.max(76, availW - 88)
   let scrollItemGap = 8
+  let itemsPerScrollPage = perPage
   if (willPaginateScroll) {
-    const maxK = Math.min(uniqueNames.length - 1, perPage + 1)
+    const maxK = Math.min(uniqueNames.length - 1, perPage)
     for (let k = maxK; k >= 1; k -= 1) {
       let sumMin = 0
       let sumMax = 0
@@ -135,26 +141,33 @@ export function buildLegendOption(opts: {
         sumMax += formattedMaxWidths[i] ?? 0
       }
       if (k === 1) {
-        scrollItemGap = Math.max(8, Math.min(64, Math.ceil(clipWMax - sumMin + 12)))
+        itemsPerScrollPage = 1
+        scrollItemGap = Math.max(8, Math.min(96, Math.ceil(clipWMax - sumMin + 12)))
         break
       }
       const gapMin = Math.ceil((clipWMax - sumMin + 12) / k)
-      const gapMax = Math.floor((clipWMin - sumMax - 4) / (k - 1))
+      const gapMax = Math.floor((clipWMin - sumMax - 6) / (k - 1))
       if (gapMax >= 8 && gapMin <= gapMax) {
-        scrollItemGap = Math.max(8, Math.min(64, gapMin))
+        itemsPerScrollPage = k
+        scrollItemGap = Math.max(8, Math.min(96, gapMin))
         break
       }
     }
   }
   const slotTextW = willPaginateScroll
-    ? Math.max(42, Math.floor((clipWMin - 8 * (perPage - 1)) / perPage) - itemWidth - 5)
+    ? Math.max(
+        34,
+        Math.floor((clipWMin - scrollItemGap * (itemsPerScrollPage - 1)) / itemsPerScrollPage) -
+          itemWidth -
+          6,
+      )
     : undefined
 
   return {
     type: effectiveScroll ? 'scroll' : 'plain',
     bottom: opts.bottom ?? 0,
-    left: isCompact ? 6 : 'center',
-    ...(isCompact ? { right: 6 } : {}),
+    left: isCompact || willPaginateScroll ? 6 : 'center',
+    ...(isCompact || willPaginateScroll ? { right: 6 } : {}),
     ...(willPaginateScroll ? { padding: 0 } : {}),
     itemWidth,
     itemHeight,

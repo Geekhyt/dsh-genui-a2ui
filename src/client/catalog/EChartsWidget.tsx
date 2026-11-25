@@ -230,42 +230,52 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
     typeof rawHeight === 'number' && Number.isFinite(rawHeight) ? rawHeight : 260
   const height = Math.min(640, Math.max(140, safeRawHeight))
 
-  const option = useMemo(() => {
-    if (!chunk || !chartHasData) return null
-    return chunk.buildChartOption(
-      {
-        kind,
-        data,
-        title,
-        xField,
-        yField,
-        y2Field,
-        seriesField,
-        sizeField,
-        referenceLine,
-        referenceLabel,
-        stacked,
-        horizontal,
-        zoom,
-        height,
-        step,
-        yScale,
-        stackMode,
-        markArea,
-        referenceX,
-        referenceXLabel,
-        bins,
-        interactiveSelect: hasSelectChange,
-        selected:
-          activeTokens.length === 0
-            ? undefined
-            : activeTokens.length === 1
-              ? activeTokens[0]
-              : activeTokens,
-      },
-      dark,
-      containerWidth,
-    )
+  const { option, buildError } = useMemo(() => {
+    if (!chunk || !chartHasData) return { option: null, buildError: null as string | null }
+    try {
+      return {
+        option: chunk.buildChartOption(
+          {
+            kind,
+            data,
+            title,
+            xField,
+            yField,
+            y2Field,
+            seriesField,
+            sizeField,
+            referenceLine,
+            referenceLabel,
+            stacked,
+            horizontal,
+            zoom,
+            height,
+            step,
+            yScale,
+            stackMode,
+            markArea,
+            referenceX,
+            referenceXLabel,
+            bins,
+            interactiveSelect: hasSelectChange,
+            selected:
+              activeTokens.length === 0
+                ? undefined
+                : activeTokens.length === 1
+                  ? activeTokens[0]
+                  : activeTokens,
+          },
+          dark,
+          containerWidth,
+        ),
+        buildError: null as string | null,
+      }
+    } catch (err) {
+      return {
+        option: null,
+        buildError: err instanceof Error ? err.message : String(err),
+      }
+    }
   }, [
     chunk,
     chartHasData,
@@ -432,7 +442,7 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
     chunk,
     option,
     dark,
-    mounted: chartHasData && !loadError,
+    mounted: chartHasData && !loadError && !buildError,
     chartKind: kind,
     dataIdentity: data,
     onPointClick: handlePointClick,
@@ -460,7 +470,7 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
     copyTextToClipboard(csvPayload, markCopiedCsv)
   }
 
-  const showActions = Boolean(exportable && chunk && !loadError && chartHasData)
+  const showActions = Boolean(exportable && chunk && !loadError && !buildError && chartHasData)
   const showHeader = Boolean(title || activeSelectedDisplay || showActions)
   const isInteractive = Boolean(onSelectChange || action)
 
@@ -523,6 +533,10 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
             <button type="button" className={css.chartActionBtn} onClick={retryEchartsChunk}>
               {msg.retryLoad}
             </button>
+          </div>
+        ) : buildError ? (
+          <div className={css.emptyCell} role="alert">
+            <span>{sanitizeInlineText(buildError)}</span>
           </div>
         ) : !chartHasData ? (
           <div className={css.emptyCell}>{msg.tableEmpty}</div>

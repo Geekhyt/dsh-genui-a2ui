@@ -111,6 +111,7 @@ export const DshScheduleImpl = defineComponent<{
                       data-narrow={placeOutside ? 'true' : 'false'}
                       style={{ left: `${tr.leftPct}%`, width: `${tr.widthPct}%` }}
                       title={barTitle}
+                      aria-label={barTitle}
                       onClick={() => {
                         void runAction?.({
                           metadata: {
@@ -300,16 +301,41 @@ export const DshEntityHeaderImpl = defineComponent<{
     [props.metrics],
   )
 
-  const dotState: 'done' | 'ongoing' | 'warning' | 'error' | 'pending' | null =
-    props.status === 'healthy'
-      ? 'done'
-      : props.status === 'warning'
+  const rawStatus = typeof props.status === 'string' ? props.status.trim().toLowerCase() : ''
+  const normalizedStatus: 'healthy' | 'ongoing' | 'warning' | 'error' | 'offline' | undefined =
+    rawStatus === 'healthy' ||
+    rawStatus === 'ok' ||
+    rawStatus === 'active' ||
+    rawStatus === 'done' ||
+    rawStatus === 'success'
+      ? 'healthy'
+      : rawStatus === 'warning' || rawStatus === 'warn' || rawStatus === 'degraded'
         ? 'warning'
-        : props.status === 'ongoing'
+        : rawStatus === 'ongoing' || rawStatus === 'running' || rawStatus === 'in_progress'
           ? 'ongoing'
-          : props.status === 'error'
+          : rawStatus === 'error' ||
+              rawStatus === 'err' ||
+              rawStatus === 'danger' ||
+              rawStatus === 'critical' ||
+              rawStatus === 'failed'
             ? 'error'
-            : props.status === 'offline'
+            : rawStatus === 'offline' ||
+                rawStatus === 'pending' ||
+                rawStatus === 'inactive' ||
+                rawStatus === 'paused'
+              ? 'offline'
+              : undefined
+
+  const dotState: 'done' | 'ongoing' | 'warning' | 'error' | 'pending' | null =
+    normalizedStatus === 'healthy'
+      ? 'done'
+      : normalizedStatus === 'warning'
+        ? 'warning'
+        : normalizedStatus === 'ongoing'
+          ? 'ongoing'
+          : normalizedStatus === 'error'
+            ? 'error'
+            : normalizedStatus === 'offline'
               ? 'pending'
               : null
 
@@ -334,9 +360,9 @@ export const DshEntityHeaderImpl = defineComponent<{
           <div className={css.entityTextCol}>
             <div className={css.entityTitleLine}>
               <span className={css.entityTitle}>{title}</span>
-              {dotState ? (
-                <span className={css.entityStatusPill} data-status={props.status}>
-                  <DshStateDot state={dotState} size={8} />
+              {dotState || statusLabel ? (
+                <span className={css.entityStatusPill} data-status={normalizedStatus}>
+                  {dotState ? <DshStateDot state={dotState} size={8} /> : null}
                   {statusLabel ? <span>{statusLabel}</span> : null}
                 </span>
               ) : null}
@@ -464,9 +490,9 @@ export const DshMatrixImpl = defineComponent<{
           <tbody>
             {model.rowLabels.map((rowLabel, rIdx) => (
               <tr key={`${rowLabel}-${rIdx}`}>
-                <td className={css.matrixRowTd} title={rowLabel}>
-                  {rowLabel}
-                </td>
+                <th scope="row" className={css.matrixRowTd} title={rowLabel}>
+                  <span className={css.matrixRowText}>{rowLabel}</span>
+                </th>
                 {(model.cells[rIdx] ?? []).map((cell, cIdx) => (
                   <td
                     key={cIdx}

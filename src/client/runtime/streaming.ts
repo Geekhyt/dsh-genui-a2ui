@@ -206,6 +206,8 @@ export class StreamingExpressSession {
     }
     if (rawClean.length > A2UI_LIMITS.maxUiChars) {
       this.streamRejected = true
+      this.messages = []
+      this.surfaceIdSet.clear()
       this.lastError = `Express program length (${rawClean.length} chars) exceeds maximum (${A2UI_LIMITS.maxUiChars} chars).`
       return this.buildSnapshot()
     }
@@ -213,6 +215,8 @@ export class StreamingExpressSession {
       assertSafeExpressProgram(rawClean)
     } catch (err) {
       this.streamRejected = true
+      this.messages = []
+      this.surfaceIdSet.clear()
       this.lastError = err instanceof Error ? err.message : String(err)
       return this.buildSnapshot()
     }
@@ -230,6 +234,8 @@ export class StreamingExpressSession {
     const maxExpansion = A2UI_LIMITS.maxCompiledBytes * 2
     if (estimateExpressExpansionSize(clean, maxExpansion) > maxExpansion) {
       this.streamRejected = true
+      this.messages = []
+      this.surfaceIdSet.clear()
       this.lastError = `Express local-variable expansion exceeds limit (${maxExpansion} chars).`
       return this.buildSnapshot()
     }

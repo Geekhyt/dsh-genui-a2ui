@@ -133,10 +133,16 @@ export function DshSelectView({
       aria-expanded={effectiveOpen}
       aria-invalid={showError || undefined}
       onClick={handleOpenToggle}
-      data-placeholder={activeOption ? 'false' : 'true'}
+      onKeyDown={(e) => {
+        if (!effectiveOpen && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+          e.preventDefault()
+          handleOpenToggle()
+        }
+      }}
+      data-placeholder={activeOption || selectedVal ? 'false' : 'true'}
     >
       <span className={css.selectTriggerText}>
-        {activeOption ? activeOption.label : placeholder}
+        {activeOption ? activeOption.label : selectedVal || placeholder}
       </span>
       <span className={css.selectTriggerChevron} aria-hidden="true">
         {CHEVRON_DOWN_14}

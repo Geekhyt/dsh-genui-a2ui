@@ -159,7 +159,7 @@ export function buildComparisonChartOption(
     const leftEdge = stepEdgeVals.slice(0, Math.min(2, stepEdgeVals.length))
     const rightEdge = stepEdgeVals.slice(Math.max(0, stepEdgeVals.length - 2))
     const wfMarkPos = pickMarkLinePosition(leftEdge, rightEdge, props.referenceLine)
-    const refLine = buildRefLine(theme.warn, wfMarkPos)
+    const refLine = buildRefLine(theme.textWarn, wfMarkPos)
     const refBounds = computeRefAxisBounds(peaks, props.referenceLine)
     const minPeak = Math.min(0, ...peaks)
     const negHeadroomMin = minPeak < 0 ? -niceUpperBound(Math.abs(minPeak) * 1.24) : undefined
@@ -313,31 +313,46 @@ export function buildComparisonChartOption(
       (p: { dataIndex?: number; value?: unknown }): string => {
         const idx = typeof p.dataIndex === 'number' ? p.dataIndex : -1
         const delta = idx >= 0 ? stepDeltas[idx] : undefined
+        if (delta === 0) return '0'
         return `${sign}${delta !== undefined ? Math.abs(delta) : sanitizeChartLabel(p.value)}`
       }
     const mapNegItems = (
       arr: readonly (number | '-')[],
-      color: string,
+      barColor: string,
+      labelColor: string,
       sign: '+' | '-',
       onlyWhenPosEmpty: boolean,
     ) =>
-      arr.map((val, i) =>
-        typeof val !== 'number'
-          ? val
-          : {
-              value: val,
-              itemStyle: { color, borderRadius: [0, 0, 4, 4] },
-              label: {
-                show: showBarLabels && (!onlyWhenPosEmpty || incData[i] === '-'),
-                position: 'bottom' as const,
-                color,
+      arr.map((val, i) => {
+        if (typeof val !== 'number') return val
+        const bottom = (baseNegData[i] ?? 0) + val
+        const labelText = stepDeltas[i] === 0 ? '0' : `${sign}${Math.abs(stepDeltas[i] ?? val)}`
+        const shouldShow = showBarLabels && (!onlyWhenPosEmpty || incData[i] === '-')
+        const useInside =
+          shouldShow &&
+          overlapsRefBand(i, bottom - ySpan * 0.085, bottom) &&
+          fitsInsideBar(labelText, Math.abs(val))
+        return {
+          value: val,
+          itemStyle: { color: barColor, borderRadius: [0, 0, 4, 4] },
+          label: useInside
+            ? {
+                show: true,
+                ...insideHaloLabel,
                 fontSize: barLabelFontSize,
-                formatter: () => `${sign}${Math.abs(stepDeltas[i] ?? val)}`,
+                formatter: () => labelText,
+              }
+            : {
+                show: shouldShow,
+                position: 'bottom' as const,
+                color: labelColor,
+                fontSize: barLabelFontSize,
+                formatter: () => labelText,
               },
-            },
-      )
-    const incNegItems = mapNegItems(incNegData, theme.success, '+', true)
-    const decNegItems = mapNegItems(decNegData, theme.danger, '-', false)
+        }
+      })
+    const incNegItems = mapNegItems(incNegData, theme.success, theme.textSuccess, '+', true)
+    const decNegItems = mapNegItems(decNegData, theme.danger, theme.textDanger, '-', false)
     const silentBase = (
       stack: string,
       data: readonly number[],
@@ -408,7 +423,7 @@ export function buildComparisonChartOption(
         type: 'category',
         data: categories,
         axisTick: { show: false },
-        axisLabel: compactCatLabel(categories.length),
+        axisLabel: compactCatLabel(categories.length, 36, 6, categories),
       },
       yAxis: valAxis(bounds, true),
       series: [
@@ -442,7 +457,7 @@ export function buildComparisonChartOption(
           label: {
             show: showBarLabels,
             position: 'top',
-            color: theme.success,
+            color: theme.textSuccess,
             fontSize: barLabelFontSize,
             formatter: formatDeltaLabel('+'),
           },
@@ -459,7 +474,7 @@ export function buildComparisonChartOption(
           label: {
             show: showBarLabels,
             position: 'bottom',
-            color: theme.danger,
+            color: theme.textDanger,
             fontSize: barLabelFontSize,
             formatter: formatDeltaLabel('-'),
           },
@@ -590,7 +605,10 @@ export function buildComparisonChartOption(
         max: bulletMax,
         interval: bulletInterval,
         splitLine: dashedLine,
-        axisLabel: axisLabelBase,
+        axisLabel: {
+          ...axisLabelBase,
+          formatter: (v: number) => formatCompactTickNum(v, bulletMax - bulletMin),
+        },
       },
       yAxis: [
         {
@@ -660,9 +678,13 @@ export function buildComparisonChartOption(
               p.target !== undefined
                 ? p.actual >= p.target
                   ? theme.success
-                  : p.actual >= p.target * 0.8
-                    ? theme.brand
-                    : theme.warn
+                  : p.target > 0
+                    ? p.actual >= p.target * 0.8
+                      ? theme.brand
+                      : theme.warn
+                    : p.actual >= p.target * 1.2
+                      ? theme.brand
+                      : theme.warn
                 : theme.brand
             return {
               value: p.actual,
@@ -724,7 +746,7 @@ export function buildComparisonChartOption(
     const offsetStep = 10 ** Math.floor(Math.log10(Math.max(1e-9, rawSpan)))
     const baseline =
       minVal < 0
-        ? -niceUpperBound(Math.abs(minVal))
+        ? minVal
         : useHighOffsetBaseline
           ? Number(
               Math.max(
@@ -735,9 +757,11 @@ export function buildComparisonChartOption(
           : 0
     const connectorColor = dark ? 'rgba(148, 163, 184, 0.5)' : 'rgba(100, 116, 139, 0.42)'
     const beforeColor = dark ? '#94a3b8' : '#64748b'
-    const baseData = parsed.map((p) => Number((Math.min(p.before, p.after) - baseline).toFixed(4)))
+    const baseData = parsed.map((p) =>
+      Number((Math.min(p.before, p.after) - baseline).toPrecision(10)),
+    )
     const spanData = parsed.map((p) => ({
-      value: Number(Math.abs(p.after - p.before).toFixed(4)),
+      value: Number(Math.abs(p.after - p.before).toPrecision(10)),
       itemStyle: {
         color:
           p.after > p.before ? theme.success : p.after < p.before ? theme.warn : connectorColor,

@@ -2313,6 +2313,189 @@ export const SHOWCASE_COMPREHENSIVE_AUDIT_V055_UI = [
   ']))',
 ].join('\n')
 
+export const SHOWCASE_COMPREHENSIVE_AUDIT_V056_ECHARTS_UI = [
+  'surface("audit_v056_echarts")',
+  '$/treemapZeroParent = [',
+  '  { name: "Compute", value: 0, children: [{ name: "GPU Inference", value: 420 }, { name: "CPU Batch", value: 180 }] },',
+  '  { name: "Storage", value: 0, children: [{ name: "NVMe Hot", value: 260 }, { name: "Object Cold", value: 140 }] }',
+  ']',
+  '$/boxNullData = [',
+  '  { svc: "Auth-GW", values: [12, 18, 22, null, 29, 35] },',
+  '  { svc: "Pay-Core", values: [25, 31, 38, 44, 52] },',
+  '  { svc: "Risk-ML", values: [40, 48, 56, 65, 81] },',
+  '  { svc: "Order-DB", values: [15, 20, 24, 31, 39] },',
+  '  { svc: "Edge-CDN", values: [8, 11, 14, 19, 24] }',
+  ']',
+  '$/bigHeatmap = [',
+  '  { x: "Mon", y: "HZ", v: 1250000 }, { x: "Tue", y: "HZ", v: 2480000 }, { x: "Wed", y: "HZ", v: 3620000 }, { x: "Thu", y: "HZ", v: 4190000 }, { x: "Fri", y: "HZ", v: 2950000 },',
+  '  { x: "Mon", y: "BJ", v: 1840000 }, { x: "Tue", y: "BJ", v: 3120000 }, { x: "Wed", y: "BJ", v: 4850000 }, { x: "Thu", y: "BJ", v: 3910000 }, { x: "Fri", y: "BJ", v: 2740000 },',
+  '  { x: "Mon", y: "SG", v: 1490000 }, { x: "Tue", y: "SG", v: 2210000 }, { x: "Wed", y: "SG", v: 3390000 }, { x: "Thu", y: "SG", v: 4410000 }, { x: "Fri", y: "SG", v: 3180000 }',
+  ']',
+  '$/isoCandle = [',
+  '  { day: "2025-12-28", open: 102, close: 108, low: 99, high: 111 },',
+  '  { day: "2025-12-29", open: 108, close: 105, low: 103, high: 112 },',
+  '  { day: "2025-12-30", open: 105, close: 114, low: 104, high: 116 },',
+  '  { day: "2025-12-31", open: 114, close: 119, low: 112, high: 121 },',
+  '  { day: "2026-01-01", open: 119, close: 116, low: 114, high: 123 },',
+  '  { day: "2026-01-02", open: 116, close: 124, low: 115, high: 126 }',
+  ']',
+  '$/subOneHBar = [',
+  '  { name: "Shard-A", rate: 0.14 }, { name: "Shard-B", rate: 0.28 }, { name: "Shard-C", rate: 0.39 }, { name: "Shard-D", rate: 0.46 }',
+  ']',
+  '$/bigGauge = [{ name: "Annual Tokens", value: 1850000, max: 2000000 }]',
+  '$/bulletMillions = [',
+  '  { name: "Q3 Revenue", value: 4200000, target: 5000000, ranges: [2000000, 4000000, 6000000] },',
+  '  { name: "Q4 Forecast", value: 5300000, target: 5500000, ranges: [2500000, 4500000, 6500000] }',
+  ']',
+  '$/tightHist = [0.011, 0.0114, 0.012, 0.0123, 0.0128, 0.0132, 0.0136, 0.0141, 0.0148, 0.0152, 0.0157, 0.016]',
+  '$/sankeyClip = {',
+  '  nodes: [',
+  '    { name: "Ingress" }, { name: "Router" },',
+  '    { name: "Global Edge CDN Distribution" },',
+  '    { name: "Cold Archive Glacier Storage" }',
+  '  ],',
+  '  links: [',
+  '    { source: "Ingress", target: "Router", value: 100 },',
+  '    { source: "Router", target: "Global Edge CDN Distribution", value: 65 },',
+  '    { source: "Router", target: "Cold Archive Glacier Storage", value: 35 }',
+  '  ]',
+  '}',
+  '$/parallelLarge = [',
+  '  { model: "Alpha-70B", tokens: 1000100, qps: 12400, latency: 42, cost: 1800, score: 91 },',
+  '  { model: "Beta-32B", tokens: 1000280, qps: 28600, latency: 26, cost: 920, score: 86 },',
+  '  { model: "Gamma-120B", tokens: 1000490, qps: 8400, latency: 68, cost: 3400, score: 95 }',
+  ']',
+  '$/comboNegRef = [',
+  '  { q: "Jan", net: -40, margin: 12 }, { q: "Feb", net: -15, margin: 18 }, { q: "Mar", net: 22, margin: 24 },',
+  '  { q: "Apr", net: 55, margin: 31 }, { q: "May", net: 78, margin: 36 }',
+  ']',
+  '$/escapedPie = [',
+  '  { name: "R&D & Alice\'s Team", value: 46 },',
+  '  { name: "Core <Platform>", value: 34 },',
+  '  { name: "Ops & SRE", value: 20 }',
+  ']',
+  'root = Card(Column([',
+  '  Text("### 全面审计 43：ECharts 泛化边界实测（276px & 全宽）"),',
+  '  Row([',
+  '    Chart("treemap", $/treemapZeroParent, title="Treemap 父节点 value=0 自动汇总", height=210, weight=1),',
+  '    Chart("boxplot", $/boxNullData, title="Boxplot 5 项防碰撞 + null 样本过滤", xField="svc", height=210, weight=1)',
+  '  ], align="stretch"),',
+  '  Row([',
+  '    Chart("heatmap", $/bigHeatmap, title="Heatmap 七位数紧凑标签防重叠", xField="x", yField="y", height=210, weight=1),',
+  '    Chart("candlestick", $/isoCandle, title="Candlestick 跨年 ISO 日期防同名截断", xField="day", height=210, weight=1)',
+  '  ], align="stretch"),',
+  '  Row([',
+  '    Chart("bar", $/subOneHBar, title="水平柱 <1 参考线防右侧裁切", xField="name", yField="rate", horizontal=true, referenceLine=0.42, referenceLabel="SLO 0.42", height=210, weight=1),',
+  '    Chart("gauge", $/bigGauge, title="Gauge 大数详情与刻度防碰撞", height=210, weight=1)',
+  '  ], align="stretch"),',
+  '  Row([',
+  '    Chart("bullet", $/bulletMillions, title="Bullet 百万级刻度紧凑化", height=210, weight=1),',
+  '    Chart("histogram", $/tightHist, title="Histogram 窄小数区间分箱精度", height=210, weight=1)',
+  '  ], align="stretch"),',
+  '  Row([',
+  '    Chart("sankey", $/sankeyClip, title="Sankey 276px 右叶长标签防裁切", height=210, weight=1),',
+  '    Chart("pie", $/escapedPie, title="Pie 特殊字符 & / 单引号提示防转义", xField="name", yField="value", height=210, weight=1)',
+  '  ], align="stretch"),',
+  '  Chart("parallel", $/parallelLarge, title="Parallel 高基准精密刻度与末双轴防撞", xField="model", yField=["tokens", "qps", "latency", "cost", "score"], height=230),',
+  '  Chart("combo", $/comboNegRef, title="Combo 负值数据 + 正参考线防刻度爆炸", xField="q", yField="net", y2Field="margin", referenceLine=65, referenceLabel="目标 65", height=220)',
+  ']))',
+].join('\n')
+
+export const SHOWCASE_COMPREHENSIVE_AUDIT_V056_WIDGETS_UI = [
+  'surface("audit_v056_widgets")',
+  '$/stickyRows = [',
+  '  { svc: "gateway-hz", region: "华东杭州 AZ1", port: 8080, status: "无异常", errors: "0 failed", util: "40%", delta: "+14.2%", sla: "99.99975%", owner: "Platform-SRE" },',
+  '  { svc: "inference-bj", region: "华北北京 AZ2", port: 9090, status: "警告", errors: "2 failed", util: "78%", delta: "-3.8%", sla: "99.99120%", owner: "ML-Infra" },',
+  '  { svc: "vector-sg", region: "新加坡 AZ1", port: 6333, status: "正常", errors: "No error", util: "52%", delta: "+6.4%", sla: "99.99850%", owner: "Search-Core" }',
+  ']',
+  '$/sortItems = [',
+  '  { id: "s1", title: "Canary Health Gate", description: "验证延迟 P99 与错误率", badge: "P0" },',
+  '  { id: "s2", title: "Shadow Replay Verification", description: "回放生产流量核验输出一致性", badge: "P1" },',
+  '  { id: "s3", title: "Global Rollout Switch", description: "全量切流至新集群", badge: "P2" }',
+  ']',
+  '$/rangeStart = 88',
+  '$/rangeEnd = 90',
+  '$/ratingVal = 3.5',
+  '$/kvObj = { ENV: "prod", API_TOKEN: "tok_live_98123", LOG_LEVEL: "info" }',
+  '$/topoNodes = [',
+  '  { id: "a", label: "Edge Ingress", status: "ok", metric: "14.2k QPS" },',
+  '  { id: "b", label: "Fraud Scorer", status: "error", metric: "P99 480ms" },',
+  '  { id: "c", label: "Ledger Core", status: "ok", metric: "12ms" },',
+  '  { id: "d", label: "Audit Sink", status: "warning", metric: "Lag 3.2s" }',
+  ']',
+  '$/topoEdges = [',
+  '  { from: "a", to: "b", label: "gRPC" },',
+  '  { from: "a", to: "c", label: "direct-bypass" },',
+  '  { from: "b", to: "d", label: "async" },',
+  '  { from: "c", to: "d", label: "mirror" }',
+  ']',
+  '$/matrixRows = ["East-US-Production-Inference-Pool", "EU-Central-Canary-Verification-Cluster", "AP-South-Realtime-Gateway-Shard"]',
+  '$/matrixCols = ["SLA", "P99", "Err"]',
+  '$/matrixCells = [[99.99975, 24.5, 0.02], [99.9912, 31.8, 0.11], [99.9985, 19.2, 0.04]]',
+  '$/scheduleItems = [',
+  '  { id: "sh1", title: "Day Shift A", group: "Ops", start: "08:00", end: "16:00", tone: "info" },',
+  '  { id: "sh2", title: "Evening Shift", group: "Ops", start: "16:00", end: "24:00", tone: "success" },',
+  '  { id: "sh3", title: "Night Guard", group: "SRE", start: "22:00", end: "06:00", tone: "warning" }',
+  ']',
+  '$/commaLogs = [',
+  '  "2026-06-01 10:00:01,234 [auth-svc] ERROR Token signature expired for tenant=prod",',
+  '  "2026-06-01 10:00:02,045 [gateway] INFO Error recovery completed with 0 issues",',
+  '  "2026-06-01 10:00:03,810 [scheduler] WARN Retry backoff reached 400ms"',
+  ']',
+  '$/trackerDays = [',
+  '  { id: "d1", label: "05-01", status: "ok", value: "99.99%" }, { id: "d2", label: "05-02", status: "ok", value: "99.98%" },',
+  '  { id: "d3", label: "05-03", status: "warning", value: "99.82%" }, { id: "d4", label: "05-04", status: "ok", value: "100%" },',
+  '  { id: "d5", label: "05-05", status: "ok", value: "99.97%" }, { id: "d6", label: "05-06", status: "ok", value: "99.99%" }',
+  ']',
+  '$/traceTree = [',
+  '  { id: "t1", label: "POST /v1/infer", meta: "Total 420ms", status: "ok", offsetPct: 0, widthPct: 100, children: [',
+  '    { id: "t2", label: "Auth & Quota", meta: "18ms", status: "ok", offsetPct: 0, widthPct: 12 },',
+  '    { id: "t3", label: "KV Prefill", meta: "285ms", status: "warning", offsetPct: 12, widthPct: 68 }',
+  '  ]}',
+  ']',
+  'root = Card(Column([',
+  '  Text("### 全面审计 44：Widgets & CSS 泛化实测（Dark & Light）"),',
+  '  EntityHeader("推理网关核心集群", subtitle="华东-生产主备拓扑", status="warning", statusLabel="降级告警 · 需核验", tags=["SLA 99.99%", "P99 警告"]),',
+  '  Row([Badge("SLA 99.99% 正常", tone="success"), Badge("P99 延迟警告", tone="warning"), Badge("3 节点健康", tone="info")]),',
+  '  Table($/stickyRows, title="Sticky 首列防透视 + 否定词徽章 + 百分比进度条 + 高 SLA 汇总", stickyFirstColumn=true, selectable=true, searchable=true, showSummary=true, columns=[',
+  '    { key: "svc", label: "服务", sortable: true },',
+  '    { key: "region", label: "区域", sortable: true },',
+  '    { key: "port", label: "端口", sortable: true },',
+  '    { key: "status", label: "状态", format: "badge" },',
+  '    { key: "errors", label: "异常统计", format: "badge" },',
+  '    { key: "util", label: "利用率", format: "bar", sortable: true },',
+  '    { key: "delta", label: "环比", format: "delta", sortable: true },',
+  '    { key: "sla", label: "SLA", sortable: true },',
+  '    { key: "owner", label: "负责人" }',
+  '  ]),',
+  '  Row([',
+  '    SortableList($/sortItems, title="306px SortableList 内容不挤压", weight=1),',
+  '    Column([',
+  '      Rating("半星评分 + 306px 长摘要防溢出", $/ratingVal, allowHalf=true, labels=["不可用", "有风险", "一般", "建议进入灰度验证并观察", "完美放行"]),',
+  '      RangeSlider("高区段双滑块 88..90 无锁死", 0, 100, $/rangeStart, $/rangeEnd, step=1, unit="%")',
+  '    ], weight=1)',
+  '  ], align="stretch"),',
+  '  Row([',
+  '    ServiceGraph($/topoNodes, $/topoEdges, title="ServiceGraph 节点不透明背板防连线穿透", weight=1),',
+  '    Matrix($/matrixRows, $/matrixCols, $/matrixCells, title="306px Matrix 长行头与高 SLA 精度", weight=1)',
+  '  ], align="stretch"),',
+  '  Row([',
+  '    Schedule($/scheduleItems, title="Schedule 24:00 与跨夜并存无偏移", weight=1),',
+  '    LogViewer($/commaLogs, title="LogViewer 逗号毫秒与 [svc] 级别识别", weight=1)',
+  '  ], align="stretch"),',
+  '  Row([',
+  '    Column([',
+  '      Tracker($/trackerDays, title="Light 模式状态文本对比度核验", summary="14 日均值 99.96%"),',
+  '      Tree($/traceTree, title="Trace 瀑布树状态对比度")',
+  '    ], weight=1),',
+  '    Column([',
+  '      KvEditor($/kvObj, title="KvEditor 重复键告警与密文显隐切换"),',
+  '      ImageCompare("https://invalid.local/missing-before.png", "data:image/svg+xml;utf8,<svg xmlns=%27http://www.w3.org/2000/svg%27 width=%27320%27 height=%27160%27><rect width=%27320%27 height=%27160%27 fill=%27%231d4ed8%27/><text x=%27160%27 y=%2786%27 fill=%27white%27 font-size=%2718%27 text-anchor=%27middle%27>After Render OK</text></svg>", beforeLabel="Before (Broken)", afterLabel="After (OK)", height=160)',
+  '    ], weight=1)',
+  '  ], align="stretch")',
+  ']))',
+].join('\n')
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 function extractText(content) {
@@ -2621,6 +2804,8 @@ export function startMockLlmServer(port = PORT) {
       const isShowcase40 = /\bshowcase-40\b|combo-v053-charts/i.test(userText)
       const isShowcase41 = /\bshowcase-41\b|combo-v053-widgets/i.test(userText)
       const isShowcase42 = /\bshowcase-42\b|audit-v055/i.test(userText)
+      const isShowcase43 = /\bshowcase-43\b|audit-v056-echarts/i.test(userText)
+      const isShowcase44 = /\bshowcase-44\b|audit-v056-widgets/i.test(userText)
       const isDashboard = /dashboard|看板/i.test(userText)
       const isAsk = /ask|向导|部署/i.test(userText)
       const isDock = /dock|工作台|监控/i.test(userText)
@@ -2935,6 +3120,22 @@ export function startMockLlmServer(port = PORT) {
           })
           return
         }
+        if (isShowcase43) {
+          await streamToolCall(res, model, 'a2ui_render', {
+            title:
+              '全面审计 43：ECharts 泛化边界压测（Treemap零父值/Boxplot防撞/7位热力/跨年K线/<1标线/大数Gauge/Bullet/Histogram/Sankey/Parallel/Combo/Pie）',
+            ui: SHOWCASE_COMPREHENSIVE_AUDIT_V056_ECHARTS_UI,
+          })
+          return
+        }
+        if (isShowcase44) {
+          await streamToolCall(res, model, 'a2ui_render', {
+            title:
+              '全面审计 44：Widgets & CSS 泛化压测（Sticky不透视/Light对比度/SortableList/RangeSlider/Rating/ServiceGraph/Matrix/Schedule/LogViewer/KvEditor/ImageCompare）',
+            ui: SHOWCASE_COMPREHENSIVE_AUDIT_V056_WIDGETS_UI,
+          })
+          return
+        }
         if (userText.includes('[a2ui-action]')) {
           if (userText.includes('surface="analytics"') || userText.includes('action="boost_q2"')) {
             await streamToolCall(res, model, 'a2ui_render', {
@@ -3132,21 +3333,25 @@ export function startMockLlmServer(port = PORT) {
                                                                                         ? '已渲染全面审计 41（16 协议标准图标、小数域滑块、字面量 CheckCard、Warning 语义点、306px ApiEndpoint/FileOpenBtn/AnnotationText、跨夜过午 Schedule、URL+Action SourceList 与 ProTable 空值排序）。'
                                                                                         : isShowcase42
                                                                                           ? '已渲染全面审计 42（Mermaid SQL/ID 文本防污染、Waterfall 零线防撞、小量级箱线图、空节点关系图、稀疏热力图、长系列图例、零值圆环、长服务名日志、ServiceGraph 长指标与 ProTable 布尔/N/A/高 SLA 实测）。'
-                                                                                          : userText.includes(
-                                                                                                '[a2ui-action]',
-                                                                                              )
-                                                                                            ? '已根据您的操作实时增量刷新界面数据模型。'
-                                                                                            : isDock
-                                                                                              ? '已将 CI/CD 发布流水线监控面板固定在输入框上方的常驻工作台（Dock），后续轮次将继续实时原地刷新。'
-                                                                                              : isInline
-                                                                                                ? '已在工具步骤流内嵌渲染诊断摘要。'
-                                                                                                : isDashboard
-                                                                                                  ? '已为您生成 2026 区域经营交互看板（示例数据），可切换图表、搜索排序明细表或一键调整预测情景。'
-                                                                                                  : userText.includes(
-                                                                                                        'test-error',
-                                                                                                      )
-                                                                                                    ? '初稿校验触发编译器诊断自愈，已自动将非法组件修正为标准组件并完成渲染。'
-                                                                                                    : '已为您准备好餐厅预订交互卡片，您可直接在下方调整人数、口味或包间选项后点击确认。'
+                                                                                          : isShowcase43
+                                                                                            ? '已渲染全面审计 43（ECharts 泛化边界压测：Treemap 父值汇总、Boxplot 防撞、7 位数热力图、跨年 K 线、<1 水平标线、全负零线、大数 Gauge、Bullet、Sankey、Parallel、Combo 与小负值 Radar）。'
+                                                                                            : isShowcase44
+                                                                                              ? '已渲染全面审计 44（Widgets & CSS 泛化压测：Sticky 首列防透视、Light 对比度、SortableList、RangeSlider、Rating、ServiceGraph、Matrix、Schedule、LogViewer、KvEditor 与 ImageCompare）。'
+                                                                                              : userText.includes(
+                                                                                                    '[a2ui-action]',
+                                                                                                  )
+                                                                                                ? '已根据您的操作实时增量刷新界面数据模型。'
+                                                                                                : isDock
+                                                                                                  ? '已将 CI/CD 发布流水线监控面板固定在输入框上方的常驻工作台（Dock），后续轮次将继续实时原地刷新。'
+                                                                                                  : isInline
+                                                                                                    ? '已在工具步骤流内嵌渲染诊断摘要。'
+                                                                                                    : isDashboard
+                                                                                                      ? '已为您生成 2026 区域经营交互看板（示例数据），可切换图表、搜索排序明细表或一键调整预测情景。'
+                                                                                                      : userText.includes(
+                                                                                                            'test-error',
+                                                                                                          )
+                                                                                                        ? '初稿校验触发编译器诊断自愈，已自动将非法组件修正为标准组件并完成渲染。'
+                                                                                                        : '已为您准备好餐厅预订交互卡片，您可直接在下方调整人数、口味或包间选项后点击确认。'
       await streamTextReply(res, model, reply)
       return
     }
