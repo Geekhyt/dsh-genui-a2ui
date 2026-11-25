@@ -392,7 +392,7 @@ export function buildHierarchyChartOption(
       ),
     ].map((name) => ({ name }))
 
-    const useCircularCompact = isCompact && nodes.length <= 10
+    const useCircular = nodes.length <= 10
     return {
       tooltip: itemTooltip,
       legend:
@@ -405,25 +405,26 @@ export function buildHierarchyChartOption(
       series: [
         {
           type: 'graph',
-          layout: useCircularCompact ? 'circular' : 'force',
-          circular: useCircularCompact ? { rotateLabel: false } : undefined,
+          layout: useCircular ? 'circular' : 'force',
+          circular: useCircular ? { rotateLabel: false } : undefined,
           roam: 'move',
-          draggable: !useCircularCompact,
-          top: useCircularCompact ? 28 : isCompact ? 16 : 12,
-          bottom: categories.length > 1 ? (useCircularCompact ? 52 : isCompact ? 42 : 34) : 28,
-          left: useCircularCompact ? 46 : isCompact ? 32 : 18,
-          right: useCircularCompact ? 46 : isCompact ? 32 : 18,
+          draggable: !useCircular,
+          top: useCircular ? 28 : isCompact ? 16 : 12,
+          bottom: categories.length > 1 ? (useCircular ? 52 : isCompact ? 42 : 34) : 28,
+          left: useCircular ? 46 : isCompact ? 32 : 18,
+          right: useCircular ? 46 : isCompact ? 32 : 18,
           edgeSymbol: ['none', 'arrow'],
           edgeSymbolSize: [4, 8],
-          force: useCircularCompact
+          force: useCircular
             ? undefined
             : {
+                initLayout: 'circular',
                 repulsion: isCompact ? 85 : 180,
                 edgeLength: isCompact ? [40, 64] : [65, 120],
                 gravity: isCompact ? 0.22 : 0.1,
                 layoutAnimation: true,
               },
-          labelLayout: useCircularCompact && nodes.length <= 5 ? undefined : { hideOverlap: true },
+          labelLayout: useCircular && nodes.length <= 5 ? undefined : { hideOverlap: true },
           label: {
             show: true,
             position: isCompact ? 'bottom' : 'right',
@@ -438,7 +439,7 @@ export function buildHierarchyChartOption(
           lineStyle: {
             color: theme.textSecondary,
             width: 1.6,
-            curveness: useCircularCompact ? 0.18 : 0.12,
+            curveness: useCircular ? 0.18 : 0.12,
             opacity: dark ? 0.52 : 0.48,
           },
           categories: categories.length > 0 ? categories : undefined,
@@ -448,7 +449,7 @@ export function buildHierarchyChartOption(
                 ? categories.findIndex((c) => c.name === n.category)
                 : -1
             let circularLabelPos: 'top' | 'bottom' | undefined
-            if (useCircularCompact && nodes.length > 0) {
+            if (useCircular && nodes.length > 0) {
               const angle = ((idx + 0.5) * Math.PI * 2) / nodes.length
               circularLabelPos = Math.sin(angle) < -0.15 ? 'top' : 'bottom'
             }
