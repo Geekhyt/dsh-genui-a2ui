@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -25,6 +26,10 @@ jobs:
 
       - name: Verify tag matches package.json version
         run: |
+          if [ "${GITHUB_REF_TYPE}" != "tag" ]; then
+            echo "::error::Release workflow must run on a v* git tag (got ${GITHUB_REF_TYPE}: ${GITHUB_REF_NAME})."
+            exit 1
+          fi
           TAG_VERSION="${GITHUB_REF_NAME#v}"
           PKG_VERSION="$(node -p "require('./package.json').version")"
           if [ "${TAG_VERSION}" != "${PKG_VERSION}" ]; then
@@ -63,6 +68,19 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if ! gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
-            gh release create "${GITHUB_REF_NAME}" --generate-notes --verify-tag
-          fi
+          for attempt in 1 2 3 4 5; do
+            if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+              echo "GitHub Release ${GITHUB_REF_NAME} already exists; skipping."
+              exit 0
+            fi
+            if gh release create "${GITHUB_REF_NAME}" --generate-notes --verify-tag; then
+              exit 0
+            fi
+            if [ "${attempt}" -eq 5 ]; then
+              echo "::error::Failed to create GitHub Release ${GITHUB_REF_NAME} after 5 attempts."
+              exit 1
+            fi
+            delay=$((attempt * 10))
+            echo "::warning::gh release create failed (attempt ${attempt}/5); retrying in ${delay}s..."
+            sleep "${delay}"
+          done
