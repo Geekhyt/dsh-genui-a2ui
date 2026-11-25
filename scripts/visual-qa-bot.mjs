@@ -5,6 +5,7 @@ import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { inflateSync } from 'node:zlib'
 
 export const ALL_SHOWCASES = [
   'showcase-1',
@@ -49,6 +50,7 @@ export const ALL_SHOWCASES = [
   'showcase-39',
   'showcase-40',
   'showcase-41',
+  'showcase-42',
 ]
 
 export const DEFAULT_AUDIT_SHOWCASES = [
@@ -74,6 +76,7 @@ export const DEFAULT_AUDIT_SHOWCASES = [
   'showcase-39',
   'showcase-40',
   'showcase-41',
+  'showcase-42',
 ]
 
 export const SCREENSHOT_SHOWCASE_MAP = {
@@ -120,6 +123,7 @@ export function buildDomGeometryAuditExpression() {
     const clippingViolations = [];
     const popoverViolations = [];
     const contrastViolations = [];
+    const svgTextClipViolations = [];
     let canvasCount = 0;
     let svgCount = 0;
 
@@ -286,6 +290,62 @@ export function buildDomGeometryAuditExpression() {
             hostRight: Math.round(cRect.right),
           });
         }
+        if (viz.tagName === 'SVG' || viz.tagName === 'svg') {
+          for (const t of viz.querySelectorAll('text')) {
+            const tStyle = getComputedStyle(t);
+            if (tStyle.visibility === 'hidden' || Number(tStyle.opacity || 1) < 0.05) continue;
+            const txt = (t.textContent || '').trim();
+            if (!txt) continue;
+            const tRect = t.getBoundingClientRect();
+            if (tRect.width <= 0 || tRect.height <= 0) continue;
+            if (tRect.right > vRect.right + 4 || tRect.left < vRect.left - 4) {
+              svgTextClipViolations.push({
+                kind: 'svg-viewport',
+                text: txt.slice(0, 28),
+                textRight: Math.round(tRect.right),
+                boxRight: Math.round(vRect.right),
+              });
+              continue;
+            }
+            const gParent = t.parentElement;
+            if (gParent && gParent.tagName.toLowerCase() === 'g') {
+              const directRects = [...gParent.children].filter((ch) => ch.tagName.toLowerCase() === 'rect');
+              if (directRects.length === 1) {
+                const rRect = directRects[0].getBoundingClientRect();
+                if (rRect.width >= 28 && rRect.height >= 14 && (tRect.right > rRect.right + 4 || tRect.left < rRect.left - 4)) {
+                  svgTextClipViolations.push({
+                    kind: 'svg-rect',
+                    text: txt.slice(0, 28),
+                    textRight: Math.round(tRect.right),
+                    boxRight: Math.round(rRect.right),
+                  });
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    for (const nodeBox of document.querySelectorAll('[class*="serviceNodeBox"]')) {
+      const boxRect = nodeBox.getBoundingClientRect();
+      if (boxRect.width <= 0 || boxRect.height <= 0) continue;
+      const boxCs = getComputedStyle(nodeBox);
+      const boxClipsX = boxCs.overflowX === 'hidden' || boxCs.overflowX === 'clip';
+      for (const child of nodeBox.querySelectorAll('span, div')) {
+        if (!hasDirectText(child)) continue;
+        const cCs = getComputedStyle(child);
+        const childClipsX = cCs.overflowX === 'hidden' || cCs.overflowX === 'clip';
+        const cRect = child.getBoundingClientRect();
+        if (cRect.width <= 0 || cRect.height <= 0) continue;
+        if ((!boxClipsX && cRect.right > boxRect.right + 2) || (!boxClipsX && !childClipsX && child.scrollWidth > boxRect.width + 2)) {
+          svgTextClipViolations.push({
+            kind: 'node-box',
+            text: (child.textContent || '').trim().slice(0, 28),
+            textRight: Math.round(cRect.right),
+            boxRight: Math.round(boxRect.right),
+          });
+        }
       }
     }
 
@@ -298,6 +358,7 @@ export function buildDomGeometryAuditExpression() {
       clippingViolations: clippingViolations.slice(0, 12),
       popoverViolations: popoverViolations.slice(0, 12),
       contrastViolations: contrastViolations.slice(0, 12),
+      svgTextClipViolations: svgTextClipViolations.slice(0, 12),
     };
   })()`
 }
@@ -314,6 +375,8 @@ export function evaluateVisualQaReport(runs) {
     if (r.popoverViolations.length > 0) issues.push(`${r.popoverViolations.length} popover clip(s)`)
     const contrastList = Array.isArray(r.contrastViolations) ? r.contrastViolations : []
     if (contrastList.length > 0) issues.push(`${contrastList.length} contrast violation(s)`)
+    const svgClipList = Array.isArray(r.svgTextClipViolations) ? r.svgTextClipViolations : []
+    if (svgClipList.length > 0) issues.push(`${svgClipList.length} svg/node text clip(s)`)
     if (r.consoleErrors.length > 0) issues.push(`${r.consoleErrors.length} console error(s)`)
     if (r.pageErrors.length > 0) issues.push(`${r.pageErrors.length} page error(s)`)
     if (issues.length > 0) {
@@ -326,6 +389,126 @@ export function evaluateVisualQaReport(runs) {
     passedRuns: runs.length - failures.length,
     failures,
   }
+}
+
+function paethPredictor(a, b, c) {
+  const p = a + b - c
+  const pa = Math.abs(p - a)
+  const pb = Math.abs(p - b)
+  const pc = Math.abs(p - c)
+  if (pa <= pb && pa <= pc) return a
+  if (pb <= pc) return b
+  return c
+}
+
+export function decodePngRgba(buffer) {
+  if (!Buffer.isBuffer(buffer) || buffer.length < 33) {
+    throw new Error('Invalid PNG buffer')
+  }
+  const sig = buffer.subarray(0, 8)
+  if (!sig.equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) {
+    throw new Error('Not a PNG image')
+  }
+  let width = 0
+  let height = 0
+  let bitDepth = 0
+  let colorType = 0
+  const idatParts = []
+  let offset = 8
+  while (offset + 8 <= buffer.length) {
+    const length = buffer.readUInt32BE(offset)
+    const type = buffer.toString('ascii', offset + 4, offset + 8)
+    const dataStart = offset + 8
+    const dataEnd = dataStart + length
+    if (dataEnd + 4 > buffer.length) break
+    if (type === 'IHDR') {
+      width = buffer.readUInt32BE(dataStart)
+      height = buffer.readUInt32BE(dataStart + 4)
+      bitDepth = buffer[dataStart + 8]
+      colorType = buffer[dataStart + 9]
+    } else if (type === 'IDAT') {
+      idatParts.push(buffer.subarray(dataStart, dataEnd))
+    } else if (type === 'IEND') {
+      break
+    }
+    offset = dataEnd + 4
+  }
+  if (width <= 0 || height <= 0 || bitDepth !== 8 || (colorType !== 2 && colorType !== 6)) {
+    throw new Error(
+      `Unsupported PNG format: ${width}x${height} depth=${bitDepth} type=${colorType}`,
+    )
+  }
+  const bpp = colorType === 6 ? 4 : 3
+  const stride = width * bpp
+  const inflated = inflateSync(Buffer.concat(idatParts))
+  const raw = new Uint8Array(height * stride)
+  let inPos = 0
+  for (let y = 0; y < height; y += 1) {
+    const filterType = inflated[inPos++]
+    const rowStart = y * stride
+    for (let x = 0; x < stride; x += 1) {
+      const byte = inflated[inPos++]
+      const left = x >= bpp ? raw[rowStart + x - bpp] : 0
+      const up = y > 0 ? raw[rowStart - stride + x] : 0
+      const upLeft = y > 0 && x >= bpp ? raw[rowStart - stride + x - bpp] : 0
+      let recon = byte
+      if (filterType === 1) recon = (byte + left) & 0xff
+      else if (filterType === 2) recon = (byte + up) & 0xff
+      else if (filterType === 3) recon = (byte + ((left + up) >> 1)) & 0xff
+      else if (filterType === 4) recon = (byte + paethPredictor(left, up, upLeft)) & 0xff
+      raw[rowStart + x] = recon
+    }
+  }
+  const rgba = new Uint8Array(width * height * 4)
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const src = y * stride + x * bpp
+      const dst = (y * width + x) * 4
+      rgba[dst] = raw[src]
+      rgba[dst + 1] = raw[src + 1]
+      rgba[dst + 2] = raw[src + 2]
+      rgba[dst + 3] = bpp === 4 ? raw[src + 3] : 255
+    }
+  }
+  return { width, height, data: rgba }
+}
+
+export function samplePngMedianRgb(decoded, rect) {
+  const x0 = Math.max(0, Math.min(decoded.width - 1, Math.floor(rect.x)))
+  const y0 = Math.max(0, Math.min(decoded.height - 1, Math.floor(rect.y)))
+  const x1 = Math.max(x0 + 1, Math.min(decoded.width, Math.ceil(rect.x + rect.w)))
+  const y1 = Math.max(y0 + 1, Math.min(decoded.height, Math.ceil(rect.y + rect.h)))
+  const rs = []
+  const gs = []
+  const bs = []
+  for (let y = y0; y < y1; y += 1) {
+    for (let x = x0; x < x1; x += 1) {
+      const i = (y * decoded.width + x) * 4
+      rs.push(decoded.data[i])
+      gs.push(decoded.data[i + 1])
+      bs.push(decoded.data[i + 2])
+    }
+  }
+  const median = (arr) => {
+    const sorted = [...arr].sort((a, b) => a - b)
+    return sorted[Math.floor(sorted.length / 2)] ?? 0
+  }
+  return [median(rs), median(gs), median(bs)]
+}
+
+export function computeRgbMaxChannelDelta(a, b) {
+  return Math.max(Math.abs(a[0] - b[0]), Math.abs(a[1] - b[1]), Math.abs(a[2] - b[2]))
+}
+
+export function evaluateStickyTintParity(pairs, maxDelta = 4) {
+  const failures = []
+  for (const p of pairs) {
+    const delta = computeRgbMaxChannelDelta(p.stickyRgb, p.normalRgb)
+    if (delta > maxDelta) {
+      failures.push({ label: p.label, stickyRgb: p.stickyRgb, normalRgb: p.normalRgb, delta })
+    }
+  }
+  return { ok: failures.length === 0, failures }
 }
 
 function getFreePort() {
@@ -766,6 +949,9 @@ async function runCli() {
         const contrastCount = Array.isArray(metrics.contrastViolations)
           ? metrics.contrastViolations.length
           : 0
+        const svgClipCount = Array.isArray(metrics.svgTextClipViolations)
+          ? metrics.svgTextClipViolations.length
+          : 0
         const okTag =
           metrics.a2uiElementCount > 0 &&
           metrics.overflowViolations.length === 0 &&
@@ -773,12 +959,13 @@ async function runCli() {
           metrics.clippingViolations.length === 0 &&
           metrics.popoverViolations.length === 0 &&
           contrastCount === 0 &&
+          svgClipCount === 0 &&
           consoleErrors.length === 0 &&
           pageErrors.length === 0
             ? 'PASS'
             : 'FAIL'
         console.log(
-          `[visual-qa-bot] ${okTag} ${showcase.padEnd(16)} (${theme.padEnd(5)}) els=${metrics.a2uiElementCount} canvas=${metrics.canvasCount} svg=${metrics.svgCount} overflow=${metrics.overflowViolations.length} wrap=${metrics.buttonWrapViolations.length} clip=${metrics.clippingViolations.length} contrast=${contrastCount} errs=${consoleErrors.length + pageErrors.length}`,
+          `[visual-qa-bot] ${okTag} ${showcase.padEnd(16)} (${theme.padEnd(5)}) els=${metrics.a2uiElementCount} canvas=${metrics.canvasCount} svg=${metrics.svgCount} overflow=${metrics.overflowViolations.length} wrap=${metrics.buttonWrapViolations.length} clip=${metrics.clippingViolations.length} contrast=${contrastCount} svgclip=${svgClipCount} errs=${consoleErrors.length + pageErrors.length}`,
         )
       }
     }

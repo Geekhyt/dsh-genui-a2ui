@@ -72,16 +72,17 @@ export function normalizeMultiSelectMergedOptions(
 }
 
 export function computeDateRangeSpanDays(startStr: string, endStr: string): number | null {
-  if (!startStr || !endStr) return null
-  const sDate = tryParseLocalDate(startStr.slice(0, 10))
-  const eDate = tryParseLocalDate(endStr.slice(0, 10))
-  if (sDate === null || eDate === null || eDate.getTime() < sDate.getTime()) return null
-  if (startStr.length > 10 && endStr.length > 10) {
-    const sFull = tryParseLocalDate(startStr)
-    const eFull = tryParseLocalDate(endStr)
-    if (sFull === null || eFull === null || eFull.getTime() < sFull.getTime()) return null
-  }
-  const diffDays = Math.round((eDate.getTime() - sDate.getTime()) / 86_400_000) + 1
+  const sTrim = startStr.trim()
+  const eTrim = endStr.trim()
+  if (!sTrim || !eTrim) return null
+  const sFull = tryParseLocalDate(sTrim)
+  const eFull = tryParseLocalDate(eTrim)
+  if (sFull === null || eFull === null) return null
+  const sDay = new Date(sFull.getFullYear(), sFull.getMonth(), sFull.getDate())
+  const eDay = new Date(eFull.getFullYear(), eFull.getMonth(), eFull.getDate())
+  if (eDay.getTime() < sDay.getTime()) return null
+  if (sTrim.length > 10 && eTrim.length > 10 && eFull.getTime() < sFull.getTime()) return null
+  const diffDays = Math.round((eDay.getTime() - sDay.getTime()) / 86_400_000) + 1
   return Math.max(1, diffDays)
 }
 
@@ -249,7 +250,8 @@ export function findBreadcrumbByValue(
 ): string | null {
   if (!targetVal) return null
   for (const n of nodes) {
-    if (n.value === targetVal) return n.breadcrumb
+    const selectable = n.children.length === 0 || Boolean(n.hasExplicitValue)
+    if (selectable && n.value === targetVal) return n.breadcrumb
     const childHit = findBreadcrumbByValue(n.children, targetVal)
     if (childHit !== null) return childHit
   }

@@ -229,19 +229,54 @@ function extractCssBlocks(cssText) {
   }
 
   const stickyTransparentBgRules = []
+  const opaqueControlBgRules = []
+  const fixedTablePreCellRules = []
   const rawWhiteOnStatePrimaryRules = []
+  const fixedTablePrefixes = new Set()
   const STATE_PRIMARY_BG_RE =
     /\bbackground(?:-color)?\s*:\s*var\(\s*--(?:dsw-alias-state-(?:business|error|warn|success)-primary|a2ui-(?:accent|danger|warn|success))\b/
   const RAW_WHITE_COLOR_RE = /(?:^|[;{\s])color\s*:\s*(?:#fff(?:fff)?\b|white\b)/i
+  const TRANSLUCENT_LAYER_BG_RE =
+    /background(?:-color)?\s*:\s*var\(\s*--(?:dsw-alias-bg-layer-1|a2ui-bg-1)\b/
+  const RAW_PRE_RE = /\bwhite-space\s*:\s*pre\s*(?:;|$)/
+  for (const rule of topRules) {
+    if (!rule.header.startsWith('@') && /\btable-layout\s*:\s*fixed\b/.test(rule.body)) {
+      for (const sel of rule.header.split(',')) {
+        const m = /^\.([A-Za-z0-9_-]+)Table$/.exec(sel.trim())
+        if (m?.[1]) fixedTablePrefixes.add(m[1])
+      }
+    }
+  }
   for (const rule of topRules) {
     if (!rule.header.startsWith('@')) {
       if (/\bposition\s*:\s*sticky\b/.test(rule.body)) {
-        if (
-          /background(?:-color)?\s*:\s*var\(\s*--(?:dsw-alias-bg-layer-1|a2ui-bg-1)\b/.test(
-            rule.body,
-          )
-        ) {
+        if (TRANSLUCENT_LAYER_BG_RE.test(rule.body)) {
           stickyTransparentBgRules.push({ line: rule.startLine, header: rule.header })
+        }
+      }
+      if (
+        /::-(?:webkit-slider|moz-range)-thumb\b/.test(rule.header) &&
+        TRANSLUCENT_LAYER_BG_RE.test(rule.body)
+      ) {
+        opaqueControlBgRules.push({ line: rule.startLine, header: rule.header })
+      }
+      if (RAW_PRE_RE.test(rule.body)) {
+        let isFixedCell = false
+        for (const item of extractSelectorClasses(rule.header)) {
+          if (/(?:Split|Fixed)Cell$/.test(item.cls)) {
+            isFixedCell = true
+            break
+          }
+          for (const prefix of fixedTablePrefixes) {
+            if (item.cls.startsWith(prefix) && item.cls.endsWith('Cell')) {
+              isFixedCell = true
+              break
+            }
+          }
+          if (isFixedCell) break
+        }
+        if (isFixedCell) {
+          fixedTablePreCellRules.push({ line: rule.startLine, header: rule.header })
         }
       }
       if (STATE_PRIMARY_BG_RE.test(rule.body) && RAW_WHITE_COLOR_RE.test(rule.body)) {
@@ -316,6 +351,8 @@ function extractCssBlocks(cssText) {
     mediaWidthRules,
     shadowedResponsiveRules,
     stickyTransparentBgRules,
+    opaqueControlBgRules,
+    fixedTablePreCellRules,
     rawWhiteOnStatePrimaryRules,
   }
 }
@@ -328,6 +365,8 @@ export function checkCssInvariants(source, relPath) {
     mediaWidthRules,
     shadowedResponsiveRules,
     stickyTransparentBgRules,
+    opaqueControlBgRules,
+    fixedTablePreCellRules,
     rawWhiteOnStatePrimaryRules,
   } = extractCssBlocks(source)
 
@@ -350,6 +389,24 @@ export function checkCssInvariants(source, relPath) {
       file: relPath,
       line: st.line,
       message: `Sticky rule "${st.header}" uses translucent --dsw-alias-bg-layer-1 as primary background-color; use opaque --dsw-alias-bg-base with optional linear-gradient tint.`,
+    })
+  }
+
+  for (const oc of opaqueControlBgRules) {
+    violations.push({
+      rule: 'css-opaque-control-bg',
+      file: relPath,
+      line: oc.line,
+      message: `Slider thumb rule "${oc.header}" uses translucent --dsw-alias-bg-layer-1; use opaque --dsw-alias-switch-thumb / --a2ui-bg-opaque so tracks cannot bleed through.`,
+    })
+  }
+
+  for (const fp of fixedTablePreCellRules) {
+    violations.push({
+      rule: 'css-fixed-table-no-overflow-pre',
+      file: relPath,
+      line: fp.line,
+      message: `Fixed-layout table cell "${fp.header}" sets white-space: pre; use white-space: pre-wrap with word-break/overflow-wrap so adjacent cells cannot collide.`,
     })
   }
 
@@ -509,6 +566,7 @@ export function checkTsInvariants(source, relPath) {
   const isEchartsChunk =
     relPath === 'src/client/chunks/echarts-chunk.ts' ||
     relPath.startsWith('src/client/chunks/echarts/')
+  const isMermaidChunk = relPath === 'src/client/chunks/mermaid-chunk.ts'
 
   const report = (rule, node, message) => {
     violations.push({
@@ -517,6 +575,52 @@ export function checkTsInvariants(source, relPath) {
       line: lineOf(sf, node.getStart(sf)),
       message,
     })
+  }
+
+  const checkRawEchartsFormatterSubtree = (root) => {
+    const walk = (n) => {
+      if (ts.isPropertyAssignment(n)) {
+        const pname = ts.isIdentifier(n.name)
+          ? n.name.text
+          : ts.isStringLiteral(n.name)
+            ? n.name.text
+            : ''
+        if (
+          pname === 'formatter' &&
+          !ts.isArrowFunction(n.initializer) &&
+          !ts.isFunctionExpression(n.initializer)
+        ) {
+          report(
+            'echarts-no-raw-string-formatter',
+            n,
+            'ECharts markLine/edgeLabel formatters must be functions (() => text) so literal {a}/{b}/{c} tokens in data cannot be interpolated.',
+          )
+        }
+      }
+      ts.forEachChild(n, walk)
+    }
+    walk(root)
+  }
+
+  const checkCurlSubtree = (root) => {
+    const walk = (n) => {
+      if (
+        (ts.isStringLiteral(n) ||
+          ts.isNoSubstitutionTemplateLiteral(n) ||
+          ts.isTemplateHead(n) ||
+          ts.isTemplateMiddle(n) ||
+          ts.isTemplateTail(n)) &&
+        /(?:^|\s)-d(?:\s|$)/.test(n.text)
+      ) {
+        report(
+          'no-raw-curl-data-flag',
+          n,
+          'Use --data-raw instead of -d when generating curl commands so payloads starting with "@" cannot read local files.',
+        )
+      }
+      ts.forEachChild(n, walk)
+    }
+    walk(root)
   }
 
   const visit = (node) => {
@@ -657,6 +761,22 @@ export function checkTsInvariants(source, relPath) {
     }
 
     if (isEchartsChunk) {
+      if (
+        ts.isFunctionDeclaration(node) &&
+        node.name?.text === 'buildReferenceMarkLine' &&
+        node.body
+      ) {
+        checkRawEchartsFormatterSubtree(node.body)
+      } else if (ts.isPropertyAssignment(node)) {
+        const propName = ts.isIdentifier(node.name)
+          ? node.name.text
+          : ts.isStringLiteral(node.name)
+            ? node.name.text
+            : ''
+        if (propName === 'markLine' || propName === 'edgeLabel') {
+          checkRawEchartsFormatterSubtree(node.initializer)
+        }
+      }
       if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
         if (HTML_IN_RICHTEXT_RE.test(node.text)) {
           report(
@@ -876,6 +996,94 @@ export function checkTsInvariants(source, relPath) {
           widthFullNode,
           'Do not hardcode width: "100%" alongside ...weightStyle(...) on weighted flex items.',
         )
+      }
+    }
+
+    if (
+      isMermaidChunk &&
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      node.expression.name.text === 'initialize' &&
+      node.arguments.length >= 1 &&
+      ts.isObjectLiteralExpression(node.arguments[0])
+    ) {
+      const hasDomPurifyCfg = node.arguments[0].properties.some(
+        (prop) =>
+          (ts.isPropertyAssignment(prop) || ts.isShorthandPropertyAssignment(prop)) &&
+          ((ts.isIdentifier(prop.name) && prop.name.text === 'dompurifyConfig') ||
+            (ts.isStringLiteral(prop.name) && prop.name.text === 'dompurifyConfig')),
+      )
+      if (!hasDomPurifyCfg) {
+        report(
+          'mermaid-init-dompurify-config',
+          node,
+          'mermaid.initialize(...) must pass an explicit dompurifyConfig forbidding unsafe SVG tags/attributes.',
+        )
+      }
+    }
+
+    if (
+      isClientFile &&
+      ts.isFunctionDeclaration(node) &&
+      node.name &&
+      /curl/i.test(node.name.text) &&
+      node.body
+    ) {
+      checkCurlSubtree(node.body)
+    }
+
+    if (
+      isClientFile &&
+      relPath.endsWith('.tsx') &&
+      ts.isCallExpression(node) &&
+      ((ts.isIdentifier(node.expression) && node.expression.text === 'createPortal') ||
+        (ts.isPropertyAccessExpression(node.expression) &&
+          node.expression.name.text === 'createPortal')) &&
+      node.arguments.length >= 2 &&
+      node.arguments[1].getText(sf).includes('document.body')
+    ) {
+      const firstArgText = node.arguments[0].getText(sf)
+      if (
+        !(
+          (firstArgText.includes('a2ui-dark') && firstArgText.includes('a2ui-light')) ||
+          /\bthemeCls\b/.test(firstArgText)
+        )
+      ) {
+        report(
+          'tsx-portal-theme-class',
+          node,
+          'document.body portals must apply both a2ui-dark / a2ui-light theme classes so light-dark() tokens resolve outside surface containers.',
+        )
+      }
+    }
+
+    if (isClientFile && ts.isBlock(node)) {
+      const stmts = node.statements
+      for (let i = 0; i + 1 < stmts.length; i += 1) {
+        const cur = stmts[i]
+        const next = stmts[i + 1]
+        if (!ts.isExpressionStatement(cur) || !ts.isExpressionStatement(next)) continue
+        const curExpr = ts.isVoidExpression(cur.expression)
+          ? cur.expression.expression
+          : cur.expression
+        const nextExpr = ts.isVoidExpression(next.expression)
+          ? next.expression.expression
+          : next.expression
+        if (
+          ts.isCallExpression(curExpr) &&
+          ts.isIdentifier(curExpr.expression) &&
+          curExpr.expression.text === 'copyTextToClipboard' &&
+          curExpr.arguments.length < 2 &&
+          ts.isCallExpression(nextExpr) &&
+          ts.isIdentifier(nextExpr.expression) &&
+          /^markCopied/i.test(nextExpr.expression.text)
+        ) {
+          report(
+            'no-blind-clipboard-success',
+            curExpr,
+            'Pass the copied-state callback as the second argument to copyTextToClipboard(text, markCopied) instead of calling it unconditionally on the next line.',
+          )
+        }
       }
     }
 
@@ -1180,7 +1388,7 @@ function runCli() {
     process.exit(1)
   }
   console.log(
-    `[check-invariants] OK: 27 architectural invariant rules verified across ${report.filesScanned} source/CSS file(s) and locale tables.`,
+    `[check-invariants] OK: 34 architectural invariant rules verified across ${report.filesScanned} source/CSS file(s) and locale tables.`,
   )
 }
 

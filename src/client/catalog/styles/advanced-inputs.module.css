@@ -780,8 +780,11 @@
   position: sticky;
   left: var(--sticky-left, 0px);
   z-index: 2;
+  --sticky-tint: transparent;
   background-color: var(--a2ui-bg-opaque);
-  background-image: linear-gradient(var(--a2ui-bg-1), var(--a2ui-bg-1));
+  background-image:
+    linear-gradient(var(--sticky-tint), var(--sticky-tint)),
+    linear-gradient(var(--a2ui-bg-1), var(--a2ui-bg-1));
 }
 
 .tableStickyColEdge {
@@ -790,31 +793,27 @@
 
 .th.tableStickyCol {
   z-index: 3;
-  background-color: var(--a2ui-bg-opaque);
-  background-image: linear-gradient(var(--a2ui-bg-2), var(--a2ui-bg-2));
+  --sticky-tint: var(--a2ui-bg-2);
 }
 
 .thSortable.tableStickyCol:hover {
-  background-color: var(--a2ui-bg-opaque);
-  background-image: linear-gradient(var(--a2ui-bg-hover), var(--a2ui-bg-hover));
+  --sticky-tint: var(--a2ui-bg-hover);
 }
 
 .proSummaryRow .td.tableStickyCol {
-  background-color: var(--a2ui-bg-opaque);
-  background-image: linear-gradient(var(--a2ui-bg-2), var(--a2ui-bg-2));
+  --sticky-tint: var(--a2ui-bg-2);
 }
 
 .table tbody tr:hover .td.tableStickyCol {
-  background-color: var(--a2ui-bg-opaque);
-  background-image: linear-gradient(var(--a2ui-bg-hover), var(--a2ui-bg-hover));
+  --sticky-tint: var(--a2ui-bg-hover);
 }
 
 .table tbody tr.trSelected .td.tableStickyCol,
 .table tbody tr.trInteractive:hover .td.tableStickyCol,
 .table tbody tr.trInteractive:focus-visible .td.tableStickyCol {
-  background-color: var(--a2ui-bg-opaque);
-  background-image: linear-gradient(
-    color-mix(in srgb, var(--a2ui-brand) 8%, transparent),
-    color-mix(in srgb, var(--a2ui-brand) 8%, transparent)
-  );
+  --sticky-tint: color-mix(in srgb, var(--a2ui-brand) 8%, transparent);
+}
+
+.table tbody tr.trSelected:hover .td.tableStickyCol {
+  --sticky-tint: color-mix(in srgb, var(--a2ui-brand) 13%, transparent);
 }

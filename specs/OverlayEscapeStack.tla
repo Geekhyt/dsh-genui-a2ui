@@ -7,13 +7,14 @@ VARIABLES
   focusOwner,
   formValid,
   triggerVisible,
-  localActionClosedModal
+  lastAction
 
 vars ==
-  <<stack, globalListenerAttached, focusOwner, formValid, triggerVisible, localActionClosedModal>>
+  <<stack, globalListenerAttached, focusOwner, formValid, triggerVisible, lastAction>>
 
 Layers == {"modal", "popover", "fullscreen"}
 FocusTargets == {"page"} \cup Layers
+Actions == {"none", "open", "escape", "local", "submit", "scroll", "toggle"}
 
 SeqContains(seq, elem) == \E i \in 1..Len(seq) : seq[i] = elem
 
@@ -30,7 +31,7 @@ TypeOK ==
   /\ focusOwner \in FocusTargets
   /\ formValid \in BOOLEAN
   /\ triggerVisible \in BOOLEAN
-  /\ localActionClosedModal \in BOOLEAN
+  /\ lastAction \in Actions
 
 Init ==
   /\ stack = <<>>
@@ -38,7 +39,7 @@ Init ==
   /\ focusOwner = "page"
   /\ formValid = FALSE
   /\ triggerVisible = TRUE
-  /\ localActionClosedModal = FALSE
+  /\ lastAction = "none"
 
 OpenModal ==
   /\ ~SeqContains(stack, "modal")
@@ -46,7 +47,8 @@ OpenModal ==
      IN /\ stack' = next
         /\ globalListenerAttached' = TRUE
         /\ focusOwner' = TopOrPage(next)
-        /\ UNCHANGED <<formValid, triggerVisible, localActionClosedModal>>
+        /\ lastAction' = "open"
+        /\ UNCHANGED <<formValid, triggerVisible>>
 
 OpenPopover ==
   /\ triggerVisible
@@ -55,7 +57,8 @@ OpenPopover ==
      IN /\ stack' = next
         /\ globalListenerAttached' = TRUE
         /\ focusOwner' = TopOrPage(next)
-        /\ UNCHANGED <<formValid, triggerVisible, localActionClosedModal>>
+        /\ lastAction' = "open"
+        /\ UNCHANGED <<formValid, triggerVisible>>
 
 OpenFullscreen ==
   /\ ~SeqContains(stack, "fullscreen")
@@ -63,7 +66,8 @@ OpenFullscreen ==
      IN /\ stack' = next
         /\ globalListenerAttached' = TRUE
         /\ focusOwner' = TopOrPage(next)
-        /\ UNCHANGED <<formValid, triggerVisible, localActionClosedModal>>
+        /\ lastAction' = "open"
+        /\ UNCHANGED <<formValid, triggerVisible>>
 
 PressEscape ==
   /\ Len(stack) > 0
@@ -71,11 +75,13 @@ PressEscape ==
      IN /\ stack' = next
         /\ globalListenerAttached' = (Len(next) > 0)
         /\ focusOwner' = TopOrPage(next)
-        /\ UNCHANGED <<formValid, triggerVisible, localActionClosedModal>>
+        /\ lastAction' = "escape"
+        /\ UNCHANGED <<formValid, triggerVisible>>
 
 TriggerLocalFunctionAction ==
   /\ SeqContains(stack, "modal")
-  /\ UNCHANGED vars
+  /\ lastAction' = "local"
+  /\ UNCHANGED <<stack, globalListenerAttached, focusOwner, formValid, triggerVisible>>
 
 SubmitInModal ==
   /\ Len(stack) > 0
@@ -86,7 +92,8 @@ SubmitInModal ==
              /\ globalListenerAttached' = (Len(next) > 0)
              /\ focusOwner' = TopOrPage(next)
      ELSE UNCHANGED <<stack, globalListenerAttached, focusOwner>>
-  /\ UNCHANGED <<formValid, triggerVisible, localActionClosedModal>>
+  /\ lastAction' = "submit"
+  /\ UNCHANGED <<formValid, triggerVisible>>
 
 ScrollTriggerOutOfView ==
   /\ triggerVisible
@@ -95,16 +102,19 @@ ScrollTriggerOutOfView ==
      IN /\ stack' = next
         /\ globalListenerAttached' = (Len(next) > 0)
         /\ focusOwner' = TopOrPage(next)
-        /\ UNCHANGED <<formValid, localActionClosedModal>>
+        /\ lastAction' = "scroll"
+        /\ UNCHANGED <<formValid>>
 
 ScrollTriggerIntoView ==
   /\ ~triggerVisible
   /\ triggerVisible' = TRUE
-  /\ UNCHANGED <<stack, globalListenerAttached, focusOwner, formValid, localActionClosedModal>>
+  /\ lastAction' = "scroll"
+  /\ UNCHANGED <<stack, globalListenerAttached, focusOwner, formValid>>
 
 ToggleFormValid ==
   /\ formValid' = ~formValid
-  /\ UNCHANGED <<stack, globalListenerAttached, focusOwner, triggerVisible, localActionClosedModal>>
+  /\ lastAction' = "toggle"
+  /\ UNCHANGED <<stack, globalListenerAttached, focusOwner, triggerVisible>>
 
 Next ==
   \/ OpenModal
@@ -132,12 +142,12 @@ FocusMatchesTopLayer ==
   focusOwner = TopOrPage(stack)
 
 LocalActionNeverClosesModal ==
-  ~localActionClosedModal
+  (lastAction = "local") => SeqContains(stack, "modal")
 
 HiddenTriggerNeverHoldsPopover ==
   ~triggerVisible => ~SeqContains(stack, "popover")
 
 EscapeCanAlwaysDrain ==
-  [](Len(stack) > 0 => <>(Len(stack) = 0 \/ Len(stack) < 3))
+  [](Len(stack) = Cardinality(Layers) => <>(Len(stack) < Cardinality(Layers)))
 
 ====

@@ -166,10 +166,6 @@ export const DshMetricRingImpl = defineComponent<{
     props.sublabel !== undefined && props.sublabel !== null ? String(props.sublabel) : ''
   const maxVal =
     typeof props.max === 'number' && Number.isFinite(props.max) && props.max > 0 ? props.max : 100
-  const rawMetricNum = Number(props.value)
-  const safeAriaNow = Number.isFinite(rawMetricNum)
-    ? Math.max(0, Math.min(maxVal, rawMetricNum))
-    : 0
   const unit =
     props.unit !== undefined && props.unit !== null ? String(props.unit) : maxVal === 100 ? '%' : ''
   const geom = useMemo(
@@ -183,6 +179,7 @@ export const DshMetricRingImpl = defineComponent<{
       }),
     [props.value, props.max, props.size, props.tone, unit],
   )
+  const safeAriaNow = Math.max(0, Math.min(maxVal, geom.numericValue))
   const center = geom.size / 2
 
   return (
@@ -216,19 +213,21 @@ export const DshMetricRingImpl = defineComponent<{
               className={css.metricRingTrack}
               strokeWidth={geom.strokeWidth}
             />
-            <circle
-              cx={center}
-              cy={center}
-              r={geom.radius}
-              fill="none"
-              className={css.metricRingArc}
-              data-tone={geom.resolvedTone}
-              strokeWidth={geom.strokeWidth}
-              strokeLinecap="round"
-              strokeDasharray={geom.circumference}
-              strokeDashoffset={geom.dashOffset}
-              transform={`rotate(-90 ${center} ${center})`}
-            />
+            {geom.clampedRatio > 0 ? (
+              <circle
+                cx={center}
+                cy={center}
+                r={geom.radius}
+                fill="none"
+                className={css.metricRingArc}
+                data-tone={geom.resolvedTone}
+                strokeWidth={geom.strokeWidth}
+                strokeLinecap="round"
+                strokeDasharray={geom.circumference}
+                strokeDashoffset={geom.dashOffset}
+                transform={`rotate(-90 ${center} ${center})`}
+              />
+            ) : null}
           </svg>
           <div className={css.metricRingCenterText}>
             <span
@@ -436,7 +435,9 @@ export const DshServiceGraphImpl = defineComponent<{
                         </span>
                       ) : null}
                       {node.metric ? (
-                        <span className={css.serviceNodeMetric}>{node.metric}</span>
+                        <span className={css.serviceNodeMetric} title={node.metric}>
+                          {node.metric}
+                        </span>
                       ) : null}
                     </span>
                   ) : null}

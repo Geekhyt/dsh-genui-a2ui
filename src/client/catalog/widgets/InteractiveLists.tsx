@@ -1,5 +1,5 @@
 import type { ActionDispatchOptions } from '@a2ui/web_core/v1_0'
-import { useContext, useMemo, useState } from 'react'
+import { useContext, useMemo, useRef, useState } from 'react'
 import {
   ChecklistApi,
   KvEditorApi,
@@ -23,6 +23,7 @@ import {
   areExternalValuesEqual,
   defineComponent,
   isWritableProp,
+  normalizeStringArrayValue,
   SurfaceReadOnlyContext,
   SurfaceValidationContext,
   useSurfaceActionRunner,
@@ -64,6 +65,8 @@ export const DshRangeSliderImpl = defineComponent<{
   const readOnly = useContext(SurfaceReadOnlyContext)
   const { submitAttempted } = useContext(SurfaceValidationContext)
   const [touched, setTouched] = useState(false)
+  const [activeThumb, setActiveThumb] = useState<'start' | 'end'>('end')
+  const trackWrapRef = useRef<HTMLDivElement | null>(null)
   const [startVal, commitStart] = useWritablePropState(
     context,
     'start',
@@ -89,17 +92,38 @@ export const DshRangeSliderImpl = defineComponent<{
   const fillLeft = `calc(${state.startPct}% + ${(9 - 0.18 * state.startPct).toFixed(2)}px)`
   const fillRight = `calc(${100 - state.endPct}% + ${(9 - 0.18 * (100 - state.endPct)).toFixed(2)}px)`
 
-  const parseFiniteOpt = (v: unknown): number | null => {
-    if (typeof v === 'number') return Number.isFinite(v) ? v : null
-    if (typeof v === 'string' && v.trim() !== '') {
-      const n = Number(v.trim())
-      return Number.isFinite(n) ? n : null
-    }
-    return null
+  const toOptNum = (v: unknown): number | null => {
+    const n =
+      typeof v === 'number' ? v : typeof v === 'string' && v.trim() !== '' ? Number(v) : Number.NaN
+    return Number.isFinite(n) ? n : null
   }
-  const rawStartNum = parseFiniteOpt(startVal)
-  const rawEndNum = parseFiniteOpt(endVal)
+  const rawStartNum = toOptNum(startVal)
+  const rawEndNum = toOptNum(endVal)
   const wasInverted = rawStartNum !== null && rawEndNum !== null && rawStartNum > rawEndNum
+
+  const selectThumbForClientX = (clientX: number) => {
+    const rect = trackWrapRef.current?.getBoundingClientRect()
+    if (!rect || rect.width <= 0) return
+    const pct = Math.max(0, Math.min(100, ((clientX - rect.left) / rect.width) * 100))
+    if (state.start === state.end) {
+      setActiveThumb(
+        state.start >= state.max
+          ? 'start'
+          : state.end <= state.min
+            ? 'end'
+            : pct < state.startPct
+              ? 'start'
+              : 'end',
+      )
+      return
+    }
+    setActiveThumb(Math.abs(pct - state.startPct) <= Math.abs(pct - state.endPct) ? 'start' : 'end')
+  }
+
+  const startOnTop =
+    state.start === state.end
+      ? state.start >= state.max || (state.end > state.min && activeThumb === 'start')
+      : activeThumb === 'start' || state.startPct > 85
 
   return (
     <div
@@ -113,7 +137,16 @@ export const DshRangeSliderImpl = defineComponent<{
           {fmt(state.start)} – {fmt(state.end)}
         </span>
       </div>
-      <div className={css.rangeTrackWrap}>
+      <div
+        ref={trackWrapRef}
+        className={css.rangeTrackWrap}
+        onPointerMove={(e) => {
+          if (!readOnly && e.buttons === 0) selectThumbForClientX(e.clientX)
+        }}
+        onPointerDown={(e) => {
+          if (!readOnly) selectThumbForClientX(e.clientX)
+        }}
+      >
         <div className={css.rangeRail} aria-hidden="true" />
         <div
           className={css.rangeFill}
@@ -130,10 +163,12 @@ export const DshRangeSliderImpl = defineComponent<{
           disabled={readOnly}
           aria-invalid={showError || undefined}
           aria-label={label ? `${label} ${msg.rangeSliderStartAria}` : msg.rangeSliderStartAria}
-          style={{ zIndex: state.startPct > 85 ? 4 : 2 }}
+          style={{ zIndex: startOnTop ? 4 : 2 }}
+          onFocus={() => setActiveThumb('start')}
           onChange={(e) => {
             if (readOnly) return
             setTouched(true)
+            setActiveThumb('start')
             const next = Number(e.target.value)
             if (Number.isFinite(next)) {
               commitStart(Math.min(next, state.end))
@@ -151,10 +186,12 @@ export const DshRangeSliderImpl = defineComponent<{
           disabled={readOnly}
           aria-invalid={showError || undefined}
           aria-label={label ? `${label} ${msg.rangeSliderEndAria}` : msg.rangeSliderEndAria}
-          style={{ zIndex: 3 }}
+          style={{ zIndex: startOnTop ? 3 : 4 }}
+          onFocus={() => setActiveThumb('end')}
           onChange={(e) => {
             if (readOnly) return
             setTouched(true)
+            setActiveThumb('end')
             const next = Number(e.target.value)
             if (Number.isFinite(next)) {
               commitEnd(Math.max(next, state.start))
@@ -197,11 +234,12 @@ export const DshChecklistImpl = defineComponent<{
     [items],
   )
   const externalCheckedIds = useMemo(
-    () => (Array.isArray(props.value) ? props.value.map(String) : null),
+    () => (Array.isArray(props.value) ? normalizeStringArrayValue(props.value) : null),
     [props.value],
   )
   const seedCheckedIds = externalCheckedIds ?? defaultCheckedIds
   const itemIds = useMemo(() => items.map((it) => it.id), [items])
+  const itemIdSet = useMemo(() => new Set(itemIds), [itemIds])
   const [localChecked, setLocalChecked] = useState<readonly string[]>(seedCheckedIds)
   const [prevSeedChecked, setPrevSeedChecked] = useState<readonly string[]>(seedCheckedIds)
   const [prevItemIds, setPrevItemIds] = useState<readonly string[]>(itemIds)
@@ -225,13 +263,17 @@ export const DshChecklistImpl = defineComponent<{
     }
   }
 
-  const activeCheckedList = hasWritableValue
+  const rawActiveCheckedList = hasWritableValue
     ? Array.isArray(props.value)
-      ? props.value.map(String)
+      ? normalizeStringArrayValue(props.value)
       : props.value === undefined
         ? defaultCheckedIds
         : []
     : localChecked
+  const activeCheckedList = useMemo(
+    () => rawActiveCheckedList.filter((id) => itemIdSet.has(id)),
+    [rawActiveCheckedList, itemIdSet],
+  )
   const checkedSet = useMemo(() => new Set(activeCheckedList), [activeCheckedList])
   const summary = useMemo(() => computeChecklistSummary(items, checkedSet), [items, checkedSet])
 
@@ -302,7 +344,7 @@ export const DshChecklistImpl = defineComponent<{
         {items.length === 0 ? (
           <div className={css.emptyCell}>{msg.checklistEmpty}</div>
         ) : (
-          <ul className={css.checklistList}>
+          <ul className={css.checklistList} aria-invalid={showError || undefined}>
             {items.map((item) => {
               const checked = checkedSet.has(item.id)
               return (
@@ -598,6 +640,18 @@ export const DshKvEditorImpl = defineComponent<{
   const showError = !readOnly && (touched || submitAttempted) && props.isValid === false
   const err = showError ? props.validationErrors?.[0] : undefined
 
+  const duplicateKeySet = useMemo(() => {
+    const dups = new Set<string>()
+    if (!isObjectBacked) return dups
+    const seen = new Set<string>()
+    for (const r of rows) {
+      if (r.key === '') continue
+      if (seen.has(r.key)) dups.add(r.key)
+      else seen.add(r.key)
+    }
+    return dups
+  }, [isObjectBacked, rows])
+
   const commitRows = (nextRows: readonly KvDraftRow[], nextId = draftState.nextId) => {
     setTouched(true)
     const normalized: KvDraftRow[] = nextRows.map((r) => ({
@@ -626,7 +680,8 @@ export const DshKvEditorImpl = defineComponent<{
         ...prev,
         rows: normalized,
         nextId,
-        pendingSnaps: [...prev.pendingSnaps.slice(-15), snap],
+        pendingSnaps:
+          snap === prev.lastExtSnap ? prev.pendingSnaps : [...prev.pendingSnaps.slice(-15), snap],
       }))
       props.setItems?.(obj)
       return
@@ -637,7 +692,8 @@ export const DshKvEditorImpl = defineComponent<{
       ...prev,
       rows: normalized,
       nextId,
-      pendingSnaps: [...prev.pendingSnaps.slice(-15), snap],
+      pendingSnaps:
+        snap === prev.lastExtSnap ? prev.pendingSnaps : [...prev.pendingSnaps.slice(-15), snap],
     }))
     props.setItems?.(arr)
   }
@@ -692,56 +748,61 @@ export const DshKvEditorImpl = defineComponent<{
               <span>{valueLabel}</span>
               {!readOnly ? <span /> : null}
             </div>
-            {rows.map((row, idx) => (
-              <div
-                key={row.id}
-                className={css.kvEditorRow}
-                data-readonly={readOnly ? 'true' : undefined}
-              >
-                <input
-                  type="text"
-                  className={css.kvEditorInput}
-                  value={row.key}
-                  disabled={readOnly}
-                  aria-invalid={showError || undefined}
-                  placeholder={keyPlaceholder}
-                  aria-label={`${keyLabel} #${idx + 1}`}
-                  onChange={(e) => {
-                    if (readOnly) return
-                    const next = rows.map((r) =>
-                      r.id === row.id ? { ...r, key: e.target.value } : r,
-                    )
-                    commitRows(next)
-                  }}
-                />
-                <input
-                  type={row.sensitive ? 'password' : 'text'}
-                  className={css.kvEditorInput}
-                  value={row.value}
-                  disabled={readOnly}
-                  aria-invalid={showError || undefined}
-                  placeholder={valuePlaceholder}
-                  aria-label={`${valueLabel} #${idx + 1}`}
-                  onChange={(e) => {
-                    if (readOnly) return
-                    const next = rows.map((r) =>
-                      r.id === row.id ? { ...r, value: e.target.value } : r,
-                    )
-                    commitRows(next)
-                  }}
-                />
-                {!readOnly ? (
-                  <button
-                    type="button"
-                    className={css.kvEditorDelBtn}
-                    aria-label={msg.kvEditorRemoveAria}
-                    onClick={() => commitRows(rows.filter((r) => r.id !== row.id))}
-                  >
-                    ×
-                  </button>
-                ) : null}
-              </div>
-            ))}
+            {rows.map((row, idx) => {
+              const isDupKey = row.key !== '' && duplicateKeySet.has(row.key)
+              return (
+                <div
+                  key={row.id}
+                  className={css.kvEditorRow}
+                  data-readonly={readOnly ? 'true' : undefined}
+                  data-duplicate={isDupKey ? 'true' : undefined}
+                >
+                  <input
+                    type="text"
+                    className={css.kvEditorInput}
+                    value={row.key}
+                    disabled={readOnly}
+                    aria-invalid={showError || isDupKey || undefined}
+                    placeholder={keyPlaceholder}
+                    aria-label={`${keyLabel} #${idx + 1}`}
+                    onChange={(e) => {
+                      if (readOnly) return
+                      const next = rows.map((r) =>
+                        r.id === row.id ? { ...r, key: e.target.value } : r,
+                      )
+                      commitRows(next)
+                    }}
+                  />
+                  <input
+                    type={row.sensitive ? 'password' : 'text'}
+                    autoComplete={row.sensitive ? 'off' : undefined}
+                    className={css.kvEditorInput}
+                    value={row.value}
+                    disabled={readOnly}
+                    aria-invalid={showError || undefined}
+                    placeholder={valuePlaceholder}
+                    aria-label={`${valueLabel} #${idx + 1}`}
+                    onChange={(e) => {
+                      if (readOnly) return
+                      const next = rows.map((r) =>
+                        r.id === row.id ? { ...r, value: e.target.value } : r,
+                      )
+                      commitRows(next)
+                    }}
+                  />
+                  {!readOnly ? (
+                    <button
+                      type="button"
+                      className={css.kvEditorDelBtn}
+                      aria-label={msg.kvEditorRemoveAria}
+                      onClick={() => commitRows(rows.filter((r) => r.id !== row.id))}
+                    >
+                      ×
+                    </button>
+                  ) : null}
+                </div>
+              )
+            })}
           </div>
         )}
         {err ? <span className={css.errorText}>{err}</span> : null}

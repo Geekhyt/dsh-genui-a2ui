@@ -278,13 +278,13 @@ describe('v0.4.8 composition & systemic hardening audit', () => {
       276,
     ) as {
       legend: { itemGap: number; textStyle: { width?: number; overflow?: string } }
-      series: Array<{ markLine?: { label?: { width?: number; formatter?: string } } }>
+      series: Array<{ markLine?: { label?: { width?: number; formatter?: () => string } } }>
     }
     expect(line4.legend.textStyle.width).toBeGreaterThanOrEqual(42)
     expect(line4.legend.textStyle.overflow).toBe('truncate')
     expect(line4.legend.itemGap).toBeGreaterThanOrEqual(24)
     expect(line4.series[0]?.markLine?.label?.width).toBeUndefined()
-    expect(line4.series[0]?.markLine?.label?.formatter).toBe('SLO 200ms')
+    expect(line4.series[0]?.markLine?.label?.formatter?.()).toBe('SLO 200ms')
 
     const comboNoLine = buildChartOption(
       {

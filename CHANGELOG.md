@@ -2,6 +2,35 @@
 
 All notable changes to `dsh-genui-a2ui` are documented in this file.
 
+## [0.5.5] - 2026-11-25
+
+### Added
+- **7 New Architectural Invariant Rules (`scripts/check-invariants.mjs`, `tests/invariants-lint.spec.ts`)**:
+  - Expanded the static invariant gate from **27 → 34 rules**, adding `css-fixed-table-no-overflow-pre`, `css-opaque-control-bg`, `tsx-portal-theme-class`, `no-blind-clipboard-success`, `mermaid-init-dompurify-config`, `echarts-no-raw-string-formatter`, and `no-raw-curl-data-flag`.
+- **Adversarial ECharts SVG Matrix, Built-Bundle Cross-Chunk Tests & `showcase-42` (`tests/echarts-svg-whitebox.spec.ts`, `tests/built-bundle-cross-chunk.spec.ts`, `tests/comprehensive-audit-v055.spec.ts`, `scripts/mock-llm.mjs`)**:
+  - Expanded white-box SVG verification to compile and audit **every `Chart` across all exported `SHOWCASE_*_UI` suites** at `276px` & `640px` in both themes, plus a **26 chart kinds × 9 adversarial data-distribution matrix** (`empty`, `null/NaN/Infinity`, `all-zeros`, negative log scale, zero-row percent stacks, `0.001~0.0055` micro-decimals, `2026-01..06` prefix + `{c}/{a}` braces, links-only `graph`, and sparse first-row-null `heatmap`).
+  - Added `tests/built-bundle-cross-chunk.spec.ts` executing the actual built `lib/client.js`, `lib/client.runtime.js`, `lib/client.echarts.js`, `lib/client.mermaid.js`, and `lib/index.js` artifacts in a DSH `window.__ModuleLoader__` sandbox to verify cross-chunk `globalThis.__dshA2uiPersistence__` singleton parity and production bundle security contracts.
+  - Upgraded `scripts/visual-qa-bot.mjs` (`svgTextClipViolations` + zero-dependency `decodePngRgba`/`evaluateStickyTintParity`) and `scripts/qa-e2e-bot.mjs` (**24/24** live Chrome checks including real Dark & Light sticky-column selected/hover pixel RGB parity and `showcase-42` live DOM semantics).
+
+### Fixed
+- **Host Security, Express Sandbox, Redaction & File-Opener Guards (`src/shared/{express-preprocess,redaction,temporal}.ts`, `src/host/{ask-tool,generator}.ts`, `src/client/{file-opener.tsx,runtime/streaming.ts}`)**:
+  - Blocked split-line, comment-obfuscated, raw/triple-quoted `__proto__` bypasses and semicolon Billion-Laughs expansion DoS in `express-preprocess.ts` with post-compilation `findDangerousCompiledKey` verification, named-argument `eq`, and `calc` reassignment invalidation.
+  - Hardened root `/` template pointer redaction and `kvPointers` pre-scanning (`redaction.ts`), unpadded RFC 3339 temporal normalization (`temporal.ts`), streaming patch validation (`streaming.ts`), and Windows backslash / root-directory traversal guards (`file-opener.tsx`).
+- **Mermaid Sandbox, Linear Edge Repair & Context-Aware SVG ID Namespacing (`src/client/mermaid-safe.ts`, `src/client/chunks/mermaid-chunk.ts`, `src/client/catalog/widgets/MermaidWidget.tsx`)**:
+  - Rewrote `namespaceSvgIds` as a tag/attribute-aware pure function in `mermaid-safe.ts` so SQL/API text nodes (`WHERE id='123'`, `id='ord_42'`) and hex colors are never corrupted by SVG ID prefixes.
+  - Filtered `<dialog>`/`<img>` and external fetch attributes, enforced explicit `dompurifyConfig` in `mermaid.initialize`, protected unclosed `%%{` directives, and replaced backtracking edge-label repair regexes with O(n) linear scanning.
+- **Cross-Chunk Persistence, TLA+ State Machines, Focus Trap & Unified Portal Primitives (`src/client/{persistence,chunk-loader,dom-hooks}.ts`, `src/client/ui/primitives.tsx`, `src/client/catalog/widget-helpers.tsx`, `specs/{AskLifecycle,OverlayEscapeStack}.tla`)**:
+  - Unified persistence state on `globalThis.__dshA2uiPersistence__` across chunks and migrated LRU ordering to insertion-ordered `Map` (fixing numeric-key ordering).
+  - Hardened focus traps against `tabindex="-1"`, hidden, and `inert` subtrees; registered `HostModal` on `data-a2ui-overlay=""` for LIFO Escape handling; strengthened `AskLifecycle.tla` (`3,890` states) and `OverlayEscapeStack.tla` (`169` states).
+  - Consolidated pickers onto `<PortalPopoverShell>`, `usePickerPopover`, `nextRovingIndex`, and `SvgIcon16`; guarded clipboard feedback on `writeText()` settlement; switched `buildEndpointCurl` to `--data-raw`.
+- **ProTable, Observability Widgets, 26-Kind ECharts & Dual-Theme CSS (`src/client/catalog/{TableWidget.tsx,v3~v6-helpers.ts,styles/*.module.css}`, `src/client/chunks/echarts/*.ts`)**:
+  - Fixed ProTable boolean descending/ascending sorting (`compareTableAlphanumericCells`), `N/A` numeric summary omission, mixed-currency sum suppression, high-SLA 4-decimal precision (`99.9633%` instead of `100.0%`), and selection persistence across title updates.
+  - Fixed `MetricRing` `0.004%` precision and `0%` arc omission, `Tracker` `warning`/`pending` summary semantics, `LogViewer` ISO timezone & colon-level parsing (`ERROR:`/`[WARN]`) + `.logService` ellipsis, `ServiceGraph` `.serviceNodeBox` / `.serviceNodeMetric` clipping, `Schedule` `border-box` & overnight clamping, `RangeSlider` opaque thumbs + `:focus-visible` + collapsed-thumb dragging, and seamless 2-layer `--sticky-tint` compositing on sticky `ProTable` selected/hover rows (0 RGB delta across Dark & Light).
+  - Hardened all 26 ECharts kinds: locked `percent` stacks to `0%–100%`, added `buildCompactCategoryFormatter` (`2026-01..06` → `Jan..Jun`), dense 7-item `radialBar` scroll-legend mode, `NICE_STEPS` uniform axis bounds, inside-bar halo on zero-crossing `waterfall` bars, small-magnitude `boxplot` precision, links-only `graph` node derivation, sparse first-row-null `heatmap` + `NaN`/`Infinity` blocking in `sanitizeChartLabel`, natural-width auto-scroll legends, and closure-function `formatter`s preventing `{a}/{b}/{c}` template injection.
+
+### Changed
+- Verified full automated & live release gate: **42 suites / 264 tests**, **34/34** architectural invariants, **0** comments, **4/4** TLA+ formal specs, **5/5** bundle budgets unchanged (`lib/client.js = 74.66 kB / 20.82 kB gzip`), `eval:check` (`31/31`, `64/64` components), `check:host-api`, **24/24** live Chrome E2E checks (including 0-delta Dark/Light sticky pixel parity & `showcase-42` live semantics), and **46/46** upgraded 6-point Dark & Light Visual QA runs (`overflow=0 wrap=0 clip=0 contrast=0 svgclip=0 errs=0`).
+
 ## [0.5.4] - 2026-11-24
 
 ### Added

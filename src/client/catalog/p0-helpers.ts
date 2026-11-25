@@ -94,7 +94,8 @@ export function normalizeDiffFiles(raw: unknown): readonly NormalizedDiffFile[] 
     const filePath =
       typeof rawFilePath === 'string' && rawFilePath.trim() !== '' ? rawFilePath.trim() : undefined
     const path = filePath ?? String(rec.title ?? `file-${idx + 1}`).trim()
-    const title = String(rec.title ?? path).trim() || `file-${idx + 1}`
+    const rawTitle = rec.title !== undefined && rec.title !== null ? String(rec.title).trim() : ''
+    const title = rawTitle || path || `file-${idx + 1}`
     const lineNum = parsePositiveLineNumber(rec.line)
     out.push({
       path,
@@ -253,10 +254,13 @@ export function normalizeStepItems(
 ): NormalizedStep[] {
   if (!Array.isArray(rawItems)) return []
   const effectiveLocale = locale ?? resolveClientLocale()
-  const currentIdx =
-    typeof currentRaw === 'number' && Number.isFinite(currentRaw)
-      ? Math.trunc(currentRaw)
-      : undefined
+  const parsedCurrent =
+    typeof currentRaw === 'number'
+      ? currentRaw
+      : typeof currentRaw === 'string' && currentRaw.trim() !== ''
+        ? Number(currentRaw.trim())
+        : Number.NaN
+  const currentIdx = Number.isFinite(parsedCurrent) ? Math.trunc(parsedCurrent) : undefined
 
   const filtered = rawItems.filter((entry) => entry !== null && entry !== undefined)
   return filtered.map((entry, idx) => {

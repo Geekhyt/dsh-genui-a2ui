@@ -25,12 +25,15 @@ import css from './Catalog.module.css'
 import { buildSparklineGeometry, normalizeSparklinePoints } from './stat-file-helpers.ts'
 import {
   compareFormattedNumericCells,
+  compareTableAlphanumericCells,
   computeNextCrossFilterValue,
   computeTableNumericSummary,
   detectNumericColumnKeys,
   filterTableRowsByField,
   formatTableToCsv,
   formatTableToMarkdown,
+  getOwnProp,
+  isEmptyTableCell,
   normalizeCrossFilterTokens,
 } from './v4-helpers.ts'
 import { copyTextToClipboard, weightStyle } from './widget-helpers.tsx'
@@ -47,7 +50,9 @@ const TABLE_FEATURES = tableFeatures({
   paginatedRowModel: createPaginatedRowModel(),
   filterFns: { includesString: filterFn_includesString },
   sortFns: {
-    alphanumeric: sortFn_alphanumeric,
+    alphanumeric: (rowA, rowB, columnId) =>
+      compareTableAlphanumericCells(rowA.getValue(columnId), rowB.getValue(columnId)) ??
+      sortFn_alphanumeric(rowA, rowB, columnId),
     basic: sortFn_basic,
     formattedNumeric: (rowA, rowB, columnId) =>
       compareFormattedNumericCells(rowA.getValue(columnId), rowB.getValue(columnId)),
@@ -342,7 +347,8 @@ export const TableWidget = memo(function TableWidget({
   const [copiedMd, markCopiedMd] = useTransientFlag(1300)
   const [prevCrossFilterKey, setPrevCrossFilterKey] = useState(activeCrossFilterKey)
   const [prevFilterField, setPrevFilterField] = useState(filterField)
-  const [prevNormalizedData, setPrevNormalizedData] = useState(normalizedData)
+  const normalizedDataSnap = useMemo(() => safeStringifyJson(normalizedData, 0), [normalizedData])
+  const [prevNormalizedDataSnap, setPrevNormalizedDataSnap] = useState(normalizedDataSnap)
   const [prevPageSize, setPrevPageSize] = useState(clampedPageSize)
 
   if (prevPageSize !== clampedPageSize) {
@@ -353,11 +359,11 @@ export const TableWidget = memo(function TableWidget({
   if (
     prevCrossFilterKey !== activeCrossFilterKey ||
     prevFilterField !== filterField ||
-    prevNormalizedData !== normalizedData
+    prevNormalizedDataSnap !== normalizedDataSnap
   ) {
     setPrevCrossFilterKey(activeCrossFilterKey)
     setPrevFilterField(filterField)
-    setPrevNormalizedData(normalizedData)
+    setPrevNormalizedDataSnap(normalizedDataSnap)
     if (pagination.pageIndex !== 0) {
       setPagination((prev) => ({ ...prev, pageIndex: 0 }))
     }
@@ -397,7 +403,7 @@ export const TableWidget = memo(function TableWidget({
       Boolean(
         expandKey &&
           normalizedData.some((r) => {
-            const v = r[expandKey]
+            const v = getOwnProp(r, expandKey)
             return v !== undefined && v !== null && v !== ''
           }),
       ),
@@ -419,7 +425,7 @@ export const TableWidget = memo(function TableWidget({
       }
       let maxFound = 0
       for (const r of normalizedData) {
-        const n = parseNumericScalarForBar(r[col.key])
+        const n = parseNumericScalarForBar(getOwnProp(r, col.key))
         if (n !== null && n > maxFound) maxFound = n
       }
       map.set(col.key, maxFound > 0 ? maxFound : 100)
@@ -438,33 +444,24 @@ export const TableWidget = memo(function TableWidget({
             numericKeySet.has(col.key)
           const rawNumber =
             normalizedData.length > 0 &&
-            normalizedData.some((r) => typeof r[col.key] === 'number') &&
-            normalizedData.every(
-              (r) =>
-                r[col.key] === null || r[col.key] === undefined || typeof r[col.key] === 'number',
-            )
+            normalizedData.some((r) => typeof getOwnProp(r, col.key) === 'number') &&
+            normalizedData.every((r) => {
+              const v = getOwnProp(r, col.key)
+              return v === null || v === undefined || typeof v === 'number'
+            })
           const wrapProse =
             !isNumeric &&
             !col.format &&
             normalizedData.slice(0, 40).some((r) => {
-              const formatted = formatCellValue(r[col.key], msg)
+              const formatted = formatCellValue(getOwnProp(r, col.key), msg)
               return formatted.includes('\n') || estimateVisualUnits(formatted) > 14
             })
           const align = col.align ?? (isNumeric ? 'right' : 'left')
           const colMax = barMaxByCol.get(col.key) ?? 100
-          const isEmptySortableCell = (val: unknown): boolean => {
-            if (val === null || val === undefined) return true
-            if (typeof val === 'number') return !Number.isFinite(val)
-            if (typeof val === 'string') {
-              const t = val.trim()
-              return t === '' || t === '-' || t === '—' || t === '–' || t === 'N/A'
-            }
-            return false
-          }
           return columnHelper.accessor(
             (row) => {
-              const v = row[col.key]
-              return isEmptySortableCell(v) ? undefined : v
+              const v = getOwnProp(row, col.key)
+              return isEmptyTableCell(v) ? undefined : v
             },
             {
               id: col.key,
@@ -474,7 +471,12 @@ export const TableWidget = memo(function TableWidget({
               sortFn: rawNumber ? 'basic' : isNumeric ? 'formattedNumeric' : 'alphanumeric',
               meta: { align, isNumeric, wrapProse },
               cell: (info) =>
-                renderFormattedTableCell(info.row.original[col.key], col.format, colMax, msg),
+                renderFormattedTableCell(
+                  getOwnProp(info.row.original, col.key),
+                  col.format,
+                  colMax,
+                  msg,
+                ),
             },
           )
         }),
@@ -567,8 +569,7 @@ export const TableWidget = memo(function TableWidget({
       sortedRows.map((r) => r.original),
       numericKeySet,
     )
-    copyTextToClipboard(md)
-    markCopiedMd()
+    copyTextToClipboard(md, markCopiedMd)
   }
 
   const handleExportCsv = () => {
@@ -779,11 +780,13 @@ export const TableWidget = memo(function TableWidget({
                 const clickable = (typeof action === 'function' && !selectable) || canCrossFilterRow
                 const rowChecked = selectable && selectedIndices.has(row.index)
                 const detailText =
-                  hasExpandColumn && expandKey ? formatExpandDetail(row.original[expandKey]) : ''
+                  hasExpandColumn && expandKey
+                    ? formatExpandDetail(getOwnProp(row.original, expandKey))
+                    : ''
                 const isExpanded = detailText !== '' && expandedIndices.has(row.index)
                 const triggerRow = () => {
                   if (canCrossFilterRow && filterField && onFilterValueChange) {
-                    const rawCell = row.original[filterField]
+                    const rawCell = getOwnProp(row.original, filterField)
                     const scalarVal =
                       rawCell === null || rawCell === undefined
                         ? ''
@@ -801,7 +804,7 @@ export const TableWidget = memo(function TableWidget({
                   const firstKey = inferredCols[0]?.key
                   const label =
                     firstKey !== undefined
-                      ? formatCellValue(row.original[firstKey], msg)
+                      ? formatCellValue(getOwnProp(row.original, firstKey), msg)
                       : msg.tableRowFallback(row.index + 1)
                   void action({
                     metadata: {
@@ -939,9 +942,9 @@ export const TableWidget = memo(function TableWidget({
                         ...(isSticky ? stickyVar(firstColStickyLeft) : undefined),
                       }}
                     >
-                      {idx === 0 && !summaryMap[col.key]
+                      {idx === 0 && !getOwnProp(summaryMap, col.key)
                         ? msg.tableSummaryLabel(filteredRows.length)
-                        : (summaryMap[col.key] ?? '')}
+                        : ((getOwnProp(summaryMap, col.key) as string | undefined) ?? '')}
                     </td>
                   )
                 })}

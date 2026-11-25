@@ -2236,6 +2236,83 @@ export const SHOWCASE_COMBO_AUDIT_V053_WIDGETS_UI = [
   ']))',
 ].join('\n')
 
+export const SHOWCASE_COMPREHENSIVE_AUDIT_V055_UI = [
+  'surface("v055_comprehensive_audit")',
+  '$/wfZero = [',
+  '  { step: "期初", delta: 100, total: true },',
+  '  { step: "全额回撤", delta: -100 },',
+  '  { step: "新增回补", delta: 45 },',
+  '  { step: "期末", delta: 45, total: true }',
+  ']',
+  '$/smallBox = [',
+  '  { group: "API-A", values: [0.001, 0.0015, 0.002, 0.003, 0.004, 0.0045] },',
+  '  { group: "API-B", values: [0.0012, 0.0022, 0.0028, 0.0035, 0.0048, 0.0055] }',
+  ']',
+  '$/linksOnlyGraph = {',
+  '  nodes: [],',
+  '  links: [',
+  '    { source: "Gateway", target: "Auth" },',
+  '    { source: "Auth", target: "Ledger" },',
+  '    { source: "Ledger", target: "Audit" }',
+  '  ]',
+  '}',
+  '$/sparseHeat = [',
+  '  { day: "周一", hour: "09:00", errors: null },',
+  '  { day: "周一", hour: "10:00", errors: 5 },',
+  '  { day: "周二", hour: "09:00", errors: 12 },',
+  '  { day: "周二", hour: "10:00", errors: 8 }',
+  ']',
+  '$/wideLegendLine = [',
+  '  { day: "Mon", "Production API Gateway Cluster": 120, "Staging Canary Verification Pool": 95, "Shadow Traffic Replay Pipeline": 78 },',
+  '  { day: "Tue", "Production API Gateway Cluster": 148, "Staging Canary Verification Pool": 112, "Shadow Traffic Replay Pipeline": 89 },',
+  '  { day: "Wed", "Production API Gateway Cluster": 136, "Staging Canary Verification Pool": 108, "Shadow Traffic Replay Pipeline": 94 }',
+  ']',
+  '$/auditLogs = [',
+  '  "2026-11-24T10:42:05+08:00 ERROR: [k8s-prod-us-east-1-payment-settlement-worker] database connection refused",',
+  '  "[2026-11-24 10:42:08] [WARN] [k8s-prod-cn-hangzhou-checkout-gateway-canary] retry budget 82% consumed"',
+  ']',
+  '$/auditTopoNodes = [',
+  '  { id: "gw", label: "API Gateway", status: "ok", metric: "p99 420ms · err 4.2% · 12.4k/s" },',
+  '  { id: "pay", label: "Checkout", status: "warning", metric: "p99 880ms · timeout 3.1% · retry" }',
+  ']',
+  '$/auditTopoEdges = [{ from: "gw", to: "pay", label: "HTTP 200" }]',
+  '$/unknownTracker = [',
+  '  { id: "u1", label: "11-20", status: "unknown", value: "No data" },',
+  '  { id: "u2", label: "11-21", status: "unknown", value: "No data" },',
+  '  { id: "u3", label: "11-22", status: "unknown", value: "No data" }',
+  ']',
+  '$/auditTableRows = [',
+  '  { name: "gateway-hz", active: false, price: "$1,000", sla: "99.95%" },',
+  '  { name: "checkout-sh", active: true, price: "$200", sla: "99.98%" },',
+  '  { name: "audit-bj", active: false, price: "N/A", sla: "99.96%" }',
+  ']',
+  'root = Card(Column([',
+  '  Text("### 全面审计 42：Mermaid 文本防污染 / Waterfall 零线防撞 / 小量级箱线图 / 空节点拓扑 / 稀疏热力图 / 长图例 / 圆环与表格"),',
+  '  Mermaid("flowchart LR\\n  A[\\"SELECT * FROM orders WHERE id=\'123\'\\"] --> B[\\"POST /orders (id=\'ord_42\')\\"]", title="Mermaid SQL/ID 文本防 namespace 污染"),',
+  '  Row([',
+  '    Chart("waterfall", $/wfZero, title="Waterfall 跌至零线防撞 X 轴", xField="step", yField="delta", height=220, weight=1),',
+  '    Chart("boxplot", $/smallBox, title="小量级小数箱线图 (0.001~0.0055)", xField="group", height=220, weight=1)',
+  '  ], align="stretch"),',
+  '  Row([',
+  '    Chart("graph", $/linksOnlyGraph, title="空 nodes 仅 links 关系图", height=210, weight=1),',
+  '    Chart("heatmap", $/sparseHeat, title="首行 null 稀疏热力图", height=210, weight=1)',
+  '  ], align="stretch"),',
+  '  Chart("line", $/wideLegendLine, title="三长系列折线图 + 花括号标线防模板插值", xField="day", yField=["Production API Gateway Cluster", "Staging Canary Verification Pool", "Shadow Traffic Replay Pipeline"], referenceLine=130, referenceLabel="SLA {c} / {a}", height=220),',
+  '  Row([',
+  '    Column([',
+  '      Row([',
+  '        MetricRing("零值无顶圆点", 0, max=100, unit="%", size=88, weight=1),',
+  '        MetricRing("微小小数精度", 0.004, max=0.01, unit="%", size=88, weight=1)',
+  '      ], align="stretch"),',
+  '      Tracker($/unknownTracker, title="全未知无数据 Tracker 状态色", summary="暂无数据")',
+  '    ], weight=1),',
+  '    LogViewer($/auditLogs, title="306px 长服务名防裁切 + ERROR:/TZ 识别", weight=1)',
+  '  ], align="stretch"),',
+  '  ServiceGraph($/auditTopoNodes, $/auditTopoEdges, title="ServiceGraph 长指标防溢出节点右边界"),',
+  '  Table($/auditTableRows, title="ProTable 布尔列排序 + N/A 汇总与高 SLA 精度", showSummary=true, columns=[{ key: "name", label: "服务", sortable: true }, { key: "active", label: "启用", sortable: true }, { key: "price", label: "费用", sortable: true }, { key: "sla", label: "SLA", sortable: true }])',
+  ']))',
+].join('\n')
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 function extractText(content) {
@@ -2543,6 +2620,7 @@ export function startMockLlmServer(port = PORT) {
       const isShowcase39 = /\bshowcase-39\b|combo-v050-charts/i.test(userText)
       const isShowcase40 = /\bshowcase-40\b|combo-v053-charts/i.test(userText)
       const isShowcase41 = /\bshowcase-41\b|combo-v053-widgets/i.test(userText)
+      const isShowcase42 = /\bshowcase-42\b|audit-v055/i.test(userText)
       const isDashboard = /dashboard|看板/i.test(userText)
       const isAsk = /ask|向导|部署/i.test(userText)
       const isDock = /dock|工作台|监控/i.test(userText)
@@ -2849,6 +2927,14 @@ export function startMockLlmServer(port = PORT) {
           })
           return
         }
+        if (isShowcase42) {
+          await streamToolCall(res, model, 'a2ui_render', {
+            title:
+              '全面审计 42：Mermaid 文本防污染 / Waterfall 零线 / 小量级箱线 / 空节点图 / 稀疏热力 / 长指标与表格实测',
+            ui: SHOWCASE_COMPREHENSIVE_AUDIT_V055_UI,
+          })
+          return
+        }
         if (userText.includes('[a2ui-action]')) {
           if (userText.includes('surface="analytics"') || userText.includes('action="boost_q2"')) {
             await streamToolCall(res, model, 'a2ui_render', {
@@ -3044,21 +3130,23 @@ export function startMockLlmServer(port = PORT) {
                                                                                       ? '已渲染全面审计 40（ECharts 6 小数域 Bullet/RadialBar、7 项玉玦图、右尾直方图参考线、自动数值散点、含负值 100% 堆叠、跨年日历、首行 null 平行坐标、三层旭日图与哑铃图）。'
                                                                                       : isShowcase41
                                                                                         ? '已渲染全面审计 41（16 协议标准图标、小数域滑块、字面量 CheckCard、Warning 语义点、306px ApiEndpoint/FileOpenBtn/AnnotationText、跨夜过午 Schedule、URL+Action SourceList 与 ProTable 空值排序）。'
-                                                                                        : userText.includes(
-                                                                                              '[a2ui-action]',
-                                                                                            )
-                                                                                          ? '已根据您的操作实时增量刷新界面数据模型。'
-                                                                                          : isDock
-                                                                                            ? '已将 CI/CD 发布流水线监控面板固定在输入框上方的常驻工作台（Dock），后续轮次将继续实时原地刷新。'
-                                                                                            : isInline
-                                                                                              ? '已在工具步骤流内嵌渲染诊断摘要。'
-                                                                                              : isDashboard
-                                                                                                ? '已为您生成 2026 区域经营交互看板（示例数据），可切换图表、搜索排序明细表或一键调整预测情景。'
-                                                                                                : userText.includes(
-                                                                                                      'test-error',
-                                                                                                    )
-                                                                                                  ? '初稿校验触发编译器诊断自愈，已自动将非法组件修正为标准组件并完成渲染。'
-                                                                                                  : '已为您准备好餐厅预订交互卡片，您可直接在下方调整人数、口味或包间选项后点击确认。'
+                                                                                        : isShowcase42
+                                                                                          ? '已渲染全面审计 42（Mermaid SQL/ID 文本防污染、Waterfall 零线防撞、小量级箱线图、空节点关系图、稀疏热力图、长系列图例、零值圆环、长服务名日志、ServiceGraph 长指标与 ProTable 布尔/N/A/高 SLA 实测）。'
+                                                                                          : userText.includes(
+                                                                                                '[a2ui-action]',
+                                                                                              )
+                                                                                            ? '已根据您的操作实时增量刷新界面数据模型。'
+                                                                                            : isDock
+                                                                                              ? '已将 CI/CD 发布流水线监控面板固定在输入框上方的常驻工作台（Dock），后续轮次将继续实时原地刷新。'
+                                                                                              : isInline
+                                                                                                ? '已在工具步骤流内嵌渲染诊断摘要。'
+                                                                                                : isDashboard
+                                                                                                  ? '已为您生成 2026 区域经营交互看板（示例数据），可切换图表、搜索排序明细表或一键调整预测情景。'
+                                                                                                  : userText.includes(
+                                                                                                        'test-error',
+                                                                                                      )
+                                                                                                    ? '初稿校验触发编译器诊断自愈，已自动将非法组件修正为标准组件并完成渲染。'
+                                                                                                    : '已为您准备好餐厅预订交互卡片，您可直接在下方调整人数、口味或包间选项后点击确认。'
       await streamTextReply(res, model, reply)
       return
     }

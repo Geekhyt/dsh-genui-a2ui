@@ -118,11 +118,15 @@ export interface ChartBuildContext {
   readonly markArea: (
     yAxisIndex?: number,
     yRange?: readonly [number, number],
+    categories?: readonly string[],
+    horizontal?: boolean,
+    useLog?: boolean,
   ) => Record<string, unknown> | undefined
   readonly zoom: (horizontal?: boolean) => Record<string, unknown>[] | undefined
 }
 
 export function sanitizeChartLabel(input: unknown): string {
+  if (typeof input === 'number' && !Number.isFinite(input)) return ''
   return sanitizeInlineUrlText(input)
 }
 
@@ -148,13 +152,19 @@ export function truncateByVisualWidth(raw: string, maxUnits: number): string {
   return raw
 }
 
-export function toNumber(input: unknown): number {
-  if (typeof input === 'number') return Number.isFinite(input) ? input : 0
+export function toFiniteNum(input: unknown): number | null {
+  if (typeof input === 'number') return Number.isFinite(input) ? input : null
   if (typeof input === 'string') {
-    const parsed = Number(input.replace(/,/g, '').trim())
-    return Number.isFinite(parsed) ? parsed : 0
+    const t = input.replace(/,/g, '').trim()
+    if (t === '') return null
+    const parsed = Number(t)
+    return Number.isFinite(parsed) ? parsed : null
   }
-  return 0
+  return null
+}
+
+export function toNumber(input: unknown): number {
+  return toFiniteNum(input) ?? 0
 }
 
 export function normalizeChartRows(data: unknown): Record<string, unknown>[] {
@@ -165,6 +175,34 @@ export function normalizeChartRows(data: unknown): Record<string, unknown>[] {
   )
 }
 
+export const ZOOM_LEGEND_BOTTOM = 30
+
+export function scanSampleKeys(
+  rows: readonly Record<string, unknown>[],
+  limit = 16,
+): {
+  readonly keys: string[]
+  readonly stringKeys: string[]
+  readonly numericKeys: string[]
+} {
+  const slice = rows.slice(0, limit)
+  const keys: string[] = []
+  const seen = new Set<string>()
+  for (const r of slice) {
+    for (const k of Object.keys(r)) {
+      if (!seen.has(k)) {
+        seen.add(k)
+        keys.push(k)
+      }
+    }
+  }
+  const stringKeys = keys.filter((k) => slice.some((r) => typeof r[k] === 'string'))
+  const numericKeys = keys.filter((k) =>
+    slice.some((r) => typeof r[k] === 'number' && Number.isFinite(r[k])),
+  )
+  return { keys, stringKeys, numericKeys }
+}
+
 export function inferFields(
   rows: readonly Record<string, unknown>[],
   explicitX: string | undefined,
@@ -172,26 +210,9 @@ export function inferFields(
   excludeKeys?: readonly (string | undefined)[],
 ): { xKey: string; yKeys: string[] } {
   const excluded = new Set((excludeKeys ?? []).filter((k): k is string => Boolean(k)))
-  const sampleSlice = rows.slice(0, 16)
-  const keys: string[] = []
-  const seenKeys = new Set<string>()
-  for (const row of sampleSlice) {
-    for (const k of Object.keys(row)) {
-      if (!seenKeys.has(k)) {
-        seenKeys.add(k)
-        keys.push(k)
-      }
-    }
-  }
-  const hasStringVal = (k: string) => sampleSlice.some((r) => typeof r[k] === 'string')
-  const hasNumericVal = (k: string) =>
-    sampleSlice.some((r) => typeof r[k] === 'number' && Number.isFinite(r[k]))
+  const { keys, stringKeys, numericKeys: allNumeric } = scanSampleKeys(rows)
   const xKey =
-    explicitX ??
-    keys.find((k) => !excluded.has(k) && hasStringVal(k)) ??
-    keys.find((k) => hasStringVal(k)) ??
-    keys[0] ??
-    'label'
+    explicitX ?? stringKeys.find((k) => !excluded.has(k)) ?? stringKeys[0] ?? keys[0] ?? 'label'
 
   if (typeof explicitY === 'string' && explicitY !== '') {
     return { xKey, yKeys: [explicitY] }
@@ -199,7 +220,7 @@ export function inferFields(
   if (Array.isArray(explicitY) && explicitY.length > 0) {
     return { xKey, yKeys: explicitY }
   }
-  const numericKeys = keys.filter((k) => k !== xKey && !excluded.has(k) && hasNumericVal(k))
+  const numericKeys = allNumeric.filter((k) => k !== xKey && !excluded.has(k))
   return {
     xKey,
     yKeys:
@@ -216,7 +237,7 @@ export function quantile(sorted: readonly number[], q: number): number {
   const base = Math.floor(pos)
   const rest = pos - base
   const next = sorted[base + 1] ?? sorted[base]!
-  return Number((sorted[base]! + rest * (next - sorted[base]!)).toFixed(2))
+  return Number((sorted[base]! + rest * (next - sorted[base]!)).toPrecision(10))
 }
 
 export const FILLED_SHAPE_LABEL = {
@@ -327,46 +348,69 @@ export function buildZoomConfig(
 
 export function computeEvenAxisInterval(maxVal: number, isCompact: boolean): number | undefined {
   if (!Number.isFinite(maxVal) || maxVal <= 0) return undefined
-  const div = isCompact
-    ? maxVal % 3 === 0
-      ? 3
-      : maxVal % 4 === 0
-        ? 4
-        : 2
-    : maxVal % 5 === 0
-      ? 5
-      : maxVal % 4 === 0
-        ? 4
-        : 3
-  return Number((maxVal / div).toPrecision(6))
+  const mag = 10 ** Math.floor(Math.log10(maxVal))
+  const scaled = Math.round((maxVal / mag) * 1000)
+  const divs = isCompact ? [4, 3, 2, 5] : [5, 4, 3, 2]
+  for (const d of divs) {
+    if (scaled % d === 0) return Number((maxVal / d).toPrecision(6))
+  }
+  return Number((maxVal / (isCompact ? 3 : 4)).toPrecision(6))
 }
+
+export function buildCompactCategoryFormatter(
+  categories: readonly string[],
+  maxWidthPx: number,
+  isCompact: boolean,
+): ((val: string) => string) | undefined {
+  if (!isCompact || categories.length < 2) return undefined
+  const maxUnits = Math.max(4, Math.floor(maxWidthPx / 6.2))
+  const unique = [...new Set(categories)]
+  if (unique.length < 2) return undefined
+  const seen = new Set<string>()
+  let collides = false
+  for (const c of unique) {
+    const t = truncateByVisualWidth(c, maxUnits)
+    if (seen.has(t)) {
+      collides = true
+      break
+    }
+    seen.add(t)
+  }
+  if (!collides) return undefined
+  if (unique.every((c) => /^\d{4}-\d{2}$/.test(c))) {
+    const sameYear = unique.every((c) => c.slice(0, 5) === unique[0]!.slice(0, 5))
+    return (v: string) => (sameYear && maxUnits < 5 ? v.slice(5) : v.slice(2))
+  }
+  if (unique.every((c) => /^\d{4}-\d{2}-\d{2}$/.test(c))) {
+    const sameYear = unique.every((c) => c.slice(0, 5) === unique[0]!.slice(0, 5))
+    if (sameYear) return (v: string) => v.slice(5)
+  }
+  let lcp = unique[0]!
+  for (let i = 1; i < unique.length && lcp.length > 0; i++) {
+    const cur = unique[i]!
+    let j = 0
+    while (j < lcp.length && j < cur.length && lcp[j] === cur[j]) j++
+    lcp = lcp.slice(0, j)
+  }
+  let delimIdx = -1
+  for (const sep of '-/_: ') delimIdx = Math.max(delimIdx, lcp.lastIndexOf(sep))
+  const cut = delimIdx >= 2 ? delimIdx + 1 : lcp.length >= 4 ? lcp.length : 0
+  if (cut > 0) {
+    return (v: string) => {
+      const tail = v.startsWith(lcp.slice(0, cut)) ? v.slice(cut) : v
+      return truncateByVisualWidth(tail || v, maxUnits)
+    }
+  }
+  return undefined
+}
+
+const NICE_STEPS = [1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10] as const
 
 export function niceUpperBound(v: number): number {
   if (v <= 0) return 0
   const mag = 10 ** Math.floor(Math.log10(v))
   const norm = v / mag
-  const step =
-    norm <= 1
-      ? 1
-      : norm <= 1.2
-        ? 1.2
-        : norm <= 1.5
-          ? 1.5
-          : norm <= 2
-            ? 2
-            : norm <= 2.5
-              ? 2.5
-              : norm <= 3
-                ? 3
-                : norm <= 4
-                  ? 4
-                  : norm <= 5
-                    ? 5
-                    : norm <= 6
-                      ? 6
-                      : norm <= 8
-                        ? 8
-                        : 10
+  const step = NICE_STEPS.find((s) => norm <= s) ?? 10
   return Number((step * mag).toPrecision(6))
 }
 
@@ -485,7 +529,7 @@ export function buildReferenceMarkLine(
     symbol: ['none', 'none'],
     lineStyle: { color, type: 'dashed', width: 1.5 },
     label: {
-      formatter: text,
+      formatter: () => text,
       position: horizontal ? (position === 'end' ? 'end' : 'start') : position,
       rotate: horizontal ? 0 : undefined,
       ...(horizontal && align ? { align } : {}),
@@ -501,6 +545,57 @@ export function buildReferenceMarkLine(
     },
     data: [horizontal ? { xAxis: value } : { yAxis: value }],
   }
+}
+
+export function extractFlowData(
+  data: unknown,
+  rows: readonly Record<string, unknown>[],
+  srcField: string,
+  tgtField: string,
+  valField: string,
+  fallbackValKey: string,
+  defaultVal: number,
+  skipSelfLoop: boolean,
+): {
+  readonly nodeNames: Set<string>
+  readonly links: { source: string; target: string; value: number }[]
+} {
+  const rawObj =
+    typeof data === 'object' && data !== null && !Array.isArray(data)
+      ? (data as Record<string, unknown>)
+      : null
+  const rawLinks = Array.isArray(rawObj?.links)
+    ? (rawObj.links as Record<string, unknown>[])
+    : Array.isArray(rawObj?.edges)
+      ? (rawObj.edges as Record<string, unknown>[])
+      : rows
+  const idToName = new Map<string, string>()
+  const nodeNames = new Set<string>()
+  if (Array.isArray(rawObj?.nodes)) {
+    for (const n of rawObj.nodes as Record<string, unknown>[]) {
+      const nid = sanitizeChartLabel(n?.id)
+      const name = sanitizeChartLabel(n?.name ?? n?.label ?? n?.id)
+      if (nid && name) idToName.set(nid, name)
+      if (name) nodeNames.add(name)
+    }
+  }
+  const linkTotals = new Map<string, { source: string; target: string; value: number }>()
+  for (const r of rawLinks) {
+    if (typeof r !== 'object' || r === null) continue
+    const rawSrc = sanitizeChartLabel(r[srcField] ?? r.source ?? r.from)
+    const rawTgt = sanitizeChartLabel(r[tgtField] ?? r.target ?? r.to)
+    const source = idToName.get(rawSrc) ?? rawSrc
+    const target = idToName.get(rawTgt) ?? rawTgt
+    const value = Math.max(0, toNumber(r[valField] ?? r.value ?? r[fallbackValKey] ?? defaultVal))
+    if (!source || !target || value <= 0 || (skipSelfLoop && source === target)) continue
+    nodeNames.add(source)
+    nodeNames.add(target)
+    const key = `${source}\u0000${target}`
+    const prev = linkTotals.get(key)
+    if (prev) prev.value += value
+    else linkTotals.set(key, { source, target, value })
+  }
+  return { nodeNames, links: [...linkTotals.values()] }
 }
 
 export function buildHierarchyTree(
@@ -525,7 +620,7 @@ export function buildHierarchyTree(
       name: sanitizeChartLabel(node[nameField] ?? node.name ?? node.label),
       value:
         node[valField] !== undefined || node.value !== undefined
-          ? toNumber(node[valField] ?? node.value)
+          ? Math.max(0, toNumber(node[valField] ?? node.value))
           : undefined,
       children: Array.isArray(node.children)
         ? (node.children as Record<string, unknown>[])
@@ -544,7 +639,7 @@ export function buildHierarchyTree(
       const list = groups.get(g) ?? []
       list.push({
         name: sanitizeChartLabel(r[nameField] ?? r.name ?? r.label ?? r[xKey]),
-        value: toNumber(r[valField] ?? r.value ?? r[primaryY]),
+        value: Math.max(0, toNumber(r[valField] ?? r.value ?? r[primaryY])),
       })
       groups.set(g, list)
     }
@@ -553,7 +648,7 @@ export function buildHierarchyTree(
 
   return rows.map((r) => ({
     name: sanitizeChartLabel(r[nameField] ?? r.name ?? r.label ?? r[xKey]),
-    value: toNumber(r[valField] ?? r.value ?? r[primaryY]),
+    value: Math.max(0, toNumber(r[valField] ?? r.value ?? r[primaryY])),
   }))
 }
 
@@ -650,36 +745,32 @@ export function buildMarkAreaOption(
   isCompact: boolean,
   yOffset = 0,
   yRange?: readonly [number, number],
+  categories?: readonly string[],
+  horizontal = false,
+  useLog = false,
 ): Record<string, unknown> | undefined {
   if (!Array.isArray(rawMarkArea) || rawMarkArea.length === 0) return undefined
-  const toneFill = (tone: string): { readonly fill: string; readonly labelColor: string } => {
-    if (tone === 'danger') {
-      return {
-        fill: dark ? 'rgba(248, 113, 113, 0.16)' : 'rgba(239, 68, 68, 0.11)',
-        labelColor: theme.danger,
-      }
-    }
-    if (tone === 'warning') {
-      return {
-        fill: dark ? 'rgba(251, 191, 36, 0.16)' : 'rgba(245, 158, 11, 0.12)',
-        labelColor: theme.warn,
-      }
-    }
-    if (tone === 'success') {
-      return {
-        fill: dark ? 'rgba(52, 211, 153, 0.15)' : 'rgba(16, 185, 129, 0.11)',
-        labelColor: theme.success,
-      }
-    }
-    return {
-      fill: dark ? 'rgba(96, 165, 250, 0.14)' : 'rgba(37, 99, 235, 0.09)',
-      labelColor: theme.brand,
-    }
+  const catSet = categories ? new Set(categories) : null
+  const toneMap: Record<string, readonly [string, string, string]> = {
+    danger: ['rgba(248, 113, 113, 0.16)', 'rgba(239, 68, 68, 0.11)', theme.danger],
+    warning: ['rgba(251, 191, 36, 0.16)', 'rgba(245, 158, 11, 0.12)', theme.warn],
+    success: ['rgba(52, 211, 153, 0.15)', 'rgba(16, 185, 129, 0.11)', theme.success],
+    info: ['rgba(96, 165, 250, 0.14)', 'rgba(37, 99, 235, 0.09)', theme.brand],
+  }
+  const toneFill = (tone: string) => {
+    const entry = toneMap[tone] ?? toneMap.info!
+    return { fill: dark ? entry[0] : entry[1], labelColor: entry[2] }
   }
   const shiftY = (v: unknown): unknown =>
     yOffset !== 0 && typeof v === 'number' && Number.isFinite(v)
       ? Number((v + yOffset).toFixed(4))
       : v
+  const isValidCatBound = (v: unknown): boolean => {
+    if (!catSet) return true
+    if (catSet.size === 0) return false
+    if (typeof v === 'number') return Number.isInteger(v) && v >= 0 && v < catSet.size
+    return catSet.has(sanitizeChartLabel(v))
+  }
   const areas: unknown[] = []
   for (const raw of rawMarkArea) {
     if (typeof raw !== 'object' || raw === null) continue
@@ -691,17 +782,27 @@ export function buildMarkAreaOption(
     const { fill, labelColor } = toneFill(tone)
     const lbl = rec.label !== undefined && rec.label !== null ? sanitizeChartLabel(rec.label) : ''
     const isY = rec.axis === 'y'
+    if (!isY && (!isValidCatBound(startVal) || !isValidCatBound(endVal))) continue
     const sVal = isY ? shiftY(startVal) : startVal
     const eVal = isY ? shiftY(endVal) : endVal
+    if (
+      isY &&
+      useLog &&
+      ((typeof sVal === 'number' && sVal <= 0) || (typeof eVal === 'number' && eVal <= 0))
+    ) {
+      continue
+    }
+    const useYAxisKey = horizontal ? !isY : isY
     const useTopAboveYBand =
       isY &&
+      !horizontal &&
       yRange !== undefined &&
       typeof sVal === 'number' &&
       typeof eVal === 'number' &&
       yRange[1] > yRange[0] &&
       Math.max(sVal, eVal) <= yRange[0] + (yRange[1] - yRange[0]) * 0.35
     const startPoint: Record<string, unknown> = {
-      ...(isY ? { yAxis: sVal } : { xAxis: sVal }),
+      ...(useYAxisKey ? { yAxis: sVal } : { xAxis: sVal }),
       itemStyle: { color: fill },
       ...(lbl !== ''
         ? {
@@ -717,15 +818,19 @@ export function buildMarkAreaOption(
           }
         : {}),
     }
-    const endPoint: Record<string, unknown> = isY ? { yAxis: eVal } : { xAxis: eVal }
+    const endPoint: Record<string, unknown> = useYAxisKey ? { yAxis: eVal } : { xAxis: eVal }
     areas.push([startPoint, endPoint])
   }
   if (areas.length === 0) return undefined
   return { silent: true, animation: false, data: areas }
 }
 
-export function formatCompactTickNum(v: number): string {
+export function formatCompactTickNum(v: number, span?: number): string {
   if (!Number.isFinite(v)) return '0'
+  if (span !== undefined && span > 0 && span < 2) {
+    const digits = span < 0.05 ? 4 : span < 0.5 ? 3 : 2
+    return String(Number(v.toFixed(digits)))
+  }
   const abs = Math.abs(v)
   if (abs >= 1e9) return `${Number((v / 1e9).toFixed(1))}B`
   if (abs >= 1e6) return `${Number((v / 1e6).toFixed(1))}M`

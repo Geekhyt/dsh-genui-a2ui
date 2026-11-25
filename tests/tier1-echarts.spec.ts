@@ -59,10 +59,12 @@ describe('Tier-1 ECharts Expansion (14 -> 19 Kinds + y2Field + referenceLine)', 
       },
       true,
       640,
-    ) as { series: Array<{ data: unknown[]; markLine?: { label?: { formatter?: string } } }> }
+    ) as {
+      series: Array<{ data: unknown[]; markLine?: { label?: { formatter?: () => string } } }>
+    }
     expect(wfOpt.series).toHaveLength(4)
     expect(wfOpt.series[0]?.data).toEqual([0, 480, 600, 0])
-    expect(wfOpt.series[1]?.markLine?.label?.formatter).toBe('目标 ¥550w')
+    expect(wfOpt.series[1]?.markLine?.label?.formatter?.()).toBe('目标 ¥550w')
     const wfSvg = renderOptionToSvg(wfOpt)
     expect(wfSvg).toContain('<svg')
     expect(wfSvg).toContain('目标 ¥550w')
@@ -186,8 +188,8 @@ describe('Tier-1 ECharts Expansion (14 -> 19 Kinds + y2Field + referenceLine)', 
         referenceLine: 180,
       },
       false,
-    ) as { series: Array<{ markLine?: { label?: { formatter?: string } } }> }
-    expect(lineRef.series[0]?.markLine?.label?.formatter).toBe('180')
+    ) as { series: Array<{ markLine?: { label?: { formatter?: () => string } } }> }
+    expect(lineRef.series[0]?.markLine?.label?.formatter?.()).toBe('180')
   })
 
   it('compiles all 5 new Chart kinds and reactive $/path referenceLine cleanly in A2UI Express', () => {

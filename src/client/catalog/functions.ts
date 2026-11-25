@@ -33,6 +33,7 @@ import {
 import { resolveClientLocale } from '../../shared/i18n.ts'
 import {
   filterTableRowsByField,
+  getOwnProp,
   normalizeCrossFilterTokens,
   parseFormattedNumericCell,
 } from './v4-helpers.ts'
@@ -111,8 +112,12 @@ export function extractNumericValues(
   const nums: number[] = []
   for (const item of scoped) {
     const candidate =
-      field !== undefined && field !== '' && typeof item === 'object' && item !== null
-        ? (item as Record<string, unknown>)[field]
+      field !== undefined &&
+      field !== '' &&
+      typeof item === 'object' &&
+      item !== null &&
+      !Array.isArray(item)
+        ? getOwnProp(item as Record<string, unknown>, field)
         : item
     const parsed = parseFormattedNumericCell(candidate)
     if (parsed !== null) {
@@ -226,6 +231,12 @@ function tryFiniteScalar(val: unknown): number | null {
 export function computeEq(a: unknown, b: unknown): boolean {
   const left = unwrapSingleChoice(a)
   const right = unwrapSingleChoice(b)
+  if (
+    (typeof left === 'number' && !Number.isFinite(left)) ||
+    (typeof right === 'number' && !Number.isFinite(right))
+  ) {
+    return false
+  }
   if (left === right) return true
   if (typeof left === 'string' && typeof right === 'string') {
     return left === right
@@ -442,6 +453,11 @@ export const CondImplementation = createFunctionImplementation(CondApi, (args) =
   computeCond(args.condition, args.truthy, args.falsy),
 )
 
+function sanitizeFormatDecimals(raw: unknown): number | undefined {
+  if (typeof raw !== 'number' || !Number.isFinite(raw)) return undefined
+  return Math.max(0, Math.min(20, Math.trunc(raw)))
+}
+
 const fmtNumberZh = createFormatNumberImplementation('zh-CN')
 const fmtNumberEn = createFormatNumberImplementation('en-US')
 export const LocaleFormatNumberImplementation = createFunctionImplementation(
@@ -457,8 +473,9 @@ export const LocaleFormatNumberImplementation = createFunctionImplementation(
     }
     const coerced = tryFiniteScalar(rawVal)
     if (coerced === null) return ''
+    const decimals = sanitizeFormatDecimals((args as { decimals?: unknown }).decimals)
     return (resolveClientLocale() === 'zh' ? fmtNumberZh : fmtNumberEn).execute(
-      { ...args, value: coerced },
+      { ...args, value: coerced, decimals },
       context,
       abortSignal,
     ) as string
@@ -480,8 +497,9 @@ export const LocaleFormatCurrencyImplementation = createFunctionImplementation(
     }
     const coerced = tryFiniteScalar(rawVal)
     if (coerced === null) return ''
+    const decimals = sanitizeFormatDecimals((args as { decimals?: unknown }).decimals)
     return (resolveClientLocale() === 'zh' ? fmtCurrencyZh : fmtCurrencyEn).execute(
-      { ...args, value: coerced },
+      { ...args, value: coerced, decimals },
       context,
       abortSignal,
     ) as string

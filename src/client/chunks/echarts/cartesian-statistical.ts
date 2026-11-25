@@ -1,6 +1,8 @@
 import type * as echarts from 'echarts/core'
 import {
   type ChartBuildContext,
+  ZOOM_LEGEND_BOTTOM,
+  buildCompactCategoryFormatter,
   canUseLogScale,
   computeEvenAxisInterval,
   computeHistogramBins,
@@ -12,6 +14,8 @@ import {
   pickVerticalMarkLineAlign,
   resolveYRange,
   sanitizeChartLabel,
+  scanSampleKeys,
+  toFiniteNum,
   toNumber,
 } from './shared.ts'
 
@@ -57,30 +61,24 @@ export function buildStatisticalChartOption(
     const estW = chartWidth(520)
     const catSlotPx = Math.max(38, Math.floor((estW - 44) / Math.max(1, categories.length)) - 4)
     const formatCompactCat = (raw: string): string => {
-      if (!compactWrapCat) return raw
-      const fontPx = 9.5
-      let line1 = ''
-      let line2 = ''
+      let l1 = ''
+      let l2 = ''
       let px = 0
-      let onSecond = false
       for (const ch of raw) {
-        const w = (ch.codePointAt(0) ?? 0) > 0xff ? fontPx : fontPx * 0.62
-        if (!onSecond && line1 !== '' && px + w > catSlotPx) {
-          onSecond = true
+        const w = (ch.codePointAt(0) ?? 0) > 0xff ? 9.5 : 5.89
+        if (!l2 && l1 && px + w > catSlotPx) {
           px = w
-          line2 = ch
-        } else if (onSecond) {
-          if (px + w > catSlotPx) {
-            return `${line1}\n${line2}…`
-          }
-          line2 += ch
+          l2 = ch
+        } else if (l2) {
+          if (px + w > catSlotPx) return `${l1}\n${l2}…`
+          l2 += ch
           px += w
         } else {
-          line1 += ch
+          l1 += ch
           px += w
         }
       }
-      return line2 ? `${line1}\n${line2}` : line1
+      return l2 ? `${l1}\n${l2}` : l1
     }
     const boxMsg = msg
     return {
@@ -202,7 +200,6 @@ export function buildStatisticalChartOption(
     let scatterYKeys = yKeys
     let scatterPrimaryY = primaryY
     if (!props.xField && rows.length > 0) {
-      const sampleSlice = rows.slice(0, 16)
       const excludedSet = new Set(
         [props.seriesField, sizeKey].filter((k): k is string => Boolean(k)),
       )
@@ -213,17 +210,7 @@ export function buildStatisticalChartOption(
             ? props.yField
             : [],
       )
-      const seenKeys = new Set<string>()
-      const numericCandidates: string[] = []
-      for (const r of sampleSlice) {
-        for (const k of Object.keys(r)) {
-          if (seenKeys.has(k) || excludedSet.has(k)) continue
-          seenKeys.add(k)
-          if (sampleSlice.some((row) => typeof row[k] === 'number' && Number.isFinite(row[k]))) {
-            numericCandidates.push(k)
-          }
-        }
-      }
+      const numericCandidates = scanSampleKeys(rows).numericKeys.filter((k) => !excludedSet.has(k))
       const xFirstVal = rows.find((r) => r[scatterXKey] !== undefined && r[scatterXKey] !== null)?.[
         scatterXKey
       ]
@@ -243,7 +230,8 @@ export function buildStatisticalChartOption(
       (r) => r[scatterXKey] !== undefined && r[scatterXKey] !== null,
     )?.[scatterXKey]
     const numericX = typeof firstNonNullX === 'number' && Number.isFinite(firstNonNullX)
-    const rawSizes = sizeKey ? rows.map((r) => Math.max(0, toNumber(r[sizeKey]))) : []
+    const validRows = numericX ? rows.filter((r) => toFiniteNum(r[scatterXKey]) !== null) : rows
+    const rawSizes = sizeKey ? validRows.map((r) => Math.max(0, toNumber(r[sizeKey]))) : []
     const maxSize = rawSizes.length > 0 ? Math.max(...rawSizes, 1) : 1
     const computeRadiusForVal = (rawVal: number): number => {
       if (!sizeKey) return isCompact ? 9 : 11
@@ -252,13 +240,15 @@ export function buildStatisticalChartOption(
     }
 
     const zoomCfg = zoom()
-    const scatterYVals = rows.flatMap((r) => scatterYKeys.map((k) => toNumber(r[k])))
+    const scatterYVals = validRows.flatMap((r) =>
+      scatterYKeys.map((k) => toFiniteNum(r[k])).filter((n): n is number => n !== null),
+    )
     const scatterUseLog = canUseLogScale(props.yScale, scatterYVals)
     const effectiveScatterRefY =
       scatterUseLog && props.referenceLine !== undefined && props.referenceLine <= 0
         ? undefined
         : props.referenceLine
-    const sortedByX = rows
+    const sortedByX = validRows
       .map((r, i) => ({
         x: numericX ? toNumber(r[scatterXKey]) : i,
         y: Math.max(...scatterYKeys.map((k) => toNumber(r[k])), 0),
@@ -271,7 +261,7 @@ export function buildStatisticalChartOption(
       effectiveScatterRefY,
     )
     const refLineY = buildRefLine(theme.danger, scatterMarkPos, effectiveScatterRefY)
-    const scatterXVals = numericX ? rows.map((r) => toNumber(r[scatterXKey])) : []
+    const scatterXVals = numericX ? validRows.map((r) => toNumber(r[scatterXKey])) : []
     const allNonNegX = scatterXVals.length > 0 && scatterXVals.every((v) => v >= 0)
     const xBounds = numericX ? computeRefAxisBounds(scatterXVals, props.referenceX, false) : {}
     const xRangeMin = xBounds.min ?? (allNonNegX ? 0 : Math.min(0, ...scatterXVals))
@@ -306,20 +296,24 @@ export function buildStatisticalChartOption(
           }
         : (refLineY ?? refLineX)
     const bounds = scatterUseLog ? {} : computeRefAxisBounds(scatterYVals, effectiveScatterRefY)
-    const scatterMarkArea = markArea(0, resolveYRange(scatterYVals, bounds))
-    const safeScatterY = (raw: unknown): number | null => {
-      const n = toNumber(raw)
-      return scatterUseLog && n <= 0 ? null : n
-    }
-
-    const scatterLabelKey = Object.keys(rows[0] ?? {}).find(
+    const scatterCategories = numericX
+      ? undefined
+      : [...new Set(validRows.map((r) => sanitizeChartLabel(r[scatterXKey])))]
+    const scatterMarkArea = markArea(
+      0,
+      resolveYRange(scatterYVals, bounds),
+      scatterCategories,
+      false,
+      scatterUseLog,
+    )
+    const scatterLabelKey = Object.keys(validRows[0] ?? {}).find(
       (rk) =>
         rk !== scatterXKey &&
         !scatterYKeys.includes(rk) &&
         rk !== sizeKey &&
         rk !== props.seriesField &&
-        typeof rows[0]?.[rk] === 'string' &&
-        String(rows[0]?.[rk]).trim() !== '',
+        typeof validRows[0]?.[rk] === 'string' &&
+        String(validRows[0]?.[rk]).trim() !== '',
     )
     const resolveScatterPointName = (r: Record<string, unknown>, fallback?: unknown): string =>
       sanitizeChartLabel(
@@ -330,78 +324,68 @@ export function buildStatisticalChartOption(
           r[scatterXKey],
       )
 
+    const makeScatterSeries = (
+      name: string,
+      idx: number,
+      srcRows: readonly Record<string, unknown>[],
+      yFieldKey: string,
+      useCategoryIdx: boolean,
+      fallbackLabel?: (r: Record<string, unknown>) => unknown,
+    ): Record<string, unknown> => ({
+      name,
+      type: 'scatter',
+      symbolSize: (val: unknown) =>
+        sizeKey && Array.isArray(val) && val.length >= 3
+          ? computeRadiusForVal(Math.max(0, toNumber(val[2])))
+          : isCompact
+            ? 9
+            : 11,
+      itemStyle: sizeKey ? { opacity: 0.78 } : undefined,
+      markLine: idx === 0 ? refLine : undefined,
+      markArea: idx === 0 ? scatterMarkArea : undefined,
+      data: srcRows
+        .map((r) => {
+          const rawY = toFiniteNum(r[yFieldKey])
+          if (rawY === null) return null
+          const yVal = scatterUseLog && rawY <= 0 ? null : rawY
+          const sz = sizeKey ? Math.max(0, toNumber(r[sizeKey])) : undefined
+          if (numericX) {
+            const xv = toNumber(r[scatterXKey])
+            return {
+              name: resolveScatterPointName(r, fallbackLabel?.(r)),
+              value: sz !== undefined ? [xv, yVal, sz] : [xv, yVal],
+            }
+          }
+          const cxLabel = sanitizeChartLabel(r[scatterXKey])
+          const cxVal = useCategoryIdx ? (scatterCategories?.indexOf(cxLabel) ?? 0) : cxLabel
+          return {
+            name: cxLabel,
+            value: sz !== undefined ? [cxVal, yVal, sz] : [cxVal, yVal],
+          }
+        })
+        .filter((pt): pt is NonNullable<typeof pt> => pt !== null),
+    })
+
     const scatterSeries: Record<string, unknown>[] = props.seriesField
       ? (() => {
           const groupField = props.seriesField
-          const groups = [...new Set(rows.map((r) => sanitizeChartLabel(r[groupField])))]
-          const xCategories = numericX
-            ? []
-            : [...new Set(rows.map((r) => sanitizeChartLabel(r[scatterXKey])))]
-          return groups.map((group, idx) => {
-            const grpRows = rows.filter((r) => sanitizeChartLabel(r[groupField]) === group)
-            return {
-              name: group,
-              type: 'scatter',
-              symbolSize: (val: unknown) => {
-                if (!sizeKey) return isCompact ? 9 : 11
-                if (Array.isArray(val) && val.length >= 3)
-                  return computeRadiusForVal(toNumber(val[2]))
-                return isCompact ? 9 : 11
-              },
-              itemStyle: sizeKey ? { opacity: 0.78 } : undefined,
-              markLine: idx === 0 ? refLine : undefined,
-              markArea: idx === 0 ? scatterMarkArea : undefined,
-              data: numericX
-                ? grpRows.map((r) => ({
-                    name: resolveScatterPointName(r, r[groupField]),
-                    value: sizeKey
-                      ? [
-                          toNumber(r[scatterXKey]),
-                          safeScatterY(r[scatterPrimaryY]),
-                          toNumber(r[sizeKey]),
-                        ]
-                      : [toNumber(r[scatterXKey]), safeScatterY(r[scatterPrimaryY])],
-                  }))
-                : grpRows.map((r) => {
-                    const cxLabel = sanitizeChartLabel(r[scatterXKey])
-                    const cx = xCategories.indexOf(cxLabel)
-                    return {
-                      name: cxLabel,
-                      value: sizeKey
-                        ? [cx, safeScatterY(r[scatterPrimaryY]), toNumber(r[sizeKey])]
-                        : [cx, safeScatterY(r[scatterPrimaryY])],
-                    }
-                  }),
-            }
-          })
+          const groups = [...new Set(validRows.map((r) => sanitizeChartLabel(r[groupField])))]
+          return groups.map((group, idx) =>
+            makeScatterSeries(
+              group,
+              idx,
+              validRows.filter((r) => sanitizeChartLabel(r[groupField]) === group),
+              scatterPrimaryY,
+              true,
+              (r) => r[groupField],
+            ),
+          )
         })()
-      : scatterYKeys.map((k, idx) => ({
-          name: sanitizeChartLabel(k),
-          type: 'scatter',
-          symbolSize: (_val: unknown, params?: { dataIndex?: number }) =>
-            computeRadiusForVal(rawSizes[params?.dataIndex ?? 0] ?? 0),
-          itemStyle: sizeKey ? { opacity: 0.78 } : undefined,
-          markLine: idx === 0 ? refLine : undefined,
-          markArea: idx === 0 ? scatterMarkArea : undefined,
-          data: numericX
-            ? rows.map((r) => ({
-                name: resolveScatterPointName(r),
-                value: sizeKey
-                  ? [toNumber(r[scatterXKey]), safeScatterY(r[k]), toNumber(r[sizeKey])]
-                  : [toNumber(r[scatterXKey]), safeScatterY(r[k])],
-              }))
-            : rows.map((r) => ({
-                name: sanitizeChartLabel(r[scatterXKey]),
-                value: sizeKey
-                  ? [sanitizeChartLabel(r[scatterXKey]), safeScatterY(r[k]), toNumber(r[sizeKey])]
-                  : [sanitizeChartLabel(r[scatterXKey]), safeScatterY(r[k])],
-              })),
-        }))
+      : scatterYKeys.map((k, idx) =>
+          makeScatterSeries(sanitizeChartLabel(k), idx, validRows, k, false),
+        )
 
     const showScatterLegend = scatterSeries.length > 1
-    const scatterCategories = numericX
-      ? undefined
-      : [...new Set(rows.map((r) => sanitizeChartLabel(r[scatterXKey])))]
 
     return {
       tooltip: {
@@ -413,10 +397,20 @@ export function buildStatisticalChartOption(
           const v = rec?.value
           if (Array.isArray(v)) {
             const lines = head ? [head] : []
-            if (v[0] !== undefined) lines.push(`${sanitizeChartLabel(scatterXKey)}: ${v[0]}`)
+            if (v[0] !== undefined) {
+              const xDisplay =
+                !numericX && typeof v[0] === 'number' && scatterCategories
+                  ? (scatterCategories[v[0]] ?? v[0])
+                  : v[0]
+              lines.push(`${sanitizeChartLabel(scatterXKey)}: ${xDisplay}`)
+            }
             if (v[1] !== undefined) {
               const yLbl = sanitizeChartLabel(
-                showScatterLegend ? (rec?.seriesName ?? primaryY) : (scatterYKeys[0] ?? primaryY),
+                props.seriesField
+                  ? scatterPrimaryY
+                  : showScatterLegend
+                    ? (rec?.seriesName ?? primaryY)
+                    : (scatterYKeys[0] ?? primaryY),
               )
               lines.push(`${yLbl}: ${v[1]}`)
             }
@@ -429,14 +423,14 @@ export function buildStatisticalChartOption(
       legend: showScatterLegend
         ? legend({
             scroll: isCompact || scatterSeries.length >= 4,
-            bottom: props.zoom ? 28 : 0,
+            bottom: props.zoom ? ZOOM_LEGEND_BOTTOM : 0,
             names: scatterSeries.map((s) => String(s.name ?? '')),
           })
         : undefined,
       grid: {
         top: refLineX ? 26 : 18,
         right: isCompact ? 12 : 18,
-        bottom: (showScatterLegend ? 32 : 16) + (props.zoom ? 28 : 0),
+        bottom: (showScatterLegend ? 32 : 16) + (props.zoom ? ZOOM_LEGEND_BOTTOM : 0),
         left: isCompact ? 8 : 12,
         containLabel: true,
       },
@@ -536,6 +530,7 @@ export function buildStatisticalChartOption(
     const rangeMarkArea = markArea(
       -baseline,
       resolveYRange([...baseData, ...shiftedHighs], rangeBounds),
+      categories,
     )
     const rangeRefLabel =
       props.referenceLabel !== undefined && props.referenceLabel.trim() !== ''
@@ -553,6 +548,14 @@ export function buildStatisticalChartOption(
     const maxCatW = isCompact
       ? Math.max(40, Math.floor((estW - 44) / Math.min(6, Math.max(2, categories.length))))
       : undefined
+    const rangeCatFmt =
+      maxCatW !== undefined
+        ? buildCompactCategoryFormatter(categories, maxCatW, isCompact)
+        : undefined
+    const rangeInterval =
+      rangeBounds.max !== undefined && rangeBounds.min === undefined
+        ? computeEvenAxisInterval(rangeBounds.max, isCompact)
+        : undefined
     const zoomCfg = zoom()
     const midSeriesName = midKey ? sanitizeChartLabel(midKey) : localeMsg.chartRangeMid
 
@@ -573,7 +576,7 @@ export function buildStatisticalChartOption(
       },
       legend: legend({
         scroll: isCompact,
-        bottom: props.zoom ? 24 : 0,
+        bottom: props.zoom ? ZOOM_LEGEND_BOTTOM : 0,
         names: [midSeriesName, localeMsg.chartRangeBand],
         data: [midSeriesName, { name: localeMsg.chartRangeBand, icon: 'roundRect' }],
       }),
@@ -581,7 +584,7 @@ export function buildStatisticalChartOption(
       grid: {
         top: 18,
         right: isCompact ? 10 : 18,
-        bottom: 34 + (props.zoom ? 24 : 0),
+        bottom: 34 + (props.zoom ? ZOOM_LEGEND_BOTTOM : 0),
         left: isCompact ? 6 : 12,
         containLabel: true,
       },
@@ -592,14 +595,22 @@ export function buildStatisticalChartOption(
         axisLabel: {
           ...axisLabelBase,
           ...(maxCatW !== undefined
-            ? { width: maxCatW, overflow: 'truncate' as const, ellipsis: '…' }
+            ? {
+                width: maxCatW,
+                overflow: 'truncate' as const,
+                ellipsis: '…',
+                ...(rangeCatFmt ? { formatter: rangeCatFmt } : {}),
+              }
             : {}),
         },
       },
       yAxis: {
         type: 'value',
+        min: rangeBounds.min ?? 0,
         ...rangeBounds,
-        splitNumber: isCompact ? 3 : undefined,
+        ...(rangeInterval !== undefined
+          ? { interval: rangeInterval }
+          : { splitNumber: isCompact ? 3 : undefined }),
         splitLine: borderLine,
         axisLabel: {
           ...axisLabelBase,

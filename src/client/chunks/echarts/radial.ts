@@ -2,6 +2,8 @@ import type * as echarts from 'echarts/core'
 import {
   type ChartBuildContext,
   FILLED_SHAPE_LABEL,
+  extractFlowData,
+  formatCompactTickNum,
   niceUpperBound,
   sanitizeChartLabel,
   toNumber,
@@ -44,7 +46,7 @@ export function buildRadialChartOption(ctx: ChartBuildContext): echarts.EChartsC
       : 112
     const funnelUseInside =
       isCompact || (containerWidth !== undefined && containerWidth > 0 && containerWidth < 460)
-    const funnelOuterLabelW = Math.max(58, Math.min(96, Math.floor(estFunnelW * 0.15 - 10)))
+    const funnelOuterLabelW = Math.max(52, Math.min(96, Math.floor(estFunnelW * 0.15 - 22)))
     const funnelInsideLabelW = Math.max(54, Math.min(120, Math.floor(estFunnelW * 0.88 * 0.36) - 6))
     const funnelBorder = dark ? '#18181b' : '#ffffff'
     return {
@@ -108,6 +110,7 @@ export function buildRadialChartOption(ctx: ChartBuildContext): echarts.EChartsC
               minSize: funnelUseInside ? '32%' : '18%',
               itemStyle: { borderColor: funnelBorder, borderWidth: 1.5 },
               labelLayout: { hideOverlap: true },
+              labelLine: funnelUseInside ? { show: false } : { length: 10 },
               label: funnelUseInside
                 ? {
                     position: 'inside',
@@ -194,6 +197,7 @@ export function buildRadialChartOption(ctx: ChartBuildContext): echarts.EChartsC
             color: theme.textSecondary,
             fontSize: isCompact ? 9 : 10,
             distance: isCompact ? 12 : 15,
+            formatter: (v: number) => formatCompactTickNum(v),
           },
           detail: {
             valueAnimation: true,
@@ -415,25 +419,39 @@ export function buildRadialChartOption(ctx: ChartBuildContext): echarts.EChartsC
     const radialCategories = items.map((it) => it.name)
     const trackBg = dark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(15, 23, 42, 0.07)'
     const denseRadial = items.length >= 6
+    const useLegendMode = denseRadial
+    const radialBarW = isCompact
+      ? Math.max(3.5, Math.min(10, Math.floor((denseRadial ? 42 : 46) / Math.max(1, items.length))))
+      : Math.max(3.5, Math.min(12, Math.floor(64 / Math.max(1, items.length))))
     return {
       tooltip: {
         ...baseTooltip,
         trigger: 'item',
         formatter: (p: unknown) => {
-          const rec = p as { name?: string; value?: number }
+          const rec = p as { name?: string; seriesName?: string; value?: number }
+          const labelName = sanitizeChartLabel(rec.name || rec.seriesName)
           const pct = maxVal > 0 ? Math.round(((rec.value ?? 0) / maxVal) * 100) : 0
-          return `${sanitizeChartLabel(rec.name)}: ${rec.value ?? 0} (${pct}%)`
+          return `${labelName}: ${rec.value ?? 0} (${pct}%)`
         },
       },
+      legend: useLegendMode
+        ? legend({
+            scroll: true,
+            bottom: 0,
+            fontSize: isCompact ? 10 : 11,
+            names: radialCategories,
+            data: radialCategories,
+          })
+        : undefined,
       polar: {
-        radius: isCompact
-          ? denseRadial
-            ? ['16%', '78%']
-            : ['24%', '78%']
-          : denseRadial
-            ? ['18%', '84%']
+        radius: useLegendMode
+          ? isCompact
+            ? ['14%', '74%']
+            : ['16%', '78%']
+          : isCompact
+            ? ['24%', '78%']
             : ['26%', '84%'],
-        center: isCompact ? ['56%', '52%'] : ['54%', '52%'],
+        center: useLegendMode ? ['50%', '43%'] : isCompact ? ['56%', '52%'] : ['54%', '52%'],
       },
       angleAxis: {
         max: maxVal,
@@ -450,80 +468,62 @@ export function buildRadialChartOption(ctx: ChartBuildContext): echarts.EChartsC
         axisLine: { show: false },
         axisTick: { show: false },
         axisLabel: {
+          show: !useLegendMode,
           color: theme.textSecondary,
           fontSize: isCompact ? (denseRadial ? 8.5 : items.length >= 5 ? 9 : 9.5) : 10.5,
-          ...(isCompact && denseRadial ? { hideOverlap: true } : { interval: 0 }),
+          ...(denseRadial ? { hideOverlap: true } : { interval: 0 }),
           align: 'right',
           margin: isCompact ? 9 : 12,
           width: isCompact ? 68 : 96,
           overflow: 'truncate',
         },
       },
-      series: [
-        {
-          type: 'bar',
-          coordinateSystem: 'polar',
-          roundCap: true,
-          showBackground: true,
-          backgroundStyle: { color: trackBg },
-          barWidth: isCompact
-            ? Math.max(
-                4.5,
-                Math.min(10, Math.floor((denseRadial ? 42 : 46) / Math.max(1, items.length))),
-              )
-            : Math.min(12, Math.floor(64 / Math.max(1, items.length))),
-          data: items.map((it, idx) => ({
+      series: useLegendMode
+        ? items.map((it, idx) => ({
             name: it.name,
-            value: it.value,
+            type: 'bar' as const,
+            coordinateSystem: 'polar' as const,
+            stack: 'radial',
+            roundCap: true,
+            showBackground: idx === 0,
+            backgroundStyle: { color: trackBg },
+            barWidth: radialBarW,
             itemStyle: { color: theme.colors[idx % theme.colors.length] },
-          })),
-        },
-      ],
+            data: items.map((_, j) => (j === idx ? { name: it.name, value: it.value } : '-')),
+          }))
+        : [
+            {
+              type: 'bar',
+              coordinateSystem: 'polar',
+              roundCap: true,
+              showBackground: true,
+              backgroundStyle: { color: trackBg },
+              barWidth: radialBarW,
+              data: items.map((it, idx) => ({
+                name: it.name,
+                value: it.value,
+                itemStyle: { color: theme.colors[idx % theme.colors.length] },
+              })),
+            },
+          ],
     }
   }
 
   if (props.kind === 'chord') {
-    const rawObj =
-      typeof props.data === 'object' && props.data !== null && !Array.isArray(props.data)
-        ? (props.data as Record<string, unknown>)
-        : null
-    const rawLinks = Array.isArray(rawObj?.links)
-      ? (rawObj.links as Record<string, unknown>[])
-      : Array.isArray(rawObj?.edges)
-        ? (rawObj.edges as Record<string, unknown>[])
-        : rows
     const srcField = props.xField ?? 'source'
     const tgtField = props.seriesField ?? 'target'
     const valField =
       typeof props.yField === 'string' && props.yField !== '' ? props.yField : 'value'
-
-    const idToName = new Map<string, string>()
-    const nodeNames = new Set<string>()
-    if (Array.isArray(rawObj?.nodes)) {
-      for (const n of rawObj.nodes as Record<string, unknown>[]) {
-        const nid = sanitizeChartLabel(n?.id)
-        const name = sanitizeChartLabel(n?.name ?? n?.label ?? n?.id)
-        if (nid && name) idToName.set(nid, name)
-        if (name) nodeNames.add(name)
-      }
-    }
-    const linkTotals = new Map<string, { source: string; target: string; value: number }>()
-    for (const r of rawLinks) {
-      if (typeof r !== 'object' || r === null) continue
-      const rawSrc = sanitizeChartLabel(r[srcField] ?? r.source ?? r.from)
-      const rawTgt = sanitizeChartLabel(r[tgtField] ?? r.target ?? r.to)
-      const source = idToName.get(rawSrc) ?? rawSrc
-      const target = idToName.get(rawTgt) ?? rawTgt
-      const value = toNumber(r[valField] ?? r.value ?? r.weight ?? 1)
-      if (!source || !target || source === target || value <= 0) continue
-      nodeNames.add(source)
-      nodeNames.add(target)
-      const key = `${source}\u0000${target}`
-      const prev = linkTotals.get(key)
-      if (prev) prev.value += value
-      else linkTotals.set(key, { source, target, value })
-    }
-    const links = [...linkTotals.values()]
+    const { nodeNames, links } = extractFlowData(
+      props.data,
+      rows,
+      srcField,
+      tgtField,
+      valField,
+      'weight',
+      1,
+      true,
+    )
     const nodes = [...nodeNames].map((name, idx) => ({
       name,
       itemStyle: { color: theme.colors[idx % theme.colors.length] },

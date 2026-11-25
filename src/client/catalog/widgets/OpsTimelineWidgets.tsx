@@ -175,15 +175,30 @@ export const DshComparisonImpl = defineComponent<{
                     >
                       <span className={css.comparisonCellInner}>
                         {cell.kind === 'ok' ? (
-                          <span className={css.comparisonSemanticIcon} data-semantic="ok">
+                          <span
+                            className={css.comparisonSemanticIcon}
+                            data-semantic="ok"
+                            role="img"
+                            aria-label={msg.boolYes}
+                          >
                             {CHECK_BADGE_GLYPH}
                           </span>
                         ) : cell.kind === 'warn' ? (
-                          <span className={css.comparisonSemanticIcon} data-semantic="warn">
+                          <span
+                            className={css.comparisonSemanticIcon}
+                            data-semantic="warn"
+                            role="img"
+                            aria-label={msg.trackerDegraded}
+                          >
                             {WARN_BADGE_GLYPH}
                           </span>
                         ) : cell.kind === 'no' ? (
-                          <span className={css.comparisonSemanticIcon} data-semantic="no">
+                          <span
+                            className={css.comparisonSemanticIcon}
+                            data-semantic="no"
+                            role="img"
+                            aria-label={msg.boolNo}
+                          >
                             {CROSS_BADGE_GLYPH}
                           </span>
                         ) : null}
@@ -327,8 +342,7 @@ export const DshLogViewerImpl = defineComponent<{
           `${e.time ? `${e.time} ` : ''}[${e.level.toUpperCase()}]${e.service ? ` [${e.service}]` : ''} ${e.message}${e.detail ? `\n${e.detail}` : ''}`,
       )
       .join('\n')
-    copyTextToClipboard(text)
-    markCopiedAll()
+    copyTextToClipboard(text, markCopiedAll)
   }
 
   return (

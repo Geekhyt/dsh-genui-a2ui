@@ -5,7 +5,13 @@ import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { buildDomGeometryAuditExpression, resolveChromeBinary } from './visual-qa-bot.mjs'
+import {
+  buildDomGeometryAuditExpression,
+  decodePngRgba,
+  evaluateStickyTintParity,
+  resolveChromeBinary,
+  samplePngMedianRgb,
+} from './visual-qa-bot.mjs'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const outArg = process.argv.find((a) => a.startsWith('--out-dir='))
@@ -445,6 +451,76 @@ async function run() {
 
     await freshChat(cdp)
     await sendPrompt(cdp, 'showcase-38')
+    const stickyParityPairs = []
+    for (const theme of ['dark', 'light']) {
+      await setTheme(cdp, theme)
+      const geomInfo = await cdp.evaluate(`(async () => {
+        const scrollBox = document.querySelector('[class*="tableScroll"]');
+        if (!scrollBox) return null;
+        scrollBox.scrollIntoView({ block: 'center' });
+        scrollBox.scrollLeft = 0;
+        await new Promise((r) => setTimeout(r, 150));
+        const rows = [...scrollBox.querySelectorAll('tbody tr')];
+        if (rows.length < 2) return null;
+        const cb = rows[0].querySelector('input[type="checkbox"]');
+        if (cb && !cb.checked) {
+          cb.click();
+          await new Promise((r) => setTimeout(r, 150));
+        }
+        const measureRow = (tr) => {
+          const stickies = [...tr.querySelectorAll('td[class*="tableStickyCol"]')];
+          const lastSticky = stickies[stickies.length - 1];
+          const nextNormal = lastSticky?.nextElementSibling;
+          if (!lastSticky || !nextNormal) return null;
+          const sr = lastSticky.getBoundingClientRect();
+          const nr = nextNormal.getBoundingClientRect();
+          return {
+            stickyBox: { x: sr.right - 14, y: sr.top + 3, w: 10, h: 6 },
+            normalBox: { x: nr.left + 6, y: nr.top + 3, w: 10, h: 6 },
+            hoverPt: { x: Math.round((nr.left + nr.right) / 2), y: Math.round((nr.top + nr.bottom) / 2) },
+          };
+        };
+        const r1 = measureRow(rows[0]);
+        const r2 = measureRow(rows[1]);
+        if (!r1 || !r2) return null;
+        return { vw: window.innerWidth, r1, r2 };
+      })()`)
+      if (geomInfo) {
+        await cdp.send('Input.dispatchMouseEvent', {
+          type: 'mouseMoved',
+          x: geomInfo.r2.hoverPt.x,
+          y: geomInfo.r2.hoverPt.y,
+        })
+        await delay(200)
+        const shot = await cdp.send('Page.captureScreenshot', { format: 'png' })
+        const decoded = decodePngRgba(Buffer.from(shot.data, 'base64'))
+        const scale = decoded.width / geomInfo.vw
+        const scaleBox = (b) => ({
+          x: b.x * scale,
+          y: b.y * scale,
+          w: b.w * scale,
+          h: b.h * scale,
+        })
+        stickyParityPairs.push({
+          label: `${theme}:selected`,
+          stickyRgb: samplePngMedianRgb(decoded, scaleBox(geomInfo.r1.stickyBox)),
+          normalRgb: samplePngMedianRgb(decoded, scaleBox(geomInfo.r1.normalBox)),
+        })
+        stickyParityPairs.push({
+          label: `${theme}:hover`,
+          stickyRgb: samplePngMedianRgb(decoded, scaleBox(geomInfo.r2.stickyBox)),
+          normalRgb: samplePngMedianRgb(decoded, scaleBox(geomInfo.r2.normalBox)),
+        })
+        await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 0, y: 0 })
+      }
+    }
+    await setTheme(cdp, 'dark')
+    const stickyParity = evaluateStickyTintParity(stickyParityPairs, 4)
+    check(
+      'Sticky ProTable selected & hover pixel color parity (Dark & Light)',
+      stickyParityPairs.length === 4 && stickyParity.ok,
+      JSON.stringify({ pairs: stickyParityPairs, failures: stickyParity.failures }),
+    )
     const stickyScrollRes = await cdp.evaluate(`(async () => {
       const scrollBox = document.querySelector('[class*="tableScroll"]');
       if (!scrollBox) return { ok: false, reason: 'no tableScroll' };
@@ -634,6 +710,66 @@ async function run() {
     })()`)
     check('ProTable null/dash-last asc & desc sort', sortRes.ok, JSON.stringify(sortRes))
 
+    await freshChat(cdp)
+    await sendPrompt(cdp, 'showcase-42')
+    await setTheme(cdp, 'dark')
+    const audit42 = await cdp.evaluate(`(async () => {
+      const mermaidCard = document.querySelector('[data-a2ui-mermaid]');
+      const mermaidTxt = mermaidCard?.textContent || '';
+      const mermaidOk =
+        mermaidTxt.includes("WHERE id='123'") &&
+        mermaidTxt.includes("id='ord_42'") &&
+        !mermaidTxt.includes('m_rfn_i_');
+      const logBadges = [
+        ...document.querySelectorAll('[data-a2ui-logviewer] [class*="logBadgeWrap"]'),
+      ].map((el) => (el.textContent || '').trim());
+      const logsOk = logBadges.length === 2 && logBadges[0] === 'ERROR' && logBadges[1] === 'WARN';
+
+      const boolHeader = [...document.querySelectorAll('[class*="tableScroll"] thead th button, [class*="tableScroll"] thead th')].find(
+        (b) => (b.textContent || '').trim().includes('启用'),
+      );
+      const readBoolCol = () =>
+        [...document.querySelectorAll('[class*="tableScroll"] tbody tr')].map((tr) =>
+          tr.querySelectorAll('td')[1]?.textContent?.trim(),
+        );
+      let boolClick1 = [];
+      let boolClick2 = [];
+      if (boolHeader) {
+        boolHeader.click();
+        await new Promise((r) => setTimeout(r, 150));
+        boolClick1 = readBoolCol();
+        boolHeader.click();
+        await new Promise((r) => setTimeout(r, 150));
+        boolClick2 = readBoolCol();
+      }
+      const tfoot = document.querySelector('[class*="tableScroll"] tfoot')?.textContent?.trim() || '';
+      const boolSortedOk =
+        (boolClick1.join(',') === '是,否,否' && boolClick2.join(',') === '否,否,是') ||
+        (boolClick1.join(',') === '否,否,是' && boolClick2.join(',') === '是,否,否');
+      const tableOk =
+        boolSortedOk &&
+        tfoot.includes('$1,200') &&
+        tfoot.includes('99.9633%') &&
+        !tfoot.includes('100.0%');
+      return {
+        ok: mermaidOk && logsOk && tableOk,
+        mermaidOk,
+        logBadges,
+        boolClick1,
+        boolClick2,
+        tfoot,
+      };
+    })()`)
+    const geom42 = await cdp.evaluate(buildDomGeometryAuditExpression())
+    const svgClips42 = Array.isArray(geom42.svgTextClipViolations)
+      ? geom42.svgTextClipViolations.length
+      : 0
+    check(
+      'Showcase-42 live DOM semantics (Mermaid SQL + Log TZ + ProTable Bool/SLA + ServiceGraph)',
+      audit42.ok && svgClips42 === 0 && geom42.overflowViolations.length === 0,
+      JSON.stringify({ ...audit42, svgClips42, overflow42: geom42.overflowViolations.length }),
+    )
+
     for (const sc of [
       'showcase-21',
       'showcase-22',
@@ -668,11 +804,15 @@ async function run() {
       const contrastLen = Array.isArray(geom.contrastViolations)
         ? geom.contrastViolations.length
         : 0
+      const svgClipLen = Array.isArray(geom.svgTextClipViolations)
+        ? geom.svgTextClipViolations.length
+        : 0
       const ok =
         geom.overflowViolations.length === 0 &&
         geom.buttonWrapViolations.length === 0 &&
         geom.clippingViolations.length === 0 &&
-        contrastLen === 0
+        contrastLen === 0 &&
+        svgClipLen === 0
       check(
         `1024px narrow desktop geometry (${sc})`,
         ok,
@@ -681,6 +821,7 @@ async function run() {
           wrap: geom.buttonWrapViolations.length,
           clip: geom.clippingViolations.length,
           contrast: contrastLen,
+          svgClip: svgClipLen,
           sampleOverflow: geom.overflowViolations.slice(0, 3),
           sampleClip: geom.clippingViolations.slice(0, 3),
         }),

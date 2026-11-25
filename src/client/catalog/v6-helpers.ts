@@ -162,50 +162,32 @@ export interface NormalizedSortableItem {
   readonly raw: unknown
 }
 
+function nonEmptyTrimmed(raw: unknown): string | undefined {
+  if (raw === undefined || raw === null) return undefined
+  const s = String(raw).trim()
+  return s === '' ? undefined : s
+}
+
 export function normalizeSortableItems(raw: unknown): readonly NormalizedSortableItem[] {
   if (!Array.isArray(raw)) return []
   const out: NormalizedSortableItem[] = []
-  const occurrences = new Map<string, number>()
-  const nextStableId = (base: string): string => {
-    const count = (occurrences.get(base) ?? 0) + 1
-    occurrences.set(base, count)
-    return count === 1 ? base : `${base}__${count}`
-  }
+  const nextStableId = makeUniqueIdFactory('__')
   raw.forEach((entry, idx) => {
     if (typeof entry === 'string' || typeof entry === 'number') {
       const title = String(entry).trim()
       if (!title) return
-      const id = nextStableId(`sort_${title}`)
-      out.push({ id, title, tone: 'neutral', raw: entry })
+      out.push({ id: nextStableId(`sort_${title}`), title, tone: 'neutral', raw: entry })
       return
     }
     if (typeof entry !== 'object' || entry === null) return
     const rec = entry as Record<string, unknown>
     const title = String(rec.title ?? rec.label ?? rec.name ?? `#${idx + 1}`).trim()
-    const explicitId =
-      rec.id !== undefined && rec.id !== null && String(rec.id).trim() !== ''
-        ? String(rec.id).trim()
-        : rec.key !== undefined && rec.key !== null && String(rec.key).trim() !== ''
-          ? String(rec.key).trim()
-          : `sort_${title}`
-    const id = nextStableId(explicitId)
-    const subtitle =
-      rec.subtitle !== undefined && rec.subtitle !== null && String(rec.subtitle).trim() !== ''
-        ? String(rec.subtitle).trim()
-        : rec.description !== undefined &&
-            rec.description !== null &&
-            String(rec.description).trim() !== ''
-          ? String(rec.description).trim()
-          : undefined
-    const badge =
-      rec.badge !== undefined && rec.badge !== null && String(rec.badge).trim() !== ''
-        ? String(rec.badge).trim()
-        : undefined
+    const explicitId = nonEmptyTrimmed(rec.id) ?? nonEmptyTrimmed(rec.key) ?? `sort_${title}`
     out.push({
-      id,
+      id: nextStableId(explicitId),
       title,
-      subtitle,
-      badge,
+      subtitle: nonEmptyTrimmed(rec.subtitle) ?? nonEmptyTrimmed(rec.description),
+      badge: nonEmptyTrimmed(rec.badge),
       tone: normalizeSemanticTone(rec.tone, 'neutral'),
       raw: entry,
     })
@@ -324,33 +306,14 @@ export function buildAnnotatedTextSegments(
   }
 
   const candidates: NormalizedTextAnnotation[] = []
-  let searchCursor = 0
-  for (const item of rawAnnotations) {
-    if (typeof item !== 'object' || item === null) continue
-    const rec = item as Record<string, unknown>
-    let start = -1
-    let end = -1
-    const rawStart = parseOptionalFiniteNumber(rec.start)
-    const rawEnd = parseOptionalFiniteNumber(rec.end)
-    if (
-      rawStart !== null &&
-      rawEnd !== null &&
-      rawStart >= 0 &&
-      rawEnd > rawStart &&
-      rawStart < sourceText.length
-    ) {
-      start = Math.trunc(rawStart)
-      end = Math.min(sourceText.length, Math.trunc(rawEnd))
-    } else if (typeof rec.match === 'string' && rec.match !== '') {
-      let foundIdx = sourceText.indexOf(rec.match, searchCursor)
-      if (foundIdx < 0) foundIdx = sourceText.indexOf(rec.match)
-      if (foundIdx >= 0) {
-        start = foundIdx
-        end = foundIdx + rec.match.length
-        searchCursor = end
-      }
-    }
-    if (start < 0 || end <= start) continue
+  const occupied: Array<readonly [number, number]> = []
+  const overlapsOccupied = (s: number, e: number): boolean =>
+    occupied.some(([os, oe]) => s < oe && e > os)
+  const buildAnnotation = (
+    rec: Record<string, unknown>,
+    start: number,
+    end: number,
+  ): NormalizedTextAnnotation => {
     const label = String(rec.label ?? rec.tag ?? rec.category ?? '').trim()
     const note =
       rec.note !== undefined && rec.note !== null && String(rec.note).trim() !== ''
@@ -362,7 +325,7 @@ export function buildAnnotatedTextSegments(
       rec.sourceId !== undefined && rec.sourceId !== null && String(rec.sourceId).trim() !== ''
         ? String(rec.sourceId).trim()
         : undefined
-    candidates.push({
+    return {
       start,
       end,
       text: sourceText.slice(start, end),
@@ -370,7 +333,47 @@ export function buildAnnotatedTextSegments(
       note,
       tone: normalizeSemanticTone(rec.tone, 'info'),
       sourceId,
-    })
+    }
+  }
+
+  const pendingMatches: Array<Record<string, unknown>> = []
+  for (const item of rawAnnotations) {
+    if (typeof item !== 'object' || item === null) continue
+    const rec = item as Record<string, unknown>
+    const rawStart = parseOptionalFiniteNumber(rec.start)
+    const rawEnd = parseOptionalFiniteNumber(rec.end)
+    if (
+      rawStart !== null &&
+      rawEnd !== null &&
+      rawStart >= 0 &&
+      rawEnd > rawStart &&
+      rawStart < sourceText.length
+    ) {
+      const start = Math.trunc(rawStart)
+      const end = Math.min(sourceText.length, Math.trunc(rawEnd))
+      if (end > start && !overlapsOccupied(start, end)) {
+        occupied.push([start, end])
+        candidates.push(buildAnnotation(rec, start, end))
+      }
+    } else if (typeof rec.match === 'string' && rec.match !== '') {
+      pendingMatches.push(rec)
+    }
+  }
+
+  for (const rec of pendingMatches) {
+    const needle = rec.match as string
+    let pos = 0
+    while (pos <= sourceText.length - needle.length) {
+      const foundIdx = sourceText.indexOf(needle, pos)
+      if (foundIdx < 0) break
+      const end = foundIdx + needle.length
+      if (!overlapsOccupied(foundIdx, end)) {
+        occupied.push([foundIdx, end])
+        candidates.push(buildAnnotation(rec, foundIdx, end))
+        break
+      }
+      pos = foundIdx + 1
+    }
   }
 
   candidates.sort((a, b) => a.start - b.start || b.end - a.end)

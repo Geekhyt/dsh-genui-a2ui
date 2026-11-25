@@ -239,10 +239,13 @@ function composeTemplatePath(outerTplPath: string, rawInnerPath: string): string
   const trimmed = rawInnerPath.trim()
   if (trimmed === '' || trimmed === '/') return outerTplPath
   if (trimmed.startsWith('/')) return normalizePointerPath(trimmed)
-  let start = 0
-  while (start < trimmed.length && trimmed[start] === '/') start += 1
-  const cleanRel = trimmed.slice(start)
-  return cleanRel === '' ? outerTplPath : `${outerTplPath}/*/${cleanRel}`
+  let cleanRel = trimmed
+  while (cleanRel.startsWith('./') || cleanRel.startsWith('/')) {
+    cleanRel = cleanRel.startsWith('./') ? cleanRel.slice(2) : cleanRel.slice(1)
+  }
+  if (cleanRel === '' || cleanRel === '.') return outerTplPath
+  const outerBase = outerTplPath === '/' ? '' : outerTplPath
+  return `${outerBase}/*/${cleanRel}`
 }
 
 export function buildTemplatePathMap(
@@ -252,6 +255,32 @@ export function buildTemplatePathMap(
   for (const comp of components) {
     if (typeof comp.id === 'string' && comp.id !== '') {
       byId.set(comp.id, comp)
+    }
+  }
+  const nestedCompIds = new Set<string>()
+  const nestedQueue: string[] = []
+  for (const comp of components) {
+    const children = comp.children
+    if (typeof children === 'object' && children !== null && !Array.isArray(children)) {
+      const rec = children as Record<string, unknown>
+      const tplCompId = typeof rec.componentId === 'string' ? rec.componentId.trim() : ''
+      if (tplCompId !== '' && !nestedCompIds.has(tplCompId)) {
+        nestedCompIds.add(tplCompId)
+        nestedQueue.push(tplCompId)
+      }
+    }
+  }
+  while (nestedQueue.length > 0) {
+    const curId = nestedQueue.shift()!
+    const comp = byId.get(curId)
+    if (!comp) continue
+    const cids: string[] = []
+    collectChildComponentIds(comp, cids)
+    for (const cid of cids) {
+      if (!nestedCompIds.has(cid)) {
+        nestedCompIds.add(cid)
+        nestedQueue.push(cid)
+      }
     }
   }
   const templatePathByCompId = new Map<string, Set<string>>()
@@ -275,7 +304,9 @@ export function buildTemplatePathMap(
       const rec = children as Record<string, unknown>
       const tplPath = typeof rec.path === 'string' ? rec.path.trim() : ''
       const tplCompId = typeof rec.componentId === 'string' ? rec.componentId.trim() : ''
-      if (tplPath !== '' && tplCompId !== '') {
+      const ownerId = typeof comp.id === 'string' ? comp.id : ''
+      const isNestedOwner = ownerId !== '' && nestedCompIds.has(ownerId)
+      if (tplPath !== '' && tplCompId !== '' && (!isNestedOwner || tplPath.startsWith('/'))) {
         enqueue(tplCompId, normalizePointerPath(tplPath))
       }
     }

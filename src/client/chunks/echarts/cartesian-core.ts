@@ -1,13 +1,17 @@
 import type * as echarts from 'echarts/core'
 import {
   type ChartBuildContext,
+  ZOOM_LEGEND_BOTTOM,
+  buildCompactCategoryFormatter,
   canUseLogScale,
+  computeEvenAxisInterval,
   computeRefAxisBounds,
   niceUpperBound,
   pickMarkLinePosition,
   pickVerticalMarkLineAlign,
   resolveYRange,
   sanitizeChartLabel,
+  scanSampleKeys,
   toNumber,
 } from './shared.ts'
 
@@ -54,17 +58,10 @@ export function buildCartesianCoreChartOption(ctx: ChartBuildContext): echarts.E
       barKeys = [yKeys[0]!]
       lineKeys = yKeys.slice(1)
     } else {
-      const scanLimit = Math.min(rows.length, 16)
-      const extraSet = new Set<string>()
-      for (let i = 0; i < scanLimit; i++) {
-        for (const [k, v] of Object.entries(rows[i]!)) {
-          if (k !== xKey && !yKeys.includes(k) && typeof v === 'number' && Number.isFinite(v)) {
-            extraSet.add(k)
-          }
-        }
-      }
       barKeys = yKeys
-      lineKeys = [...extraSet].slice(0, 1)
+      lineKeys = scanSampleKeys(rows)
+        .numericKeys.filter((k) => k !== xKey && !yKeys.includes(k))
+        .slice(0, 1)
     }
 
     const alignSeriesByCategory = (fieldKey: string, allowNull = false): Array<number | null> => {
@@ -171,6 +168,9 @@ export function buildCartesianCoreChartOption(ctx: ChartBuildContext): echarts.E
       lineKeys.length > 0
         ? resolveYRange(lineVals, rightBounds)
         : resolveYRange(stackedComboVals, leftBounds),
+      categories,
+      false,
+      lineKeys.length === 0 && comboUseLog,
     )
     const comboStep = props.step ? ('end' as const) : false
     const barKeySet = new Set(barKeys)
@@ -200,11 +200,18 @@ export function buildCartesianCoreChartOption(ctx: ChartBuildContext): echarts.E
     const totalSeriesCount = barSeries.length + lineSeries.length
 
     const zoomCfg = zoom()
-    const legendBottom = props.zoom ? (isCompact ? 26 : 24) : 0
+    const legendBottom = props.zoom ? ZOOM_LEGEND_BOTTOM : 0
+    const comboCatW = Math.max(
+      38,
+      Math.floor(((containerWidth ?? 276) - 44) / Math.min(6, Math.max(2, categories.length))),
+    )
+    const comboCatFmt = buildCompactCategoryFormatter(categories, comboCatW, isCompact)
     const leftYAxis = {
       type: comboUseLog ? ('log' as const) : ('value' as const),
       ...leftBounds,
-      splitNumber: isCompact ? 3 : undefined,
+      ...(leftBounds.max !== undefined && leftBounds.min === undefined && !comboUseLog
+        ? { interval: computeEvenAxisInterval(leftBounds.max, isCompact) }
+        : { splitNumber: isCompact ? 3 : undefined }),
       splitLine: dashedLine,
       axisLabel: {
         ...axisLabelBase,
@@ -213,7 +220,9 @@ export function buildCartesianCoreChartOption(ctx: ChartBuildContext): echarts.E
     const rightYAxis = {
       type: 'value' as const,
       ...rightBounds,
-      splitNumber: isCompact ? 3 : undefined,
+      ...(rightBounds.max !== undefined && rightBounds.min === undefined
+        ? { interval: computeEvenAxisInterval(rightBounds.max, isCompact) }
+        : { splitNumber: isCompact ? 3 : undefined }),
       splitLine: { show: false },
       axisLabel: {
         ...axisLabelBase,
@@ -244,14 +253,10 @@ export function buildCartesianCoreChartOption(ctx: ChartBuildContext): echarts.E
           ...axisLabelBase,
           ...(isCompact
             ? {
-                width: Math.max(
-                  38,
-                  Math.floor(
-                    ((containerWidth ?? 276) - 44) / Math.min(6, Math.max(2, categories.length)),
-                  ),
-                ),
+                width: comboCatW,
                 overflow: 'truncate' as const,
                 ellipsis: '…',
+                ...(comboCatFmt ? { formatter: comboCatFmt } : {}),
               }
             : {}),
         },
@@ -342,7 +347,7 @@ export function buildCartesianCoreChartOption(ctx: ChartBuildContext): echarts.E
       ? item.vals.map((v, cIdx) => {
           const tot = categoryTotals[cIdx] ?? 0
           if (v === null || tot <= 0) return echartsType === 'line' ? null : 0
-          return Number((((hasSignedPercentStack ? v : Math.abs(v)) / tot) * 100).toFixed(1))
+          return Number((((hasSignedPercentStack ? v : Math.abs(v)) / tot) * 100).toFixed(3))
         })
       : useLogAxis
         ? item.vals.map((v) => (typeof v === 'number' && v > 0 ? v : null))
@@ -401,18 +406,33 @@ export function buildCartesianCoreChartOption(ctx: ChartBuildContext): echarts.E
   const cartesianVals = isStacked
     ? [...stackedPosSums, ...stackedNegSums]
     : series.flatMap((s) => (s.data as unknown[]).map(extractDatumNum))
-  const cartesianBounds = isPercentStack
+  const pctStep = isCompact ? 50 : 25
+  const signedNegMax = Math.max(
+    10,
+    ...stackedNegSums.map(Math.abs),
+    effectiveCartRef !== undefined && effectiveCartRef < 0 ? Math.abs(effectiveCartRef) : 0,
+  )
+  const signedPosMax = Math.max(
+    10,
+    ...stackedPosSums,
+    effectiveCartRef !== undefined && effectiveCartRef > 0 ? effectiveCartRef : 0,
+  )
+  const cartesianBounds: { min?: number; max?: number; interval?: number } = isPercentStack
     ? hasSignedPercentStack
       ? {
-          min: Math.max(-100, -niceUpperBound(Math.max(10, ...stackedNegSums.map(Math.abs)))),
-          max: Math.min(100, niceUpperBound(Math.max(10, ...stackedPosSums))),
+          min: Math.max(-100, -Math.ceil(signedNegMax / pctStep) * pctStep),
+          max: Math.min(100, Math.ceil(signedPosMax / pctStep) * pctStep),
+          interval: pctStep,
         }
       : {
           min: 0,
           max:
             effectiveCartRef !== undefined && effectiveCartRef >= 95
-              ? Math.max(105, Math.ceil(effectiveCartRef * 1.08))
-              : Math.max(100, Math.ceil(Math.max(...stackedPosSums, 100))),
+              ? niceUpperBound(effectiveCartRef * 1.08)
+              : 100,
+          ...(effectiveCartRef !== undefined && effectiveCartRef >= 95
+            ? {}
+            : { interval: pctStep }),
         }
     : useLogAxis
       ? {}
@@ -443,6 +463,9 @@ export function buildCartesianCoreChartOption(ctx: ChartBuildContext): echarts.E
   const cartMarkArea = markArea(
     0,
     isHorizontal ? undefined : resolveYRange(cartesianVals, cartesianBounds),
+    categories,
+    isHorizontal,
+    useLogAxis,
   )
   if (series[0] && refLine) {
     series[0].markLine = refLine
@@ -459,6 +482,10 @@ export function buildCartesianCoreChartOption(ctx: ChartBuildContext): echarts.E
   const maxVBarLabelW = isCompact
     ? Math.max(40, Math.floor((estCartW - 44) / Math.min(6, Math.max(2, categories.length))))
     : undefined
+  const vCatFormatter =
+    !isHorizontal && maxVBarLabelW !== undefined
+      ? buildCompactCategoryFormatter(categories, maxVBarLabelW, isCompact)
+      : undefined
   const categoryAxis = {
     type: 'category' as const,
     data: categories,
@@ -478,19 +505,34 @@ export function buildCartesianCoreChartOption(ctx: ChartBuildContext): echarts.E
           fontSize: isCompact ? 10 : 11,
           hideOverlap: true,
           ...(maxVBarLabelW !== undefined
-            ? { width: maxVBarLabelW, overflow: 'truncate' as const, ellipsis: '…' }
+            ? {
+                width: maxVBarLabelW,
+                overflow: 'truncate' as const,
+                ellipsis: '…',
+                ...(vCatFormatter ? { formatter: vCatFormatter } : {}),
+              }
             : {}),
         },
   }
+  const cartInterval =
+    cartesianBounds.interval ??
+    (!useLogAxis &&
+    cartesianBounds.max !== undefined &&
+    cartesianBounds.min === undefined &&
+    cartesianVals.every((v) => v >= 0)
+      ? computeEvenAxisInterval(cartesianBounds.max, isCompact)
+      : undefined)
   const valueAxis = valAxis({
     type: useLogAxis ? ('log' as const) : ('value' as const),
     ...cartesianBounds,
+    ...(cartInterval !== undefined ? { interval: cartInterval } : {}),
     axisLabel: {
       ...axisLabelBase,
       ...(isPercentStack ? { formatter: '{value}%' } : {}),
     },
   })
   const zoomCfg = zoom(isHorizontal)
+  const cartLegendBottom = props.zoom && !isHorizontal ? ZOOM_LEGEND_BOTTOM : 0
 
   return {
     tooltip: {
@@ -532,7 +574,7 @@ export function buildCartesianCoreChartOption(ctx: ChartBuildContext): echarts.E
     legend: showLegend
       ? legend({
           scroll: isCompact || series.length >= 4,
-          bottom: props.zoom && !isHorizontal ? 28 : 0,
+          bottom: cartLegendBottom,
           fontSize: 11.5,
           names: series.map((s) => String(s.name ?? '')),
         })
@@ -541,7 +583,7 @@ export function buildCartesianCoreChartOption(ctx: ChartBuildContext): echarts.E
     grid: {
       top: isHorizontal && props.referenceLine !== undefined ? 26 : 16,
       right: isHorizontal && props.zoom ? 34 : 18,
-      bottom: (showLegend ? 32 : 12) + (props.zoom && !isHorizontal ? 28 : 0),
+      bottom: (showLegend ? 32 : 12) + cartLegendBottom,
       left: isHorizontal && isCompact ? 6 : 12,
       containLabel: true,
     },

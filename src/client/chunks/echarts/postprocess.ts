@@ -141,7 +141,7 @@ export function applyCrossFilterSelection(
       const qNorms = queries.map(normArrow)
       const hasExactCat = categories.some((c) => qNorms.includes(normArrow(c)))
       let anyPointMatched = false
-      const borderEligible = type === 'bar' || type === 'line'
+      const borderEligible = (type === 'bar' && s.stack !== 'dumbbellLink') || type === 'line'
       const nextData = (s.data as unknown[]).map((pt, idx) => {
         if (pt === '-') return pt
         const isMatch =
@@ -180,12 +180,13 @@ export function applyCrossFilterSelection(
       const hasNamedItems =
         dataArr.length > 1 && dataArr.some((item) => typeof asObj(item).name === 'string')
       if (hasNamedItems) {
+        const hasExactItem = dataArr.some((item) => queries.includes(normStr(asObj(item).name)))
         return {
           ...s,
           data: dataArr.map((item) => {
             if (typeof item !== 'object' || item === null || Array.isArray(item)) return item
             const rec = item as Record<string, unknown>
-            const itemMatch = matchesQuery(normStr(rec.name), queries, false)
+            const itemMatch = matchesQuery(normStr(rec.name), queries, hasExactItem)
             return {
               ...rec,
               lineStyle: {
@@ -197,7 +198,10 @@ export function applyCrossFilterSelection(
           }),
         }
       }
-      const isMatch = seriesMatched || matchesQuery(seriesNameNorm, queries, false)
+      const hasExactSeries = (opt.series as Record<string, unknown>[]).some(
+        (item) => item?.type === 'parallel' && queries.includes(normStr(item.name)),
+      )
+      const isMatch = seriesMatched || matchesQuery(seriesNameNorm, queries, hasExactSeries)
       return {
         ...s,
         lineStyle: {

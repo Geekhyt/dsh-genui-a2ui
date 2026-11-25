@@ -92,7 +92,7 @@ export function collectObscuredContextPointersFromMessages(
     depth: number,
     templatePrefixes?: ReadonlySet<string>,
   ) => {
-    if (depth > 6 || typeof ctx !== 'object' || ctx === null || Array.isArray(ctx)) return
+    if (depth > 8 || typeof ctx !== 'object' || ctx === null || Array.isArray(ctx)) return
     for (const [k, v] of Object.entries(ctx as Record<string, unknown>)) {
       const seg = escapeJsonPointerSegment(k)
       const nextPath = prefix === '' ? `/${seg}` : `${prefix}/${seg}`

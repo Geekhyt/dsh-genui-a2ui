@@ -2,6 +2,7 @@ import type * as echarts from 'echarts/core'
 import {
   type ChartBuildContext,
   FILLED_SHAPE_LABEL,
+  ZOOM_LEGEND_BOTTOM,
   computeEvenAxisInterval,
   computeRefAxisBounds,
   formatCompactTickNum,
@@ -9,6 +10,7 @@ import {
   pickMarkLinePosition,
   sanitizeChartLabel,
   toNumber,
+  visualWidthOf,
 } from './shared.ts'
 
 export function buildComparisonChartOption(
@@ -134,17 +136,28 @@ export function buildComparisonChartOption(
     }
 
     const zoomCfg = zoom()
-    const stepHighs = baseData.map((b, i) => {
+    const wfIsNegRef =
+      props.referenceLine !== undefined &&
+      Number.isFinite(props.referenceLine) &&
+      props.referenceLine < 0
+    const stepEdgeVals = baseData.map((b, i) => {
       const tot = totalData[i]
+      if (typeof tot === 'number') return tot
+      if (wfIsNegRef) {
+        const negB = baseNegData[i] ?? 0
+        const decN = decNegData[i]
+        const incN = incNegData[i]
+        if (typeof decN === 'number') return negB + decN
+        if (typeof incN === 'number') return negB + incN
+      }
       const inc = incData[i]
       const dec = decData[i]
-      if (typeof tot === 'number') return tot
       if (typeof inc === 'number') return b + inc
       if (typeof dec === 'number') return b + dec
       return b
     })
-    const leftEdge = stepHighs.slice(0, Math.min(2, stepHighs.length))
-    const rightEdge = stepHighs.slice(Math.max(0, stepHighs.length - 2))
+    const leftEdge = stepEdgeVals.slice(0, Math.min(2, stepEdgeVals.length))
+    const rightEdge = stepEdgeVals.slice(Math.max(0, stepEdgeVals.length - 2))
     const wfMarkPos = pickMarkLinePosition(leftEdge, rightEdge, props.referenceLine)
     const refLine = buildRefLine(theme.warn, wfMarkPos)
     const refBounds = computeRefAxisBounds(peaks, props.referenceLine)
@@ -181,11 +194,7 @@ export function buildComparisonChartOption(
     const estW = chartWidth(520)
     const barSlotW = Math.max(22, (estW - 56) / Math.max(1, rows.length))
     const estBarW = Math.min(34, barSlotW * 0.62)
-    let refTextPx = 18
-    for (const ch of refText) {
-      refTextPx += (ch.codePointAt(0) ?? 0) > 0xff ? 11.2 : 6.8
-    }
-    const estPillW = Math.max(48, refTextPx)
+    const estPillW = Math.max(48, 18 + visualWidthOf(refText) * 6.2)
     const pillSpanBars = Math.min(rows.length, Math.max(2, Math.ceil(estPillW / barSlotW)))
 
     const overlapsRefBand = (idx: number, low: number, high: number): boolean => {
@@ -284,7 +293,11 @@ export function buildComparisonChartOption(
       const bottom = baseData[i] ?? 0
       const top = bottom + val
       const text = `-${Math.abs(stepDeltas[i] ?? val)}`
-      if (showBarLabels && overlapsRefBand(i, bottom - ySpan * 0.085, bottom)) {
+      const hitsBottomAxis = !hasNegativeRegion && bottom <= ySpan * 0.12
+      if (showBarLabels && (hitsBottomAxis || overlapsRefBand(i, bottom - ySpan * 0.085, bottom))) {
+        if (hitsBottomAxis && fitsInsideBar(text, val)) {
+          return { value: val, label: insideHaloLabel }
+        }
         if (!overlapsRefBand(i, top, top + ySpan * 0.085)) {
           return { value: val, label: { position: 'top' as const } }
         }
@@ -378,12 +391,16 @@ export function buildComparisonChartOption(
           return `${title}\n${sName}: ${sign}${sanitizeChartLabel(active.value)}`
         },
       },
-      legend: legend({ scroll: isCompact, bottom: props.zoom ? 24 : 0, data: wfLegendData }),
+      legend: legend({
+        scroll: isCompact,
+        bottom: props.zoom ? ZOOM_LEGEND_BOTTOM : 0,
+        data: wfLegendData,
+      }),
       dataZoom: zoomCfg,
       grid: {
         top: 22,
         right: 18,
-        bottom: 34 + (props.zoom ? 24 : 0),
+        bottom: 34 + (props.zoom ? ZOOM_LEGEND_BOTTOM : 0),
         left: 12,
         containLabel: true,
       },
@@ -510,11 +527,11 @@ export function buildComparisonChartOption(
       return { label, actual, target, rLow, rMid, rHigh, hasScaleHint }
     })
     const categories = parsedRows.map((p) => p.label)
-    const maxBound = Math.max(
-      ...parsedRows.map((p) => Math.max(p.rHigh, p.actual, p.target ?? 0)),
-      1e-6,
-    )
-    const minActual = Math.min(0, ...parsedRows.map((p) => p.actual))
+    const maxBound =
+      parsedRows.length > 0
+        ? Math.max(...parsedRows.map((p) => Math.max(p.rHigh, p.actual, p.target ?? 0)), 1e-6)
+        : 100
+    const minActual = Math.min(0, ...parsedRows.flatMap((p) => [p.actual, p.target ?? 0]))
     const bulletMin = minActual < 0 ? -niceUpperBound(Math.abs(minActual)) : 0
     const estW = chartWidth(540)
     const estH = chartHeight
@@ -696,7 +713,7 @@ export function buildComparisonChartOption(
       const label = sanitizeChartLabel(r[xKey] ?? r.label ?? r.name ?? `#${idx + 1}`)
       const before = toNumber(r[beforeKey] ?? r.before ?? r.start ?? r.from ?? 0)
       const after = toNumber(r[afterKey] ?? r.after ?? r.end ?? r.to ?? 0)
-      return { label, before, after, delta: Number((after - before).toFixed(2)) }
+      return { label, before, after, delta: Number((after - before).toPrecision(6)) }
     })
     const categories = parsed.map((p) => p.label)
     const allVals = parsed.flatMap((p) => [p.before, p.after])
@@ -768,7 +785,7 @@ export function buildComparisonChartOption(
         splitLine: dashedLine,
         axisLabel: {
           ...axisLabelBase,
-          formatter: (val: number) => formatCompactTickNum(val + baseline),
+          formatter: (val: number) => formatCompactTickNum(val + baseline, rawSpan),
         },
       },
       yAxis: {

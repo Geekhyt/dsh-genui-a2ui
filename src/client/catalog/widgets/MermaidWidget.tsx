@@ -25,7 +25,7 @@ import {
   useTransientFlag,
 } from '../../dom-hooks.ts'
 import { useRuntimeMessages } from '../../i18n.ts'
-import { prepareMermaidSvg } from '../../mermaid-safe.ts'
+import { namespaceSvgIds, prepareMermaidSvg } from '../../mermaid-safe.ts'
 import { useDarkTheme } from '../../theme.ts'
 import { DshCodeBlock } from '../../ui/primitives.tsx'
 import css from '../Catalog.module.css'
@@ -78,43 +78,7 @@ export interface MermaidWidgetProps {
   weight?: number
 }
 
-export function namespaceSvgIds(markup: string, prefix: string): string {
-  const idMap = new Map<string, string>()
-  const idDeclRe = /\bid=(["'])([^"']+)\1/g
-  let m: RegExpExecArray | null = idDeclRe.exec(markup)
-  while (m !== null) {
-    const oldId = m[2]!
-    if (!idMap.has(oldId)) {
-      idMap.set(oldId, `${prefix}${oldId}`)
-    }
-    m = idDeclRe.exec(markup)
-  }
-  if (idMap.size === 0) return markup
-  let out = markup.replace(
-    /\bid=(["'])([^"']+)\1/g,
-    (_full, q: string, oldId: string) => `id=${q}${idMap.get(oldId) ?? oldId}${q}`,
-  )
-  out = out.replace(
-    /url\(\s*(["']?)#([^)"']+)\1\s*\)/g,
-    (_full, q: string, oldId: string) => `url(${q}#${idMap.get(oldId) ?? oldId}${q})`,
-  )
-  out = out.replace(
-    /\b((?:xlink:)?href)=(["'])#([^"']+)\2/g,
-    (_full, attr: string, q: string, oldId: string) =>
-      `${attr}=${q}#${idMap.get(oldId) ?? oldId}${q}`,
-  )
-  out = out.replace(
-    /<style([^>]*)>([\s\S]*?)<\/style>/gi,
-    (_full, attrs: string, cssBody: string) => {
-      const rewritten = cssBody.replace(/#([A-Za-z_][A-Za-z0-9_-]*)/g, (hit, oldId: string) => {
-        const next = idMap.get(oldId)
-        return next ? `#${next}` : hit
-      })
-      return `<style${attrs}>${rewritten}</style>`
-    },
-  )
-  return out
-}
+export { namespaceSvgIds }
 
 export function DshMermaidView({ props }: { props: MermaidWidgetProps }) {
   const dark = useDarkTheme()
@@ -356,8 +320,7 @@ export function DshMermaidView({ props }: { props: MermaidWidgetProps }) {
   })
 
   const handleCopy = () => {
-    copyTextToClipboard(code)
-    markCopied()
+    copyTextToClipboard(code, markCopied)
   }
 
   const handleZoomOut = useCallback(
@@ -431,6 +394,13 @@ export function DshMermaidView({ props }: { props: MermaidWidgetProps }) {
       if (!canZoom || e.button !== 0 || typeof window === 'undefined') return
       const viewport = inDialog ? dialogViewportRef.current : inlineViewportRef.current
       if (!viewport) return
+      const rect = viewport.getBoundingClientRect()
+      if (
+        e.clientX >= rect.left + viewport.clientWidth ||
+        e.clientY >= rect.top + viewport.clientHeight
+      ) {
+        return
+      }
       const overflows =
         viewport.scrollWidth > viewport.clientWidth + 2 ||
         viewport.scrollHeight > viewport.clientHeight + 2

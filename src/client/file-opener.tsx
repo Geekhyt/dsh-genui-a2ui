@@ -15,7 +15,8 @@ export function isWindowsStylePath(value: string): boolean {
 }
 
 export function isAbsoluteWorkspacePath(path: string): boolean {
-  return path.startsWith('/') || isAbsoluteWindows(path)
+  const slashNorm = path.replace(/\\/g, '/')
+  return slashNorm.startsWith('/') || isAbsoluteWindows(slashNorm)
 }
 
 function isAbsoluteWindows(path: string): boolean {
@@ -44,8 +45,11 @@ export function sessionFileAddress(sessionId: string, path: string): string {
 }
 
 function normalizeForPrefixCompare(p: string): string {
-  const slashes = stripTrailingSlashes(collapseDuplicateSlashes(p.replace(/\\/g, '/')))
-  return isWindowsStylePath(slashes) ? slashes.toLowerCase() : slashes
+  const collapsed = collapseDuplicateSlashes(p.replace(/\\/g, '/'))
+  if (collapsed === '/') return '/'
+  const isWin = isWindowsStylePath(collapsed) || /^[A-Za-z]:$/.test(collapsed)
+  const stripped = stripTrailingSlashes(collapsed)
+  return isWin ? stripped.toLowerCase() : stripped
 }
 
 export function isPathWithinWorkspace(targetPath: string, cwd: string | undefined): boolean {
@@ -57,6 +61,7 @@ export function isPathWithinWorkspace(targetPath: string, cwd: string | undefine
   const rootCmp = normalizeForPrefixCompare(cwd)
   const targetCmp = normalizeForPrefixCompare(normalized)
   if (rootCmp === '') return false
+  if (rootCmp === '/') return targetCmp.startsWith('/')
   return targetCmp === rootCmp || targetCmp.startsWith(`${rootCmp}/`)
 }
 
@@ -65,13 +70,16 @@ export function fileAddressFor(sessionId: string, cwd: string | undefined, path:
   if (!isAbsoluteWorkspacePath(normalized)) {
     return sessionFileAddress(sessionId, normalized)
   }
-  const root =
-    cwd === undefined ? '' : stripTrailingSlashes(collapseDuplicateSlashes(cwd.replace(/\\/g, '/')))
+  const collapsedCwd = cwd === undefined ? '' : collapseDuplicateSlashes(cwd.replace(/\\/g, '/'))
+  const root = collapsedCwd === '/' ? '/' : stripTrailingSlashes(collapsedCwd)
   if (root !== '') {
     const rootCmp = normalizeForPrefixCompare(root)
     const normCmp = normalizeForPrefixCompare(normalized)
     if (normCmp === rootCmp) {
       return sessionFileAddress(sessionId, '')
+    }
+    if (rootCmp === '/' && normCmp.startsWith('/')) {
+      return sessionFileAddress(sessionId, normalized.slice(1))
     }
     if (normCmp.startsWith(`${rootCmp}/`)) {
       return sessionFileAddress(sessionId, normalized.slice(root.length + 1))
@@ -83,7 +91,9 @@ export function fileAddressFor(sessionId: string, cwd: string | undefined, path:
 export function resolveSessionPath(workingDir: string | undefined, path: string): string {
   const normalized = collapseDuplicateSlashes(path.replace(/\\/g, '/')).replace(/^(?:\.\/)+/, '')
   if (!workingDir || isAbsoluteWorkspacePath(normalized)) return normalized
-  const base = stripTrailingSlashes(collapseDuplicateSlashes(workingDir.replace(/\\/g, '/')))
+  const collapsed = collapseDuplicateSlashes(workingDir.replace(/\\/g, '/'))
+  if (collapsed === '/') return `/${normalized}`
+  const base = stripTrailingSlashes(collapsed)
   return base === '' ? normalized : `${base}/${normalized}`
 }
 

@@ -468,4 +468,78 @@ describe('Real Interactive DOM Convergence Tests (happy-dom + React 18)', () => 
     expect(colHost?.style.display).toBe('contents')
     expect(resolveDshHostElement('dsh-a2ui-card')).toBe(customElements.get('dsh-a2ui-card'))
   })
+
+  it('sorts boolean columns cleanly and preserves Table selection across unrelated title updates', () => {
+    const rows = [
+      { id: '1', name: 'Alpha', active: false },
+      { id: '2', name: 'Beta', active: true },
+      { id: '3', name: 'Gamma', active: false },
+    ]
+    const cols = [
+      { key: 'name', label: 'Name' },
+      { key: 'active', label: 'Active' },
+    ]
+    const { container, rerender } = mount(
+      <TableWidget title="v1" rows={rows} columns={cols} selectable={true} />,
+    )
+
+    const rowChecks = container.querySelectorAll<HTMLInputElement>('tbody input[type="checkbox"]')
+    expect(rowChecks.length).toBe(3)
+    act(() => {
+      rowChecks[0]?.click()
+    })
+    expect(
+      container.querySelectorAll('tbody tr.a2ui_trSelected, tbody tr[class*="trSelected"]').length,
+    ).toBe(1)
+
+    rerender(<TableWidget title="v2" rows={[...rows]} columns={cols} selectable={true} />)
+    expect(container.querySelectorAll('tbody tr[class*="trSelected"]').length).toBe(1)
+
+    const activeTh = Array.from(container.querySelectorAll('th')).find((th) =>
+      th.textContent?.includes('Active'),
+    )
+    expect(activeTh).toBeTruthy()
+    act(() => {
+      activeTh?.click()
+    })
+    const firstOrder = Array.from(container.querySelectorAll('tbody tr')).map(
+      (tr) => tr.querySelectorAll('td')[1]?.textContent,
+    )
+    act(() => {
+      activeTh?.click()
+    })
+    const secondOrder = Array.from(container.querySelectorAll('tbody tr')).map(
+      (tr) => tr.querySelectorAll('td')[1]?.textContent,
+    )
+    expect(firstOrder).not.toEqual(secondOrder)
+  })
+
+  it('skips tabindex=-1 buttons inside DshModal focus trap on Tab', () => {
+    const { rerender } = mount(
+      <DshModal open={true} title="Trap Test" closeLabel="Close" onClose={() => {}}>
+        <button type="button" id="first-btn">
+          First
+        </button>
+        <button type="button" id="skip-btn" tabIndex={-1}>
+          Skipped
+        </button>
+      </DshModal>,
+    )
+    const firstBtn = document.getElementById('first-btn') as HTMLButtonElement | null
+    const skipBtn = document.getElementById('skip-btn') as HTMLButtonElement | null
+    expect(firstBtn).not.toBeNull()
+    expect(skipBtn).not.toBeNull()
+    const dialog = document.querySelector('[role="dialog"]') as HTMLElement | null
+    expect(dialog).not.toBeNull()
+    act(() => {
+      firstBtn?.focus()
+      dialog?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }))
+    })
+    expect(document.activeElement).not.toBe(skipBtn)
+    rerender(
+      <DshModal open={false} title="Trap Test" closeLabel="Close" onClose={() => {}}>
+        <div />
+      </DshModal>,
+    )
+  })
 })

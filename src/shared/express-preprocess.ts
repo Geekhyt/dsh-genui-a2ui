@@ -119,14 +119,12 @@ function isScientificExponentPlus(src: string, plusIdx: number): boolean {
   return j < 0 || !isIdentChar(src[j])
 }
 
-function splitTopLevel(src: string, sep: string): string[] {
-  const parts: string[] = []
+function scanTopLevelPositions(src: string, sep: string, firstOnly: boolean): number[] {
+  const hits: number[] = []
   let depthParen = 0
   let depthBracket = 0
   let depthBrace = 0
-  let start = 0
   let i = 0
-
   while (i < src.length) {
     const skipped = scanStringOrComment(src, i)
     if (skipped !== -1) {
@@ -147,40 +145,28 @@ function splitTopLevel(src: string, sep: string): string[] {
       depthBrace === 0 &&
       (sep !== '+' || !isScientificExponentPlus(src, i))
     ) {
-      parts.push(src.slice(start, i))
-      start = i + 1
+      hits.push(i)
+      if (firstOnly) return hits
     }
     i += 1
+  }
+  return hits
+}
+
+function splitTopLevel(src: string, sep: string): string[] {
+  const hits = scanTopLevelPositions(src, sep, false)
+  const parts: string[] = []
+  let start = 0
+  for (const pos of hits) {
+    parts.push(src.slice(start, pos))
+    start = pos + 1
   }
   parts.push(src.slice(start))
   return parts
 }
 
 function findTopLevelChar(src: string, target: string): number {
-  let depthParen = 0
-  let depthBracket = 0
-  let depthBrace = 0
-  let i = 0
-
-  while (i < src.length) {
-    const skipped = scanStringOrComment(src, i)
-    if (skipped !== -1) {
-      i = skipped
-      continue
-    }
-    const ch = src[i]!
-    if (ch === '(') depthParen += 1
-    else if (ch === ')') depthParen = Math.max(0, depthParen - 1)
-    else if (ch === '[') depthBracket += 1
-    else if (ch === ']') depthBracket = Math.max(0, depthBracket - 1)
-    else if (ch === '{') depthBrace += 1
-    else if (ch === '}') depthBrace = Math.max(0, depthBrace - 1)
-    else if (ch === target && depthParen === 0 && depthBracket === 0 && depthBrace === 0) {
-      return i
-    }
-    i += 1
-  }
-  return -1
+  return scanTopLevelPositions(src, target, true)[0] ?? -1
 }
 
 function splitTrailingLineComment(line: string): { code: string; comment: string } {
@@ -397,7 +383,14 @@ export function desugarExpressConcat(ui: string): string {
     .map((stmt) => {
       const { code, comment } = splitTrailingLineComment(stmt)
       if (!code.includes('+')) return stmt
-      return `${transformConcatChunk(code, '=', 0)}${comment}`
+      const parts = splitTopLevel(code, ';')
+      const rewritten =
+        parts.length > 1
+          ? parts
+              .map((part) => (part.includes('+') ? transformConcatChunk(part, '=', 0) : part))
+              .join(';')
+          : transformConcatChunk(code, '=', 0)
+      return `${rewritten}${comment}`
     })
     .join('\n')
 }
@@ -446,6 +439,7 @@ function parseEqLiteralCall(
   if (args.length !== 2) return null
   const a = args[0]!.trim()
   const b = args[1]!.trim()
+  if (findTopLevelChar(a, '=') !== -1 || findTopLevelChar(b, '=') !== -1) return null
   const aStr = parseJsonStringLiteral(a)
   const bStr = parseJsonStringLiteral(b)
   if (
@@ -892,6 +886,31 @@ function rewriteInlineCalcsInStatement(
   return out
 }
 
+function mapReferencesIdent(vars: Record<string, string>, ident: string): boolean {
+  const re = new RegExp(`(?<![A-Za-z0-9_$])${ident}(?![A-Za-z0-9_$])`)
+  for (const val of Object.values(vars)) {
+    if (re.test(val)) return true
+  }
+  return false
+}
+
+function invalidateDependents(
+  varName: string,
+  localMaps: Map<string, Record<string, string>>,
+  calcDefs: Map<string, CalcDef>,
+): void {
+  for (const [k, def] of [...calcDefs.entries()]) {
+    if (k !== varName && mapReferencesIdent(def.vars, varName)) {
+      calcDefs.delete(k)
+    }
+  }
+  for (const [k, map] of [...localMaps.entries()]) {
+    if (k !== varName && mapReferencesIdent(map, varName)) {
+      localMaps.delete(k)
+    }
+  }
+}
+
 export function flattenChainedCalc(ui: string): string {
   if (!ui.includes('calc(')) return ui
   const stmts = splitTopLevel(ui, '\n')
@@ -903,17 +922,16 @@ export function flattenChainedCalc(ui: string): string {
     return aliasSeq
   }
 
-  const outStmts = stmts.map((stmt) => {
-    const { code, comment } = splitTrailingLineComment(stmt)
-    const trimmed = stripAllComments(code).trim()
+  const processSingleStmt = (rawPart: string): string => {
+    const trimmed = stripAllComments(rawPart).trim()
     if (/^(?:surface|deleteSurface)\s*\(/.test(trimmed)) {
       localMaps.clear()
       calcDefs.clear()
-      return stmt
+      return rawPart
     }
     const assignMatch = /^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*([\s\S]+)$/.exec(trimmed)
     if (!assignMatch) {
-      return `${rewriteInlineCalcsInStatement(code, localMaps, calcDefs, nextAlias)}${comment}`
+      return rewriteInlineCalcsInStatement(rawPart, localMaps, calcDefs, nextAlias)
     }
 
     const varName = assignMatch[1]!
@@ -921,32 +939,44 @@ export function flattenChainedCalc(ui: string): string {
 
     const objMap = parseSimpleObjectLiteral(rhs)
     if (objMap !== null) {
+      const rewrittenCode = rewriteInlineCalcsInStatement(rawPart, localMaps, calcDefs, nextAlias)
       calcDefs.delete(varName)
-      const rewrittenCode = rewriteInlineCalcsInStatement(code, localMaps, calcDefs, nextAlias)
+      invalidateDependents(varName, localMaps, calcDefs)
       const rewrittenMatch = /^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*([\s\S]+)$/.exec(
         stripAllComments(rewrittenCode).trim(),
       )
       const nextObjMap =
         rewrittenMatch !== null ? (parseSimpleObjectLiteral(rewrittenMatch[2]!) ?? objMap) : objMap
       localMaps.set(varName, nextObjMap)
-      return `${rewrittenCode}${comment}`
+      return rewrittenCode
     }
 
     const inlined = inlineSingleCalcCall(rhs, localMaps, calcDefs, nextAlias)
     if (!inlined) {
-      const rewritten = rewriteInlineCalcsInStatement(code, localMaps, calcDefs, nextAlias)
+      const rewritten = rewriteInlineCalcsInStatement(rawPart, localMaps, calcDefs, nextAlias)
       calcDefs.delete(varName)
       localMaps.delete(varName)
-      return `${rewritten}${comment}`
+      invalidateDependents(varName, localMaps, calcDefs)
+      return rewritten
     }
 
     localMaps.delete(varName)
+    invalidateDependents(varName, localMaps, calcDefs)
     calcDefs.set(varName, inlined.def)
-    if (!inlined.didInline) return stmt
+    if (!inlined.didInline) return rawPart
 
-    const lead = /^\s*/.exec(code)?.[0] ?? ''
-    const { trail: trailSpace } = splitTrailingWhitespace(code)
-    return `${lead}${varName} = ${inlined.rewritten}${comment ? `${trailSpace}${comment}` : ''}`
+    const lead = /^\s*/.exec(rawPart)?.[0] ?? ''
+    const { trail: trailSpace } = splitTrailingWhitespace(rawPart)
+    return `${lead}${varName} = ${inlined.rewritten}${trailSpace}`
+  }
+
+  const outStmts = stmts.map((stmt) => {
+    const { code, comment } = splitTrailingLineComment(stmt)
+    const parts = splitTopLevel(code, ';')
+    if (parts.length > 1) {
+      return `${parts.map(processSingleStmt).join(';')}${comment}`
+    }
+    return `${processSingleStmt(code)}${comment}`
   })
 
   return outStmts.join('\n')
@@ -1129,26 +1159,7 @@ export function extractUpdateSurfaceIds(cleanedUi: string): string[] {
   return ids
 }
 
-const POINTER_STOP_CHARS = new Set([
-  ' ',
-  '\t',
-  '\n',
-  '\r',
-  '=',
-  ',',
-  ')',
-  ']',
-  '}',
-  '(',
-  '[',
-  '{',
-  ';',
-  ':',
-  '+',
-  '#',
-  '"',
-  "'",
-])
+const POINTER_STOP_CHARS = new Set(' \t\n\r=,)]}([ {;:+#"\'')
 
 function prevNonWsChar(src: string, idx: number): string {
   let k = idx - 1
@@ -1156,44 +1167,87 @@ function prevNonWsChar(src: string, idx: number): string {
   return k >= 0 ? src[k]! : ''
 }
 
-export function findDangerousExpressPointer(ui: string): string | null {
-  let i = 0
-  while (i < ui.length) {
-    const ch = ui[i]!
-    if (
-      ch === '#' ||
-      (ch === '-' && ui[i + 1] === '-') ||
-      (ch === '/' && (ui[i + 1] === '/' || ui[i + 1] === '*'))
-    ) {
-      const skipped = scanStringOrComment(ui, i)
-      i = skipped !== -1 ? skipped : i + 1
-      continue
+function nextNonWsChar(src: string, idx: number): string {
+  let k = idx
+  while (k < src.length && isWsCharCode(src.charCodeAt(k))) k += 1
+  return k < src.length ? src[k]! : ''
+}
+
+function decodeExpressStringKey(raw: string): string | null {
+  if (raw.startsWith('r"""') || raw.startsWith('R"""')) {
+    return raw.endsWith('"""') && raw.length >= 7 ? raw.slice(4, -3) : null
+  }
+  if (raw.startsWith('r"') || raw.startsWith('R"')) {
+    return raw.endsWith('"') && raw.length >= 3 ? raw.slice(2, -1) : null
+  }
+  if (raw.startsWith('"""') && raw.endsWith('"""') && raw.length >= 6) {
+    const inner = raw.slice(3, -3)
+    const escaped = inner
+      .replace(/\\.|"/g, (m) => (m === '"' ? '\\"' : m))
+      .replace(/\r/g, '\\r')
+      .replace(/\n/g, '\\n')
+    try {
+      const parsed = JSON.parse(`"${escaped}"`)
+      return typeof parsed === 'string' ? parsed : inner
+    } catch {
+      return inner
     }
+  }
+  return parseJsonStringLiteral(raw)
+}
+
+function splitTopLevelStatements(ui: string): string[] {
+  const out: string[] = []
+  for (const line of splitTopLevel(ui, '\n')) {
+    for (const part of splitTopLevel(line, ';')) {
+      out.push(part)
+    }
+  }
+  return out
+}
+
+const SPLIT_DATA_PATH_CONT_RE = /^[ \t]*\r?\n[ \t]*([A-Za-z0-9_~./-]+)/
+
+export function findDangerousExpressPointer(ui: string): string | null {
+  const clean = stripAllComments(ui)
+  let i = 0
+  while (i < clean.length) {
+    const ch = clean[i]!
     if (
       ch === '"' ||
-      ((ch === 'r' || ch === 'R') && ui[i + 1] === '"' && (i === 0 || !isIdentChar(ui[i - 1])))
+      ((ch === 'r' || ch === 'R') &&
+        clean[i + 1] === '"' &&
+        (i === 0 || !isIdentChar(clean[i - 1])))
     ) {
-      const skipped = scanStringOrComment(ui, i)
-      const end = skipped !== -1 ? skipped : ui.length
-      if (ch === '"') {
-        const prevCh = prevNonWsChar(ui, i)
-        if (prevCh === '{' || prevCh === ',') {
-          let nextWs = end
-          while (nextWs < ui.length && isWsCharCode(ui.charCodeAt(nextWs))) nextWs += 1
-          if (ui[nextWs] === ':') {
-            const decoded = parseJsonStringLiteral(ui.slice(i, end))
-            if (decoded === '__proto__') return decoded
-          }
-        }
+      const skipped = scanStringOrComment(clean, i)
+      const end = skipped !== -1 ? skipped : clean.length
+      const prevCh = prevNonWsChar(clean, i)
+      if ((prevCh === '{' || prevCh === ',') && nextNonWsChar(clean, end) === ':') {
+        const decoded = decodeExpressStringKey(clean.slice(i, end))
+        if (decoded === '__proto__') return decoded
       }
       i = end
       continue
     }
-    if (ch === '$' && ui[i + 1] === '/' && (i === 0 || !isIdentChar(ui[i - 1]))) {
+    if (ch === '$' && clean[i + 1] === '/' && (i === 0 || !isIdentChar(clean[i - 1]))) {
       let j = i + 2
-      while (j < ui.length && !POINTER_STOP_CHARS.has(ui[j]!)) j += 1
-      const pointer = ui.slice(i, j)
-      const segs = ui.slice(i + 2, j).split('/')
+      let pointerBody = ''
+      while (j < clean.length) {
+        const segStart = j
+        while (j < clean.length && !POINTER_STOP_CHARS.has(clean[j]!)) j += 1
+        pointerBody += clean.slice(segStart, j)
+        const endsWithSlash = pointerBody === '' || pointerBody.endsWith('/')
+        if (endsWithSlash) {
+          const cont = SPLIT_DATA_PATH_CONT_RE.exec(clean.slice(j))
+          if (cont) {
+            j += cont[0].length - cont[1]!.length
+            continue
+          }
+        }
+        break
+      }
+      const pointer = `$/${pointerBody}`
+      const segs = pointerBody.split('/')
       for (const rawSeg of segs) {
         const seg = rawSeg.replace(/~1/g, '/').replace(/~0/g, '~')
         if (isDangerousObjectKey(seg)) return pointer
@@ -1201,22 +1255,44 @@ export function findDangerousExpressPointer(ui: string): string | null {
       i = j
       continue
     }
-    if ((i === 0 || !isIdentChar(ui[i - 1])) && ch === '_') {
+    if ((i === 0 || !isIdentChar(clean[i - 1])) && ch === '_') {
       let j = i
-      while (j < ui.length && isIdentChar(ui[j])) j += 1
-      const ident = ui.slice(i, j)
+      while (j < clean.length && isIdentChar(clean[j])) j += 1
+      const ident = clean.slice(i, j)
       if (ident === '__proto__') {
-        const prevCh = prevNonWsChar(ui, i)
-        if (prevCh === '{' || prevCh === ',') {
-          let nextWs = j
-          while (nextWs < ui.length && isWsCharCode(ui.charCodeAt(nextWs))) nextWs += 1
-          if (ui[nextWs] === ':') return ident
-        }
+        const prevCh = prevNonWsChar(clean, i)
+        if ((prevCh === '{' || prevCh === ',') && nextNonWsChar(clean, j) === ':') return ident
       }
       i = j
       continue
     }
     i += 1
+  }
+  return null
+}
+
+export function findDangerousCompiledKey(node: unknown, depth = 0): string | null {
+  if (depth > 48 || typeof node !== 'object' || node === null) return null
+  if (Array.isArray(node)) {
+    for (const item of node) {
+      const hit = findDangerousCompiledKey(item, depth + 1)
+      if (hit !== null) return hit
+    }
+    return null
+  }
+  const rec = node as Record<string, unknown>
+  for (const key of Object.keys(rec)) {
+    if (key === '__proto__') return key
+    const val = rec[key]
+    if ((key === '@path' || key === 'path') && typeof val === 'string') {
+      const segs = val.split('/')
+      for (const rawSeg of segs) {
+        const seg = rawSeg.replace(/~1/g, '/').replace(/~0/g, '~')
+        if (isDangerousObjectKey(seg)) return val
+      }
+    }
+    const hit = findDangerousCompiledKey(val, depth + 1)
+    if (hit !== null) return hit
   }
   return null
 }
@@ -1229,7 +1305,7 @@ export function assertSafeExpressProgram(ui: string): void {
 }
 
 export function estimateExpressExpansionSize(ui: string, maxChars: number): number {
-  const stmts = splitTopLevel(ui, '\n')
+  const stmts = splitTopLevelStatements(ui)
   const varSizes = new Map<string, number>()
   let total = 0
   for (const stmt of stmts) {
@@ -1258,9 +1334,7 @@ export function estimateExpressExpansionSize(ui: string, maxChars: number): numb
         const ident = rhs.slice(i, j)
         const refSize = varSizes.get(ident)
         if (refSize !== undefined) {
-          let nextWs = j
-          while (nextWs < rhs.length && isWsCharCode(rhs.charCodeAt(nextWs))) nextWs += 1
-          const nextCh = rhs[nextWs]
+          const nextCh = nextNonWsChar(rhs, j)
           if (nextCh !== '(' && nextCh !== ':' && nextCh !== '=') {
             expanded += Math.max(0, refSize - ident.length)
             if (expanded > maxChars) return maxChars + 1

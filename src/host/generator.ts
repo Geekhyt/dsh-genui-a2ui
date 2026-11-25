@@ -27,6 +27,7 @@ import {
   desugarExpressConcat,
   estimateExpressExpansionSize,
   extractUpdateSurfaceIds,
+  findDangerousCompiledKey,
   flattenChainedCalc,
   foldNestedCondToLookup,
   preprocessExpressProgram,
@@ -289,6 +290,13 @@ function enrichCompilerError(err: unknown): never {
 }
 
 function validateCompiledLimits(messages: readonly AgentToRendererMessage[]): void {
+  const dangerous = findDangerousCompiledKey(messages)
+  if (dangerous !== null) {
+    throw new A2uiError(
+      `Forbidden prototype property key "${dangerous}" in compiled A2UI payload.`,
+      'VALIDATION_ERROR',
+    )
+  }
   const surfaceIds = new Set<string>()
   const componentCounts = new Map<string, number>()
   let dataBytes = 0
@@ -496,12 +504,53 @@ export class SurfaceSessions {
           }
         } else if (normKv === '/' ? dmPath !== '/' : dmPath.startsWith(`${normKv}/`)) {
           const relStart = normKv === '/' ? 1 : normKv.length + 1
-          const seg =
-            dmPath.slice(relStart).split('/')[0]?.replace(/~1/g, '/').replace(/~0/g, '~') ?? ''
+          const relParts = dmPath.slice(relStart).split('/')
+          const seg = relParts[0]?.replace(/~1/g, '/').replace(/~0/g, '~') ?? ''
           if (seg !== '' && isSecretKey(seg)) {
             rec.obscuredPointers.add(dmPath)
+          } else if (
+            typeof dmValue === 'object' &&
+            dmValue !== null &&
+            !Array.isArray(dmValue) &&
+            relParts.length === 1
+          ) {
+            const valRec = dmValue as Record<string, unknown>
+            const k =
+              typeof valRec.key === 'string'
+                ? valRec.key
+                : typeof valRec.name === 'string'
+                  ? valRec.name
+                  : ''
+            if (k !== '' && isSecretKey(k)) {
+              rec.obscuredPointers.add(`${dmPath}/value`)
+            }
           }
         }
+      }
+    }
+    const prescanKvPointers = (surfaceId: string, list: unknown) => {
+      if (!Array.isArray(list)) return
+      const rec = ensureSurface(surfaceId)
+      for (const item of list) {
+        if (typeof item !== 'object' || item === null) continue
+        const comp = item as Record<string, unknown>
+        if (comp.component === 'KvEditor') {
+          const p = extractBindingPointer(comp.items)
+          if (p !== null) rec.kvPointers.add(p)
+        }
+      }
+    }
+    for (const msg of messages) {
+      const rec = msg as unknown as Record<string, unknown>
+      if (rec.createSurface && typeof rec.createSurface === 'object') {
+        const cs = rec.createSurface as Record<string, unknown>
+        const sid = typeof cs.surfaceId === 'string' ? cs.surfaceId : ''
+        if (sid !== '') prescanKvPointers(sid, cs.components)
+      }
+      if (rec.updateComponents && typeof rec.updateComponents === 'object') {
+        const uc = rec.updateComponents as Record<string, unknown>
+        const sid = typeof uc.surfaceId === 'string' ? uc.surfaceId : ''
+        if (sid !== '') prescanKvPointers(sid, uc.components)
       }
     }
     for (const msg of messages) {
@@ -514,7 +563,12 @@ export class SurfaceSessions {
         const cs = rec.createSurface as Record<string, unknown>
         const sid = typeof cs.surfaceId === 'string' ? cs.surfaceId : ''
         if (sid !== '') {
+          const prevKv = bySurface.get(sid)?.kvPointers
           bySurface.delete(sid)
+          if (prevKv && prevKv.size > 0) {
+            const fresh = ensureSurface(sid)
+            for (const p of prevKv) fresh.kvPointers.add(p)
+          }
           ingestComponents(sid, cs.components)
           if (cs.dataModel !== undefined) ingestDataModel(sid, '/', cs.dataModel)
         }
@@ -625,9 +679,14 @@ export class SurfaceSessions {
           try {
             const proc = this.processor(sessionId)
             for (const id of updateIds) {
-              proc.parseResponse(`surface(${JSON.stringify(id)})\nroot = Text("")`, {
-                wrapped: false,
-              })
+              try {
+                proc.parseResponse(`surface(${JSON.stringify(id)})\nroot = Text("")`, {
+                  wrapped: false,
+                })
+              } catch (seedErr) {
+                const seedMsg = seedErr instanceof Error ? seedErr.message : ''
+                if (!/already exists/i.test(seedMsg)) throw seedErr
+              }
             }
             parts = proc.parseResponse(cleaned, { wrapped: false })
           } catch (retryErr) {
@@ -667,7 +726,7 @@ export class SurfaceSessions {
       channel === 'render'
         ? { render: entry.render + 1, ask: entry.ask }
         : { render: entry.render, ask: entry.ask + 1 }
-    this.failuresBySession.set(sessionId, next)
+    touchMapLru(this.failuresBySession, sessionId, next, MAX_HOST_SESSIONS)
     return next[channel]
   }
 

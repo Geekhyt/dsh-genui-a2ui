@@ -1,6 +1,22 @@
-import { safeStringifyJson } from '../../shared/constants.ts'
-import { parseLocalDateAnchor } from '../../shared/temporal.ts'
+import { isDangerousObjectKey, safeStringifyJson } from '../../shared/constants.ts'
+import { tryParseLocalDate } from '../../shared/temporal.ts'
 import { makeUniqueIdFactory } from './v3-helpers.ts'
+
+export function getOwnProp(obj: Record<string, unknown>, key: string): unknown {
+  if (isDangerousObjectKey(key) || !Object.hasOwn(obj, key)) return undefined
+  return obj[key]
+}
+
+export function isEmptyTableCell(val: unknown): boolean {
+  if (val === null || val === undefined) return true
+  if (typeof val === 'number') return !Number.isFinite(val)
+  if (typeof val === 'string') {
+    const t = val.trim()
+    if (t === '' || t === '-' || t === '—' || t === '–') return true
+    return t.toLowerCase() === 'n/a'
+  }
+  return false
+}
 
 export type TrackerSliceStatus = 'ok' | 'warning' | 'error' | 'unknown'
 export type TrackerSegmentTone = 'brand' | 'success' | 'warning' | 'danger' | 'neutral'
@@ -118,10 +134,18 @@ export interface NormalizedTerminalStep {
 export function normalizeTerminalCommands(raw: unknown): readonly NormalizedTerminalStep[] {
   if (typeof raw === 'string') {
     const lines = raw.split(/\r?\n/)
-    const hasPromptPrefix = lines.some((l) => {
-      const t = l.trim()
-      return t.startsWith('$ ') || t.startsWith('> ')
-    })
+    const hasDollarPrompt = lines.some((l) => l.trim().startsWith('$ '))
+    const isPromptLine = (trimmed: string): boolean =>
+      hasDollarPrompt ? trimmed.startsWith('$ ') : trimmed.startsWith('> ')
+    const hasPromptPrefix = hasDollarPrompt || lines.some((l) => l.trim().startsWith('> '))
+    const nextNonCommentIsPrompt = (startIdx: number): boolean => {
+      for (let j = startIdx + 1; j < lines.length; j++) {
+        const nt = lines[j]!.trim()
+        if (!nt || nt.startsWith('#')) continue
+        return isPromptLine(nt)
+      }
+      return false
+    }
     const steps: NormalizedTerminalStep[] = []
     let curCmd = ''
     let curComment = ''
@@ -140,14 +164,16 @@ export function normalizeTerminalCommands(raw: unknown): readonly NormalizedTerm
         curOut = []
       }
     }
-    for (const line of lines) {
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]!
       const trimmed = line.trim()
       if (!trimmed) continue
       if (hasPromptPrefix) {
-        if (trimmed.startsWith('$ ') || trimmed.startsWith('> ')) {
+        if (isPromptLine(trimmed)) {
           flush()
           curCmd = trimmed.slice(2).trim()
-        } else if (!curCmd && trimmed.startsWith('#')) {
+        } else if (trimmed.startsWith('#') && (!curCmd || nextNonCommentIsPrompt(i))) {
+          flush()
           const text = trimmed.replace(/^#+\s*/, '')
           curComment = curComment ? `${curComment} ${text}` : text
         } else if (!curCmd) {
@@ -343,7 +369,7 @@ export function buildEndpointCurl(params: {
       typeof params.requestBody === 'string'
         ? params.requestBody
         : safeStringifyJson(params.requestBody, 0)
-    parts.push(`-d ${shellEscapeSingle(bodyStr)}`)
+    parts.push(`--data-raw ${shellEscapeSingle(bodyStr)}`)
   }
   return parts.join(' \\\n  ')
 }
@@ -394,10 +420,8 @@ function parseTemporalPosition(
     return { numeric: Number.parseFloat(s), kind: 'num' }
   }
   if (SCHEDULE_DATE_ONLY_RE.test(s)) {
-    const localDate = parseLocalDateAnchor(s)
-    if (!Number.isNaN(localDate.getTime())) {
-      return { numeric: localDate.getTime(), kind: 'date' }
-    }
+    const localDate = tryParseLocalDate(s)
+    return localDate !== null ? { numeric: localDate.getTime(), kind: 'date' } : null
   }
   const ts = Date.parse(s)
   if (!Number.isNaN(ts)) {
@@ -539,7 +563,7 @@ export function normalizeScheduleItems(
   if (wrapCutoff !== null) {
     for (const p of sameKindParsed) {
       if (p.kind !== 'hhmm') continue
-      if (p.sNum < wrapCutoff) {
+      if (p.sNum < wrapCutoff && (overnightAnchor === null || p.eNum <= overnightAnchor)) {
         p.sNum += 1440
         if (p.eNum < 1440) p.eNum += 1440
       }
@@ -715,24 +739,24 @@ export function normalizeMatrixData(params: {
         continue
       }
       const s = String(v).trim()
-      if (/^(?:ok|yes|pass):/i.test(s) || s === '✓' || s === '✔') {
+      if (/^(?:ok|yes|pass|true):/i.test(s) || s === '✓' || s === '✔') {
         rowOut.push({
           kind: 'ok',
-          display: s.replace(/^(?:ok|yes|pass):\s*/i, '') || '✓',
+          display: s.replace(/^(?:ok|yes|pass|true):\s*/i, '') || '✓',
           intensityPct: 0,
           ratio: 0,
         })
-      } else if (/^(?:warn|warning):/i.test(s)) {
+      } else if (/^(?:warn|warning|partial):/i.test(s)) {
         rowOut.push({
           kind: 'warn',
-          display: s.replace(/^(?:warn|warning):\s*/i, '') || '!',
+          display: s.replace(/^(?:warn|warning|partial):\s*/i, '') || '!',
           intensityPct: 0,
           ratio: 0,
         })
-      } else if (/^(?:no|err|fail):/i.test(s) || s === '✕' || s === '✗') {
+      } else if (/^(?:no|err|error|fail|false):/i.test(s) || s === '✕' || s === '✗' || s === '×') {
         rowOut.push({
           kind: 'no',
-          display: s.replace(/^(?:no|err|fail):\s*/i, '') || '✕',
+          display: s.replace(/^(?:no|err|error|fail|false):\s*/i, '') || '✕',
           intensityPct: 0,
           ratio: 0,
         })
@@ -766,7 +790,7 @@ export interface ProTableColumnDescriptor {
 }
 
 const PURE_SIGNED_NUMBER_RE = /^[+-]?\d+(?:\.\d+)?$/
-const CSV_FORMULA_PREFIX_RE = /^[\s\r\n]*[=+\-@\t\r]/
+const CSV_FORMULA_PREFIX_RE = /^[\s\u0000-\u001f]*[=+\-@|\t\r]/
 
 function formatScalarOrJsonCell(raw: unknown): string {
   if (raw === undefined || raw === null) return ''
@@ -791,7 +815,9 @@ export function formatTableToCsv(
   rows: readonly Record<string, unknown>[],
 ): string {
   const header = columns.map((c) => escapeCsvCell(c.label)).join(',')
-  const body = rows.map((row) => columns.map((c) => escapeCsvCell(row[c.key])).join(','))
+  const body = rows.map((row) =>
+    columns.map((c) => escapeCsvCell(getOwnProp(row, c.key))).join(','),
+  )
   return `\uFEFF${[header, ...body].join('\r\n')}`
 }
 
@@ -801,10 +827,12 @@ export function formatTableToMarkdown(
   numericKeys?: ReadonlySet<string>,
 ): string {
   const escMd = (v: unknown) =>
-    formatScalarOrJsonCell(v).replace(/\|/g, '\\|').replace(/\r?\n/g, ' ')
+    formatScalarOrJsonCell(v).replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\r?\n/g, ' ')
   const head = `| ${columns.map((c) => escMd(c.label)).join(' | ')} |`
   const sep = `| ${columns.map((c) => (numericKeys?.has(c.key) ? '---:' : ':---')).join(' | ')} |`
-  const body = rows.map((row) => `| ${columns.map((c) => escMd(row[c.key])).join(' | ')} |`)
+  const body = rows.map(
+    (row) => `| ${columns.map((c) => escMd(getOwnProp(row, c.key))).join(' | ')} |`,
+  )
   return [head, sep, ...body].join('\n')
 }
 
@@ -818,6 +846,24 @@ export function parseFormattedNumericCell(raw: unknown): number | null {
   const cleaned = t.replace(/[¥$€£,\s%]/g, '')
   const n = Number(cleaned)
   return Number.isFinite(n) ? n : null
+}
+
+export function compareTableAlphanumericCells(a: unknown, b: unknown): number | null {
+  if (typeof a === 'boolean' && typeof b === 'boolean') {
+    return a === b ? 0 : a ? 1 : -1
+  }
+  if (
+    (typeof a !== 'string' && typeof a !== 'number') ||
+    (typeof b !== 'string' && typeof b !== 'number')
+  ) {
+    const toStr = (v: unknown): string => {
+      if (typeof v === 'boolean') return v ? '1' : '0'
+      if (typeof v === 'object' && v !== null) return safeStringifyJson(v, 0)
+      return String(v ?? '')
+    }
+    return toStr(a).localeCompare(toStr(b), undefined, { numeric: true, sensitivity: 'base' })
+  }
+  return null
 }
 
 export function compareFormattedNumericCells(a: unknown, b: unknown): number {
@@ -844,12 +890,8 @@ export function detectNumericColumnKeys(
     let nonEmpty = 0
     let numericHits = 0
     for (const r of rows) {
-      const v = r[col.key]
-      if (v === undefined || v === null) continue
-      if (typeof v === 'string') {
-        const t = v.trim()
-        if (t === '' || t === '—' || t === '-') continue
-      }
+      const v = getOwnProp(r, col.key)
+      if (isEmptyTableCell(v)) continue
       nonEmpty += 1
       if (parseFormattedNumericCell(v) !== null) {
         numericHits += 1
@@ -871,7 +913,7 @@ export function computeTableNumericSummary(
   numericKeys: ReadonlySet<string>,
   formatAvg: (pctStr: string) => string = (pctStr) => `Avg ${pctStr}`,
 ): Readonly<Record<string, string>> {
-  const summary: Record<string, string> = {}
+  const summary: Record<string, string> = Object.create(null)
   for (const col of columns) {
     if (!numericKeys.has(col.key)) continue
     let sum = 0
@@ -879,21 +921,22 @@ export function computeTableNumericSummary(
     let nonNumericCount = 0
     let allPercent = true
     let prefix = ''
+    let mixedCurrency = false
     for (const r of rows) {
-      const v = r[col.key]
-      if (v === undefined || v === null) continue
+      const v = getOwnProp(r, col.key)
+      if (isEmptyTableCell(v)) continue
       if (typeof v === 'string') {
         const t = v.trim()
-        if (t === '' || t === '—' || t === '-') continue
         const n = parseFormattedNumericCell(t)
         if (n === null) {
           nonNumericCount += 1
           continue
         }
         if (!t.endsWith('%')) allPercent = false
-        if (!prefix) {
-          const curMatch = /[¥$€£]/.exec(t)
-          if (curMatch) prefix = curMatch[0]!
+        const curMatch = /[¥$€£]/.exec(t)
+        if (curMatch) {
+          if (!prefix) prefix = curMatch[0]!
+          else if (curMatch[0] !== prefix) mixedCurrency = true
         }
         sum += n
         count += 1
@@ -909,8 +952,15 @@ export function computeTableNumericSummary(
       if (allPercent) {
         const avg = sum / count
         const absAvg = Math.abs(avg)
-        const pctDigits = absAvg > 0 && absAvg < 0.1 ? 2 : 1
-        summary[col.key] = formatAvg(`${avg.toFixed(pctDigits)}%`)
+        const pctStr =
+          absAvg > 99.9 && absAvg < 100
+            ? String(Number(avg.toFixed(4)))
+            : absAvg > 0 && absAvg < 0.01
+              ? String(Number(avg.toFixed(3)))
+              : absAvg > 0 && absAvg < 0.1
+                ? avg.toFixed(2)
+                : avg.toFixed(1)
+        summary[col.key] = formatAvg(`${pctStr}%`)
       } else if (col.format === 'bar' && col.max === 100) {
         const avg = sum / count
         const formatted = Number.isInteger(avg) ? String(avg) : avg.toFixed(1)
@@ -921,7 +971,7 @@ export function computeTableNumericSummary(
         const formatted = Number.isInteger(absVal)
           ? absVal.toLocaleString('en-US')
           : absVal.toLocaleString('en-US', { maximumFractionDigits: 2 })
-        summary[col.key] = `${sign}${prefix}${formatted}`
+        summary[col.key] = `${sign}${mixedCurrency ? '' : prefix}${formatted}`
       }
     }
   }
@@ -1044,7 +1094,7 @@ export function filterTableRowsByField(
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i]!
       const hit = field
-        ? cellText(row[field]) === q
+        ? cellText(getOwnProp(row, field)) === q
         : Object.values(row).some((val) => cellText(val) === q)
       if (hit) {
         matchedIndices.add(i)
@@ -1067,7 +1117,7 @@ export function filterTableRowsByField(
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i]!
       const hit = field
-        ? fuzzyMatch(cellText(row[field]))
+        ? fuzzyMatch(cellText(getOwnProp(row, field)))
         : Object.values(row).some((val) => fuzzyMatch(cellText(val)))
       if (hit) matchedIndices.add(i)
     }
@@ -1081,27 +1131,35 @@ function flattenTreeForCsv(
   prefix: string,
   out: Record<string, unknown>[],
   depth = 0,
+  fields?: { readonly xField?: string | undefined; readonly yField?: string | undefined },
 ): void {
   if (depth > 16 || out.length >= 1000) return
-  const name = String(node.name ?? node.label ?? '').trim()
+  const rawName =
+    (fields?.xField ? getOwnProp(node, fields.xField) : undefined) ?? node.name ?? node.label ?? ''
+  const name = String(rawName).trim()
   const path = prefix && name ? `${prefix} / ${name}` : name || prefix
   const children = Array.isArray(node.children) ? node.children : []
   if (children.length === 0) {
+    const rawVal =
+      (fields?.yField ? getOwnProp(node, fields.yField) : undefined) ?? node.value ?? ''
     out.push({
       path,
       name: name || path,
-      value: node.value ?? '',
+      value: rawVal,
     })
     return
   }
   for (const child of children) {
     if (typeof child === 'object' && child !== null && !Array.isArray(child)) {
-      flattenTreeForCsv(child as Record<string, unknown>, path, out, depth + 1)
+      flattenTreeForCsv(child as Record<string, unknown>, path, out, depth + 1, fields)
     }
   }
 }
 
-export function formatChartDataToCsv(data: unknown): string | null {
+export function formatChartDataToCsv(
+  data: unknown,
+  fields?: { readonly xField?: string | undefined; readonly yField?: string | undefined },
+): string | null {
   let rows: Record<string, unknown>[] = []
   if (Array.isArray(data)) {
     const objects = data.filter(
@@ -1110,7 +1168,7 @@ export function formatChartDataToCsv(data: unknown): string | null {
     )
     if (objects.some((item) => Array.isArray(item.children) && item.children.length > 0)) {
       for (const node of objects) {
-        flattenTreeForCsv(node, '', rows)
+        flattenTreeForCsv(node, '', rows, 0, fields)
       }
     } else {
       rows = objects
@@ -1138,7 +1196,7 @@ export function formatChartDataToCsv(data: unknown): string | null {
           typeof item === 'object' && item !== null && !Array.isArray(item),
       )
     } else if (Array.isArray(rec.children) && rec.children.length > 0) {
-      flattenTreeForCsv(rec, '', rows)
+      flattenTreeForCsv(rec, '', rows, 0, fields)
     } else if (Object.keys(rec).length > 0) {
       rows = [rec]
     }

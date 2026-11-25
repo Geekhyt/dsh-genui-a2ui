@@ -101,6 +101,9 @@ export function subscribeRuntimeChunk(enabled: boolean, listener: () => void): (
   }
   return () => {
     runtimeListeners.delete(listener)
+    if (runtimeListeners.size === 0 && runtimeSnapshot.error !== null && runtimePromise === null) {
+      runtimeSnapshot = PENDING_RUNTIME_SNAPSHOT
+    }
   }
 }
 
@@ -174,6 +177,9 @@ export function subscribeEchartsChunk(listener: () => void): () => void {
   }
   return () => {
     echartsListeners.delete(listener)
+    if (echartsListeners.size === 0 && echartsSnapshot.error !== null && echartsPromise === null) {
+      echartsSnapshot = PENDING_ECHARTS_SNAPSHOT
+    }
   }
 }
 

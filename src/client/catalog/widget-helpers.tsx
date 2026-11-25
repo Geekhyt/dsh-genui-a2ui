@@ -9,13 +9,18 @@ import {
   createContext,
   type FC,
   Fragment,
+  type MutableRefObject,
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
   useCallback,
   useContext,
+  useRef,
   useState,
 } from 'react'
+import { createPortal } from 'react-dom'
+import { usePortalPopover } from '../dom-hooks.ts'
 import { isSafeStaticSvgImage } from '../mermaid-safe.ts'
+import css from './Catalog.module.css'
 
 export type ChildRef =
   | string
@@ -100,17 +105,39 @@ export function isWritableProp(context: unknown, propName: string, setter: unkno
   if (typeof rawVal !== 'object' || rawVal === null || Array.isArray(rawVal)) return false
   const rec = rawVal as Record<string, unknown>
   if ('componentId' in rec) return false
-  const atLeastV10 = (context as { dataContext?: { atLeastV10?: unknown } }).dataContext?.atLeastV10
+  const dataContext = (context as { dataContext?: { atLeastV10?: unknown; path?: unknown } })
+    .dataContext
+  const atLeastV10 = dataContext?.atLeastV10
+  const basePath = typeof dataContext?.path === 'string' ? dataContext.path : ''
+  const isScoped = basePath !== '' && basePath !== '/'
+  const isValidPath = (rawPath: unknown): boolean =>
+    typeof rawPath === 'string' && (rawPath.trim() !== '' || (rawPath === '' && isScoped))
   if (atLeastV10 === true) {
-    return typeof rec['@path'] === 'string' && rec['@path'].trim() !== ''
+    return isValidPath(rec['@path'])
   }
   if (atLeastV10 === false) {
-    return typeof rec.path === 'string' && rec.path.trim() !== ''
+    return isValidPath(rec.path)
   }
-  return (
-    (typeof rec['@path'] === 'string' && rec['@path'].trim() !== '') ||
-    (typeof rec.path === 'string' && rec.path.trim() !== '')
-  )
+  return isValidPath(rec['@path']) || isValidPath(rec.path)
+}
+
+export function normalizeStringArrayValue(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return []
+  const out: string[] = []
+  for (const item of raw) {
+    if (item !== null && item !== undefined) out.push(String(item))
+  }
+  return out
+}
+
+export function parseBooleanValue(raw: unknown): boolean {
+  if (typeof raw === 'boolean') return raw
+  if (typeof raw === 'string') {
+    const t = raw.trim().toLowerCase()
+    if (t === '' || t === 'false' || t === '0' || t === 'no' || t === 'off') return false
+    return true
+  }
+  return Boolean(raw)
 }
 
 export function areExternalValuesEqual(a: unknown, b: unknown): boolean {
@@ -325,22 +352,28 @@ export function renderChildList(
   })
 }
 
-export const JUSTIFY_MAP: Record<string, CSSProperties['justifyContent']> = {
-  start: 'flex-start',
-  end: 'flex-end',
-  center: 'center',
-  spaceBetween: 'space-between',
-  spaceAround: 'space-around',
-  spaceEvenly: 'space-evenly',
-  stretch: 'stretch',
-}
+export const JUSTIFY_MAP: Record<string, CSSProperties['justifyContent']> = Object.assign(
+  Object.create(null),
+  {
+    start: 'flex-start',
+    end: 'flex-end',
+    center: 'center',
+    spaceBetween: 'space-between',
+    spaceAround: 'space-around',
+    spaceEvenly: 'space-evenly',
+    stretch: 'stretch',
+  },
+)
 
-export const ALIGN_MAP: Record<string, CSSProperties['alignItems']> = {
-  start: 'flex-start',
-  end: 'flex-end',
-  center: 'center',
-  stretch: 'stretch',
-}
+export const ALIGN_MAP: Record<string, CSSProperties['alignItems']> = Object.assign(
+  Object.create(null),
+  {
+    start: 'flex-start',
+    end: 'flex-end',
+    center: 'center',
+    stretch: 'stretch',
+  },
+)
 
 function decodeSvgDataUri(uri: string): string | null {
   const match =
@@ -399,34 +432,177 @@ export function isSafeMediaUrl(raw: unknown): raw is string {
   return isSafeImageUrl(raw)
 }
 
-export function handleOptionListArrowKey(
+function moveRovingFocus(
   e: ReactKeyboardEvent<HTMLElement>,
   container: HTMLElement | null,
-  roleSelector = '[role="option"]',
+  selector: string,
+  allowHorizontal: boolean,
+  onSelectIndex?: (index: number) => void,
 ): void {
   if (!container) return
+  const k = e.key
   if (
-    (e.key === 'Home' || e.key === 'End') &&
+    !allowHorizontal &&
+    (k === 'Home' || k === 'End') &&
     typeof HTMLInputElement !== 'undefined' &&
     e.target instanceof HTMLInputElement
   ) {
     return
   }
-  if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp' && e.key !== 'Home' && e.key !== 'End') return
-  const items = Array.from(container.querySelectorAll<HTMLButtonElement>(roleSelector))
+  const isNext = k === 'ArrowDown' || (allowHorizontal && k === 'ArrowRight')
+  const isPrev = k === 'ArrowUp' || (allowHorizontal && k === 'ArrowLeft')
+  if (!isNext && !isPrev && k !== 'Home' && k !== 'End') return
+  const items = Array.from(container.querySelectorAll<HTMLButtonElement>(selector)).filter(
+    (el) => !allowHorizontal || (!el.disabled && el.getAttribute('aria-disabled') !== 'true'),
+  )
   if (items.length === 0) return
-  const active = typeof document !== 'undefined' ? document.activeElement : null
-  const idx = items.indexOf(active as HTMLButtonElement)
+  const idx = items.indexOf(
+    (typeof document !== 'undefined' ? document.activeElement : null) as HTMLButtonElement,
+  )
   e.preventDefault()
-  if (e.key === 'Home') {
-    items[0]?.focus()
-  } else if (e.key === 'End') {
-    items[items.length - 1]?.focus()
-  } else if (e.key === 'ArrowDown') {
-    items[idx >= 0 ? (idx + 1) % items.length : 0]?.focus()
-  } else if (e.key === 'ArrowUp') {
-    items[idx > 0 ? idx - 1 : items.length - 1]?.focus()
+  const nextIdx =
+    k === 'Home'
+      ? 0
+      : k === 'End'
+        ? items.length - 1
+        : isNext
+          ? idx >= 0
+            ? (idx + 1) % items.length
+            : 0
+          : idx > 0
+            ? idx - 1
+            : items.length - 1
+  items[nextIdx]?.focus()
+  onSelectIndex?.(nextIdx)
+}
+
+export function handleOptionListArrowKey(
+  e: ReactKeyboardEvent<HTMLElement>,
+  container: HTMLElement | null,
+  roleSelector = '[role="option"]',
+): void {
+  moveRovingFocus(e, container, roleSelector, false)
+}
+
+export function handleHorizontalArrowKey(
+  e: ReactKeyboardEvent<HTMLElement>,
+  container: HTMLElement | null,
+  itemSelector: string,
+  onSelectIndex?: (index: number) => void,
+): void {
+  moveRovingFocus(e, container, itemSelector, true, onSelectIndex)
+}
+
+export function usePickerPopover<T extends HTMLElement>(opts: {
+  readonly readOnly: boolean
+  readonly minWidth: number
+  readonly estHeight: number
+  readonly portalEnabled?: boolean
+  readonly onBeforeClose?: () => void
+  readonly onHostOpen?: (trigger: T) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [popoverBox, setPopoverBox] = useState<ClampedPopoverBox | null>(null)
+  const triggerRef = useRef<T | null>(null)
+  const popoverRef = useRef<HTMLDivElement | null>(null)
+  if (opts.readOnly && open) setOpen(false)
+  const effectiveOpen = open && !opts.readOnly
+  const portalActive = opts.portalEnabled !== false
+
+  const closePopover = useCallback(() => {
+    setOpen(false)
+    opts.onBeforeClose?.()
+  }, [opts.onBeforeClose])
+
+  const syncPopoverBox = useCallback(() => {
+    if (!triggerRef.current) return
+    setPopoverBox(
+      computeClampedPopoverBox(triggerRef.current.getBoundingClientRect(), {
+        minWidth: opts.minWidth,
+        estHeight: opts.estHeight,
+      }),
+    )
+  }, [opts.minWidth, opts.estHeight])
+
+  usePortalPopover({
+    open: effectiveOpen && portalActive,
+    triggerRef,
+    popoverRef,
+    onClose: closePopover,
+    onReposition: syncPopoverBox,
+  })
+
+  const toggleOpen = () => {
+    if (opts.readOnly) return
+    if (effectiveOpen) {
+      closePopover()
+      return
+    }
+    if (portalActive) syncPopoverBox()
+    else if (triggerRef.current) opts.onHostOpen?.(triggerRef.current)
+    setOpen(true)
   }
+
+  const resolvedBox =
+    popoverBox ??
+    (effectiveOpen && portalActive && triggerRef.current
+      ? computeClampedPopoverBox(triggerRef.current.getBoundingClientRect(), {
+          minWidth: opts.minWidth,
+          estHeight: opts.estHeight,
+        })
+      : null)
+
+  return {
+    open,
+    setOpen,
+    effectiveOpen,
+    popoverBox: resolvedBox,
+    triggerRef,
+    popoverRef,
+    closePopover,
+    toggleOpen,
+  }
+}
+
+export function PortalPopoverShell(props: {
+  readonly open: boolean
+  readonly box: ClampedPopoverBox | null
+  readonly dark: boolean
+  readonly popoverRef: MutableRefObject<HTMLDivElement | null>
+  readonly onClose: () => void
+  readonly roleSelector?: string | undefined
+  readonly children: ReactNode
+}): ReactNode {
+  if (!props.open || !props.box || typeof document === 'undefined') return null
+  const { box } = props
+  return createPortal(
+    <div
+      role="presentation"
+      data-a2ui-portal-popover=""
+      className={`${css.selectBackdrop} ${props.dark ? 'a2ui-dark' : 'a2ui-light'}`}
+      onClick={(e) => {
+        e.stopPropagation()
+        props.onClose()
+      }}
+    >
+      <div
+        ref={props.popoverRef}
+        data-a2ui-select-popover=""
+        className={css.selectPopover}
+        style={{
+          ...(box.placeAbove ? { bottom: box.bottom } : { top: box.top }),
+          left: box.left,
+          width: box.width,
+          maxHeight: box.maxHeight,
+        }}
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => handleOptionListArrowKey(e, props.popoverRef.current, props.roleSelector)}
+      >
+        {props.children}
+      </div>
+    </div>,
+    document.body,
+  )
 }
 
 export { NativeDateField } from './NativeDateField.tsx'

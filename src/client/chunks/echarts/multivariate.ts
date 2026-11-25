@@ -5,6 +5,8 @@ import {
   FILLED_SHAPE_LABEL,
   normalizeIsoDate,
   sanitizeChartLabel,
+  scanSampleKeys,
+  toFiniteNum,
   toNumber,
 } from './shared.ts'
 
@@ -32,10 +34,7 @@ export function buildMultivariateChartOption(
   } = ctx
 
   if (props.kind === 'heatmap') {
-    const sample = rows[0] ?? {}
-    const sampleKeys = Object.keys(sample)
-    const stringKeys = sampleKeys.filter((k) => typeof sample[k] === 'string')
-    const numericKeys = sampleKeys.filter((k) => typeof sample[k] === 'number')
+    const { keys: sampleKeys, stringKeys, numericKeys } = scanSampleKeys(rows)
 
     const hxKey = props.xField ?? stringKeys[0] ?? sampleKeys[0] ?? 'x'
     const explicitYStr =
@@ -48,7 +47,7 @@ export function buildMultivariateChartOption(
         : explicitYStr &&
             explicitYStr !== hxKey &&
             (props.sizeField !== undefined ||
-              typeof sample[explicitYStr] === 'string' ||
+              stringKeys.includes(explicitYStr) ||
               hasOtherNumericBesidesExplicitY)
           ? explicitYStr
           : (stringKeys.find((k) => k !== hxKey) ?? sampleKeys.find((k) => k !== hxKey) ?? 'y')
@@ -70,20 +69,15 @@ export function buildMultivariateChartOption(
       const yLabel = sanitizeChartLabel(r[hyKey])
       const xIdx = xCats.indexOf(xLabel)
       const yIdx = yCats.indexOf(yLabel)
-      const rawV = r[valKey]
-      const parsedV =
-        rawV === undefined || rawV === null || rawV === ''
-          ? Number.NaN
-          : typeof rawV === 'number'
-            ? rawV
-            : Number(String(rawV).replace(/,/g, '').trim())
-      const val: number | '-' = Number.isFinite(parsedV) ? parsedV : '-'
+      const parsedV = toFiniteNum(r[valKey])
+      const val: number | '-' = parsedV ?? '-'
       cellMap.set(`${xIdx}\u0000${yIdx}`, { xIdx, yIdx, xLabel, val, rowIndex: rIdx })
     }
-    const dedupEntries = [...cellMap.values()]
-    const finiteVals = dedupEntries
-      .map((c) => c.val)
-      .filter((v): v is number => typeof v === 'number')
+    const dedupEntries = [...cellMap.values()].filter(
+      (c): c is { xIdx: number; yIdx: number; xLabel: string; val: number; rowIndex: number } =>
+        typeof c.val === 'number',
+    )
+    const finiteVals = dedupEntries.map((c) => c.val)
     const minVal = finiteVals.length > 0 ? Math.min(...finiteVals) : 0
     const maxVal = finiteVals.length > 0 ? Math.max(...finiteVals) : 100
     const valSpan = Math.max(1e-9, maxVal - minVal)
@@ -92,13 +86,13 @@ export function buildMultivariateChartOption(
       : dedupEntries.length <= 48
 
     const cells = dedupEntries.map((entry) => {
-      const norm = typeof entry.val === 'number' ? (entry.val - minVal) / valSpan : 0
+      const norm = (entry.val - minVal) / valSpan
       return {
         name: entry.xLabel,
         rowIndex: entry.rowIndex,
         value: [entry.xIdx, entry.yIdx, entry.val],
         label:
-          typeof entry.val === 'number' && norm >= 0.45
+          norm >= 0.45
             ? { ...FILLED_SHAPE_LABEL, fontSize: isCompact ? 9.5 : 11 }
             : { color: theme.textPrimary, fontSize: isCompact ? 9.5 : 11 },
       }
@@ -192,16 +186,7 @@ export function buildMultivariateChartOption(
 
   if (props.kind === 'parallel') {
     const sampleSlice = rows.slice(0, 16)
-    const unionKeys: string[] = []
-    const seenKeys = new Set<string>()
-    for (const r of sampleSlice) {
-      for (const k of Object.keys(r)) {
-        if (!seenKeys.has(k)) {
-          seenKeys.add(k)
-          unionKeys.push(k)
-        }
-      }
-    }
+    const { keys: unionKeys } = scanSampleKeys(rows)
     const isNumericDim = (k: string) =>
       sampleSlice.some(
         (r) =>
@@ -234,7 +219,14 @@ export function buildMultivariateChartOption(
             sanitizeChartLabel(r[labelField] ?? r.name ?? r.model ?? `#${idx + 1}`),
           ),
           axisLine: borderLine,
-          axisLabel: { color: theme.textPrimary, fontSize: isCompact ? 10 : 11, hideOverlap: true },
+          axisLabel: {
+            color: theme.textPrimary,
+            fontSize: isCompact ? 10 : 11,
+            hideOverlap: true,
+            width: Math.min(isCompact ? 92 : 160, Math.floor(chartWidth(540) * 0.34)),
+            overflow: 'truncate' as const,
+            ellipsis: '…',
+          },
         },
         series: [
           {
@@ -308,6 +300,12 @@ export function buildMultivariateChartOption(
       }
     })
 
+    const readDimVal = (r: Record<string, unknown>, k: string): number | null => {
+      const raw = r[k]
+      if (raw === null || raw === undefined || raw === '') return null
+      const n = typeof raw === 'number' ? raw : Number(String(raw).replace(/,/g, '').trim())
+      return Number.isFinite(n) ? n : null
+    }
     const showPerRowLegend = rows.length > 0 && rows.length <= 10
     const parallelSeries = showPerRowLegend
       ? rows.map((r, idx) => ({
@@ -316,7 +314,7 @@ export function buildMultivariateChartOption(
           smooth: 0.18,
           lineStyle: { width: 2.4, opacity: 0.9 },
           emphasis: { lineStyle: { width: 3.6, opacity: 1 } },
-          data: [effectiveDims.map((k) => toNumber(r[k]))],
+          data: [effectiveDims.map((k) => readDimVal(r, k))],
         }))
       : [
           {
@@ -327,7 +325,7 @@ export function buildMultivariateChartOption(
             emphasis: { lineStyle: { width: 3, opacity: 1 } },
             data: rows.map((r, idx) => ({
               name: sanitizeChartLabel(r[labelField] ?? r.name ?? r.model ?? `#${idx + 1}`),
-              value: effectiveDims.map((k) => toNumber(r[k])),
+              value: effectiveDims.map((k) => readDimVal(r, k)),
             })),
           },
         ]
@@ -398,7 +396,7 @@ export function buildMultivariateChartOption(
       const val = toNumber(r[valField] ?? r.value ?? r.count ?? r[primaryY])
       dateSums.set(iso, (dateSums.get(iso) ?? 0) + val)
     }
-    const parsedCells: Array<[string, number]> = [...dateSums.entries()].sort((a, b) =>
+    let parsedCells: Array<[string, number]> = [...dateSums.entries()].sort((a, b) =>
       a[0].localeCompare(b[0]),
     )
 
@@ -408,8 +406,12 @@ export function buildMultivariateChartOption(
     if (parsedCells.length > 0) {
       const firstIso = parsedCells[0]![0]
       const lastIso = parsedCells[parsedCells.length - 1]![0]
-      rangeStart = `${firstIso.slice(0, 7)}-01`
       const endYear = Number(lastIso.slice(0, 4))
+      const startYear = Number(firstIso.slice(0, 4))
+      rangeStart = endYear - startYear > 3 ? `${endYear - 2}-01-01` : `${firstIso.slice(0, 7)}-01`
+      if (endYear - startYear > 3) {
+        parsedCells = parsedCells.filter(([iso]) => iso >= rangeStart)
+      }
       const endMonth = Number(lastIso.slice(5, 7))
       const lastDay = new Date(Date.UTC(endYear, endMonth, 0)).getUTCDate()
       rangeEnd = `${lastIso.slice(0, 7)}-${String(lastDay).padStart(2, '0')}`

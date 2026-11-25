@@ -97,7 +97,7 @@
 
 .title {
   font-weight: 500;
-  color: var(--dsw-alias-label-secondary, #646a73);
+  color: var(--dsw-alias-label-secondary, light-dark(#646a73, #9ca3af));
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -110,7 +110,7 @@
   font-size: 11px;
   padding: 1px 6px;
   border-radius: var(--dsw-radius-sm, 4px);
-  background: var(--dsw-alias-interactive-bg-hover, rgba(0, 0, 0, 0.05));
+  background: var(--dsw-alias-interactive-bg-hover, rgba(128, 128, 128, 0.08));
   color: var(--dsw-alias-label-tertiary, light-dark(#646a73, #9ca3af));
 }
 
@@ -258,8 +258,8 @@
   margin: 8px 0 4px;
   padding: 10px 12px;
   border-radius: var(--dsw-radius-md, 8px);
-  background: var(--dsw-alias-bg-layer-1, rgba(0, 0, 0, 0.03));
-  color: var(--dsw-alias-label-secondary, #646a73);
+  background: var(--dsw-alias-bg-layer-1, rgba(128, 128, 128, 0.08));
+  color: var(--dsw-alias-label-secondary, light-dark(#646a73, #9ca3af));
   font-family: var(--dsw-font-family-mono, ui-monospace, monospace);
   font-size: 12px;
   white-space: pre-wrap;

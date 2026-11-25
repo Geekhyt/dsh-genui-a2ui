@@ -1,11 +1,13 @@
 import * as echarts from 'echarts/core'
 import { SVGRenderer } from 'echarts/renderers'
 import { describe, expect, it } from 'vitest'
+import * as mockLlm from '../scripts/mock-llm.mjs'
 import {
   buildChartOption,
   getA2uiEchartsThemeName,
   registerA2uiEchartsThemes,
 } from '../src/client/chunks/echarts-chunk.ts'
+import { SurfaceSessions } from '../src/host/generator.ts'
 import { CHART_KINDS, type ChartKind } from '../src/shared/catalog-schema.ts'
 
 echarts.use([SVGRenderer])
@@ -435,4 +437,330 @@ describe('ECharts White-Box SVG Geometry & Dark-Theme Gate (26 kinds × 3 widths
       }
     }
   })
+
+  it('audits every compiled Chart across all exported SHOWCASE_*_UI suites at 276px and 640px in both themes', () => {
+    const resolvePointer = (model: Record<string, unknown>, path: string): unknown => {
+      const segs = path.replace(/^\/+/, '').split('/').filter(Boolean)
+      let cur: unknown = model
+      for (const s of segs) {
+        if (cur && typeof cur === 'object' && s in (cur as Record<string, unknown>)) {
+          cur = (cur as Record<string, unknown>)[s]
+        } else {
+          return undefined
+        }
+      }
+      return cur
+    }
+    const resolveDynamic = (val: unknown, model: Record<string, unknown>): unknown => {
+      if (val && typeof val === 'object' && !Array.isArray(val)) {
+        const rec = val as Record<string, unknown>
+        const ptr =
+          typeof rec['@path'] === 'string'
+            ? rec['@path']
+            : typeof rec.path === 'string'
+              ? rec.path
+              : null
+        if (ptr !== null && Object.keys(rec).length === 1) {
+          return resolvePointer(model, ptr)
+        }
+      }
+      return val
+    }
+
+    const showcaseEntries = Object.entries(mockLlm).filter(
+      ([k, v]) => /^SHOWCASE_[A-Z0-9_]+_UI$/.test(k) && typeof v === 'string' && v.trim() !== '',
+    ) as Array<[string, string]>
+    expect(showcaseEntries.length).toBeGreaterThanOrEqual(40)
+
+    let totalCharts = 0
+    const issues: string[] = []
+    for (const [key, dsl] of showcaseEntries) {
+      const sessions = new SurfaceSessions()
+      const msgs = sessions.compile(`whitebox-${key}`, dsl)
+      const models = new Map<string, Record<string, unknown>>()
+      const charts: Array<{ surfaceId: string; comp: Record<string, unknown> }> = []
+
+      for (const msg of msgs) {
+        if ('createSurface' in msg && msg.createSurface) {
+          const sid = msg.createSurface.surfaceId
+          if (msg.createSurface.dataModel && typeof msg.createSurface.dataModel === 'object') {
+            models.set(sid, { ...(msg.createSurface.dataModel as Record<string, unknown>) })
+          }
+          if (Array.isArray(msg.createSurface.components)) {
+            for (const c of msg.createSurface.components) {
+              if (c.component === 'Chart') {
+                charts.push({ surfaceId: sid, comp: c as Record<string, unknown> })
+              }
+            }
+          }
+        }
+        if ('updateDataModel' in msg && msg.updateDataModel) {
+          const sid = msg.updateDataModel.surfaceId
+          const existing = models.get(sid) ?? {}
+          const p = msg.updateDataModel.path
+          if (!p || p === '/') {
+            models.set(sid, {
+              ...existing,
+              ...(msg.updateDataModel.value as Record<string, unknown>),
+            })
+          } else {
+            const segs = p.replace(/^\/+/, '').split('/')
+            let cur: Record<string, unknown> = existing
+            for (let i = 0; i < segs.length - 1; i += 1) {
+              const s = segs[i]!
+              if (!cur[s] || typeof cur[s] !== 'object') cur[s] = {}
+              cur = cur[s] as Record<string, unknown>
+            }
+            cur[segs[segs.length - 1]!] = msg.updateDataModel.value
+            models.set(sid, existing)
+          }
+        }
+        if ('updateComponents' in msg && msg.updateComponents) {
+          for (const c of msg.updateComponents.components) {
+            if (c.component === 'Chart') {
+              charts.push({
+                surfaceId: msg.updateComponents.surfaceId,
+                comp: c as Record<string, unknown>,
+              })
+            }
+          }
+        }
+      }
+
+      for (const { surfaceId, comp } of charts) {
+        totalCharts += 1
+        const model = models.get(surfaceId) ?? {}
+        const resolved: Record<string, unknown> = {}
+        for (const [propKey, propVal] of Object.entries(comp)) {
+          if (propKey === 'id' || propKey === 'component') continue
+          resolved[propKey] = resolveDynamic(propVal, model)
+        }
+        const h = typeof resolved.height === 'number' ? resolved.height : 260
+        for (const dark of [true, false]) {
+          for (const width of [276, 640]) {
+            const opt = buildChartOption(resolved as never, dark, width)
+            const svg = renderSvgWithTheme(opt, dark, width, h)
+            if (/\b(?:NaN|Infinity|undefined)\b/.test(svg)) {
+              issues.push(
+                `${key}#${String(comp.id)} dark=${dark} w=${width}: NaN/Infinity/undefined`,
+              )
+            }
+            if (!/<(?:path|rect|circle|polygon|polyline)\b/i.test(svg)) {
+              issues.push(`${key}#${String(comp.id)} dark=${dark} w=${width}: empty geometry`)
+            }
+            if (dark) {
+              const leaks = scanDarkColorLeaks(svg)
+              if (leaks.length > 0) {
+                issues.push(`${key}#${String(comp.id)} dark w=${width}: leaks ${leaks.join(',')}`)
+              }
+            }
+            const boxes = extractTextBoxes(svg)
+            const cols = findSevereTextCollisions(boxes)
+            if (cols.length > 0) {
+              issues.push(`${key}#${String(comp.id)} dark=${dark} w=${width}: ${cols.join('; ')}`)
+            }
+            const clipped = boxes.filter(
+              (b) => b.x0 < -12 || b.x1 > width + 12 || b.y0 < -12 || b.y1 > h + 12,
+            )
+            if (clipped.length > 0) {
+              issues.push(
+                `${key}#${String(comp.id)} dark=${dark} w=${width}: clipped ${clipped.map((b) => b.text).join(',')}`,
+              )
+            }
+          }
+        }
+      }
+    }
+
+    expect(totalCharts).toBeGreaterThanOrEqual(80)
+    expect(issues).toEqual([])
+  }, 30_000)
+
+  it('survives 26 kinds × 9 adversarial data-distribution payloads with zero NaN, zero crashes, and intact semantics', () => {
+    const adversarialPayloads: ReadonlyArray<{
+      readonly name: string
+      readonly build: (kind: ChartKind) => Record<string, unknown>
+    }> = [
+      { name: 'empty-array', build: (kind) => ({ kind, data: [], xField: 'x', yField: 'y' }) },
+      { name: 'empty-graph', build: (kind) => ({ kind, data: { nodes: [], links: [] } }) },
+      {
+        name: 'null-nan-rows',
+        build: (kind) => ({
+          kind,
+          xField: 'x',
+          yField: 'y',
+          data: [
+            { x: 'A', y: null },
+            { x: 'B', y: Number.NaN },
+            { x: 'C', y: Number.POSITIVE_INFINITY },
+            { x: 'D', y: 0 },
+          ],
+        }),
+      },
+      {
+        name: 'all-zeros',
+        build: (kind) => ({
+          kind,
+          xField: 'x',
+          yField: 'y',
+          data: [
+            { x: 'A', y: 0 },
+            { x: 'B', y: 0 },
+            { x: 'C', y: 0 },
+          ],
+        }),
+      },
+      {
+        name: 'negatives-log-scale',
+        build: (kind) => ({
+          kind,
+          xField: 'x',
+          yField: 'y',
+          yScale: 'log',
+          data: [
+            { x: 'A', y: -50 },
+            { x: 'B', y: 0 },
+            { x: 'C', y: 120 },
+          ],
+        }),
+      },
+      {
+        name: 'percent-stack-with-zeros',
+        build: (kind) => ({
+          kind,
+          xField: 'x',
+          yField: ['a', 'b'],
+          stacked: true,
+          stackMode: 'percent',
+          data: [
+            { x: 'Q1', a: 0, b: 0 },
+            { x: 'Q2', a: -10, b: 30 },
+            { x: 'Q3', a: 50, b: 50 },
+          ],
+        }),
+      },
+      {
+        name: 'single-datum',
+        build: (kind) => ({
+          kind,
+          xField: 'x',
+          yField: 'y',
+          data: [{ x: 'OnlyOneVeryLongCategoryNameHere', y: 42 }],
+        }),
+      },
+      {
+        name: 'tiny-magnitude-decimals',
+        build: (kind) =>
+          kind === 'boxplot'
+            ? {
+                kind,
+                xField: 'group',
+                data: [
+                  { group: 'API-A', values: [0.001, 0.0018, 0.0025, 0.0038, 0.0045] },
+                  { group: 'API-B', values: [0.0012, 0.0023, 0.0032, 0.0046, 0.0055] },
+                ],
+              }
+            : {
+                kind,
+                xField: 'x',
+                yField: 'y',
+                data: [
+                  { x: 'T1', y: 0.0012 },
+                  { x: 'T2', y: 0.0038 },
+                  { x: 'T3', y: 0.0054 },
+                ],
+              },
+      },
+      {
+        name: 'template-braces-and-prefix',
+        build: (kind) => ({
+          kind,
+          xField: 'month',
+          yField: 'value',
+          referenceLine: 50,
+          referenceLabel: 'SLA {c} / {a}',
+          data: [
+            { month: '2026-01', value: 40 },
+            { month: '2026-02', value: 55 },
+            { month: '2026-03', value: 48 },
+            { month: '2026-04', value: 62 },
+            { month: '2026-05', value: 70 },
+            { month: '2026-06', value: 76 },
+          ],
+        }),
+      },
+    ]
+
+    const failures: string[] = []
+    for (const kind of CHART_KINDS) {
+      for (const payload of adversarialPayloads) {
+        const opt = buildChartOption(payload.build(kind) as never, true, 276)
+        const svg = renderSvgWithTheme(opt, true, 276, 240)
+        if (!svg.includes('<svg') || /\b(?:NaN|Infinity|undefined)\b/.test(svg)) {
+          failures.push(`${kind}/${payload.name}: invalid SVG or NaN leak`)
+        }
+        if (payload.name === 'template-braces-and-prefix' && (kind === 'line' || kind === 'bar')) {
+          if (!svg.includes('SLA {c} / {a}')) {
+            failures.push(`${kind}/${payload.name}: markLine literal braces expanded or missing`)
+          }
+          if (svg.includes('2026...')) {
+            failures.push(`${kind}/${payload.name}: common-prefix dates collapsed to 2026...`)
+          }
+        }
+        if (payload.name === 'tiny-magnitude-decimals' && kind === 'boxplot') {
+          if (!svg.includes('0.004') && !svg.includes('0.002') && !svg.includes('0.005')) {
+            failures.push(`boxplot/${payload.name}: small decimal ticks collapsed`)
+          }
+        }
+      }
+    }
+
+    const linksOnlyGraphSvg = renderSvgWithTheme(
+      buildChartOption(
+        {
+          kind: 'graph',
+          data: {
+            links: [
+              { source: 'Gateway', target: 'Auth' },
+              { source: 'Auth', target: 'Ledger' },
+            ],
+          },
+        } as never,
+        true,
+        276,
+      ),
+      true,
+      276,
+      240,
+    )
+    expect(linksOnlyGraphSvg).toContain('Gateway')
+    expect(linksOnlyGraphSvg).toContain('Ledger')
+
+    const sparseHeatmapSvg = renderSvgWithTheme(
+      buildChartOption(
+        {
+          kind: 'heatmap',
+          xField: 'day',
+          yField: 'hour',
+          sizeField: 'val',
+          data: [
+            { day: 'Mon', hour: '09:00', val: null },
+            { day: 'Tue', hour: '09:00', val: 12 },
+            { day: 'Mon', hour: '10:00', val: 5 },
+            { day: 'Tue', hour: '10:00', val: 8 },
+          ],
+        } as never,
+        true,
+        276,
+      ),
+      true,
+      276,
+      240,
+    )
+    expect(sparseHeatmapSvg).not.toMatch(/\b(?:NaN|Infinity|undefined)\b/)
+    expect(sparseHeatmapSvg).toContain('12')
+    expect(sparseHeatmapSvg).toContain('5')
+
+    expect(failures).toEqual([])
+  }, 20_000)
 })

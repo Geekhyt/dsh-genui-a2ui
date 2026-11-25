@@ -1,7 +1,5 @@
-import { useCallback, useContext, useDeferredValue, useId, useMemo, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
+import { useCallback, useContext, useDeferredValue, useId, useMemo, useState } from 'react'
 import { SegmentedApi, SelectApi, SwitchApi } from '../../../shared/catalog-schema.ts'
-import { usePortalPopover } from '../../dom-hooks.ts'
 import { useRuntimeMessages } from '../../i18n.ts'
 import { useDarkTheme } from '../../theme.ts'
 import {
@@ -16,14 +14,15 @@ import {
 import css from '../Catalog.module.css'
 import { normalizeSelectOptions } from '../v3-helpers.ts'
 import {
-  type ClampedPopoverBox,
-  computeClampedPopoverBox,
   computeDropdownSide,
   defineComponent,
+  handleHorizontalArrowKey,
+  PortalPopoverShell,
+  parseBooleanValue,
   SurfaceReadOnlyContext,
   SurfaceValidationContext,
+  usePickerPopover,
   useWritablePropState,
-  handleOptionListArrowKey,
   weightStyle,
 } from '../widget-helpers.tsx'
 
@@ -49,23 +48,16 @@ export function DshSelectView({
   context?: unknown
 }) {
   const fieldId = useId()
+  const listboxId = useId()
   const msg = useRuntimeMessages()
   const dark = useDarkTheme()
   const readOnly = useContext(SurfaceReadOnlyContext)
   const { submitAttempted } = useContext(SurfaceValidationContext)
   const [touched, setTouched] = useState(false)
-  const [open, setOpen] = useState(false)
   const [menuSide, setMenuSide] = useState<'top' | 'bottom'>('bottom')
   const [query, setQuery] = useState('')
   const deferredQuery = useDeferredValue(query)
-  const triggerRef = useRef<HTMLButtonElement | null>(null)
-  const popoverRef = useRef<HTMLDivElement | null>(null)
-  const [popoverBox, setPopoverBox] = useState<ClampedPopoverBox | null>(null)
   const [rawVal, commitValue] = useWritablePropState(context, 'value', props.value, props.setValue)
-
-  if (readOnly && open) {
-    setOpen(false)
-  }
 
   const options = useMemo(() => normalizeSelectOptions(props.options), [props.options])
   const selectedVal = rawVal === undefined || rawVal === null ? '' : String(rawVal)
@@ -76,7 +68,29 @@ export function DshSelectView({
   const hasDescriptions = useMemo(() => options.some((opt) => Boolean(opt.description)), [options])
   const searchable = Boolean(props.searchable)
   const useCustomPopover = searchable || hasDescriptions
-  const effectiveOpen = open && !readOnly
+  const onBeforeClose = useCallback(() => {
+    setQuery('')
+    setTouched(true)
+  }, [])
+  const {
+    setOpen,
+    effectiveOpen,
+    popoverBox: resolvedPopoverBox,
+    triggerRef,
+    popoverRef,
+    closePopover,
+    toggleOpen: handleOpenToggle,
+  } = usePickerPopover<HTMLButtonElement>({
+    readOnly,
+    minWidth: 180,
+    estHeight: Math.min(280, options.length * 40 + (searchable ? 52 : 12)),
+    portalEnabled: useCustomPopover,
+    onBeforeClose,
+    onHostOpen: (trigger) => {
+      const estHeight = Math.min(280, options.length * 34 + 16)
+      setMenuSide(computeDropdownSide(trigger.getBoundingClientRect(), estHeight))
+    },
+  })
 
   const filteredOptions = useMemo(() => {
     const q = deferredQuery.trim().toLowerCase()
@@ -99,48 +113,12 @@ export function DshSelectView({
   const showError = !readOnly && (touched || submitAttempted) && props.isValid === false
   const err = showError ? props.validationErrors?.[0] : undefined
 
-  const closePopover = useCallback(() => {
-    setOpen(false)
-    setQuery('')
-    setTouched(true)
-  }, [])
-
-  const syncPopoverBox = useCallback(() => {
-    if (!triggerRef.current) return
-    const rect = triggerRef.current.getBoundingClientRect()
-    const estHeight = Math.min(280, options.length * 40 + (searchable ? 52 : 12))
-    setPopoverBox(computeClampedPopoverBox(rect, { minWidth: 180, estHeight }))
-  }, [options.length, searchable])
-
-  usePortalPopover({
-    open: effectiveOpen && useCustomPopover,
-    triggerRef,
-    popoverRef,
-    onClose: closePopover,
-    onReposition: syncPopoverBox,
-  })
-
   const commitSelect = (val: string) => {
     if (readOnly) return
     setTouched(true)
     commitValue(val)
     setOpen(false)
     setQuery('')
-  }
-
-  const handleOpenToggle = () => {
-    if (readOnly) return
-    if (effectiveOpen) {
-      closePopover()
-      return
-    }
-    if (useCustomPopover) {
-      syncPopoverBox()
-    } else if (triggerRef.current) {
-      const estHeight = Math.min(280, options.length * 34 + 16)
-      setMenuSide(computeDropdownSide(triggerRef.current.getBoundingClientRect(), estHeight))
-    }
-    setOpen(true)
   }
 
   const triggerButton = (
@@ -151,6 +129,7 @@ export function DshSelectView({
       className={css.selectTrigger}
       disabled={readOnly}
       aria-haspopup="listbox"
+      aria-controls={effectiveOpen && useCustomPopover ? listboxId : undefined}
       aria-expanded={effectiveOpen}
       aria-invalid={showError || undefined}
       onClick={handleOpenToggle}
@@ -164,15 +143,6 @@ export function DshSelectView({
       </span>
     </button>
   )
-
-  const resolvedPopoverBox =
-    popoverBox ??
-    (effectiveOpen && useCustomPopover && triggerRef.current
-      ? computeClampedPopoverBox(triggerRef.current.getBoundingClientRect(), {
-          minWidth: 180,
-          estHeight: Math.min(280, options.length * 40 + (searchable ? 52 : 12)),
-        })
-      : null)
 
   return (
     <div className={css.field} style={weightStyle(props.weight, 160)} data-a2ui-select="">
@@ -192,83 +162,61 @@ export function DshSelectView({
       {useCustomPopover ? (
         <>
           {triggerButton}
-          {effectiveOpen && resolvedPopoverBox && typeof document !== 'undefined'
-            ? createPortal(
-                <div
-                  role="presentation"
-                  data-a2ui-portal-popover=""
-                  className={`${css.selectBackdrop} ${dark ? 'a2ui-dark' : 'a2ui-light'}`}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    closePopover()
-                  }}
-                >
-                  <div
-                    ref={popoverRef}
-                    data-a2ui-select-popover=""
-                    className={css.selectPopover}
-                    style={{
-                      ...(resolvedPopoverBox.placeAbove
-                        ? { bottom: resolvedPopoverBox.bottom }
-                        : { top: resolvedPopoverBox.top }),
-                      left: resolvedPopoverBox.left,
-                      width: resolvedPopoverBox.width,
-                      maxHeight: resolvedPopoverBox.maxHeight,
-                    }}
-                    onClick={(e) => e.stopPropagation()}
-                    onKeyDown={(e) => handleOptionListArrowKey(e, popoverRef.current)}
-                  >
-                    {searchable ? (
-                      <div className={css.selectSearchRow}>
-                        <DshInput
-                          autoFocus
-                          icon={SEARCH_ICON_14}
-                          value={query}
-                          onChange={(e) => setQuery(e.target.value)}
-                          placeholder={msg.selectSearchPlaceholder}
-                          aria-label={msg.selectSearchPlaceholder}
-                        />
-                      </div>
-                    ) : null}
-                    <div
-                      role="listbox"
-                      aria-label={label || placeholder}
-                      className={css.selectOptionList}
+          <PortalPopoverShell
+            open={effectiveOpen}
+            box={resolvedPopoverBox}
+            dark={dark}
+            popoverRef={popoverRef}
+            onClose={closePopover}
+          >
+            {searchable ? (
+              <div className={css.selectSearchRow}>
+                <DshInput
+                  autoFocus
+                  icon={SEARCH_ICON_14}
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder={msg.selectSearchPlaceholder}
+                  aria-label={msg.selectSearchPlaceholder}
+                />
+              </div>
+            ) : null}
+            <div
+              id={listboxId}
+              role="listbox"
+              aria-label={label || placeholder}
+              className={css.selectOptionList}
+            >
+              {filteredOptions.length === 0 ? (
+                <div className={css.selectEmpty}>{msg.selectNoResults}</div>
+              ) : (
+                filteredOptions.map((opt) => {
+                  const isSelected = opt.value === selectedVal
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      role="option"
+                      aria-selected={isSelected}
+                      className={css.selectOptionBtn}
+                      data-selected={isSelected ? 'true' : 'false'}
+                      onClick={() => commitSelect(opt.value)}
                     >
-                      {filteredOptions.length === 0 ? (
-                        <div className={css.selectEmpty}>{msg.selectNoResults}</div>
-                      ) : (
-                        filteredOptions.map((opt) => {
-                          const isSelected = opt.value === selectedVal
-                          return (
-                            <button
-                              key={opt.value}
-                              type="button"
-                              role="option"
-                              aria-selected={isSelected}
-                              className={css.selectOptionBtn}
-                              data-selected={isSelected ? 'true' : 'false'}
-                              onClick={() => commitSelect(opt.value)}
-                            >
-                              <span className={css.selectOptionCopy}>
-                                <span className={css.selectOptionLabel}>{opt.label}</span>
-                                {opt.description ? (
-                                  <span className={css.selectOptionDesc}>{opt.description}</span>
-                                ) : null}
-                              </span>
-                              {isSelected ? (
-                                <span className={css.selectOptionCheck}>{CHECK_ICON_12}</span>
-                              ) : null}
-                            </button>
-                          )
-                        })
-                      )}
-                    </div>
-                  </div>
-                </div>,
-                document.body,
-              )
-            : null}
+                      <span className={css.selectOptionCopy}>
+                        <span className={css.selectOptionLabel}>{opt.label}</span>
+                        {opt.description ? (
+                          <span className={css.selectOptionDesc}>{opt.description}</span>
+                        ) : null}
+                      </span>
+                      {isSelected ? (
+                        <span className={css.selectOptionCheck}>{CHECK_ICON_12}</span>
+                      ) : null}
+                    </button>
+                  )
+                })
+              )}
+            </div>
+          </PortalPopoverShell>
         </>
       ) : (
         <div className={css.selectMenuHost}>
@@ -371,16 +319,28 @@ export function DshSegmentedView({
             id={segId}
             role="radiogroup"
             aria-label={label || msg.segmentedAria}
+            aria-invalid={showError || undefined}
             className={css.segmentedWrapGroup}
             data-disabled={readOnly ? 'true' : 'false'}
+            onKeyDown={(e) => {
+              if (readOnly) return
+              handleHorizontalArrowKey(e, e.currentTarget, '[role="radio"]', (idx) => {
+                const next = segOptions[idx]
+                if (!next) return
+                setTouched(true)
+                commitValue(next.value)
+              })
+            }}
           >
-            {segOptions.map((opt) => {
+            {segOptions.map((opt, idx) => {
               const active = opt.value === activeVal
+              const tabIdx = readOnly ? -1 : active || (activeVal === '' && idx === 0) ? 0 : -1
               return (
                 <button
                   key={opt.value}
                   type="button"
                   role="radio"
+                  tabIndex={tabIdx}
                   aria-checked={active}
                   disabled={readOnly}
                   title={opt.title ?? opt.label}
@@ -399,7 +359,7 @@ export function DshSegmentedView({
           </div>
         </div>
       ) : (
-        <div className={css.segmentedHostWrap}>
+        <div className={css.segmentedHostWrap} aria-invalid={showError || undefined}>
           <DshSegmentedControl
             id={segId}
             value={activeVal}
@@ -455,7 +415,7 @@ export function DshSwitchView({
     String(props.description) !== ''
       ? String(props.description)
       : ''
-  const checked = Boolean(rawVal)
+  const checked = parseBooleanValue(rawVal)
   const showError = !readOnly && (touched || submitAttempted) && props.isValid === false
   const err = showError ? props.validationErrors?.[0] : undefined
 
@@ -466,7 +426,12 @@ export function DshSwitchView({
   }
 
   return (
-    <div className={css.switchCard} style={weightStyle(props.weight, 240)} data-a2ui-switch="">
+    <div
+      className={css.switchCard}
+      style={weightStyle(props.weight, 240)}
+      data-a2ui-switch=""
+      aria-invalid={showError || undefined}
+    >
       <div className={css.switchMainRow}>
         <div
           className={css.switchLabelBlock}

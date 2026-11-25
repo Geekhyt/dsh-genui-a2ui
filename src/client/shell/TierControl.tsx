@@ -2,9 +2,10 @@ import { memo, useCallback, useMemo, useRef, useState, useSyncExternalStore } fr
 import { useShellMessages } from '../i18n.ts'
 import {
   dismissCommandNotice,
-  getA2uiEnabled,
+  getA2uiEnabledRevision,
   getCommandNotice,
   getDefaultA2uiEnabled,
+  getLastAppliedCommandSeq,
   reconcileLatestA2uiCommand,
   resolveEffectiveA2uiEnabled,
   setA2uiEnabled,
@@ -34,11 +35,11 @@ export const A2uiTierControl = memo(function A2uiTierControl({
 }: A2uiTierControlProps) {
   const [busyBySession, setBusyBySession] = useState<Readonly<Record<string, number>>>({})
   const reqSeqBySessionRef = useRef<Map<string, number>>(new Map())
+  const globalDefaultReqSeqRef = useRef(0)
   const sessionKey = sessionId ?? '__global__'
   const busy = Object.hasOwn(busyBySession, sessionKey)
 
-  const getPersistedEnabled = useCallback(() => getA2uiEnabled(sessionId), [sessionId])
-  useSyncExternalStore<boolean>(subscribeA2uiEnabled, getPersistedEnabled, getPersistedEnabled)
+  useSyncExternalStore<number>(subscribeA2uiEnabled, getA2uiEnabledRevision, getA2uiEnabledRevision)
 
   const getNotice = useCallback(() => getCommandNotice(sessionId), [sessionId])
   const notice = useSyncExternalStore(subscribeCommandNotice, getNotice, getNotice)
@@ -84,10 +85,16 @@ export const A2uiTierControl = memo(function A2uiTierControl({
     if (!syncHostEnabled) return
     const reqId = (reqSeqBySessionRef.current.get(targetKey) ?? 0) + 1
     reqSeqBySessionRef.current.set(targetKey, reqId)
+    const defaultReqId = ++globalDefaultReqSeqRef.current
+    const prevWatermark = getLastAppliedCommandSeq(targetSessionId)
     setBusyBySession((cur) => ({ ...cur, [targetKey]: reqId }))
     const rollback = () => {
+      if (globalDefaultReqSeqRef.current === defaultReqId) {
+        setA2uiEnabled(undefined, prevDefault, undefined, true)
+      }
       if (reqSeqBySessionRef.current.get(targetKey) !== reqId) return
-      setA2uiEnabled(undefined, prevDefault, undefined, true)
+      const curWatermark = getLastAppliedCommandSeq(targetSessionId)
+      if (curWatermark > Math.max(prevWatermark, cmdSeq ?? -1)) return
       if (targetSessionId) {
         setA2uiEnabled(targetSessionId, prev, cmdSeq, false)
       }

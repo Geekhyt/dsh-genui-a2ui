@@ -326,10 +326,10 @@ export function buildReplayMessagesForSurfaceCall(
   currentMessages: readonly AgentToRendererMessage[],
   targetSurfaceIds: readonly string[] | ReadonlySet<string>,
   beforeSeq?: number,
-): AgentToRendererMessage[] {
+): readonly AgentToRendererMessage[] {
   const targets =
     targetSurfaceIds instanceof Set ? [...targetSurfaceIds] : [...new Set(targetSurfaceIds)]
-  if (targets.length === 0) return [...currentMessages]
+  if (targets.length === 0) return currentMessages
   const createdInCurrent = new Set<string>()
   for (const msg of currentMessages) {
     if (!isRecord(msg)) continue
@@ -342,7 +342,7 @@ export function buildReplayMessagesForSurfaceCall(
   for (const id of targets) {
     if (!createdInCurrent.has(id)) missingIds.add(id)
   }
-  if (missingIds.size === 0) return [...currentMessages]
+  if (missingIds.size === 0) return currentMessages
   const priorCalls = collectOrderedCalls(snapshot).filter(
     (call) => beforeSeq === undefined || call.seq < beforeSeq,
   )
@@ -350,7 +350,7 @@ export function buildReplayMessagesForSurfaceCall(
     priorCalls.flatMap((call) => call.messages),
     missingIds,
   )
-  return prior.length > 0 ? [...prior, ...currentMessages] : [...currentMessages]
+  return prior.length > 0 ? [...prior, ...currentMessages] : currentMessages
 }
 
 export interface TurnTailBatch {
@@ -431,13 +431,10 @@ export function resolveTurnTailBatch(
             dockedIdsUpToTurn.delete(del.surfaceId)
             visibleSurfaceIds.delete(del.surfaceId)
           }
-          if (call.turn === turnNumber && call.placement === 'answer') {
-            const created = (msg as { createSurface?: { surfaceId?: unknown } }).createSurface
-            if (
-              created &&
-              typeof created.surfaceId === 'string' &&
-              !dockedIdsUpToTurn.has(created.surfaceId)
-            ) {
+          const created = (msg as { createSurface?: { surfaceId?: unknown } }).createSurface
+          if (created && typeof created.surfaceId === 'string') {
+            dockedIdsUpToTurn.delete(created.surfaceId)
+            if (call.turn === turnNumber && call.placement === 'answer') {
               visibleSurfaceIds.add(created.surfaceId)
             }
           }
@@ -569,6 +566,8 @@ export function resolveDockBatch(snapshot: ChatTargetSnapshot | undefined): Dock
         if (call.placement === 'dock') {
           dockedIds.add(created.surfaceId)
           updatedExistingDocked = true
+        } else {
+          dockedIds.delete(created.surfaceId)
         }
         continue
       }

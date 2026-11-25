@@ -146,7 +146,7 @@
   width: 18px;
   height: 18px;
   border-radius: 999px;
-  background: var(--dsw-alias-bg-layer-1, light-dark(#ffffff, #1e293b));
+  background: var(--dsw-alias-switch-thumb, var(--a2ui-bg-opaque));
   border: 2px solid var(--a2ui-accent);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.22);
   cursor: pointer;
@@ -157,10 +157,22 @@
   width: 18px;
   height: 18px;
   border-radius: 999px;
-  background: var(--dsw-alias-bg-layer-1, light-dark(#ffffff, #1e293b));
+  background: var(--dsw-alias-switch-thumb, var(--a2ui-bg-opaque));
   border: 2px solid var(--a2ui-accent);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.22);
   cursor: pointer;
+}
+
+.rangeInput:focus-visible::-webkit-slider-thumb {
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--a2ui-accent) 32%, transparent),
+    0 1px 3px rgba(0, 0, 0, 0.22);
+}
+
+.rangeInput:focus-visible::-moz-range-thumb {
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--a2ui-accent) 32%, transparent),
+    0 1px 3px rgba(0, 0, 0, 0.22);
 }
 
 .rangeAxisTicks {

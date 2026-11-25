@@ -3,10 +3,12 @@ import {
   type ChartBuildContext,
   FILLED_SHAPE_LABEL,
   buildHierarchyTree,
+  extractFlowData,
   filterAcyclicLinks,
   normalizeChartRows,
   sanitizeChartLabel,
   toNumber,
+  visualWidthOf,
 } from './shared.ts'
 
 export function buildHierarchyChartOption(
@@ -169,7 +171,17 @@ export function buildHierarchyChartOption(
             formatter: isCompact
               ? (params: { name?: unknown }) => {
                   const text = sanitizeChartLabel(params.name)
-                  return text.length > 8 && text.includes(' ') ? text.replace(/\s+/g, '\n') : text
+                  if (text.length <= 8 || !text.includes(' ')) return text
+                  const words = text.trim().split(/\s+/)
+                  if (words.length <= 3) return words.join('\n')
+                  const mid = Math.floor(text.length / 2)
+                  let best = -1
+                  for (let i = 0; i < text.length; i++) {
+                    if (text[i] === ' ' && (best < 0 || Math.abs(i - mid) < Math.abs(best - mid))) {
+                      best = i
+                    }
+                  }
+                  return best > 0 ? `${text.slice(0, best)}\n${text.slice(best + 1)}` : text
                 }
               : undefined,
           },
@@ -184,50 +196,25 @@ export function buildHierarchyChartOption(
     const srcField = props.xField ?? 'source'
     const tgtField = props.seriesField ?? 'target'
     const valField = (typeof props.yField === 'string' ? props.yField : undefined) ?? 'value'
-    const sankeyObj =
-      typeof props.data === 'object' && props.data !== null && !Array.isArray(props.data)
-        ? (props.data as Record<string, unknown>)
-        : null
-    const sankeySourceRows =
-      rows.length > 0
-        ? rows
-        : sankeyObj !== null && Array.isArray(sankeyObj.links ?? sankeyObj.edges)
-          ? normalizeChartRows(sankeyObj.links ?? sankeyObj.edges)
-          : rows
-
-    const idToName = new Map<string, string>()
-    if (sankeyObj !== null && Array.isArray(sankeyObj.nodes)) {
-      for (const n of sankeyObj.nodes as Record<string, unknown>[]) {
-        const nid = sanitizeChartLabel(n?.id)
-        const nName = sanitizeChartLabel(n?.name ?? n?.label ?? n?.id)
-        if (nid && nName) idToName.set(nid, nName)
-      }
-    }
-    const linkTotals = new Map<string, { source: string; target: string; value: number }>()
-    for (const r of sankeySourceRows) {
-      const rawSrc = sanitizeChartLabel(r[srcField] ?? r.source ?? r.from)
-      const rawTgt = sanitizeChartLabel(r[tgtField] ?? r.target ?? r.to)
-      const source = idToName.get(rawSrc) ?? rawSrc
-      const target = idToName.get(rawTgt) ?? rawTgt
-      const value = Math.max(0, toNumber(r[valField] ?? r.value ?? r[primaryY]))
-      if (!source || !target || value <= 0) continue
-      const key = `${source}\u0000${target}`
-      const prev = linkTotals.get(key)
-      if (prev) prev.value += value
-      else linkTotals.set(key, { source, target, value })
-    }
-    const links = filterAcyclicLinks([...linkTotals.values()])
+    const { links: rawFlowLinks } = extractFlowData(
+      props.data,
+      rows,
+      srcField,
+      tgtField,
+      valField,
+      primaryY,
+      0,
+      false,
+    )
+    const links = filterAcyclicLinks(rawFlowLinks)
     const nodeNames = [...new Set(links.flatMap((l) => [l.source, l.target]))]
     const sourceSet = new Set(links.map((l) => l.source))
     const rightSideLabels = nodeNames.filter((n) => !sourceSet.has(n))
     const measureCandidates = rightSideLabels.length > 0 ? rightSideLabels : nodeNames
-    const maxRightLabelPx = measureCandidates.reduce((acc, label) => {
-      let width = 0
-      for (const ch of label) {
-        width += (ch.codePointAt(0) ?? 0) > 0xff ? 12.2 : 7.0
-      }
-      return Math.max(acc, width)
-    }, 0)
+    const maxRightLabelPx = measureCandidates.reduce(
+      (acc, label) => Math.max(acc, visualWidthOf(label) * 6.5),
+      0,
+    )
     const maxPad =
       containerWidth !== undefined && containerWidth > 0
         ? Math.max(64, Math.floor(containerWidth * 0.3))
@@ -321,7 +308,24 @@ export function buildHierarchyChartOption(
         : null
 
     const sizeScale = isCompact ? 0.72 : 1
-    if (rawObj && Array.isArray(rawObj.nodes)) {
+    const buildEdgeLabel = (rawLbl: unknown) => {
+      if (!rawLbl) return undefined
+      const text = sanitizeChartLabel(rawLbl)
+      return {
+        show: true,
+        formatter: () => text,
+        fontSize: isCompact ? 9 : 10,
+        color: theme.textSecondary,
+        backgroundColor: isCompact
+          ? dark
+            ? 'rgba(15, 23, 42, 0.78)'
+            : 'rgba(255, 255, 255, 0.85)'
+          : undefined,
+        padding: isCompact ? [1, 3] : undefined,
+        borderRadius: isCompact ? 3 : undefined,
+      }
+    }
+    if (rawObj && Array.isArray(rawObj.nodes) && rawObj.nodes.length > 0) {
       const seenNodeIds = new Set<string>()
       nodes = []
       for (const n of rawObj.nodes as Record<string, unknown>[]) {
@@ -347,21 +351,7 @@ export function buildHierarchyChartOption(
             .map((e) => ({
               source: sanitizeChartLabel(e.source ?? e.from),
               target: sanitizeChartLabel(e.target ?? e.to),
-              label: e.label
-                ? {
-                    show: true,
-                    formatter: sanitizeChartLabel(e.label),
-                    fontSize: isCompact ? 9 : 10,
-                    color: theme.textSecondary,
-                    backgroundColor: isCompact
-                      ? dark
-                        ? 'rgba(15, 23, 42, 0.78)'
-                        : 'rgba(255, 255, 255, 0.85)'
-                      : undefined,
-                    padding: isCompact ? [1, 3] : undefined,
-                    borderRadius: isCompact ? 3 : undefined,
-                  }
-                : undefined,
+              label: buildEdgeLabel(e.label),
             }))
         : []
     } else {
@@ -390,21 +380,7 @@ export function buildHierarchyChartOption(
           links.push({
             source: s,
             target: t,
-            label: r.label
-              ? {
-                  show: true,
-                  formatter: sanitizeChartLabel(r.label),
-                  fontSize: isCompact ? 9 : 10,
-                  color: theme.textSecondary,
-                  backgroundColor: isCompact
-                    ? dark
-                      ? 'rgba(15, 23, 42, 0.78)'
-                      : 'rgba(255, 255, 255, 0.85)'
-                    : undefined,
-                  padding: isCompact ? [1, 3] : undefined,
-                  borderRadius: isCompact ? 3 : undefined,
-                }
-              : undefined,
+            label: buildEdgeLabel(r.label),
           })
         }
       }

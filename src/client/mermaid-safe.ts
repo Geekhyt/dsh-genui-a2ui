@@ -17,12 +17,17 @@ export const ALLOWED_MERMAID_KINDS = [
 ] as const
 
 const FORBIDDEN_SVG_TAG_RE =
-  /<(?:[a-z][a-z0-9._-]*:)?(?:script|iframe|object|embed|applet|meta|base|animate|animateTransform|animateMotion|animateColor|set|discard|handler|image|feImage)\b/i
+  /<(?:[a-z][a-z0-9._-]*:)?(?:script|iframe|object|embed|applet|meta|base|dialog|animate|animateTransform|animateMotion|animateColor|set|discard|handler|img|image|feImage)\b/i
 
 const TAG_EVENT_HANDLER_RE = /<(?:"[^"]*"|'[^']*'|[^'">])*\bon[a-z]+\s*=/i
 
 const OBFUSCATED_URI_RE =
   /(?:javascript|vbscript)\s*:|data\s*:\s*(?:text\/html|image\/svg\+xml|application\/xhtml\+xml)/i
+
+const EXTERNAL_ATTR_URI_RE =
+  /\b(?:background|poster|src|srcset|action|formaction|ping|cite|(?:xlink:)?href)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi
+
+const EXTERNAL_SCHEME_RE = /^(?:https?:|ftp:|file:|\/\/)/i
 
 const TAG_OPEN_RE = /<(?:"[^"]*"|'[^']*'|[^'">])*>/g
 const STYLE_BLOCK_RE =
@@ -55,12 +60,30 @@ function decodeHtmlEntities(input: string): string {
     .replace(/[\u0000-\u0020]+/g, '')
 }
 
+function hasExternalFetchAttrInTag(tag: string): boolean {
+  EXTERNAL_ATTR_URI_RE.lastIndex = 0
+  let m: RegExpExecArray | null
+  while ((m = EXTERNAL_ATTR_URI_RE.exec(tag)) !== null) {
+    const raw = (m[1] ?? m[2] ?? m[3] ?? '').trim()
+    if (raw === '' || raw.startsWith('#')) continue
+    const decoded = decodeHtmlEntities(raw).trim()
+    if (EXTERNAL_SCHEME_RE.test(raw) || EXTERNAL_SCHEME_RE.test(decoded)) {
+      return true
+    }
+  }
+  return false
+}
+
 function hasUnsafeUriInTagsOrStyles(svg: string): boolean {
   TAG_OPEN_RE.lastIndex = 0
   let tagMatch: RegExpExecArray | null
   while ((tagMatch = TAG_OPEN_RE.exec(svg)) !== null) {
     const tag = tagMatch[0]
-    if (OBFUSCATED_URI_RE.test(tag) || OBFUSCATED_URI_RE.test(decodeHtmlEntities(tag))) {
+    if (
+      OBFUSCATED_URI_RE.test(tag) ||
+      OBFUSCATED_URI_RE.test(decodeHtmlEntities(tag)) ||
+      hasExternalFetchAttrInTag(tag)
+    ) {
       return true
     }
   }
@@ -217,15 +240,16 @@ export function isSafeStaticSvgImage(svg: string): boolean {
   return verifyStaticSvgWithDomParser(body)
 }
 
-const YAML_FRONTMATTER_RE = /^\s*---[ \t]*\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)/
-const INIT_DIRECTIVE_RE = /%%\{[\s\S]*?\}%%/g
+const YAML_FRONTMATTER_RE =
+  /^[ \t]*---[ \t]*(?:\r\n|\n|\r)[\s\S]*?(?:\r\n|\n|\r)[ \t]*---[ \t]*(?:\r\n|\n|\r|$)/
+const INIT_DIRECTIVE_RE = /%%\{(?:[\s\S]*?\}%%|[^\r\n]*)/g
 
 export function stripUnsafeDirectives(code: string): string {
-  let out = code
+  let out = code.trimStart()
   let prev = ''
   while (out !== prev) {
     prev = out
-    out = out.replace(YAML_FRONTMATTER_RE, '')
+    out = out.replace(YAML_FRONTMATTER_RE, '').trimStart()
     out = out.replace(INIT_DIRECTIVE_RE, '')
   }
   return out.trim()
@@ -250,18 +274,69 @@ export function ensureFlowchartKind(code: string): string {
   return `graph TD\n${cleaned}`
 }
 
+function maskFlowchartEdgesLinear(cleaned: string, spans: string[]): string {
+  return cleaned
+    .split('\n')
+    .map((line) => {
+      if (!line.includes('-->') && !line.includes('==>') && !line.includes('.->')) {
+        return line
+      }
+      let out = ''
+      let cursor = 0
+      while (cursor < line.length) {
+        let startIdx = -1
+        let startLen = 0
+        for (let k = cursor; k < line.length - 1; k += 1) {
+          const two = line.slice(k, k + 2)
+          if (
+            (two === '--' && line[k + 2] !== '>') ||
+            (two === '==' && line[k + 2] !== '>') ||
+            two === '-.'
+          ) {
+            startIdx = k
+            startLen = 2
+            break
+          }
+        }
+        if (startIdx === -1) {
+          out += line.slice(cursor)
+          break
+        }
+        const searchFrom = startIdx + startLen
+        const ends = [
+          line.indexOf('-->', searchFrom),
+          line.indexOf('==>', searchFrom),
+          line.indexOf('.->', searchFrom),
+        ].filter((idx) => idx !== -1)
+        if (ends.length === 0) {
+          out += line.slice(cursor)
+          break
+        }
+        const endIdx = Math.min(...ends) + 3
+        const span = line.slice(startIdx, endIdx)
+        const inner = span.slice(startLen, -3)
+        if (!inner.includes('--') && !/^[-=.<>]+$/.test(span)) {
+          out += line.slice(cursor, startIdx)
+          spans.push(span)
+          out += `\uE000${spans.length - 1}\uE001`
+          cursor = endIdx
+        } else {
+          out += line.slice(cursor, startIdx + startLen)
+          cursor = startIdx + startLen
+        }
+      }
+      return out
+    })
+    .join('\n')
+}
+
 export function repairMermaidSource(code: string): string {
   const kind = extractMermaidKind(code)
   if (kind !== 'graph' && kind !== 'flowchart') return code
   const cleaned = code.replace(/`/g, '').replace(/<br\s*\/?>/gi, ' ')
 
-  const EDGE = /(--|==|-\.)(?!>)[ \t]*([^-\n]|-(?!--))*?[ \t]*(-->|==>|\.->)/g
   const spans: string[] = []
-  const masked = cleaned.replace(EDGE, (span) => {
-    if (/^[-=.<>]+$/.test(span)) return span
-    spans.push(span)
-    return `\uE000${spans.length - 1}\uE001`
-  })
+  const masked = maskFlowchartEdgesLinear(cleaned, spans)
 
   const PIPE_LINK = /(?:<|[ox])?(?:-{2,}[>ox]?|={2,}[>ox]?|-\.+-[>ox]?)[ \t]*\|/y
   const pipeSpans: string[] = []
@@ -440,4 +515,101 @@ export function prepareMermaidSvg(rawSvg: string): PreparedMermaidSvg {
     rawSvg.slice(openTagMatch.index + openTag.length)
 
   return { markup, width: safeW, height: safeH }
+}
+
+const SVG_OPEN_TAG_RE = /<(?:"[^"]*"|'[^']*'|[^'">])*>/g
+
+function rewriteCssSelectorIds(cssBody: string, idMap: ReadonlyMap<string, string>): string {
+  let out = ''
+  let depth = 0
+  let quote: '"' | "'" | null = null
+  let segStart = 0
+  const flushSelector = (end: number) => {
+    const chunk = cssBody.slice(segStart, end)
+    out += chunk.replace(/#([A-Za-z_][A-Za-z0-9_-]*)/g, (hit, oldId: string) => {
+      const next = idMap.get(oldId)
+      return next ? `#${next}` : hit
+    })
+  }
+  for (let i = 0; i < cssBody.length; i += 1) {
+    const ch = cssBody[i]!
+    if (quote !== null) {
+      if (ch === '\\') i += 1
+      else if (ch === quote) quote = null
+      continue
+    }
+    if (ch === '"' || ch === "'") {
+      quote = ch
+      continue
+    }
+    if (ch === '/' && cssBody[i + 1] === '*') {
+      const end = cssBody.indexOf('*/', i + 2)
+      i = end === -1 ? cssBody.length : end + 1
+      continue
+    }
+    if (ch === '{') {
+      if (depth === 0) {
+        flushSelector(i)
+        segStart = i
+      }
+      depth += 1
+    } else if (ch === '}') {
+      if (depth > 0) depth -= 1
+      if (depth === 0) {
+        out += cssBody.slice(segStart, i + 1)
+        segStart = i + 1
+      }
+    }
+  }
+  if (segStart < cssBody.length) {
+    if (depth === 0) flushSelector(cssBody.length)
+    else out += cssBody.slice(segStart)
+  }
+  return out
+}
+
+export function namespaceSvgIds(markup: string, prefix: string): string {
+  const idMap = new Map<string, string>()
+  const idDeclRe = /\bid=(["'])([^"']+)\1/g
+  SVG_OPEN_TAG_RE.lastIndex = 0
+  let tagMatch: RegExpExecArray | null = SVG_OPEN_TAG_RE.exec(markup)
+  while (tagMatch !== null) {
+    const tag = tagMatch[0]
+    if (!tag.startsWith('</') && !tag.startsWith('<!') && !tag.startsWith('<?')) {
+      idDeclRe.lastIndex = 0
+      let m: RegExpExecArray | null = idDeclRe.exec(tag)
+      while (m !== null) {
+        const oldId = m[2]!
+        if (!idMap.has(oldId)) {
+          idMap.set(oldId, `${prefix}${oldId}`)
+        }
+        m = idDeclRe.exec(tag)
+      }
+    }
+    tagMatch = SVG_OPEN_TAG_RE.exec(markup)
+  }
+  if (idMap.size === 0) return markup
+  let out = markup.replace(SVG_OPEN_TAG_RE, (tag) => {
+    if (tag.startsWith('</') || tag.startsWith('<!') || tag.startsWith('<?')) return tag
+    let nextTag = tag.replace(
+      /\bid=(["'])([^"']+)\1/g,
+      (_full, q: string, oldId: string) => `id=${q}${idMap.get(oldId) ?? oldId}${q}`,
+    )
+    nextTag = nextTag.replace(
+      /url\(\s*(["']?)#([^)"']+)\1\s*\)/g,
+      (_full, q: string, oldId: string) => `url(${q}#${idMap.get(oldId) ?? oldId}${q})`,
+    )
+    nextTag = nextTag.replace(
+      /\b((?:xlink:)?href)=(["'])#([^"']+)\2/g,
+      (_full, attr: string, q: string, oldId: string) =>
+        `${attr}=${q}#${idMap.get(oldId) ?? oldId}${q}`,
+    )
+    return nextTag
+  })
+  out = out.replace(
+    /<style([^>]*)>([\s\S]*?)<\/style>/gi,
+    (_full, attrs: string, cssBody: string) =>
+      `<style${attrs}>${rewriteCssSelectorIds(cssBody, idMap)}</style>`,
+  )
+  return out
 }

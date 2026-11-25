@@ -7,12 +7,9 @@ import {
   useDeferredValue,
   useId,
   useMemo,
-  useRef,
   useState,
 } from 'react'
-import { createPortal } from 'react-dom'
 import { CheckCardApi, TreeApi, TreeSelectApi } from '../../../shared/catalog-schema.ts'
-import { usePortalPopover } from '../../dom-hooks.ts'
 import { useRuntimeMessages } from '../../i18n.ts'
 import { useDarkTheme } from '../../theme.ts'
 import {
@@ -33,19 +30,19 @@ import {
   normalizeHierarchyTree,
 } from '../v5-helpers.ts'
 import {
-  type ClampedPopoverBox,
-  computeClampedPopoverBox,
   defineComponent,
   isLocalFunctionAction,
   isWritableProp,
   ModalCloseContext,
+  normalizeStringArrayValue,
+  PortalPopoverShell,
   runSurfaceAction,
   SurfaceActionStatusContext,
   SurfaceReadOnlyContext,
   SurfaceValidationContext,
+  usePickerPopover,
   useSurfaceActionRunner,
   useWritablePropState,
-  handleOptionListArrowKey,
   weightStyle,
 } from '../widget-helpers.tsx'
 
@@ -64,8 +61,8 @@ function TreeSelectOptionBranch(props: {
   const [expanded, setExpanded] = useState(true)
   const isBranch = node.children.length > 0
   const isOpen = forceExpanded || expanded
-  const isSelected = node.value === selectedValue
   const selectableBranch = isBranch && Boolean(node.hasExplicitValue)
+  const isSelected = (!isBranch || selectableBranch) && node.value === selectedValue
 
   return (
     <Fragment>
@@ -145,16 +142,20 @@ export const DshTreeSelectImpl = defineComponent<{
   const readOnly = useContext(SurfaceReadOnlyContext)
   const { submitAttempted } = useContext(SurfaceValidationContext)
   const [touched, setTouched] = useState(false)
-  const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const deferredQuery = useDeferredValue(query)
-  const triggerRef = useRef<HTMLButtonElement | null>(null)
-  const popoverRef = useRef<HTMLDivElement | null>(null)
-  const [popoverBox, setPopoverBox] = useState<ClampedPopoverBox | null>(null)
-  if (readOnly && open) {
-    setOpen(false)
-  }
-  const effectiveOpen = open && !readOnly
+  const onBeforeClose = useCallback(() => {
+    setQuery('')
+    setTouched(true)
+  }, [])
+  const { setOpen, effectiveOpen, popoverBox, triggerRef, popoverRef, closePopover, toggleOpen } =
+    usePickerPopover<HTMLButtonElement>({
+      readOnly,
+      minWidth: 240,
+      estHeight: 280,
+      onBeforeClose,
+    })
+  const handleToggleOpen = toggleOpen
   const [rawVal, commitVal] = useWritablePropState(context, 'value', props.value, props.setValue)
 
   const tree = useMemo(() => normalizeHierarchyTree(props.nodes), [props.nodes])
@@ -172,36 +173,6 @@ export const DshTreeSelectImpl = defineComponent<{
       : msg.treeSelectPlaceholder
   const showError = !readOnly && (touched || submitAttempted) && props.isValid === false
   const err = showError ? props.validationErrors?.[0] : undefined
-
-  const closePopover = useCallback(() => {
-    setOpen(false)
-    setQuery('')
-    setTouched(true)
-  }, [])
-
-  const syncPopoverBox = useCallback(() => {
-    if (!triggerRef.current) return
-    const rect = triggerRef.current.getBoundingClientRect()
-    setPopoverBox(computeClampedPopoverBox(rect, { minWidth: 240, estHeight: 280 }))
-  }, [])
-
-  usePortalPopover({
-    open: effectiveOpen,
-    triggerRef,
-    popoverRef,
-    onClose: closePopover,
-    onReposition: syncPopoverBox,
-  })
-
-  const handleToggleOpen = () => {
-    if (readOnly) return
-    if (effectiveOpen) {
-      closePopover()
-      return
-    }
-    syncPopoverBox()
-    setOpen(true)
-  }
 
   return (
     <div className={css.field} style={weightStyle(props.weight, 180)} data-a2ui-treeselect="">
@@ -236,72 +207,48 @@ export const DshTreeSelectImpl = defineComponent<{
         </span>
       </button>
 
-      {effectiveOpen && popoverBox && typeof document !== 'undefined'
-        ? createPortal(
-            <div
-              role="presentation"
-              data-a2ui-portal-popover=""
-              className={`${css.selectBackdrop} ${dark ? 'a2ui-dark' : 'a2ui-light'}`}
-              onClick={(e) => {
-                e.stopPropagation()
-                closePopover()
-              }}
-            >
-              <div
-                ref={popoverRef}
-                data-a2ui-select-popover=""
-                className={css.selectPopover}
-                style={{
-                  ...(popoverBox.placeAbove
-                    ? { bottom: popoverBox.bottom }
-                    : { top: popoverBox.top }),
-                  left: popoverBox.left,
-                  width: popoverBox.width,
-                  maxHeight: popoverBox.maxHeight,
+      <PortalPopoverShell
+        open={effectiveOpen}
+        box={popoverBox}
+        dark={dark}
+        popoverRef={popoverRef}
+        onClose={closePopover}
+        roleSelector='[role="treeitem"]'
+      >
+        {props.searchable !== false ? (
+          <div className={css.selectSearchRow}>
+            <DshInput
+              autoFocus
+              icon={SEARCH_ICON_14}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={msg.treeSearchPlaceholder}
+            />
+          </div>
+        ) : null}
+        <div role="tree" aria-label={label || placeholder} className={css.selectOptionList}>
+          {filteredTree.length === 0 ? (
+            <div className={css.selectEmpty}>{msg.treeEmpty}</div>
+          ) : (
+            filteredTree.map((node) => (
+              <TreeSelectOptionBranch
+                key={node.id}
+                node={node}
+                depth={0}
+                selectedValue={selectedVal}
+                forceExpanded={deferredQuery.trim() !== ''}
+                onSelect={(val) => {
+                  if (readOnly) return
+                  setTouched(true)
+                  commitVal(val)
+                  setOpen(false)
+                  setQuery('')
                 }}
-                onClick={(e) => e.stopPropagation()}
-                onKeyDown={(e) =>
-                  handleOptionListArrowKey(e, popoverRef.current, '[role="treeitem"]')
-                }
-              >
-                {props.searchable !== false ? (
-                  <div className={css.selectSearchRow}>
-                    <DshInput
-                      autoFocus
-                      icon={SEARCH_ICON_14}
-                      value={query}
-                      onChange={(e) => setQuery(e.target.value)}
-                      placeholder={msg.treeSearchPlaceholder}
-                    />
-                  </div>
-                ) : null}
-                <div role="tree" aria-label={label || placeholder} className={css.selectOptionList}>
-                  {filteredTree.length === 0 ? (
-                    <div className={css.selectEmpty}>{msg.treeEmpty}</div>
-                  ) : (
-                    filteredTree.map((node) => (
-                      <TreeSelectOptionBranch
-                        key={node.id}
-                        node={node}
-                        depth={0}
-                        selectedValue={selectedVal}
-                        forceExpanded={deferredQuery.trim() !== ''}
-                        onSelect={(val) => {
-                          if (readOnly) return
-                          setTouched(true)
-                          commitVal(val)
-                          setOpen(false)
-                          setQuery('')
-                        }}
-                      />
-                    ))
-                  )}
-                </div>
-              </div>
-            </div>,
-            document.body,
-          )
-        : null}
+              />
+            ))
+          )}
+        </div>
+      </PortalPopoverShell>
     </div>
   )
 })
@@ -327,12 +274,14 @@ export const DshCheckCardImpl = defineComponent<{
 
   const options = useMemo(() => normalizeCheckCardOptions(props.options), [props.options])
   const hasWritableValue = isWritableProp(context, 'value', props.setValue)
-  const hasInitialLiteralValue =
-    props.value !== undefined &&
-    props.value !== null &&
-    (Array.isArray(props.value) ? props.value.length > 0 : String(props.value) !== '')
+  const [hadInitialLiteralValue] = useState(
+    () =>
+      props.value !== undefined &&
+      props.value !== null &&
+      (Array.isArray(props.value) ? props.value.length > 0 : String(props.value) !== ''),
+  )
   const isPromptMode =
-    typeof props.action === 'function' && !hasWritableValue && !hasInitialLiteralValue
+    typeof props.action === 'function' && !hasWritableValue && !hadInitialLiteralValue
   const isFormBound = !isPromptMode
   const multiple = Boolean(props.multiple)
   const [selectedVal, commitSelectedVal] = useWritablePropState<unknown>(
@@ -347,7 +296,7 @@ export const DshCheckCardImpl = defineComponent<{
       : Math.min(3, Math.max(1, options.length))
 
   const selectedSet = useMemo(() => {
-    if (Array.isArray(selectedVal)) return new Set(selectedVal.map(String))
+    if (Array.isArray(selectedVal)) return new Set(normalizeStringArrayValue(selectedVal))
     if (selectedVal !== undefined && selectedVal !== null && String(selectedVal) !== '') {
       return new Set([String(selectedVal)])
     }
@@ -363,23 +312,19 @@ export const DshCheckCardImpl = defineComponent<{
   const handleCardClick = (opt: (typeof options)[number]) => {
     if (readOnly) return
     setTouched(true)
-    let nextHasSelection = selectedSet.size > 0
     if (isFormBound) {
       if (multiple) {
         const cur = [...selectedSet]
         const next = selectedSet.has(opt.value)
           ? cur.filter((v) => v !== opt.value)
           : [...cur, opt.value]
-        nextHasSelection = next.length > 0
         commitSelectedVal(next)
       } else {
-        nextHasSelection = opt.value !== ''
         commitSelectedVal(opt.value)
       }
     }
     if (typeof props.action === 'function') {
-      const blockedByValidation = props.isValid === false && (!isFormBound || !nextHasSelection)
-      if (blockedByValidation) {
+      if (props.isValid === false) {
         markSubmitAttempted()
         return
       }
@@ -423,6 +368,7 @@ export const DshCheckCardImpl = defineComponent<{
         className={css.checkCardGrid}
         role="group"
         aria-label={label || undefined}
+        aria-invalid={showError || undefined}
         data-columns={String(cols)}
         style={{ '--a2ui-grid-cols': cols } as CSSProperties}
       >
@@ -521,21 +467,30 @@ function GeneralTreeBranch(props: {
           </span>
         )}
 
-        <button
-          type="button"
-          className={css.generalTreeMainBtn}
-          onClick={() => {
-            if (onSelect) onSelect(node)
-            else if (isBranch) onToggle(node.id, isOpen)
-          }}
-        >
-          {dotState ? <DshStateDot state={dotState} size={8} /> : null}
-          <span className={isBranch ? css.generalTreeBranchLabel : css.generalTreeLeafLabel}>
-            {node.label}
-          </span>
-          {node.sublabel ? <span className={css.generalTreeSub}>{node.sublabel}</span> : null}
-          {node.badge ? <DshTag tone="neutral">{node.badge}</DshTag> : null}
-        </button>
+        {onSelect || isBranch ? (
+          <button
+            type="button"
+            className={css.generalTreeMainBtn}
+            onClick={() => {
+              if (onSelect) onSelect(node)
+              else if (isBranch) onToggle(node.id, isOpen)
+            }}
+          >
+            {dotState ? <DshStateDot state={dotState} size={8} /> : null}
+            <span className={isBranch ? css.generalTreeBranchLabel : css.generalTreeLeafLabel}>
+              {node.label}
+            </span>
+            {node.sublabel ? <span className={css.generalTreeSub}>{node.sublabel}</span> : null}
+            {node.badge ? <DshTag tone="neutral">{node.badge}</DshTag> : null}
+          </button>
+        ) : (
+          <div className={css.generalTreeMainBtn} style={{ cursor: 'default' }}>
+            {dotState ? <DshStateDot state={dotState} size={8} /> : null}
+            <span className={css.generalTreeLeafLabel}>{node.label}</span>
+            {node.sublabel ? <span className={css.generalTreeSub}>{node.sublabel}</span> : null}
+            {node.badge ? <DshTag tone="neutral">{node.badge}</DshTag> : null}
+          </div>
+        )}
 
         {node.sharePct !== undefined || node.metric ? (
           <div className={css.generalTreeRight}>
@@ -603,10 +558,21 @@ export const DshTreeImpl = defineComponent<{
       : 3
 
   const branches = useMemo(() => collectBranchDepths(tree), [tree])
+  const branchSig = useMemo(
+    () => `${tree.length}:${branches.map((b) => b.id).join('\0')}`,
+    [tree.length, branches],
+  )
+  const [prevBranchSig, setPrevBranchSig] = useState(branchSig)
   const [treeMode, setTreeMode] = useState<'default' | 'all' | 'none'>('default')
   const [toggledMap, setToggledMap] = useState<ReadonlyMap<string, boolean>>(() => new Map())
   const [query, setQuery] = useState('')
   const deferredQuery = useDeferredValue(query)
+
+  if (prevBranchSig !== branchSig) {
+    setPrevBranchSig(branchSig)
+    if (toggledMap.size > 0) setToggledMap(new Map())
+    if (treeMode !== 'default') setTreeMode('default')
+  }
 
   const filtered = useMemo(
     () => (props.searchable ? filterHierarchyTree(tree, deferredQuery) : tree),
@@ -673,7 +639,7 @@ export const DshTreeImpl = defineComponent<{
       {filtered.length === 0 ? (
         <div className={css.emptyCell}>{msg.treeEmpty}</div>
       ) : (
-        <ul className={css.fileTreeRoot} role="tree">
+        <ul className={css.fileTreeRoot} role="tree" aria-label={title || 'Tree'}>
           {filtered.map((node) => (
             <GeneralTreeBranch
               key={node.id}

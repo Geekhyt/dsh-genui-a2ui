@@ -13,7 +13,6 @@ import {
   buildReplayMessagesForSurfaceCall,
   type ChatTargetSnapshot,
   findCallSeq,
-  isTurnClosedForCall,
   parseRenderMeta,
 } from './turn-surfaces.ts'
 import { DshAppsIcon, DshDisclosureRow } from '../ui/primitives.tsx'
@@ -86,17 +85,6 @@ export const A2uiToolView = memo(function A2uiToolView({
   const [expanded, setExpanded] = useState(false)
   const [inlineOpen, setInlineOpen] = useState(true)
 
-  const subscribe = useCallback(
-    (listener: () => void) => (chatStore ? chatStore.subscribe(listener) : NOOP_SUBSCRIBE()),
-    [chatStore],
-  )
-  const getSnapshot = useCallback(() => chatStore?.getSnapshot(), [chatStore])
-  const chatSnapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
-  const turnClosed = useMemo(
-    () => isTurnClosedForCall(chatSnapshot, callId),
-    [chatSnapshot, callId],
-  )
-
   const argTitle = block.args?.text('title')?.trim() || undefined
   const argUi = block.args?.text('ui') ?? ''
   const argPlacement = normalizePlacement(block.args?.text('placement'))
@@ -107,6 +95,30 @@ export const A2uiToolView = memo(function A2uiToolView({
   )
 
   const placement = settledMeta?.placement ?? argPlacement
+
+  const needsChatReplay = useMemo(() => {
+    if (phase !== 'result') return true
+    if (settledMeta === null || placement !== 'inline') return false
+    const created = new Set<string>()
+    for (const m of settledMeta.messages) {
+      const rec = m as unknown as { createSurface?: { surfaceId?: unknown } }
+      if (typeof rec?.createSurface?.surfaceId === 'string') {
+        created.add(rec.createSurface.surfaceId)
+      }
+    }
+    return settledMeta.surfaceIds.some((id) => !created.has(id))
+  }, [phase, settledMeta, placement])
+
+  const subscribe = useCallback(
+    (listener: () => void) =>
+      needsChatReplay && chatStore ? chatStore.subscribe(listener) : NOOP_SUBSCRIBE(),
+    [chatStore, needsChatReplay],
+  )
+  const getSnapshot = useCallback(
+    () => (needsChatReplay ? chatStore?.getSnapshot() : undefined),
+    [chatStore, needsChatReplay],
+  )
+  const chatSnapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 
   const streamingSnapshot = useLazyStreamingExpress(
     phase !== 'result',
@@ -249,7 +261,7 @@ export const A2uiToolView = memo(function A2uiToolView({
     )
   }
 
-  if (phase !== 'result' || (chatStore === undefined && !turnClosed)) {
+  if (phase !== 'result' || chatStore === undefined) {
     return (
       <div
         data-tool="a2ui_render"

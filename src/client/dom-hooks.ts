@@ -80,18 +80,18 @@ function isInsideUnmanagedHostOverlay(): boolean {
   if (typeof document === 'undefined') return false
   const active = document.activeElement
   if (!(active instanceof HTMLElement)) return false
+  if (
+    active.closest(
+      '[data-a2ui-overlay], [data-a2ui-portal-popover], [data-dsh-a2ui-card], [data-a2ui-dock], [data-a2ui-ask-dock]',
+    ) !== null
+  ) {
+    return false
+  }
   const overlay = active.closest('[role="dialog"], [role="alertdialog"], [role="menu"]')
   if (!overlay) return false
   if (
     overlay.hasAttribute('data-a2ui-overlay') ||
     overlay.hasAttribute('data-a2ui-portal-popover')
-  ) {
-    return false
-  }
-  if (
-    overlay.closest(
-      '[data-dsh-a2ui-card], [data-a2ui-dock], [data-a2ui-ask-dock], [data-a2ui-overlay], [data-a2ui-portal-popover]',
-    )
   ) {
     return false
   }
@@ -165,19 +165,30 @@ export function useEscapeKey(active: boolean, onEscape: () => void): void {
 }
 
 const FOCUSABLE_SELECTOR =
-  'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])'
+  'button:not(:disabled):not([tabindex="-1"]), [href]:not([tabindex="-1"]), input:not(:disabled):not([tabindex="-1"]), select:not(:disabled):not([tabindex="-1"]), textarea:not(:disabled):not([tabindex="-1"]), [tabindex]:not([tabindex="-1"])'
 
 function isVisibleFocusable(el: HTMLElement): boolean {
-  if (el.hasAttribute('hidden') || el.getAttribute('aria-hidden') === 'true') return false
+  if (el.tabIndex < 0) return false
+  if (el.closest('[hidden], [inert], [aria-hidden="true"], fieldset[disabled]') !== null) {
+    return false
+  }
   if (typeof window !== 'undefined' && typeof window.getComputedStyle === 'function') {
-    const cs = window.getComputedStyle(el)
-    if (cs.display === 'none' || cs.visibility === 'hidden') return false
+    let cur: HTMLElement | null = el
+    while (cur && cur !== document.body && cur !== document.documentElement) {
+      const cs = window.getComputedStyle(cur)
+      if (cs.display === 'none' || cs.visibility === 'hidden') return false
+      cur = cur.parentElement
+    }
   }
   return true
 }
 
 function focusTriggerSafely(trigger: HTMLElement): void {
-  if (isTriggerClippedOut(trigger)) return
+  if (isTriggerClippedOut(trigger)) {
+    const topDialog = dialogFocusStack[dialogFocusStack.length - 1]?.dialogRef.current
+    topDialog?.focus?.()
+    return
+  }
   const candidate =
     trigger.tabIndex >= 0 || trigger.matches(FOCUSABLE_SELECTOR)
       ? trigger
@@ -214,8 +225,9 @@ export function usePortalPopover(params: {
           )
           const firstOption =
             searchField ??
+            pop.querySelector<HTMLElement>('[aria-selected="true"]:not(:disabled)') ??
             pop.querySelector<HTMLElement>(
-              '[aria-selected="true"]:not(:disabled), [role="option"]:not(:disabled), [role="menuitem"]:not(:disabled), [role="treeitem"]:not(:disabled)',
+              '[role="option"]:not(:disabled), [role="menuitem"]:not(:disabled), [role="treeitem"]:not(:disabled)',
             )
           try {
             firstOption?.focus({ preventScroll: true })
@@ -363,14 +375,19 @@ export function useDialogFocus(open: boolean, dialogRef: RefObject<HTMLElement |
       const prev = entry.prevFocused
       entry.prevFocused = null
       if (!wasTop) return
-      if (prev?.isConnected) {
+      const topDialog = dialogFocusStack[dialogFocusStack.length - 1]?.dialogRef.current ?? null
+      if (
+        prev?.isConnected &&
+        prev !== document.body &&
+        prev !== document.documentElement &&
+        (!topDialog || topDialog.contains(prev))
+      ) {
         try {
           prev.focus({ preventScroll: true })
         } catch {
           prev.focus?.()
         }
       } else {
-        const topDialog = dialogFocusStack[dialogFocusStack.length - 1]?.dialogRef.current
         topDialog?.focus?.()
       }
     }

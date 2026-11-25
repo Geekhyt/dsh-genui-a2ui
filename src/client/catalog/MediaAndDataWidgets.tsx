@@ -51,14 +51,14 @@ export const DshIconImpl = defineComponent<{
   return renderCatalogIcon(props.name, insideButton ? 15 : 18, style)
 })
 
-const IMAGE_HEIGHTS: Record<string, number> = {
+const IMAGE_HEIGHTS: Record<string, number> = Object.assign(Object.create(null), {
   icon: 24,
   avatar: 44,
   smallFeature: 96,
   mediumFeature: 168,
   largeFeature: 240,
   header: 180,
-}
+})
 
 export const DshImageImpl = defineComponent<{
   url?: unknown
@@ -77,11 +77,13 @@ export const DshImageImpl = defineComponent<{
   if (prevUrl !== props.url) {
     setPrevUrl(props.url)
     if (broken) setBroken(false)
+    if (lightboxOpen) setLightboxOpen(false)
   }
-  if (readOnly && lightboxOpen) {
+  const safeUrl = isSafeImageUrl(props.url)
+  if ((readOnly || !safeUrl) && lightboxOpen) {
     setLightboxOpen(false)
   }
-  if (!isSafeImageUrl(props.url)) return null
+  if (!safeUrl) return null
   const src = String(props.url)
   const alt =
     props.description !== undefined && props.description !== null ? String(props.description) : ''
@@ -293,7 +295,10 @@ export const DshStatImpl = defineComponent<{
 function formatProgressPct(rawPct: number): string {
   if (rawPct >= 100) return '100'
   if (rawPct <= 0) return '0'
-  if (rawPct > 99 && rawPct < 100) return String(Number(rawPct.toFixed(3)))
+  if (rawPct > 99 && rawPct < 100) {
+    const s = String(Number(rawPct.toFixed(4)))
+    return s === '100' ? '99.9999' : s
+  }
   if (rawPct > 0 && rawPct < 1) return String(Number(rawPct.toFixed(2)))
   return String(Math.round(rawPct))
 }

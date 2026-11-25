@@ -1,8 +1,6 @@
-import { useCallback, useContext, useDeferredValue, useId, useMemo, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
+import { useCallback, useContext, useDeferredValue, useId, useMemo, useState } from 'react'
 import { DateRangeApi, MultiSelectApi, NumberInputApi } from '../../../shared/catalog-schema.ts'
 import { formatNativeTemporalValue } from '../../../shared/temporal.ts'
-import { usePortalPopover } from '../../dom-hooks.ts'
 import { useRuntimeMessages } from '../../i18n.ts'
 import { useDarkTheme } from '../../theme.ts'
 import {
@@ -21,14 +19,14 @@ import {
   normalizeMultiSelectMergedOptions,
 } from '../v5-helpers.ts'
 import {
-  type ClampedPopoverBox,
-  computeClampedPopoverBox,
   defineComponent,
   NativeDateField,
+  normalizeStringArrayValue,
+  PortalPopoverShell,
   SurfaceReadOnlyContext,
   SurfaceValidationContext,
+  usePickerPopover,
   useWritablePropState,
-  handleOptionListArrowKey,
   weightStyle,
 } from '../widget-helpers.tsx'
 
@@ -62,10 +60,18 @@ export const DshNumberInputImpl = defineComponent<{
   const hasRawVal = rawVal !== undefined && rawVal !== null && String(rawVal).trim() !== ''
   const numVal = hasRawVal ? Number(rawVal) : Number.NaN
   const hasValidNum = hasRawVal && Number.isFinite(numVal)
-  const safeMin =
+  const rawSafeMin =
     typeof props.min === 'number' && Number.isFinite(props.min) ? props.min : undefined
-  const safeMax =
+  const rawSafeMax =
     typeof props.max === 'number' && Number.isFinite(props.max) ? props.max : undefined
+  const safeMin =
+    rawSafeMin !== undefined && rawSafeMax !== undefined && rawSafeMin > rawSafeMax
+      ? rawSafeMax
+      : rawSafeMin
+  const safeMax =
+    rawSafeMin !== undefined && rawSafeMax !== undefined && rawSafeMin > rawSafeMax
+      ? rawSafeMin
+      : rawSafeMax
   const safeVal = hasValidNum ? numVal : (safeMin ?? 0)
   const valueKey = hasValidNum ? String(numVal) : ''
   if (prevValueKey !== valueKey) {
@@ -168,25 +174,30 @@ export const DshNumberInputImpl = defineComponent<{
                 return
               }
               const parsed = Number(trimmed)
-              let clamped = Number.isFinite(parsed) ? parsed : safeVal
+              if (!Number.isFinite(parsed)) {
+                setDraft(hasValidNum ? String(numVal) : '')
+                return
+              }
+              let clamped = parsed
               if (safeMin !== undefined) clamped = Math.max(safeMin, clamped)
               if (safeMax !== undefined) clamped = Math.min(safeMax, clamped)
               if (!hasValidNum || clamped !== numVal) commitValue(clamped)
             }}
             onKeyDown={(e) => {
               if (readOnly) return
+              const noMods = !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey
               if (e.key === 'ArrowUp') {
                 e.preventDefault()
                 applyDelta(1)
               } else if (e.key === 'ArrowDown') {
                 e.preventDefault()
                 applyDelta(-1)
-              } else if (e.key === 'Home' && safeMin !== undefined) {
+              } else if (noMods && e.key === 'Home' && safeMin !== undefined) {
                 e.preventDefault()
                 setTouched(true)
                 if (focused) setDraft(String(safeMin))
                 commitValue(safeMin)
-              } else if (e.key === 'End' && safeMax !== undefined) {
+              } else if (noMods && e.key === 'End' && safeMax !== undefined) {
                 e.preventDefault()
                 setTouched(true)
                 if (focused) setDraft(String(safeMax))
@@ -247,21 +258,26 @@ export const DshMultiSelectImpl = defineComponent<{
   validationErrors?: readonly string[]
   weight?: number
 }>(MultiSelectApi, function DshMultiSelect({ props, context }) {
+  const listboxId = useId()
   const msg = useRuntimeMessages()
   const readOnly = useContext(SurfaceReadOnlyContext)
   const { submitAttempted } = useContext(SurfaceValidationContext)
   const [touched, setTouched] = useState(false)
-  const [open, setOpen] = useState(false)
   const dark = useDarkTheme()
   const [query, setQuery] = useState('')
   const deferredQuery = useDeferredValue(query)
-  const triggerRef = useRef<HTMLDivElement | null>(null)
-  const popoverRef = useRef<HTMLDivElement | null>(null)
-  const [popoverBox, setPopoverBox] = useState<ClampedPopoverBox | null>(null)
-  if (readOnly && open) {
-    setOpen(false)
-  }
-  const effectiveOpen = open && !readOnly
+  const onBeforeClose = useCallback(() => {
+    setQuery('')
+    setTouched(true)
+  }, [])
+  const { effectiveOpen, popoverBox, triggerRef, popoverRef, closePopover, toggleOpen } =
+    usePickerPopover<HTMLDivElement>({
+      readOnly,
+      minWidth: 220,
+      estHeight: 260,
+      onBeforeClose,
+    })
+  const openPopover = toggleOpen
   const [rawSelected, commitSelected] = useWritablePropState(
     context,
     'value',
@@ -270,10 +286,7 @@ export const DshMultiSelectImpl = defineComponent<{
   )
 
   const selected = useMemo(
-    () =>
-      Array.isArray(rawSelected)
-        ? Array.from(new Set(rawSelected.map(String).filter(Boolean)))
-        : [],
+    () => Array.from(new Set(normalizeStringArrayValue(rawSelected).filter(Boolean))),
     [rawSelected],
   )
   const selectedSet = useMemo(() => new Set(selected), [selected])
@@ -312,36 +325,6 @@ export const DshMultiSelectImpl = defineComponent<{
       : msg.multiSelectPlaceholder
   const showError = !readOnly && (touched || submitAttempted) && props.isValid === false
   const err = showError ? props.validationErrors?.[0] : undefined
-
-  const closePopover = useCallback(() => {
-    setOpen(false)
-    setQuery('')
-    setTouched(true)
-  }, [])
-
-  const syncPopoverBox = useCallback(() => {
-    if (!triggerRef.current) return
-    const rect = triggerRef.current.getBoundingClientRect()
-    setPopoverBox(computeClampedPopoverBox(rect, { minWidth: 220, estHeight: 260 }))
-  }, [])
-
-  usePortalPopover({
-    open: effectiveOpen,
-    triggerRef,
-    popoverRef,
-    onClose: closePopover,
-    onReposition: syncPopoverBox,
-  })
-
-  const openPopover = () => {
-    if (readOnly) return
-    if (effectiveOpen) {
-      closePopover()
-      return
-    }
-    syncPopoverBox()
-    setOpen(true)
-  }
 
   const toggleValue = (val: string) => {
     if (readOnly) return
@@ -384,6 +367,9 @@ export const DshMultiSelectImpl = defineComponent<{
       <div
         ref={triggerRef}
         role="combobox"
+        aria-haspopup="listbox"
+        aria-controls={effectiveOpen ? listboxId : undefined}
+        aria-disabled={readOnly || undefined}
         aria-label={label || placeholder}
         aria-expanded={effectiveOpen}
         aria-invalid={showError || undefined}
@@ -435,97 +421,71 @@ export const DshMultiSelectImpl = defineComponent<{
         </span>
       </div>
 
-      {effectiveOpen && popoverBox && typeof document !== 'undefined'
-        ? createPortal(
-            <div
-              role="presentation"
-              data-a2ui-portal-popover=""
-              className={`${css.selectBackdrop} ${dark ? 'a2ui-dark' : 'a2ui-light'}`}
-              onClick={(e) => {
-                e.stopPropagation()
-                closePopover()
+      <PortalPopoverShell
+        open={effectiveOpen}
+        box={popoverBox}
+        dark={dark}
+        popoverRef={popoverRef}
+        onClose={closePopover}
+      >
+        {searchable || allowCreate ? (
+          <div className={css.selectSearchRow}>
+            <DshInput
+              autoFocus
+              icon={SEARCH_ICON_14}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (readOnly) return
+                if (e.key === 'Enter' && allowCreate && query.trim() !== '') {
+                  e.preventDefault()
+                  const clean = query.trim()
+                  if (!selectedSet.has(clean)) {
+                    setTouched(true)
+                    commitSelected([...selected, clean])
+                  }
+                  setQuery('')
+                }
               }}
-            >
-              <div
-                ref={popoverRef}
-                data-a2ui-select-popover=""
-                className={css.selectPopover}
-                style={{
-                  ...(popoverBox.placeAbove
-                    ? { bottom: popoverBox.bottom }
-                    : { top: popoverBox.top }),
-                  left: popoverBox.left,
-                  width: popoverBox.width,
-                  maxHeight: popoverBox.maxHeight,
-                }}
-                onClick={(e) => e.stopPropagation()}
-                onKeyDown={(e) => handleOptionListArrowKey(e, popoverRef.current)}
-              >
-                {searchable || allowCreate ? (
-                  <div className={css.selectSearchRow}>
-                    <DshInput
-                      autoFocus
-                      icon={SEARCH_ICON_14}
-                      value={query}
-                      onChange={(e) => setQuery(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (readOnly) return
-                        if (e.key === 'Enter' && allowCreate && query.trim() !== '') {
-                          e.preventDefault()
-                          const clean = query.trim()
-                          if (!selectedSet.has(clean)) {
-                            setTouched(true)
-                            commitSelected([...selected, clean])
-                          }
-                          setQuery('')
-                        }
-                      }}
-                      placeholder={
-                        allowCreate ? msg.multiSelectSearchCreate : msg.multiSelectSearchOnly
-                      }
-                    />
-                  </div>
-                ) : null}
-                <div
-                  role="listbox"
-                  aria-multiselectable="true"
-                  aria-label={label || placeholder}
-                  className={css.selectOptionList}
+              placeholder={allowCreate ? msg.multiSelectSearchCreate : msg.multiSelectSearchOnly}
+            />
+          </div>
+        ) : null}
+        <div
+          id={listboxId}
+          role="listbox"
+          aria-multiselectable="true"
+          aria-label={label || placeholder}
+          className={css.selectOptionList}
+        >
+          {filteredOptions.length === 0 ? (
+            <div className={css.selectEmpty}>{msg.selectNoResults}</div>
+          ) : (
+            filteredOptions.map((opt) => {
+              const active = selectedSet.has(opt.value)
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  role="option"
+                  aria-selected={active}
+                  className={css.selectOptionBtn}
+                  data-selected={active ? 'true' : 'false'}
+                  onClick={() => toggleValue(opt.value)}
                 >
-                  {filteredOptions.length === 0 ? (
-                    <div className={css.selectEmpty}>{msg.selectNoResults}</div>
-                  ) : (
-                    filteredOptions.map((opt) => {
-                      const active = selectedSet.has(opt.value)
-                      return (
-                        <button
-                          key={opt.value}
-                          type="button"
-                          role="option"
-                          aria-selected={active}
-                          className={css.selectOptionBtn}
-                          data-selected={active ? 'true' : 'false'}
-                          onClick={() => toggleValue(opt.value)}
-                        >
-                          <span className={css.selectOptionCopy}>
-                            <span className={css.selectOptionLabel}>{opt.label}</span>
-                            {opt.description ? (
-                              <span className={css.selectOptionDesc}>{opt.description}</span>
-                            ) : null}
-                          </span>
-                          {active ? (
-                            <span className={css.selectOptionCheck}>{CHECK_ICON_12}</span>
-                          ) : null}
-                        </button>
-                      )
-                    })
-                  )}
-                </div>
-              </div>
-            </div>,
-            document.body,
-          )
-        : null}
+                  <span className={css.selectOptionCopy}>
+                    <span className={css.selectOptionLabel}>{opt.label}</span>
+                    {opt.description ? (
+                      <span className={css.selectOptionDesc}>{opt.description}</span>
+                    ) : null}
+                  </span>
+                  {active ? <span className={css.selectOptionCheck}>{CHECK_ICON_12}</span> : null}
+                </button>
+              )
+            })
+          )}
+        </div>
+      </PortalPopoverShell>
     </div>
   )
 })
@@ -562,7 +522,7 @@ export const DshDateRangeImpl = defineComponent<{
   const normEnd = formatNativeTemporalValue(rawEnd, inputType, 'end')
 
   const spanDays = useMemo(() => computeDateRangeSpanDays(normStart, normEnd), [normStart, normEnd])
-  const todayIso = useMemo(() => buildDatePresetRange(1, false).start, [])
+  const todayIso = buildDatePresetRange(1, false).start
   const isTodaySelected =
     spanDays === 1 && normStart.slice(0, 10) === todayIso && normEnd.slice(0, 10) === todayIso
   const label = props.label !== undefined && props.label !== null ? String(props.label) : ''

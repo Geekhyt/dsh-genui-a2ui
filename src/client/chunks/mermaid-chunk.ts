@@ -12,6 +12,53 @@ import {
 let renderSeq = 0
 let renderChain: Promise<unknown> = Promise.resolve()
 
+const FORBID_SVG_TAGS = [
+  'script',
+  'iframe',
+  'object',
+  'embed',
+  'applet',
+  'form',
+  'input',
+  'textarea',
+  'button',
+  'meta',
+  'link',
+  'base',
+  'dialog',
+  'img',
+  'image',
+  'feImage',
+  'use',
+  'a',
+  'audio',
+  'video',
+  'animate',
+  'animateTransform',
+  'animateMotion',
+  'animateColor',
+  'set',
+  'discard',
+  'handler',
+]
+
+const FORBID_SVG_ATTRS = [
+  'background',
+  'poster',
+  'src',
+  'srcset',
+  'action',
+  'formaction',
+  'ping',
+  'cite',
+]
+
+const MERMAID_DOMPURIFY_CONFIG = {
+  FORBID_TAGS: [...FORBID_SVG_TAGS, 'style'],
+  FORBID_ATTR: [...FORBID_SVG_ATTRS, 'style'],
+  ALLOW_UNKNOWN_PROTOCOLS: false,
+}
+
 function readMermaidThemeColor(
   name: string,
   fallback: string,
@@ -94,6 +141,7 @@ function configureMermaidForHost(dark: boolean, target?: HTMLElement | null): vo
     startOnLoad: false,
     securityLevel: 'strict',
     suppressErrorRendering: true,
+    dompurifyConfig: MERMAID_DOMPURIFY_CONFIG,
     theme: 'base',
     flowchart: {
       htmlLabels: true,
@@ -238,35 +286,6 @@ function configureMermaidForHost(dark: boolean, target?: HTMLElement | null): vo
   })
 }
 
-const FORBID_SVG_TAGS = [
-  'script',
-  'iframe',
-  'object',
-  'embed',
-  'applet',
-  'form',
-  'input',
-  'textarea',
-  'button',
-  'meta',
-  'link',
-  'base',
-  'img',
-  'image',
-  'feImage',
-  'use',
-  'a',
-  'audio',
-  'video',
-  'animate',
-  'animateTransform',
-  'animateMotion',
-  'animateColor',
-  'set',
-  'discard',
-  'handler',
-]
-
 const UNSAFE_CSS_VALUE_RE =
   /\\|@import\b|expression\s*\(|(?:-webkit-)?image-set\s*\(|\bsrc\s*\(|javascript\s*:|vbscript\s*:/i
 const CSS_URL_START_RE = /\burl\s*\(/gi
@@ -329,14 +348,58 @@ function isSelectorScopedToRoot(selector: string, rootId: string): boolean {
   const trimmed = selector.trim()
   const prefix = `#${rootId}`
   if (!trimmed.startsWith(prefix)) return false
-  const rest = trimmed.slice(prefix.length)
-  if (rest === '') return true
-  const next = rest[0]!
-  if (!/[\s>.:[#]/.test(next)) return false
-  if (/\s/.test(next)) {
-    const afterWs = rest.trimStart()
-    if (afterWs.startsWith('+') || afterWs.startsWith('~')) return false
+  let i = prefix.length
+  if (i === trimmed.length) return true
+  if (!/[\s>.:[#]/.test(trimmed[i]!)) return false
+  while (i < trimmed.length) {
+    const ch = trimmed[i]!
+    if (/\s/.test(ch)) break
+    if (ch === '>' || ch === '+' || ch === '~') break
+    if (ch === '[') {
+      let depth = 1
+      let quote: '"' | "'" | null = null
+      i += 1
+      while (i < trimmed.length && depth > 0) {
+        const c = trimmed[i]!
+        if (quote !== null) {
+          if (c === '\\') i += 1
+          else if (c === quote) quote = null
+        } else if (c === '"' || c === "'") {
+          quote = c
+        } else if (c === '[') {
+          depth += 1
+        } else if (c === ']') {
+          depth -= 1
+        }
+        i += 1
+      }
+      continue
+    }
+    if (ch === '(') {
+      let depth = 1
+      let quote: '"' | "'" | null = null
+      i += 1
+      while (i < trimmed.length && depth > 0) {
+        const c = trimmed[i]!
+        if (quote !== null) {
+          if (c === '\\') i += 1
+          else if (c === quote) quote = null
+        } else if (c === '"' || c === "'") {
+          quote = c
+        } else if (c === '(') {
+          depth += 1
+        } else if (c === ')') {
+          depth -= 1
+        }
+        i += 1
+      }
+      continue
+    }
+    i += 1
   }
+  const afterRootCompound = trimmed.slice(i).trimStart()
+  if (afterRootCompound === '') return true
+  if (afterRootCompound.startsWith('+') || afterRootCompound.startsWith('~')) return false
   return true
 }
 
@@ -493,6 +556,7 @@ async function renderIntoOffscreen(id: string, source: string): Promise<string> 
         ADD_TAGS: ['foreignObject', 'foreignobject'],
         ADD_ATTR: ['dominant-baseline'],
         FORBID_TAGS: FORBID_SVG_TAGS,
+        FORBID_ATTR: FORBID_SVG_ATTRS,
         ALLOW_UNKNOWN_PROTOCOLS: false,
         HTML_INTEGRATION_POINTS: { foreignobject: true },
       }),

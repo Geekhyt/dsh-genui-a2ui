@@ -24,14 +24,14 @@ export const MAX_DRAFT_ENTRIES = 200
 const MAX_SINGLE_DRAFT_CHARS = 32_768
 const MAX_TOTAL_DRAFT_CHARS = 512_000
 
-function pruneRecordLru<T>(map: Record<string, T>, maxEntries: number): Record<string, T> {
-  const keys = Object.keys(map)
-  if (keys.length <= maxEntries) return map
-  const trimmed: Record<string, T> = {}
-  for (const k of keys.slice(keys.length - maxEntries)) {
-    trimmed[k] = map[k]!
+function touchLruMap<V>(map: Map<string, V>, key: string, value: V, maxEntries: number): void {
+  map.delete(key)
+  map.set(key, value)
+  while (map.size > maxEntries) {
+    const oldest = map.keys().next()
+    if (oldest.done) break
+    map.delete(oldest.value)
   }
-  return trimmed
 }
 
 interface DraftEntry {
@@ -48,11 +48,66 @@ interface DockUiEntry {
 interface EnabledStoreShape {
   defaultEnabled: boolean
   bySession: Record<string, boolean>
+  sessionOrder?: string[]
 }
 
-const memoryFallback = new Map<string, string>()
-const memoryPreferredKeys = new Set<string>()
-const warnedStorageKeys = new Set<string>()
+interface SharedPersistenceState {
+  memoryFallback: Map<string, string>
+  memoryPreferredKeys: Set<string>
+  warnedStorageKeys: Set<string>
+  cachedDraftsRaw: string | null | undefined
+  cachedDraftsList: DraftEntry[]
+  dockListeners: Set<() => void>
+  cachedDockRaw: string | null | undefined
+  cachedDockMap: Map<string, DockUiEntry>
+  enabledListeners: Set<() => void>
+  lastAppliedCommandSeqBySession: Map<string, number>
+  fallbackDefaultEnabled: boolean
+  cachedEnabledRaw: string | null | undefined
+  cachedEnabledStore: EnabledStoreShape
+  cachedEnabledOrder: Map<string, boolean>
+  enabledRevision: number
+  commandNoticeListeners: Set<() => void>
+  commandNoticesBySession: Map<string, A2uiCommandNotice>
+  commandNoticeTimersBySession: Map<string, ReturnType<typeof setTimeout>>
+  nextCommandNoticeSeq: number
+}
+
+const PERSISTENCE_GLOBAL_KEY = '__dshA2uiPersistence__'
+
+function getSharedState(): SharedPersistenceState {
+  const g = globalThis as Record<string, unknown>
+  const existing = g[PERSISTENCE_GLOBAL_KEY] as SharedPersistenceState | undefined
+  if (existing) return existing
+  const created: SharedPersistenceState = {
+    memoryFallback: new Map(),
+    memoryPreferredKeys: new Set(),
+    warnedStorageKeys: new Set(),
+    cachedDraftsRaw: undefined,
+    cachedDraftsList: [],
+    dockListeners: new Set(),
+    cachedDockRaw: undefined,
+    cachedDockMap: new Map(),
+    enabledListeners: new Set(),
+    lastAppliedCommandSeqBySession: new Map(),
+    fallbackDefaultEnabled: true,
+    cachedEnabledRaw: undefined,
+    cachedEnabledStore: { defaultEnabled: true, bySession: {} },
+    cachedEnabledOrder: new Map(),
+    enabledRevision: 0,
+    commandNoticeListeners: new Set(),
+    commandNoticesBySession: new Map(),
+    commandNoticeTimersBySession: new Map(),
+    nextCommandNoticeSeq: 0,
+  }
+  g[PERSISTENCE_GLOBAL_KEY] = created
+  return created
+}
+
+const shared = getSharedState()
+const memoryFallback = shared.memoryFallback
+const memoryPreferredKeys = shared.memoryPreferredKeys
+const warnedStorageKeys = shared.warnedStorageKeys
 
 function getBrowserStorage(): Storage | null {
   if (typeof window === 'undefined') return null
@@ -139,25 +194,27 @@ export function resetPersistenceForTests(): void {
   memoryFallback.clear()
   memoryPreferredKeys.clear()
   warnedStorageKeys.clear()
-  fallbackDefaultEnabled = true
-  cachedDockRaw = undefined
-  cachedDockMap = {}
-  cachedDraftsRaw = undefined
-  cachedDraftsList = []
-  cachedEnabledRaw = undefined
-  cachedEnabledStore = { defaultEnabled: true, bySession: {} }
-  lastAppliedCommandSeqBySession.clear()
-  for (const timer of commandNoticeTimersBySession.values()) {
+  shared.fallbackDefaultEnabled = true
+  shared.cachedDockRaw = undefined
+  shared.cachedDockMap = new Map()
+  shared.cachedDraftsRaw = undefined
+  shared.cachedDraftsList = []
+  shared.cachedEnabledRaw = undefined
+  shared.cachedEnabledStore = { defaultEnabled: true, bySession: {} }
+  shared.cachedEnabledOrder = new Map()
+  shared.enabledRevision += 1
+  shared.lastAppliedCommandSeqBySession.clear()
+  for (const timer of shared.commandNoticeTimersBySession.values()) {
     clearTimeout(timer)
   }
-  commandNoticeTimersBySession.clear()
-  commandNoticesBySession.clear()
+  shared.commandNoticeTimersBySession.clear()
+  shared.commandNoticesBySession.clear()
   removeStorage(DRAFTS_STORAGE_KEY)
   removeStorage(DOCK_STORAGE_KEY)
   removeStorage(ENABLED_STORAGE_KEY)
-  notifySubscribers(dockListeners, 'Persistence')
-  notifySubscribers(enabledListeners, 'Persistence')
-  notifySubscribers(commandNoticeListeners, 'Persistence')
+  notifySubscribers(shared.dockListeners, 'Persistence')
+  notifySubscribers(shared.enabledListeners, 'Persistence')
+  notifySubscribers(shared.commandNoticeListeners, 'Persistence')
 }
 
 export function computeMessagesFingerprint(messages: readonly unknown[]): string {
@@ -247,21 +304,18 @@ function draftKeyOf(sessionId: string, surfaceId: string, fingerprint: string): 
   return `${sessionId}::${surfaceId}::${fingerprint}`
 }
 
-let cachedDraftsRaw: string | null | undefined
-let cachedDraftsList: DraftEntry[] = []
-
 function readDraftList(): DraftEntry[] {
   const raw = readStorage(DRAFTS_STORAGE_KEY)
-  if (raw === cachedDraftsRaw) return [...cachedDraftsList]
-  cachedDraftsRaw = raw
+  if (raw === shared.cachedDraftsRaw) return [...shared.cachedDraftsList]
+  shared.cachedDraftsRaw = raw
   if (!raw) {
-    cachedDraftsList = []
+    shared.cachedDraftsList = []
     return []
   }
   const parsed = parseStoredJson(DRAFTS_STORAGE_KEY, raw)
   if (!parsed.ok) {
-    cachedDraftsRaw = null
-    cachedDraftsList = []
+    shared.cachedDraftsRaw = null
+    shared.cachedDraftsList = []
     return []
   }
   if (!Array.isArray(parsed.value)) {
@@ -270,11 +324,11 @@ function readDraftList(): DraftEntry[] {
       `Evicting non-array draft payload stored under "${DRAFTS_STORAGE_KEY}".`,
     )
     removeStorage(DRAFTS_STORAGE_KEY)
-    cachedDraftsRaw = null
-    cachedDraftsList = []
+    shared.cachedDraftsRaw = null
+    shared.cachedDraftsList = []
     return []
   }
-  cachedDraftsList = parsed.value.filter(
+  shared.cachedDraftsList = parsed.value.filter(
     (item): item is DraftEntry =>
       typeof item === 'object' &&
       item !== null &&
@@ -283,7 +337,7 @@ function readDraftList(): DraftEntry[] {
       (item as DraftEntry).data !== null &&
       !Array.isArray((item as DraftEntry).data),
   )
-  return [...cachedDraftsList]
+  return [...shared.cachedDraftsList]
 }
 
 export function removeSurfaceDraft(
@@ -321,8 +375,8 @@ function writeDraftList(entries: DraftEntry[]): void {
     working.shift()
     payload = JSON.stringify(working)
   }
-  cachedDraftsRaw = payload
-  cachedDraftsList = working
+  shared.cachedDraftsRaw = payload
+  shared.cachedDraftsList = working
 }
 
 export function loadSurfaceDraft(
@@ -385,38 +439,48 @@ export function countSurfaceDrafts(): number {
   return readDraftList().length
 }
 
-const dockListeners = new Set<() => void>()
 const DEFAULT_DOCK_STATE: DockUiEntry = Object.freeze({ collapsed: false, dismissedSeq: -1 })
-let cachedDockRaw: string | null | undefined
-let cachedDockMap: Record<string, DockUiEntry> = {}
 
-function readDockMap(): Record<string, DockUiEntry> {
+function readDockMap(): Map<string, DockUiEntry> {
   const raw = readStorage(DOCK_STORAGE_KEY)
-  if (raw === cachedDockRaw) return cachedDockMap
-  cachedDockRaw = raw
+  if (raw === shared.cachedDockRaw) return shared.cachedDockMap
+  shared.cachedDockRaw = raw
   if (!raw) {
-    cachedDockMap = {}
-    return cachedDockMap
+    shared.cachedDockMap = new Map()
+    return shared.cachedDockMap
   }
   const parsed = parseStoredJson(DOCK_STORAGE_KEY, raw)
   if (parsed.ok) {
-    if (typeof parsed.value === 'object' && parsed.value !== null && !Array.isArray(parsed.value)) {
-      const cleaned: Record<string, DockUiEntry> = {}
-      for (const [k, v] of Object.entries(parsed.value as Record<string, unknown>)) {
-        if (isDangerousObjectKey(k) || typeof v !== 'object' || v === null || Array.isArray(v)) {
+    const rawEntries = Array.isArray(parsed.value)
+      ? parsed.value
+      : typeof parsed.value === 'object' && parsed.value !== null
+        ? Object.entries(parsed.value as Record<string, unknown>)
+        : null
+    if (rawEntries !== null) {
+      const cleaned = new Map<string, DockUiEntry>()
+      for (const pair of rawEntries) {
+        if (!Array.isArray(pair) || pair.length < 2) continue
+        const [k, v] = pair
+        if (
+          typeof k !== 'string' ||
+          isDangerousObjectKey(k) ||
+          typeof v !== 'object' ||
+          v === null ||
+          Array.isArray(v)
+        ) {
           continue
         }
         const rec = v as Record<string, unknown>
-        cleaned[k] = {
+        cleaned.set(k, {
           collapsed: typeof rec.collapsed === 'boolean' ? rec.collapsed : false,
           dismissedSeq:
             typeof rec.dismissedSeq === 'number' && Number.isFinite(rec.dismissedSeq)
               ? rec.dismissedSeq
               : -1,
-        }
+        })
       }
-      cachedDockMap = cleaned
-      return cachedDockMap
+      shared.cachedDockMap = cleaned
+      return shared.cachedDockMap
     }
     warnOnceForKey(
       `shape:${DOCK_STORAGE_KEY}`,
@@ -424,68 +488,56 @@ function readDockMap(): Record<string, DockUiEntry> {
     )
     removeStorage(DOCK_STORAGE_KEY)
   }
-  cachedDockRaw = null
-  cachedDockMap = {}
-  return cachedDockMap
+  shared.cachedDockRaw = null
+  shared.cachedDockMap = new Map()
+  return shared.cachedDockMap
 }
 
-function writeDockMap(next: Record<string, DockUiEntry>): void {
-  const serialized = JSON.stringify(next)
-  cachedDockRaw = serialized
-  cachedDockMap = next
+function writeDockMap(next: Map<string, DockUiEntry>): void {
+  const serialized = JSON.stringify([...next.entries()])
+  shared.cachedDockRaw = serialized
+  shared.cachedDockMap = next
   writeStorage(DOCK_STORAGE_KEY, serialized)
-  notifySubscribers(dockListeners, 'Persistence')
+  notifySubscribers(shared.dockListeners, 'Persistence')
 }
 
 export function subscribeDockUi(listener: () => void): () => void {
-  dockListeners.add(listener)
+  shared.dockListeners.add(listener)
   return () => {
-    dockListeners.delete(listener)
+    shared.dockListeners.delete(listener)
   }
 }
 
 export function getDockUiState(sessionId: string | undefined): DockUiEntry {
   if (!sessionId) return DEFAULT_DOCK_STATE
   const map = readDockMap()
-  if (!Object.hasOwn(map, sessionId)) return DEFAULT_DOCK_STATE
-  return map[sessionId] ?? DEFAULT_DOCK_STATE
+  return map.get(sessionId) ?? DEFAULT_DOCK_STATE
 }
 
 export function setDockCollapsed(sessionId: string, collapsed: boolean): void {
   if (!sessionId || isDangerousObjectKey(sessionId)) return
   const prev = readDockMap()
-  const cur = Object.hasOwn(prev, sessionId)
-    ? (prev[sessionId] ?? DEFAULT_DOCK_STATE)
-    : DEFAULT_DOCK_STATE
-  const next = { ...prev }
-  delete next[sessionId]
-  next[sessionId] = { ...cur, collapsed }
-  writeDockMap(pruneRecordLru(next, MAX_DRAFT_ENTRIES))
+  const cur = prev.get(sessionId) ?? DEFAULT_DOCK_STATE
+  const next = new Map(prev)
+  touchLruMap(next, sessionId, { ...cur, collapsed }, MAX_DRAFT_ENTRIES)
+  writeDockMap(next)
 }
 
 export function dismissDockAtSeq(sessionId: string, seq: number): void {
   if (!sessionId || isDangerousObjectKey(sessionId)) return
   const prev = readDockMap()
-  const cur = Object.hasOwn(prev, sessionId)
-    ? (prev[sessionId] ?? DEFAULT_DOCK_STATE)
-    : DEFAULT_DOCK_STATE
-  const next = { ...prev }
-  delete next[sessionId]
-  next[sessionId] = { ...cur, dismissedSeq: seq }
-  writeDockMap(pruneRecordLru(next, MAX_DRAFT_ENTRIES))
+  const cur = prev.get(sessionId) ?? DEFAULT_DOCK_STATE
+  const next = new Map(prev)
+  touchLruMap(next, sessionId, { ...cur, dismissedSeq: seq }, MAX_DRAFT_ENTRIES)
+  writeDockMap(next)
 }
 
-const enabledListeners = new Set<() => void>()
-const lastAppliedCommandSeqBySession = new Map<string, number>()
-let fallbackDefaultEnabled = true
-let cachedEnabledRaw: string | null | undefined
-let cachedEnabledStore: EnabledStoreShape = { defaultEnabled: true, bySession: {} }
-
 export function setFallbackDefaultEnabled(enabled: boolean): void {
-  if (fallbackDefaultEnabled === enabled) return
-  fallbackDefaultEnabled = enabled
-  cachedEnabledRaw = undefined
-  notifySubscribers(enabledListeners, 'Persistence')
+  if (shared.fallbackDefaultEnabled === enabled) return
+  shared.fallbackDefaultEnabled = enabled
+  shared.cachedEnabledRaw = undefined
+  shared.enabledRevision += 1
+  notifySubscribers(shared.enabledListeners, 'Persistence')
 }
 
 function parsePersistedEnabled(val: unknown): boolean | undefined {
@@ -497,11 +549,12 @@ function parsePersistedEnabled(val: unknown): boolean | undefined {
 
 function readEnabledStore(): EnabledStoreShape {
   const raw = readStorage(ENABLED_STORAGE_KEY)
-  if (raw === cachedEnabledRaw) return cachedEnabledStore
-  cachedEnabledRaw = raw
+  if (raw === shared.cachedEnabledRaw) return shared.cachedEnabledStore
+  shared.cachedEnabledRaw = raw
   if (!raw) {
-    cachedEnabledStore = { defaultEnabled: fallbackDefaultEnabled, bySession: {} }
-    return cachedEnabledStore
+    shared.cachedEnabledOrder = new Map()
+    shared.cachedEnabledStore = { defaultEnabled: shared.fallbackDefaultEnabled, bySession: {} }
+    return shared.cachedEnabledStore
   }
   const parsedResult = parseStoredJson(ENABLED_STORAGE_KEY, raw)
   if (
@@ -512,21 +565,30 @@ function readEnabledStore(): EnabledStoreShape {
   ) {
     const parsed = parsedResult.value as Record<string, unknown>
     const defaultCandidate = parsePersistedEnabled(parsed.defaultEnabled ?? parsed.defaultTier)
-    const defaultEnabled = defaultCandidate ?? fallbackDefaultEnabled
+    const defaultEnabled = defaultCandidate ?? shared.fallbackDefaultEnabled
     const bySession: Record<string, boolean> = {}
+    const orderMap = new Map<string, boolean>()
     if (
       typeof parsed.bySession === 'object' &&
       parsed.bySession !== null &&
       !Array.isArray(parsed.bySession)
     ) {
-      for (const [k, v] of Object.entries(parsed.bySession as Record<string, unknown>)) {
-        if (isDangerousObjectKey(k)) continue
-        const coerced = parsePersistedEnabled(v)
-        if (coerced !== undefined) bySession[k] = coerced
+      const srcMap = parsed.bySession as Record<string, unknown>
+      const orderHint = Array.isArray(parsed.sessionOrder)
+        ? parsed.sessionOrder.filter((k): k is string => typeof k === 'string')
+        : []
+      for (const k of [...orderHint, ...Object.keys(srcMap)]) {
+        if (isDangerousObjectKey(k) || orderMap.has(k) || !Object.hasOwn(srcMap, k)) continue
+        const coerced = parsePersistedEnabled(srcMap[k])
+        if (coerced !== undefined) {
+          bySession[k] = coerced
+          orderMap.set(k, coerced)
+        }
       }
     }
-    cachedEnabledStore = { defaultEnabled, bySession }
-    return cachedEnabledStore
+    shared.cachedEnabledOrder = orderMap
+    shared.cachedEnabledStore = { defaultEnabled, bySession }
+    return shared.cachedEnabledStore
   }
   if (parsedResult.ok) {
     warnOnceForKey(
@@ -535,16 +597,25 @@ function readEnabledStore(): EnabledStoreShape {
     )
     removeStorage(ENABLED_STORAGE_KEY)
   }
-  cachedEnabledRaw = null
-  cachedEnabledStore = { defaultEnabled: fallbackDefaultEnabled, bySession: {} }
-  return cachedEnabledStore
+  shared.cachedEnabledRaw = null
+  shared.cachedEnabledOrder = new Map()
+  shared.cachedEnabledStore = { defaultEnabled: shared.fallbackDefaultEnabled, bySession: {} }
+  return shared.cachedEnabledStore
 }
 
 export function subscribeA2uiEnabled(listener: () => void): () => void {
-  enabledListeners.add(listener)
+  shared.enabledListeners.add(listener)
   return () => {
-    enabledListeners.delete(listener)
+    shared.enabledListeners.delete(listener)
   }
+}
+
+export function getA2uiEnabledRevision(): number {
+  return shared.enabledRevision
+}
+
+export function getLastAppliedCommandSeq(sessionId: string | undefined): number {
+  return shared.lastAppliedCommandSeqBySession.get(sessionId ?? 'global') ?? -1
 }
 
 export function getDefaultA2uiEnabled(): boolean {
@@ -568,31 +639,42 @@ export function setA2uiEnabled(
   let watermarkAdvanced = false
   if (typeof atCommandSeq === 'number') {
     const seqKey = sessionId ?? 'global'
-    const prevSeq = lastAppliedCommandSeqBySession.get(seqKey) ?? -1
+    const prevSeq = shared.lastAppliedCommandSeqBySession.get(seqKey) ?? -1
     if (atCommandSeq > prevSeq) {
-      lastAppliedCommandSeqBySession.set(seqKey, atCommandSeq)
+      touchLruMap(shared.lastAppliedCommandSeqBySession, seqKey, atCommandSeq, MAX_DRAFT_ENTRIES)
       watermarkAdvanced = true
     }
   }
   const prev = readEnabledStore()
-  const nextBySession = { ...prev.bySession }
+  const nextOrder = new Map(shared.cachedEnabledOrder)
   if (sessionId && !isDangerousObjectKey(sessionId)) {
-    delete nextBySession[sessionId]
-    nextBySession[sessionId] = enabled
+    touchLruMap(nextOrder, sessionId, enabled, MAX_DRAFT_ENTRIES)
+  }
+  const nextBySession: Record<string, boolean> = {}
+  const sessionOrder: string[] = []
+  for (const [k, v] of nextOrder) {
+    nextBySession[k] = v
+    sessionOrder.push(k)
   }
   const next: EnabledStoreShape = {
     defaultEnabled: updateDefault || !sessionId ? enabled : prev.defaultEnabled,
-    bySession: pruneRecordLru(nextBySession, MAX_DRAFT_ENTRIES),
+    bySession: nextBySession,
+    sessionOrder,
   }
   const serialized = JSON.stringify(next)
-  if (serialized === cachedEnabledRaw) {
-    if (watermarkAdvanced) notifySubscribers(enabledListeners, 'Persistence')
+  if (serialized === shared.cachedEnabledRaw) {
+    if (watermarkAdvanced) {
+      shared.enabledRevision += 1
+      notifySubscribers(shared.enabledListeners, 'Persistence')
+    }
     return
   }
-  cachedEnabledRaw = serialized
-  cachedEnabledStore = next
+  shared.cachedEnabledRaw = serialized
+  shared.cachedEnabledOrder = nextOrder
+  shared.cachedEnabledStore = next
+  shared.enabledRevision += 1
   writeStorage(ENABLED_STORAGE_KEY, serialized)
-  notifySubscribers(enabledListeners, 'Persistence')
+  notifySubscribers(shared.enabledListeners, 'Persistence')
 }
 
 export function resolveEffectiveA2uiEnabled(
@@ -601,7 +683,7 @@ export function resolveEffectiveA2uiEnabled(
 ): boolean {
   if (latestCommand !== null) {
     const seqKey = sessionId ?? 'global'
-    const watermark = lastAppliedCommandSeqBySession.get(seqKey) ?? -1
+    const watermark = shared.lastAppliedCommandSeqBySession.get(seqKey) ?? -1
     if (latestCommand.seq > watermark) {
       return latestCommand.enabled
     }
@@ -615,7 +697,7 @@ export function reconcileLatestA2uiCommand(
 ): void {
   if (latestCommand === null) return
   const seqKey = sessionId ?? 'global'
-  const watermark = lastAppliedCommandSeqBySession.get(seqKey) ?? -1
+  const watermark = shared.lastAppliedCommandSeqBySession.get(seqKey) ?? -1
   if (latestCommand.seq <= watermark) return
   setA2uiEnabled(sessionId, latestCommand.enabled, latestCommand.seq, false)
 }
@@ -628,29 +710,25 @@ export interface A2uiCommandNotice {
 
 const MAX_COMMAND_NOTICE_SESSIONS = 32
 const COMMAND_NOTICE_TTL_MS = 4200
-const commandNoticeListeners = new Set<() => void>()
-const commandNoticesBySession = new Map<string, A2uiCommandNotice>()
-const commandNoticeTimersBySession = new Map<string, ReturnType<typeof setTimeout>>()
-let nextCommandNoticeSeq = 0
 
 function clearNoticeTimer(sessionId: string): void {
-  const prevTimer = commandNoticeTimersBySession.get(sessionId)
+  const prevTimer = shared.commandNoticeTimersBySession.get(sessionId)
   if (prevTimer !== undefined) {
     clearTimeout(prevTimer)
-    commandNoticeTimersBySession.delete(sessionId)
+    shared.commandNoticeTimersBySession.delete(sessionId)
   }
 }
 
 export function subscribeCommandNotice(listener: () => void): () => void {
-  commandNoticeListeners.add(listener)
+  shared.commandNoticeListeners.add(listener)
   return () => {
-    commandNoticeListeners.delete(listener)
+    shared.commandNoticeListeners.delete(listener)
   }
 }
 
 export function getCommandNotice(sessionId: string | undefined): A2uiCommandNotice | null {
   if (!sessionId) return null
-  return commandNoticesBySession.get(sessionId) ?? null
+  return shared.commandNoticesBySession.get(sessionId) ?? null
 }
 
 export function publishCommandNotice(
@@ -659,36 +737,36 @@ export function publishCommandNotice(
   text: string,
 ): A2uiCommandNotice | null {
   if (!sessionId || text.trim() === '') return null
-  nextCommandNoticeSeq += 1
+  shared.nextCommandNoticeSeq += 1
   const notice: A2uiCommandNotice = {
-    seq: nextCommandNoticeSeq,
+    seq: shared.nextCommandNoticeSeq,
     kind,
     text: text.trim(),
   }
   clearNoticeTimer(sessionId)
-  commandNoticesBySession.delete(sessionId)
-  commandNoticesBySession.set(sessionId, notice)
-  while (commandNoticesBySession.size > MAX_COMMAND_NOTICE_SESSIONS) {
-    const oldest = commandNoticesBySession.keys().next()
+  shared.commandNoticesBySession.delete(sessionId)
+  shared.commandNoticesBySession.set(sessionId, notice)
+  while (shared.commandNoticesBySession.size > MAX_COMMAND_NOTICE_SESSIONS) {
+    const oldest = shared.commandNoticesBySession.keys().next()
     if (oldest.done) break
     clearNoticeTimer(oldest.value)
-    commandNoticesBySession.delete(oldest.value)
+    shared.commandNoticesBySession.delete(oldest.value)
   }
   const timer = setTimeout(() => {
     dismissCommandNotice(sessionId, notice.seq)
   }, COMMAND_NOTICE_TTL_MS)
   ;(timer as unknown as { unref?: () => void }).unref?.()
-  commandNoticeTimersBySession.set(sessionId, timer)
-  notifySubscribers(commandNoticeListeners, 'Persistence')
+  shared.commandNoticeTimersBySession.set(sessionId, timer)
+  notifySubscribers(shared.commandNoticeListeners, 'Persistence')
   return notice
 }
 
 export function dismissCommandNotice(sessionId: string | undefined, seq?: number): void {
   if (!sessionId) return
-  const current = commandNoticesBySession.get(sessionId)
+  const current = shared.commandNoticesBySession.get(sessionId)
   if (!current) return
   if (seq !== undefined && current.seq !== seq) return
   clearNoticeTimer(sessionId)
-  commandNoticesBySession.delete(sessionId)
-  notifySubscribers(commandNoticeListeners, 'Persistence')
+  shared.commandNoticesBySession.delete(sessionId)
+  notifySubscribers(shared.commandNoticeListeners, 'Persistence')
 }

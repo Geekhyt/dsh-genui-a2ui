@@ -46,7 +46,7 @@
   }
 
   .triggerOff:hover:not(:disabled) {
-    color: var(--dsw-alias-label-secondary, #646a73);
+    color: var(--dsw-alias-label-secondary, light-dark(#646a73, #d1d5db));
     background: var(--dsw-alias-interactive-bg-hover, rgba(128, 128, 128, 0.1));
   }
 }

@@ -1,12 +1,16 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { deflateSync } from 'node:zlib'
 import { describe, expect, it } from 'vitest'
 import { evaluateEvalThresholds } from '../scripts/eval-llm.mjs'
 import * as mockLlm from '../scripts/mock-llm.mjs'
 import {
   buildDomGeometryAuditExpression,
+  decodePngRgba,
+  evaluateStickyTintParity,
   evaluateVisualQaReport,
   SCREENSHOT_SHOWCASE_MAP,
+  samplePngMedianRgb,
 } from '../scripts/visual-qa-bot.mjs'
 import { computeMetricRingGeometry } from '../src/client/catalog/v3-helpers.ts'
 import { buildChartOption } from '../src/client/chunks/echarts-chunk.ts'
@@ -532,6 +536,7 @@ describe('Headless Visual QA bot contracts & screenshot manifest parity', () => 
     expect(auditExpr).toContain('buttonWrapViolations')
     expect(auditExpr).toContain('clippingViolations')
     expect(auditExpr).toContain('popoverViolations')
+    expect(auditExpr).toContain('svgTextClipViolations')
 
     const clean = evaluateVisualQaReport([
       {
@@ -544,6 +549,7 @@ describe('Headless Visual QA bot contracts & screenshot manifest parity', () => 
         buttonWrapViolations: [],
         clippingViolations: [],
         popoverViolations: [],
+        svgTextClipViolations: [],
         consoleErrors: [],
         pageErrors: [],
       },
@@ -562,11 +568,73 @@ describe('Headless Visual QA bot contracts & screenshot manifest parity', () => 
         buttonWrapViolations: [{ text: 'Copy', width: 22, height: 54 }],
         clippingViolations: [],
         popoverViolations: [],
+        svgTextClipViolations: [
+          { kind: 'node-box', text: '12.4k/s', textRight: 240, boxRight: 200 },
+        ],
         consoleErrors: ['boom'],
         pageErrors: [],
       },
     ])
     expect(broken.ok).toBe(false)
-    expect(broken.failures[0]?.issues.length).toBe(3)
+    expect(broken.failures[0]?.issues.length).toBe(4)
+
+    const makeChunk = (type: string, data: Buffer) => {
+      const len = Buffer.alloc(4)
+      len.writeUInt32BE(data.length, 0)
+      const typeBuf = Buffer.from(type, 'ascii')
+      const crc = Buffer.alloc(4)
+      return Buffer.concat([len, typeBuf, data, crc])
+    }
+    const buildSyntheticPng = (
+      width: number,
+      height: number,
+      paint: (x: number, y: number) => readonly [number, number, number, number],
+    ) => {
+      const ihdr = Buffer.alloc(13)
+      ihdr.writeUInt32BE(width, 0)
+      ihdr.writeUInt32BE(height, 4)
+      ihdr[8] = 8
+      ihdr[9] = 6
+      const scanlines = Buffer.alloc(height * (1 + width * 4))
+      for (let y = 0; y < height; y += 1) {
+        const row = y * (1 + width * 4)
+        scanlines[row] = 0
+        for (let x = 0; x < width; x += 1) {
+          const [r, g, b, a] = paint(x, y)
+          const off = row + 1 + x * 4
+          scanlines[off] = r
+          scanlines[off + 1] = g
+          scanlines[off + 2] = b
+          scanlines[off + 3] = a
+        }
+      }
+      return Buffer.concat([
+        Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+        makeChunk('IHDR', ihdr),
+        makeChunk('IDAT', deflateSync(scanlines)),
+        makeChunk('IEND', Buffer.alloc(0)),
+      ])
+    }
+
+    const seamPng = buildSyntheticPng(20, 10, (x) =>
+      x < 10 ? [33, 33, 33, 255] : [48, 48, 48, 255],
+    )
+    const decodedSeam = decodePngRgba(seamPng)
+    const leftRgb = samplePngMedianRgb(decodedSeam, { x: 1, y: 1, w: 6, h: 6 })
+    const rightRgb = samplePngMedianRgb(decodedSeam, { x: 12, y: 1, w: 6, h: 6 })
+    expect(leftRgb).toEqual([33, 33, 33])
+    expect(rightRgb).toEqual([48, 48, 48])
+    expect(
+      evaluateStickyTintParity(
+        [{ label: 'dark:selected', stickyRgb: leftRgb, normalRgb: rightRgb }],
+        4,
+      ).ok,
+    ).toBe(false)
+    expect(
+      evaluateStickyTintParity(
+        [{ label: 'dark:selected', stickyRgb: rightRgb, normalRgb: rightRgb }],
+        4,
+      ).ok,
+    ).toBe(true)
   })
 })

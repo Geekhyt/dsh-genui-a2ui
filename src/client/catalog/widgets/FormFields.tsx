@@ -39,6 +39,8 @@ import {
   ModalOpenContext,
   ModalTriggerContext,
   NativeDateField,
+  normalizeStringArrayValue,
+  parseBooleanValue,
   renderChildRef,
   runSurfaceAction,
   SurfaceActionStatusContext,
@@ -79,6 +81,12 @@ export function DshButtonView({
   const softInvalidDisabled = !hardDisabled && invalid
   const errLabel = !readOnly && invalid ? (props.validationErrors ?? []).join('；') : ''
 
+  const blockSoftInvalid = (e?: { preventDefault?: () => void; stopPropagation?: () => void }) => {
+    e?.preventDefault?.()
+    e?.stopPropagation?.()
+    markSubmitAttempted()
+  }
+
   const btn = (
     <DshButton
       data-a2ui-button=""
@@ -89,15 +97,7 @@ export function DshButtonView({
         ...weightStyle(props.weight),
         ...(softInvalidDisabled ? { opacity: 0.52, cursor: 'not-allowed' } : undefined),
       }}
-      onClickCapture={
-        softInvalidDisabled
-          ? (e) => {
-              e?.preventDefault?.()
-              e?.stopPropagation?.()
-              markSubmitAttempted()
-            }
-          : undefined
-      }
+      onClickCapture={softInvalidDisabled ? blockSoftInvalid : undefined}
       onClick={(e) => {
         if (hardDisabled) {
           e?.preventDefault?.()
@@ -105,9 +105,7 @@ export function DshButtonView({
           return
         }
         if (softInvalidDisabled) {
-          e?.preventDefault?.()
-          e?.stopPropagation?.()
-          markSubmitAttempted()
+          blockSoftInvalid(e)
           return
         }
         if (isModalTrigger) {
@@ -247,6 +245,15 @@ export function DshTextFieldView({
           onBlur={() => {
             setFocused(false)
             setTouched(true)
+            if (isNumber && !readOnly && draft !== val) {
+              const trimmed = draft.trim()
+              if (trimmed === '') {
+                if (val !== '') commitValue('')
+              } else {
+                const parsed = Number(trimmed)
+                commitValue((Number.isFinite(parsed) ? parsed : trimmed) as unknown as string)
+              }
+            }
           }}
           onChange={(e) => {
             if (readOnly) return
@@ -313,9 +320,13 @@ export function DshCheckBoxView({
   const err = showError ? props.validationErrors?.[0] : undefined
 
   return (
-    <div className={`${css.field} ${css.checkboxField}`} style={weightStyle(props.weight, 140)}>
+    <div
+      className={`${css.field} ${css.checkboxField}`}
+      style={weightStyle(props.weight, 140)}
+      aria-invalid={showError || undefined}
+    >
       <DshCheckbox
-        checked={Boolean(rawVal)}
+        checked={parseBooleanValue(rawVal)}
         disabled={readOnly}
         onChange={(next) => {
           if (readOnly) return
@@ -364,10 +375,7 @@ export const DshChoicePickerImpl = defineComponent<{
     props.value,
     props.setValue,
   )
-  const selected = useMemo(
-    () => (Array.isArray(rawSelected) ? rawSelected.map(String) : []),
-    [rawSelected],
-  )
+  const selected = useMemo(() => normalizeStringArrayValue(rawSelected), [rawSelected])
   const selectedSet = useMemo(() => new Set(selected), [selected])
   const options = useMemo(() => {
     if (!Array.isArray(props.options)) return []
@@ -433,7 +441,12 @@ export const DshChoicePickerImpl = defineComponent<{
       {filtered.length === 0 ? (
         <div className={css.selectEmpty}>{msg.selectNoResults}</div>
       ) : props.displayStyle === 'chips' ? (
-        <div className={css.pillGroup}>
+        <div
+          className={css.pillGroup}
+          role="group"
+          aria-label={label || undefined}
+          aria-invalid={showError || undefined}
+        >
           {filtered.map((opt) => (
             <DshPill
               key={opt.value}
@@ -452,6 +465,7 @@ export const DshChoicePickerImpl = defineComponent<{
           aria-label={label || msg.radioGroupAria}
           value={selected[0] ?? null}
           isDisabled={readOnly}
+          isInvalid={showError || undefined}
           onChange={(val) => {
             if (readOnly) return
             setTouched(true)
@@ -466,7 +480,12 @@ export const DshChoicePickerImpl = defineComponent<{
           ))}
         </AriaRadioGroup>
       ) : (
-        <div className={css.radioList}>
+        <div
+          className={css.radioList}
+          role="group"
+          aria-label={label || undefined}
+          aria-invalid={showError || undefined}
+        >
           {filtered.map((opt) => (
             <DshCheckbox
               key={opt.value}
@@ -512,7 +531,11 @@ export const DshSliderImpl = defineComponent<{
     typeof props.steps === 'number' && Number.isFinite(props.steps) && props.steps > 0
       ? Math.max(1e-9, span / props.steps)
       : fallbackStep
-  const rawVal = Number(sliderVal ?? min)
+  const isEmptySlider =
+    sliderVal === undefined ||
+    sliderVal === null ||
+    (typeof sliderVal === 'string' && sliderVal.trim() === '')
+  const rawVal = isEmptySlider ? min : Number(sliderVal)
   const value = Number.isFinite(rawVal) ? Math.min(max, Math.max(min, rawVal)) : min
   const pct = ((value - min) / span) * 100
   const label = props.label ? String(props.label) : ''
@@ -520,7 +543,12 @@ export const DshSliderImpl = defineComponent<{
   const err = showError ? props.validationErrors?.[0] : undefined
 
   return (
-    <div className={css.field} style={weightStyle(props.weight, 160)} data-a2ui-slider="">
+    <div
+      className={css.field}
+      style={weightStyle(props.weight, 160)}
+      data-a2ui-slider=""
+      aria-invalid={showError || undefined}
+    >
       <AriaSlider
         className={css.slider}
         minValue={min}

@@ -1,13 +1,16 @@
 const EXPLICIT_TZ_RE =
-  /^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T ](\d{1,2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?)?\s*(?:Z|[+-]\d{2}(?::?\d{2})?)$/i
-const SHORT_TZ_SUFFIX_RE = /([+-]\d{2})$/
+  /^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T ](\d{1,2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?)?\s*(Z|[+-]\d{2}(?::?\d{2})?)$/i
 const NAIVE_DATE_RE = /^(\d{4})-(\d{1,2})-(\d{1,2})$/
 const NAIVE_DATETIME_RE =
   /^(\d{4})-(\d{1,2})-(\d{1,2})[T ](\d{1,2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?$/
-const NAIVE_TIME_RE = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/
+const NAIVE_TIME_RE = /^(\d{1,2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?$/
 
-function normalizeExplicitTzString(trimmed: string): string {
-  return SHORT_TZ_SUFFIX_RE.test(trimmed) ? `${trimmed}:00` : trimmed
+function normalizeExplicitTzOffset(rawTz: string): string {
+  const upper = rawTz.toUpperCase()
+  if (upper === 'Z') return 'Z'
+  if (/^[+-]\d{2}$/.test(upper)) return `${upper}:00`
+  if (/^[+-]\d{4}$/.test(upper)) return `${upper.slice(0, 3)}:${upper.slice(3)}`
+  return upper
 }
 
 function isValidLocalCalendarDate(y: number, m: number, d: number): boolean {
@@ -38,10 +41,14 @@ function parseExplicitTzDate(trimmed: string): Date | null {
   const mo = Number(m[2])
   const d = Number(m[3])
   if (!isValidLocalCalendarDate(y, mo, d)) return null
-  if (m[4] !== undefined) {
-    if (!isValidLocalTime(Number(m[4]), Number(m[5]), Number(m[6] ?? 0))) return null
-  }
-  const parsed = new Date(normalizeExplicitTzString(trimmed))
+  const hh = m[4] !== undefined ? Number(m[4]) : 0
+  const mi = m[5] !== undefined ? Number(m[5]) : 0
+  const ss = m[6] !== undefined ? Number(m[6]) : 0
+  if (!isValidLocalTime(hh, mi, ss)) return null
+  const frac = m[7] ? `.${m[7].slice(0, 3)}` : ''
+  const tz = normalizeExplicitTzOffset(m[8]!)
+  const canonical = `${m[1]!}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}T${String(hh).padStart(2, '0')}:${String(mi).padStart(2, '0')}:${String(ss).padStart(2, '0')}${frac}${tz}`
+  const parsed = new Date(canonical)
   return Number.isNaN(parsed.getTime()) ? null : parsed
 }
 

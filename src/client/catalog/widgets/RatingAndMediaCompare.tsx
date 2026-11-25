@@ -12,6 +12,7 @@ import {
 } from '../v6-helpers.ts'
 import {
   defineComponent,
+  handleHorizontalArrowKey,
   isSafeImageUrl,
   SurfaceReadOnlyContext,
   SurfaceValidationContext,
@@ -98,16 +99,35 @@ export const DshRatingImpl = defineComponent<{
         </span>
       </div>
       {variant === 'scale' ? (
-        <div className={css.ratingScaleRow} role="radiogroup" aria-label={label || msg.ratingAria}>
+        <div
+          className={css.ratingScaleRow}
+          role="radiogroup"
+          aria-label={label || msg.ratingAria}
+          aria-invalid={showError || undefined}
+          onKeyDown={(e) => {
+            if (readOnly) return
+            handleHorizontalArrowKey(e, e.currentTarget, '[role="radio"]', (idx) => {
+              selectScore(idx + 1)
+            })
+          }}
+        >
           {Array.from({ length: max }, (_, idx) => {
             const val = idx + 1
             const active = score === val
+            const itemDesc = labels[idx]
+            const tabIdx = readOnly ? -1 : active || (score === 0 && idx === 0) ? 0 : -1
             return (
               <button
                 key={val}
                 type="button"
                 role="radio"
+                tabIndex={tabIdx}
                 aria-checked={active}
+                aria-label={
+                  itemDesc
+                    ? `${itemDesc} (${msg.ratingScoreOf(val, max)})`
+                    : msg.ratingScoreOf(val, max)
+                }
                 disabled={readOnly}
                 className={css.ratingScaleBtn}
                 data-active={active ? 'true' : 'false'}
@@ -119,19 +139,33 @@ export const DshRatingImpl = defineComponent<{
           })}
         </div>
       ) : (
-        <div className={css.ratingStarsRow} role="radiogroup" aria-label={label || msg.ratingAria}>
+        <div
+          className={css.ratingStarsRow}
+          role="radiogroup"
+          aria-label={label || msg.ratingAria}
+          aria-invalid={showError || undefined}
+          onKeyDown={(e) => {
+            if (readOnly) return
+            handleHorizontalArrowKey(e, e.currentTarget, '[role="radio"]', (idx) => {
+              selectScore(idx + 1)
+            })
+          }}
+        >
           {Array.from({ length: max }, (_, idx) => {
             const fullVal = idx + 1
             const halfVal = idx + 0.5
             const fill: 'full' | 'half' | 'empty' =
               score >= fullVal ? 'full' : allowHalf && score >= halfVal ? 'half' : 'empty'
             const isHalfChecked = allowHalf && score === halfVal
+            const isChecked = score === fullVal || isHalfChecked
+            const tabIdx = readOnly ? -1 : isChecked || (score === 0 && idx === 0) ? 0 : -1
             return (
               <button
                 key={fullVal}
                 type="button"
                 role="radio"
-                aria-checked={score === fullVal || isHalfChecked}
+                tabIndex={tabIdx}
+                aria-checked={isChecked}
                 aria-label={msg.ratingScoreOf(isHalfChecked ? halfVal : fullVal, max)}
                 disabled={readOnly}
                 className={css.ratingStarBtn}

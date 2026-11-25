@@ -577,9 +577,9 @@
 }
 
 .diffGutter {
-  width: 38px;
-  min-width: 38px;
-  padding: 1px 8px;
+  width: 44px;
+  min-width: 44px;
+  padding: 1px 6px;
   text-align: right;
   vertical-align: top;
   white-space: nowrap;
@@ -592,11 +592,11 @@
 }
 
 .diffSplitGutterCol {
-  width: 38px;
+  width: 44px;
 }
 
 .diffGutterCol {
-  width: 38px;
+  width: 44px;
 }
 
 .diffMarkerCol {
@@ -645,17 +645,11 @@
 .diffSplitCell {
   padding: 1px 10px;
   vertical-align: top;
-  white-space: pre;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
   color: var(--a2ui-fg);
   border-right: 1px solid var(--a2ui-border-1);
-}
-
-@container (max-width: 720px) {
-  .diffSplitCell {
-    white-space: pre-wrap;
-    word-break: break-word;
-    overflow-wrap: anywhere;
-  }
 }
 
 @container (max-width: 440px) {

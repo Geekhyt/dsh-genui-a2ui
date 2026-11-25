@@ -209,11 +209,16 @@
 }
 
 .mermaidFullscreenBody {
+  position: relative;
   flex: 1;
   min-height: 0;
   padding: 18px 22px;
   overflow: auto;
   display: flex;
+}
+
+.mermaidFullscreenBody .lazySkeleton {
+  position: relative;
 }
 
 .mermaidCaption {
@@ -282,12 +287,12 @@
 .selectBackdrop {
   position: fixed;
   inset: 0;
-  z-index: var(--a2ui-z-popover-backdrop, 1099);
+  z-index: var(--a2ui-z-popover, 1100);
 }
 
 .selectPopover {
   position: fixed;
-  z-index: var(--a2ui-z-popover, 1100);
+  z-index: 1;
   display: flex;
   flex-direction: column;
   max-height: 280px;

@@ -182,7 +182,7 @@ export const DshAccordionImpl = defineComponent<{
               type="button"
               className={css.accordionTrigger}
               aria-expanded={isOpen}
-              aria-controls={panelId}
+              aria-controls={isVisited ? panelId : undefined}
               onClick={() => toggleIndex(idx)}
             >
               <span className={css.accordionTitleWrap}>
@@ -234,8 +234,7 @@ export const DshJsonTreeImpl = defineComponent<{
   const [copiedAll, markCopiedAll] = useTransientFlag(1300)
 
   const handleCopyAll = () => {
-    copyTextToClipboard(safeStringifyJson(props.data ?? null, 2))
-    markCopiedAll()
+    copyTextToClipboard(safeStringifyJson(props.data ?? null, 2), markCopiedAll)
   }
 
   return (
@@ -274,9 +273,10 @@ function FileTreeBranch(props: {
   readonly depth: number
   readonly expandedDepth: number
   readonly onSelectFile: (node: FileTreeNode) => void
-  readonly interactive: boolean
+  readonly canOpenFile: boolean
+  readonly hasAction: boolean
 }) {
-  const { node, depth, expandedDepth, onSelectFile, interactive } = props
+  const { node, depth, expandedDepth, onSelectFile, canOpenFile, hasAction } = props
   const [open, setOpen] = useState(depth < expandedDepth)
   const indent = 10 + depth * 16
 
@@ -286,6 +286,7 @@ function FileTreeBranch(props: {
         <button
           type="button"
           className={css.fileTreeRow}
+          aria-expanded={open}
           style={{ paddingLeft: indent }}
           onClick={() => setOpen((v) => !v)}
         >
@@ -307,7 +308,8 @@ function FileTreeBranch(props: {
                 depth={depth + 1}
                 expandedDepth={expandedDepth}
                 onSelectFile={onSelectFile}
-                interactive={interactive}
+                canOpenFile={canOpenFile}
+                hasAction={hasAction}
               />
             ))}
           </ul>
@@ -318,6 +320,7 @@ function FileTreeBranch(props: {
 
   const statusMeta = node.status ? STATUS_META[node.status] : undefined
   const displayName = node.line !== undefined ? `${node.name}:${node.line}` : node.name
+  const canClickFile = Boolean((canOpenFile && node.status !== 'deleted') || hasAction)
   const rowContent = (
     <>
       <span className={css.fileTreeFileIcon}>
@@ -336,7 +339,7 @@ function FileTreeBranch(props: {
 
   return (
     <li className={css.fileTreeLi} role="treeitem">
-      {interactive ? (
+      {canClickFile ? (
         <button
           type="button"
           className={`${css.fileTreeRow} ${css.fileTreeFileBtn}`}
@@ -378,7 +381,8 @@ export const DshFileTreeImpl = defineComponent<{
       : 2
 
   const activeAction = readOnly ? undefined : runAction
-  const interactive = Boolean(openFile || activeAction)
+  const canOpenFile = !readOnly && Boolean(openFile)
+  const hasAction = Boolean(activeAction)
 
   const handleSelectFile = (node: FileTreeNode) => {
     if (readOnly) return
@@ -428,7 +432,8 @@ export const DshFileTreeImpl = defineComponent<{
               depth={0}
               expandedDepth={expandedDepth}
               onSelectFile={handleSelectFile}
-              interactive={interactive}
+              canOpenFile={canOpenFile}
+              hasAction={hasAction}
             />
           ))}
         </ul>

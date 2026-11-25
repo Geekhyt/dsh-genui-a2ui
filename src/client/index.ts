@@ -22,7 +22,12 @@ import {
   resolveSessionPath,
   type WorkspaceFileOpener,
 } from './file-opener.tsx'
-import { publishCommandNotice, setA2uiEnabled, setFallbackDefaultEnabled } from './persistence.ts'
+import {
+  getA2uiEnabled,
+  publishCommandNotice,
+  setA2uiEnabled,
+  setFallbackDefaultEnabled,
+} from './persistence.ts'
 import type { SurfaceActionCallback } from './runtime/SurfaceView.tsx'
 import { mountPluginCssSheets, unmountPluginCssSheets } from './style-lifecycle.ts'
 import { A2uiTierControl } from './shell/TierControl.tsx'
@@ -377,7 +382,8 @@ export function apply(ctx: Context, config: ClientConfig = {}): void {
           const parsedEnabled = parseA2uiEnabledFromStatusText(text)
           if (parsedEnabled !== null) {
             const latestSeq = resolveLatestA2uiCommandState(snapshot)?.seq
-            setA2uiEnabled(sessionId, parsedEnabled, latestSeq, false)
+            const changed = parsedEnabled !== getA2uiEnabled(sessionId)
+            setA2uiEnabled(sessionId, parsedEnabled, latestSeq, changed)
           }
         }
         if (isChatTimelineActive(snapshot)) return

@@ -219,7 +219,8 @@ export function buildFileTree(rawItems: unknown): FileTreeNode[] {
       const isLeaf = i === segments.length - 1
       const kind: 'file' | 'dir' = isLeaf ? entry.kind : 'dir'
 
-      let existing = cursorMap.get(seg)
+      const mapKey = i === 0 && isAbs ? `/${seg}` : seg
+      let existing = cursorMap.get(mapKey)
       if (!existing) {
         existing = {
           name: seg,
@@ -227,8 +228,8 @@ export function buildFileTree(rawItems: unknown): FileTreeNode[] {
           kind,
           childrenMap: new Map(),
         }
-        cursorMap.set(seg, existing)
-      } else if (!isLeaf) {
+        cursorMap.set(mapKey, existing)
+      } else if (!isLeaf || kind === 'dir') {
         existing.kind = 'dir'
       }
 

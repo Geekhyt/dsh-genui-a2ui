@@ -810,15 +810,14 @@ export class SurfaceSessionStore {
 
         const slice = messages.slice(this.appliedCount)
         if (slice.length > 0) {
+          const deletedInSlice = new Set<string>()
           for (const m of slice) {
             if (typeof m === 'object' && m !== null && 'deleteSurface' in m) {
               const delId = (m as { deleteSurface?: { surfaceId?: unknown } }).deleteSurface
                 ?.surfaceId
               if (typeof delId === 'string' && delId !== '') {
                 this.cancelPendingDraftWrites(delId)
-                if (!options.skipDraftIo && options.sessionId) {
-                  removeSurfaceDraftsBySurface(options.sessionId, delId)
-                }
+                deletedInSlice.add(delId)
               }
             }
           }
@@ -826,6 +825,20 @@ export class SurfaceSessionStore {
             this._generation += 1
           }
           this.processor.processMessagesWithErrors(slice as unknown as ProcessableMessage[])
+          if (
+            deletedInSlice.size > 0 &&
+            !options.skipDraftIo &&
+            !options.streaming &&
+            !options.readOnly &&
+            options.sessionId
+          ) {
+            const liveSurfaces = this.processor.getSurfaces()
+            for (const delId of deletedInSlice) {
+              if (!liveSurfaces.has(delId)) {
+                removeSurfaceDraftsBySurface(options.sessionId, delId)
+              }
+            }
+          }
           this.appliedCount = messages.length
           this.appliedPrefix = messages
         } else {
@@ -937,20 +950,6 @@ export const SurfaceGroupView = memo(function SurfaceGroupView({
     [messages, streaming, sessionId],
   )
 
-  if (typeof window === 'undefined') {
-    store.reconcile(messages, {
-      streaming,
-      readOnly,
-      readOnlySurfaceIds,
-      sessionId,
-      fingerprint,
-      visibleSurfaceIds,
-      onAction,
-      skipDraftIo: true,
-      notify: false,
-    })
-  }
-
   useSurfaceStoreSync(() => {
     store.reconcile(messages, {
       streaming,
@@ -1015,11 +1014,14 @@ export const SurfaceGroupView = memo(function SurfaceGroupView({
     [readOnly],
   )
 
-  const setSubSurfaceInertRef = useCallback((node: HTMLDivElement | null) => {
-    if (node !== null) {
-      ;(node as HTMLDivElement & { inert?: boolean }).inert = true
-    }
-  }, [])
+  const setSubSurfaceInertRef = useCallback(
+    (inert: boolean) => (node: HTMLDivElement | null) => {
+      if (node !== null) {
+        ;(node as HTMLDivElement & { inert?: boolean }).inert = inert
+      }
+    },
+    [],
+  )
 
   const msg = useRuntimeMessages()
   const themeClass = dark ? 'a2ui-dark' : 'a2ui-light'
@@ -1086,25 +1088,23 @@ export const SurfaceGroupView = memo(function SurfaceGroupView({
                     shown.map((surface) => {
                       const partialReadOnly =
                         !readOnly && Boolean(readOnlySurfaceIds?.has(surface.id))
-                      const body = (
-                        <ErrorBoundary
-                          key={surface.id}
-                          resetKey={`${storeGeneration}:${streaming ? 1 : 0}`}
-                          label={msg.surfaceRenderFailed(surface.id)}
-                        >
-                          <A2uiSurface surface={surface} />
-                        </ErrorBoundary>
-                      )
-                      if (!partialReadOnly) return body
+                      const effectiveReadOnly = Boolean(readOnly || partialReadOnly)
+                      const effectiveOpener =
+                        streaming || effectiveReadOnly ? undefined : openWorkspaceFile
                       return (
-                        <SurfaceReadOnlyContext.Provider key={surface.id} value={true}>
-                          <FileOpenContext.Provider value={undefined}>
+                        <SurfaceReadOnlyContext.Provider key={surface.id} value={effectiveReadOnly}>
+                          <FileOpenContext.Provider value={effectiveOpener}>
                             <div
-                              ref={setSubSurfaceInertRef}
-                              className={css.surfaceStackReadOnly}
-                              data-surface-readonly="true"
+                              ref={setSubSurfaceInertRef(partialReadOnly)}
+                              className={partialReadOnly ? css.surfaceStackReadOnly : undefined}
+                              data-surface-readonly={partialReadOnly ? 'true' : undefined}
                             >
-                              {body}
+                              <ErrorBoundary
+                                resetKey={`${storeGeneration}:${streaming ? 1 : 0}`}
+                                label={msg.surfaceRenderFailed(surface.id)}
+                              >
+                                <A2uiSurface surface={surface} />
+                              </ErrorBoundary>
                             </div>
                           </FileOpenContext.Provider>
                         </SurfaceReadOnlyContext.Provider>

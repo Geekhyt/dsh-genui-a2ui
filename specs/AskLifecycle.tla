@@ -9,10 +9,12 @@ VARIABLES
   uiState,
   inFlight,
   settledCount,
-  leakedSecret,
+  settledWithSecret,
+  redactedOnSettle,
   sessionAlive
 
-vars == <<callState, activePending, uiState, inFlight, settledCount, leakedSecret, sessionAlive>>
+vars ==
+  <<callState, activePending, uiState, inFlight, settledCount, settledWithSecret, redactedOnSettle, sessionAlive>>
 
 TerminalStates == {"answered", "skipped", "timed_out", "aborted", "superseded", "disposed"}
 CallStates == {"idle", "waiting"} \cup TerminalStates
@@ -29,7 +31,8 @@ TypeOK ==
   /\ uiState \in [Calls -> UiStates]
   /\ inFlight \subseteq ReplyMessages
   /\ settledCount \in [Calls -> 0..2]
-  /\ leakedSecret \in BOOLEAN
+  /\ settledWithSecret \subseteq Calls
+  /\ redactedOnSettle \subseteq Calls
   /\ sessionAlive \in BOOLEAN
 
 Init ==
@@ -38,7 +41,8 @@ Init ==
   /\ uiState = [c \in Calls |-> "hidden"]
   /\ inFlight = {}
   /\ settledCount = [c \in Calls |-> 0]
-  /\ leakedSecret = FALSE
+  /\ settledWithSecret = {}
+  /\ redactedOnSettle = {}
   /\ sessionAlive = TRUE
 
 StartAsk(c) ==
@@ -47,7 +51,7 @@ StartAsk(c) ==
   /\ callState' = [callState EXCEPT ![c] = "waiting"]
   /\ activePending' = activePending \cup {c}
   /\ uiState' = [uiState EXCEPT ![c] = "open"]
-  /\ UNCHANGED <<inFlight, settledCount, leakedSecret, sessionAlive>>
+  /\ UNCHANGED <<inFlight, settledCount, settledWithSecret, redactedOnSettle, sessionAlive>>
 
 SupersedeDuplicateCall(c) ==
   /\ sessionAlive
@@ -57,7 +61,7 @@ SupersedeDuplicateCall(c) ==
   /\ activePending' = activePending \ {c}
   /\ uiState' = [uiState EXCEPT ![c] = "done"]
   /\ settledCount' = [settledCount EXCEPT ![c] = @ + 1]
-  /\ UNCHANGED <<inFlight, leakedSecret, sessionAlive>>
+  /\ UNCHANGED <<inFlight, settledWithSecret, redactedOnSettle, sessionAlive>>
 
 UserSubmit(c, kind, hasSecret) ==
   /\ sessionAlive
@@ -65,7 +69,7 @@ UserSubmit(c, kind, hasSecret) ==
   /\ ~HasInFlightFor(c)
   /\ uiState' = [uiState EXCEPT ![c] = "submitting"]
   /\ inFlight' = inFlight \cup {[callId |-> c, kind |-> kind, hasSecret |-> hasSecret]}
-  /\ UNCHANGED <<callState, activePending, settledCount, leakedSecret, sessionAlive>>
+  /\ UNCHANGED <<callState, activePending, settledCount, settledWithSecret, redactedOnSettle, sessionAlive>>
 
 DispatchFailRollback(m) ==
   /\ m \in inFlight
@@ -74,7 +78,7 @@ DispatchFailRollback(m) ==
        IF uiState[m.callId] = "submitting" /\ callState[m.callId] = "waiting"
        THEN [uiState EXCEPT ![m.callId] = "open"]
        ELSE uiState
-  /\ UNCHANGED <<callState, activePending, settledCount, leakedSecret, sessionAlive>>
+  /\ UNCHANGED <<callState, activePending, settledCount, settledWithSecret, redactedOnSettle, sessionAlive>>
 
 ServerSettle(m) ==
   /\ m \in inFlight
@@ -84,13 +88,12 @@ ServerSettle(m) ==
                [callState EXCEPT ![m.callId] = IF m.kind = "skip" THEN "skipped" ELSE "answered"]
           /\ activePending' = activePending \ {m.callId}
           /\ settledCount' = [settledCount EXCEPT ![m.callId] = @ + 1]
-          /\ uiState' = [uiState EXCEPT ![m.callId] = "done"]
-          /\ leakedSecret' = leakedSecret
-     ELSE /\ UNCHANGED <<callState, activePending, settledCount, leakedSecret>>
-          /\ uiState' =
-               IF callState[m.callId] \in TerminalStates
-               THEN [uiState EXCEPT ![m.callId] = "done"]
-               ELSE uiState
+          /\ settledWithSecret' =
+               IF m.hasSecret THEN settledWithSecret \cup {m.callId} ELSE settledWithSecret
+          /\ redactedOnSettle' =
+               IF m.hasSecret THEN redactedOnSettle \cup {m.callId} ELSE redactedOnSettle
+          /\ UNCHANGED <<uiState>>
+     ELSE /\ UNCHANGED <<callState, activePending, settledCount, settledWithSecret, redactedOnSettle, uiState>>
   /\ UNCHANGED <<sessionAlive>>
 
 TimeoutFire(c) ==
@@ -98,14 +101,14 @@ TimeoutFire(c) ==
   /\ callState' = [callState EXCEPT ![c] = "timed_out"]
   /\ activePending' = activePending \ {c}
   /\ settledCount' = [settledCount EXCEPT ![c] = @ + 1]
-  /\ UNCHANGED <<uiState, inFlight, leakedSecret, sessionAlive>>
+  /\ UNCHANGED <<uiState, inFlight, settledWithSecret, redactedOnSettle, sessionAlive>>
 
 AbortCall(c) ==
   /\ c \in activePending
   /\ callState' = [callState EXCEPT ![c] = "aborted"]
   /\ activePending' = activePending \ {c}
   /\ settledCount' = [settledCount EXCEPT ![c] = @ + 1]
-  /\ UNCHANGED <<uiState, inFlight, leakedSecret, sessionAlive>>
+  /\ UNCHANGED <<uiState, inFlight, settledWithSecret, redactedOnSettle, sessionAlive>>
 
 DisposeSession ==
   /\ sessionAlive
@@ -115,13 +118,13 @@ DisposeSession ==
   /\ settledCount' =
        [c \in Calls |-> IF c \in activePending THEN settledCount[c] + 1 ELSE settledCount[c]]
   /\ activePending' = {}
-  /\ UNCHANGED <<uiState, inFlight, leakedSecret>>
+  /\ UNCHANGED <<uiState, inFlight, settledWithSecret, redactedOnSettle>>
 
 SyncUiTerminal(c) ==
   /\ callState[c] \in TerminalStates
   /\ uiState[c] # "done"
   /\ uiState' = [uiState EXCEPT ![c] = "done"]
-  /\ UNCHANGED <<callState, activePending, inFlight, settledCount, leakedSecret, sessionAlive>>
+  /\ UNCHANGED <<callState, activePending, inFlight, settledCount, settledWithSecret, redactedOnSettle, sessionAlive>>
 
 StutterDone ==
   /\ ~sessionAlive
@@ -158,7 +161,11 @@ NoDanglingPendingAfterDispose ==
   ~sessionAlive => activePending = {}
 
 NoSecretLeak ==
-  ~leakedSecret
+  settledWithSecret \subseteq redactedOnSettle
+
+NoReopenAfterSettle ==
+  \A c \in Calls :
+    callState[c] \in {"answered", "skipped"} => uiState[c] \in {"submitting", "done"}
 
 NoStuckSubmittingWhileWaiting ==
   \A c \in Calls :

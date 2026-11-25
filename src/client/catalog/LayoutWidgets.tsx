@@ -28,13 +28,13 @@ import {
   weightStyle,
 } from './widget-helpers.tsx'
 
-const HEADING_FONT_SIZES: Record<string, number> = {
+const HEADING_FONT_SIZES: Record<string, number> = Object.assign(Object.create(null), {
   h1: 20,
   h2: 17,
   h3: 15,
   h4: 14,
   h5: 13,
-}
+})
 
 export const DshTextImpl = defineComponent<{
   text?: unknown
@@ -207,11 +207,11 @@ export const DshListImpl = defineComponent<{
   )
 })
 
-const GRID_GAP_MAP: Record<string, number> = {
+const GRID_GAP_MAP: Record<string, number> = Object.assign(Object.create(null), {
   sm: 8,
   md: 12,
   lg: 16,
-}
+})
 
 export const DshGridImpl = defineComponent<{
   children?: unknown
@@ -308,7 +308,7 @@ export const DshTabsImpl = defineComponent<{
     value: String(idx),
     label: String(tab.title ?? msg.tabFallbackTitle(idx + 1)),
     id: `${baseId}-tab-${idx}`,
-    panelId: `${baseId}-panel-${idx}`,
+    panelId: visitedIndices.has(idx) || idx === safeIdx ? `${baseId}-panel-${idx}` : undefined,
   })) as unknown as readonly [SegmentedTab<string>, ...SegmentedTab<string>[]]
 
   return (
@@ -343,9 +343,32 @@ export const DshTabsImpl = defineComponent<{
   )
 })
 
+function isButtonTriggerRef(trigger: ChildRef, context: unknown): boolean {
+  const triggerId =
+    typeof trigger === 'string'
+      ? trigger
+      : typeof trigger === 'object' && trigger !== null && 'id' in trigger
+        ? trigger.id
+        : undefined
+  if (!triggerId) return false
+  const componentsModel = (
+    context as
+      | {
+          dataContext?: {
+            surface?: {
+              componentsModel?: { get(id: string): { type?: string } | undefined }
+            }
+          }
+        }
+      | undefined
+  )?.dataContext?.surface?.componentsModel
+  return componentsModel?.get(triggerId)?.type === 'Button'
+}
+
 export function DshModalView({
   props,
   buildChild,
+  context,
 }: {
   props: {
     trigger?: ChildRef
@@ -353,11 +376,13 @@ export function DshModalView({
     weight?: number
   }
   buildChild: (id: string, basePath?: string) => ReactNode
+  context?: unknown
 }) {
   const msg = useRuntimeMessages()
   const dark = useDarkTheme()
   const readOnly = useContext(SurfaceReadOnlyContext)
   const [open, setOpen] = useState(false)
+  const hasNativeButtonTrigger = isButtonTriggerRef(props.trigger, context)
 
   if (readOnly && open) {
     setOpen(false)
@@ -381,6 +406,8 @@ export function DshModalView({
     >
       <div
         className={css.modalTrigger}
+        role={hasNativeButtonTrigger ? undefined : 'button'}
+        tabIndex={hasNativeButtonTrigger ? undefined : readOnly ? -1 : 0}
         aria-disabled={readOnly || undefined}
         onClickCapture={(e) => {
           if (readOnly) {

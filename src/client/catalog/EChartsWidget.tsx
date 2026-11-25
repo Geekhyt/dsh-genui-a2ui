@@ -190,8 +190,11 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
   xFieldRef.current = xField
   const seriesFieldRef = useRef(seriesField)
   seriesFieldRef.current = seriesField
+  const sizeFieldRef = useRef(sizeField)
+  sizeFieldRef.current = sizeField
   const rawSelectedRef = useRef(selected)
   rawSelectedRef.current = selected
+  const hasSelectChange = Boolean(onSelectChange)
   const activeTokens = useMemo(
     () =>
       normalizeCrossFilterTokens(selected)
@@ -213,8 +216,14 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
   rowsRef.current = rows
 
   const csvPayload = useMemo(
-    () => (exportable ? formatChartDataToCsv(data) : null),
-    [data, exportable],
+    () =>
+      exportable
+        ? formatChartDataToCsv(data, {
+            xField,
+            yField: typeof yField === 'string' ? yField : undefined,
+          })
+        : null,
+    [data, exportable, xField, yField],
   )
 
   const safeRawHeight =
@@ -246,7 +255,7 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
         referenceX,
         referenceXLabel,
         bins,
-        interactiveSelect: Boolean(onSelectChange),
+        interactiveSelect: hasSelectChange,
         selected:
           activeTokens.length === 0
             ? undefined
@@ -281,7 +290,7 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
     referenceX,
     referenceXLabel,
     bins,
-    onSelectChange,
+    hasSelectChange,
     activeTokens,
     dark,
     locale,
@@ -323,9 +332,15 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
     const curRows = rowsRef.current
     const sample = curRows[0] ?? {}
     const sampleKeys = Object.keys(sample)
-    const resolvedXField =
-      xFieldRef.current ?? sampleKeys.find((k) => typeof sample[k] === 'string') ?? sampleKeys[0]
     const curSeriesField = seriesFieldRef.current
+    const curSizeField = sizeFieldRef.current
+    const resolvedXField =
+      xFieldRef.current ??
+      sampleKeys.find(
+        (k) => k !== curSeriesField && k !== curSizeField && typeof sample[k] === 'string',
+      ) ??
+      sampleKeys.find((k) => typeof sample[k] === 'string') ??
+      sampleKeys[0]
     const curKind = kindRef.current
     const matchedRow = (() => {
       if (curKind === 'parallel' && series) {
@@ -337,7 +352,7 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
         )
         if (hit !== undefined) return hit
       }
-      if (curKind === 'heatmap') {
+      if (curKind === 'heatmap' || curKind === 'calendar') {
         const rawData =
           params?.data && typeof params.data === 'object' && !Array.isArray(params.data)
             ? (params.data as { rowIndex?: unknown })
@@ -348,7 +363,9 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
           rawData.rowIndex >= 0 &&
           rawData.rowIndex < curRows.length
             ? rawData.rowIndex
-            : idx
+            : curKind === 'heatmap'
+              ? idx
+              : undefined
         if (rIdx !== undefined && rIdx >= 0 && rIdx < curRows.length) {
           return curRows[rIdx]
         }

@@ -25,6 +25,7 @@ import {
 import { createPortal } from 'react-dom'
 import { SHELL_MESSAGES, type UiLocale } from '../../shared/i18n.ts'
 import {
+  copyTextToClipboard,
   useAutoDismissTimer,
   useDialogFocus,
   useEscapeKey,
@@ -332,6 +333,22 @@ export function DshTag(props: {
   )
 }
 
+function nextRovingIndex(
+  key: string,
+  cur: number,
+  len: number,
+  axis: 'h' | 'v' | 'both',
+): number | null {
+  if (len <= 0) return null
+  if (key === 'Home') return 0
+  if (key === 'End') return len - 1
+  const isNext = (axis !== 'v' && key === 'ArrowRight') || (axis !== 'h' && key === 'ArrowDown')
+  const isPrev = (axis !== 'v' && key === 'ArrowLeft') || (axis !== 'h' && key === 'ArrowUp')
+  if (isNext) return cur < 0 ? 0 : (cur + 1) % len
+  if (isPrev) return cur < 0 ? len - 1 : (cur - 1 + len) % len
+  return null
+}
+
 export function DshSegmentedTabs<Value extends string = string>(props: {
   items: readonly [SegmentedTab<Value>, ...SegmentedTab<Value>[]]
   value: Value
@@ -344,11 +361,22 @@ export function DshSegmentedTabs<Value extends string = string>(props: {
     const HostTabs = HostPrimitives.SegmentedTabs
     return <HostTabs {...props} />
   }
+  const handleTabKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    const curIdx = props.items.findIndex((i) => i.value === props.value)
+    const nextIdx = nextRovingIndex(e.key, curIdx, props.items.length, 'h')
+    if (nextIdx === null) return
+    e.preventDefault()
+    const nextItem = props.items[nextIdx]
+    if (!nextItem) return
+    props.onChange(nextItem.value)
+    e.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')[nextIdx]?.focus()
+  }
   return (
     <div
       role="tablist"
       aria-label={props.label}
       className={props.className}
+      onKeyDown={handleTabKeyDown}
       style={{
         display: 'flex',
         gap: 4,
@@ -368,6 +396,7 @@ export function DshSegmentedTabs<Value extends string = string>(props: {
             id={item.id}
             role="tab"
             type="button"
+            tabIndex={selected ? 0 : -1}
             aria-selected={selected}
             aria-controls={item.panelId}
             onClick={() => props.onChange(item.value)}
@@ -408,12 +437,31 @@ export function DshSegmentedControl<Value extends string = string>(props: {
   if (hasComponent(raw.SegmentedControl)) {
     return <HostPrimitives.SegmentedControl {...props} />
   }
+  const hasSelected = props.options.some(
+    (opt) => opt.value === props.value && !(props.disabled || opt.disabled),
+  )
+  const firstEnabledIdx = props.options.findIndex((opt) => !(props.disabled || opt.disabled))
+  const handleRadioKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (props.disabled) return
+    const enabled = props.options
+      .map((opt, idx) => ({ opt, idx }))
+      .filter((entry) => !entry.opt.disabled)
+    const curPos = enabled.findIndex((entry) => entry.opt.value === props.value)
+    const nextPos = nextRovingIndex(e.key, curPos, enabled.length, 'both')
+    if (nextPos === null) return
+    e.preventDefault()
+    const target = enabled[nextPos]
+    if (!target) return
+    props.onChange(target.opt.value)
+    e.currentTarget.querySelectorAll<HTMLButtonElement>('[role="radio"]')[target.idx]?.focus()
+  }
   return (
     <div
       id={props.id}
       role="radiogroup"
       aria-label={props.label}
       className={props.className}
+      onKeyDown={handleRadioKeyDown}
       style={{
         display: 'inline-grid',
         gridAutoFlow: 'column',
@@ -428,14 +476,20 @@ export function DshSegmentedControl<Value extends string = string>(props: {
         border: '1px solid var(--dsw-alias-border-l1, rgba(128,128,128,0.2))',
       }}
     >
-      {props.options.map((opt) => {
+      {props.options.map((opt, idx) => {
         const active = opt.value === props.value
         const isDisabled = Boolean(props.disabled || opt.disabled)
+        const tabIdx = isDisabled
+          ? -1
+          : active || (!hasSelected && idx === firstEnabledIdx)
+            ? 0
+            : -1
         return (
           <button
             key={opt.value}
             type="button"
             role="radio"
+            tabIndex={tabIdx}
             aria-checked={active}
             disabled={isDisabled}
             title={opt.title ?? opt.label}
@@ -455,7 +509,9 @@ export function DshSegmentedControl<Value extends string = string>(props: {
               background: active
                 ? 'var(--dsw-alias-state-business-primary, #3b82f6)'
                 : 'transparent',
-              color: active ? '#ffffff' : 'var(--dsw-alias-label-secondary, inherit)',
+              color: active
+                ? 'var(--a2ui-on-accent, light-dark(#ffffff, #0b1220))'
+                : 'var(--dsw-alias-label-secondary, inherit)',
               cursor: isDisabled ? 'not-allowed' : 'pointer',
               opacity: isDisabled ? 0.5 : 1,
             }}
@@ -489,13 +545,13 @@ export function DshModal(props: {
         {...props}
         footer={
           props.footer !== undefined ? (
-            <div className={themeCls} style={{ display: 'contents' }}>
+            <div data-a2ui-overlay="" className={themeCls} style={{ display: 'contents' }}>
               {props.footer}
             </div>
           ) : undefined
         }
       >
-        <div className={themeCls} style={{ display: 'contents' }}>
+        <div data-a2ui-overlay="" className={themeCls} style={{ display: 'contents' }}>
           {props.children}
         </div>
       </HostModal>
@@ -537,7 +593,7 @@ export function DshModal(props: {
           containerType: 'inline-size',
           padding: 20,
           borderRadius: 'var(--dsw-radius-xl, 16px)',
-          background: 'var(--dsw-alias-bg-layer-1, light-dark(#ffffff, #18191e))',
+          background: 'var(--dsw-alias-bg-base, light-dark(#ffffff, #18191e))',
           color: 'var(--dsw-alias-label-primary, inherit)',
           border: '1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.25))',
           outline: 'none',
@@ -639,16 +695,16 @@ function FallbackJsonNode(props: {
   expandedDepth: number
   copyable: boolean
   copyLabel: string
+  expandLabel: string
+  collapseLabel: string
 }) {
-  const { name, value, depth, expandedDepth, copyable, copyLabel } = props
+  const { name, value, depth, expandedDepth, copyable, copyLabel, expandLabel, collapseLabel } =
+    props
   const [open, setOpen] = useState(depth < expandedDepth)
   const [copied, markCopied] = useTransientFlag(1200)
 
   const handleCopy = (text: string) => {
-    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-      void navigator.clipboard.writeText(text).catch(() => {})
-    }
-    markCopied()
+    copyTextToClipboard(text, markCopied)
   }
 
   if (value === null || typeof value !== 'object') {
@@ -663,6 +719,8 @@ function FallbackJsonNode(props: {
             : 'var(--dsw-alias-label-tertiary, #9ca3af)'
     return (
       <div
+        role="treeitem"
+        aria-level={depth + 1}
         style={{
           display: 'flex',
           alignItems: 'baseline',
@@ -703,6 +761,9 @@ function FallbackJsonNode(props: {
 
   return (
     <div
+      role="treeitem"
+      aria-level={depth + 1}
+      aria-expanded={open}
       style={{
         fontFamily: 'var(--dsw-font-family-mono, ui-monospace, SFMono-Regular, Menlo, monospace)',
         fontSize: 12,
@@ -720,6 +781,13 @@ function FallbackJsonNode(props: {
         <button
           type="button"
           aria-expanded={open}
+          aria-label={
+            name !== undefined
+              ? `${open ? collapseLabel : expandLabel} ${name}`
+              : open
+                ? collapseLabel
+                : expandLabel
+          }
           onClick={() => setOpen((v) => !v)}
           style={{
             border: 'none',
@@ -743,7 +811,7 @@ function FallbackJsonNode(props: {
         </span>
       </div>
       {open ? (
-        <div>
+        <div role="group">
           {entries.map(([k, v]) => (
             <FallbackJsonNode
               key={k}
@@ -753,6 +821,8 @@ function FallbackJsonNode(props: {
               expandedDepth={expandedDepth}
               copyable={copyable}
               copyLabel={copyLabel}
+              expandLabel={expandLabel}
+              collapseLabel={collapseLabel}
             />
           ))}
           <div
@@ -801,8 +871,25 @@ export function DshJsonTree(props: {
         expandedDepth={expandedDepth}
         copyable={copyable}
         copyLabel={msg.copy}
+        expandLabel={msg.expandNode}
+        collapseLabel={msg.collapseNode}
       />
     </div>
+  )
+}
+
+function SvgIcon16(props: { size: number; className?: string | undefined; children: ReactNode }) {
+  return (
+    <svg
+      width={props.size}
+      height={props.size}
+      viewBox="0 0 16 16"
+      fill="none"
+      aria-hidden="true"
+      className={props.className}
+    >
+      {props.children}
+    </svg>
   )
 }
 
@@ -811,7 +898,7 @@ export function DshSearchIcon({ size = 14 }: { size?: number }) {
     return <HostPrimitives.IconSearchOutlineRegular size={size} />
   }
   return (
-    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <SvgIcon16 size={size}>
       <circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.3" />
       <path
         d="M10.5 10.5L13.5 13.5"
@@ -819,7 +906,7 @@ export function DshSearchIcon({ size = 14 }: { size?: number }) {
         strokeWidth="1.3"
         strokeLinecap="round"
       />
-    </svg>
+    </SvgIcon16>
   )
 }
 
@@ -828,7 +915,7 @@ export function DshChevronDownIcon({ size = 14 }: { size?: number }) {
     return <HostPrimitives.IconChevronDownOutlineRegular size={size} />
   }
   return (
-    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <SvgIcon16 size={size}>
       <path
         d="M4 6.2L8 10.2L12 6.2"
         stroke="currentColor"
@@ -836,7 +923,7 @@ export function DshChevronDownIcon({ size = 14 }: { size?: number }) {
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-    </svg>
+    </SvgIcon16>
   )
 }
 
@@ -845,7 +932,7 @@ export function DshChevronUpIcon({ size = 14 }: { size?: number }) {
     return <HostPrimitives.IconChevronUpOutlineRegular size={size} />
   }
   return (
-    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <SvgIcon16 size={size}>
       <path
         d="M4 9.8L8 5.8L12 9.8"
         stroke="currentColor"
@@ -853,7 +940,7 @@ export function DshChevronUpIcon({ size = 14 }: { size?: number }) {
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-    </svg>
+    </SvgIcon16>
   )
 }
 
@@ -862,7 +949,7 @@ export function DshCheckIcon({ size = 13 }: { size?: number }) {
     return <HostPrimitives.IconCheckOutlineRegular size={size} />
   }
   return (
-    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <SvgIcon16 size={size}>
       <path
         d="M3.2 8.4L6.4 11.6L12.8 4.8"
         stroke="currentColor"
@@ -870,7 +957,7 @@ export function DshCheckIcon({ size = 13 }: { size?: number }) {
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-    </svg>
+    </SvgIcon16>
   )
 }
 
@@ -879,7 +966,7 @@ export function DshWarningIcon({ size = 15 }: { size?: number }) {
     return <HostPrimitives.IconWarningOutlineRegular size={size} />
   }
   return (
-    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <SvgIcon16 size={size}>
       <path
         d="M8 2.4L14 13H2L8 2.4Z"
         stroke="currentColor"
@@ -888,7 +975,7 @@ export function DshWarningIcon({ size = 15 }: { size?: number }) {
       />
       <path d="M8 6.4V9.4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
       <circle cx="8" cy="11.2" r="0.7" fill="currentColor" />
-    </svg>
+    </SvgIcon16>
   )
 }
 
@@ -899,6 +986,7 @@ function FallbackToast(props: {
   holdMs?: number | undefined
   onDone: () => void
 }) {
+  const dark = useDarkTheme()
   useAutoDismissTimer(props.holdMs ?? 3000, props.onDone)
 
   if (typeof document === 'undefined') {
@@ -913,6 +1001,7 @@ function FallbackToast(props: {
     <div
       role="alert"
       data-a2ui-toast={props.tone ?? 'default'}
+      className={dark ? 'a2ui-dark' : 'a2ui-light'}
       style={{
         position: 'fixed',
         top: 40,
@@ -1008,7 +1097,10 @@ function computeFallbackMenuBox(
   const maxWidth = Math.max(160, Math.min(maxAllowedW, vw - left - 8))
   const spaceBelow = Math.max(0, vh - rect.bottom - 12)
   const spaceAbove = Math.max(0, rect.top - 12)
-  const preferTop = side === 'top' || (spaceBelow < 180 && spaceAbove > spaceBelow)
+  const preferTop =
+    side === 'top'
+      ? spaceAbove >= 180 || spaceAbove >= spaceBelow
+      : spaceBelow < 180 && spaceAbove > spaceBelow
   if (preferTop && spaceAbove >= 80) {
     return {
       left,
@@ -1041,23 +1133,15 @@ export function DshMenu(props: {
   const anchorWrapRef = useRef<HTMLSpanElement | null>(null)
   const menuPopoverRef = useRef<HTMLDivElement | null>(null)
   const resolvedSide = props.side ?? 'top'
-  const [menuBoxState, setMenuBoxState] = useState<{
-    openSession: number
-    box: ReturnType<typeof computeFallbackMenuBox>
-  } | null>(null)
-  const openSessionRef = useRef(0)
-  const prevOpenRef = useRef(false)
-  if (props.open && !prevOpenRef.current) {
-    openSessionRef.current += 1
+  const [menuBox, setMenuBox] = useState<ReturnType<typeof computeFallbackMenuBox> | null>(null)
+  const [prevOpen, setPrevOpen] = useState(false)
+  if (props.open !== prevOpen) {
+    setPrevOpen(props.open)
+    if (!props.open) setMenuBox(null)
   }
-  prevOpenRef.current = props.open
-  const currentOpenSession = openSessionRef.current
 
   const repositionMenu = useCallback(() => {
-    setMenuBoxState({
-      openSession: openSessionRef.current,
-      box: computeFallbackMenuBox(anchorWrapRef.current, resolvedSide),
-    })
+    setMenuBox(computeFallbackMenuBox(anchorWrapRef.current, resolvedSide))
   }, [resolvedSide])
 
   usePortalPopover({
@@ -1083,35 +1167,27 @@ export function DshMenu(props: {
     )
   }
 
-  const menuStyle =
-    props.open && menuBoxState?.openSession === currentOpenSession
-      ? menuBoxState.box
-      : computeFallbackMenuBox(anchorWrapRef.current, resolvedSide)
+  const menuStyle = props.open
+    ? (menuBox ?? computeFallbackMenuBox(anchorWrapRef.current, resolvedSide))
+    : null
 
   const handleMenuKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>) => {
-    const keys = ['ArrowDown', 'ArrowUp', 'Home', 'End']
-    if (!keys.includes(e.key)) return
     const items = Array.from(
       menuPopoverRef.current?.querySelectorAll<HTMLButtonElement>(
         'button[role="menuitem"]:not(:disabled)',
       ) ?? [],
     )
-    if (items.length === 0) return
-    e.preventDefault()
     const curIdx = items.indexOf(document.activeElement as HTMLButtonElement)
-    let nextIdx = 0
-    if (e.key === 'ArrowDown') nextIdx = curIdx < 0 ? 0 : (curIdx + 1) % items.length
-    else if (e.key === 'ArrowUp')
-      nextIdx = curIdx < 0 ? items.length - 1 : (curIdx - 1 + items.length) % items.length
-    else if (e.key === 'Home') nextIdx = 0
-    else if (e.key === 'End') nextIdx = items.length - 1
+    const nextIdx = nextRovingIndex(e.key, curIdx, items.length, 'v')
+    if (nextIdx === null) return
+    e.preventDefault()
     items[nextIdx]?.focus()
   }
 
   return (
     <span ref={anchorWrapRef} style={{ position: 'relative', display: 'inline-flex' }}>
       {props.anchor}
-      {props.open && typeof document !== 'undefined'
+      {props.open && menuStyle !== null && typeof document !== 'undefined'
         ? createPortal(
             <div
               role="presentation"
@@ -1124,7 +1200,7 @@ export function DshMenu(props: {
               style={{
                 position: 'fixed',
                 inset: 0,
-                zIndex: 'var(--a2ui-z-popover-backdrop, 1099)',
+                zIndex: 'var(--a2ui-z-popover, 1100)',
               }}
             >
               <div
@@ -1135,7 +1211,7 @@ export function DshMenu(props: {
                 style={{
                   position: 'fixed',
                   ...menuStyle,
-                  zIndex: 'var(--a2ui-z-popover, 1100)',
+                  zIndex: 1,
                   overflowY: 'auto',
                   padding: 4,
                   borderRadius: 'var(--dsw-radius-md, 10px)',
@@ -1254,7 +1330,7 @@ export function DshAppsIcon({ size = 14 }: { size?: number }) {
     return <HostPrimitives.IconAppsAddOutlineRegular size={size} />
   }
   return (
-    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <SvgIcon16 size={size}>
       <rect
         x="2.2"
         y="2.2"
@@ -1288,8 +1364,16 @@ export function DshAppsIcon({ size = 14 }: { size?: number }) {
         strokeWidth="1.3"
         strokeLinecap="round"
       />
-    </svg>
+    </SvgIcon16>
   )
+}
+
+const STATE_DOT_BG: Record<string, string> = {
+  done: 'var(--dsw-alias-state-success-primary, #10b981)',
+  warning: 'var(--dsw-alias-state-warn-primary, #f59e0b)',
+  error: 'var(--dsw-alias-state-error-primary, #ef4444)',
+  ongoing: 'var(--dsw-alias-brand-primary, #4d6bfe)',
+  pending: 'var(--dsw-alias-label-tertiary, #9ca3af)',
 }
 
 export function DshStateDot(props: {
@@ -1309,16 +1393,6 @@ export function DshStateDot(props: {
     )
   }
   const sz = props.size ?? 8
-  const bg =
-    props.state === 'done'
-      ? 'var(--dsw-alias-state-success-primary, #10b981)'
-      : props.state === 'warning'
-        ? 'var(--dsw-alias-state-warn-primary, #f59e0b)'
-        : props.state === 'error'
-          ? 'var(--dsw-alias-state-error-primary, #ef4444)'
-          : props.state === 'ongoing'
-            ? 'var(--dsw-alias-brand-primary, #4d6bfe)'
-            : 'var(--dsw-alias-label-tertiary, #9ca3af)'
   return (
     <span
       className={props.className}
@@ -1329,7 +1403,7 @@ export function DshStateDot(props: {
         width: sz,
         height: sz,
         borderRadius: '50%',
-        background: bg,
+        background: STATE_DOT_BG[props.state] ?? STATE_DOT_BG.pending,
         flexShrink: 0,
       }}
     />
@@ -1474,24 +1548,15 @@ export function DshFileTypeIcon(props: { path: string; size?: number; className?
       />
     )
   }
-  const sz = props.size ?? 14
   return (
-    <svg
-      width={sz}
-      height={sz}
-      viewBox="0 0 16 16"
-      fill="none"
-      aria-hidden="true"
-      className={props.className}
-    >
+    <SvgIcon16 size={props.size ?? 14} className={props.className}>
       <path
-        d="M3.5 2.5H9.5L12.5 5.5V13.5H3.5V2.5Z"
+        d="M3.5 2.5H9.5L12.5 5.5V13.5H3.5V2.5ZM9 2.5V6H12.5"
         stroke="currentColor"
         strokeWidth="1.3"
         strokeLinejoin="round"
       />
-      <path d="M9 2.5V6H12.5" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
-    </svg>
+    </SvgIcon16>
   )
 }
 
@@ -1517,23 +1582,15 @@ export function DshLinkIcon(props: { href?: string; size?: number; className?: s
       />
     )
   }
-  const sz = props.size ?? 14
   return (
-    <svg
-      width={sz}
-      height={sz}
-      viewBox="0 0 16 16"
-      fill="none"
-      aria-hidden="true"
-      className={props.className}
-    >
+    <SvgIcon16 size={props.size ?? 14} className={props.className}>
       <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.3" />
       <path
         d="M2.5 8H13.5M8 2.2C9.6 3.9 9.6 12.1 8 13.8C6.4 12.1 6.4 3.9 8 2.2Z"
         stroke="currentColor"
         strokeWidth="1.2"
       />
-    </svg>
+    </SvgIcon16>
   )
 }
 

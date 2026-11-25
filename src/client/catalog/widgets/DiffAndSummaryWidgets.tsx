@@ -115,8 +115,7 @@ export const DshDiffViewImpl = defineComponent<{
         : msg.diffDefaultTitle
 
   const handleCopyAfter = () => {
-    copyTextToClipboard(afterStr)
-    markCopied()
+    copyTextToClipboard(afterStr, markCopied)
   }
 
   return (
@@ -468,8 +467,7 @@ export const DshKeyValueImpl = defineComponent<{
   const headerTitle = props.title ? String(props.title) : ''
 
   const handleCopy = (idx: number, text: string) => {
-    copyTextToClipboard(text)
-    markCopiedIdx(idx)
+    copyTextToClipboard(text, () => markCopiedIdx(idx))
   }
 
   const computeSpansForCols = (targetCols: number): number[] => {

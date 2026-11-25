@@ -115,9 +115,10 @@ export function buildLegendOption(opts: {
   const estFormattedTotalMax =
     formattedMaxWidths.length > 0 ? formattedMaxWidths.reduce((sum, w) => sum + w + 8, -8) : 0
 
+  const effectiveScroll = scroll || (uniqueNames.length > 1 && estNaturalTotalPx > availW - 6)
   const willPaginateScroll =
     isCompact &&
-    scroll &&
+    effectiveScroll &&
     uniqueNames.length >= 3 &&
     !fitsNaturallyWithoutScroll &&
     estFormattedTotalMax > availW - 6
@@ -150,7 +151,7 @@ export function buildLegendOption(opts: {
     : undefined
 
   return {
-    type: scroll ? 'scroll' : 'plain',
+    type: effectiveScroll ? 'scroll' : 'plain',
     bottom: opts.bottom ?? 0,
     left: isCompact ? 6 : 'center',
     ...(isCompact ? { right: 6 } : {}),
@@ -158,7 +159,7 @@ export function buildLegendOption(opts: {
     itemWidth,
     itemHeight,
     itemGap: scrollItemGap,
-    ...(scroll ? { pageButtonGap: 8, pageButtonItemGap: 4, pageIconSize: 10 } : {}),
+    ...(effectiveScroll ? { pageButtonGap: 8, pageButtonItemGap: 4, pageIconSize: 10 } : {}),
     ...(compactFormatter ? { formatter: compactFormatter } : {}),
     ...(opts.data ? { data: [...opts.data] } : {}),
     textStyle: {

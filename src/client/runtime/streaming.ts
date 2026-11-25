@@ -5,6 +5,7 @@ import {
   assertSafeExpressProgram,
   estimateExpressExpansionSize,
   extractUpdateSurfaceIds,
+  findDangerousCompiledKey,
   preprocessExpressProgram,
 } from '../../shared/express-preprocess.ts'
 
@@ -54,6 +55,38 @@ function collectSurfaceIds(messages: readonly AgentToRendererMessage[], target: 
       }
     }
   }
+}
+
+function validateStreamedMessages(messages: readonly AgentToRendererMessage[]): string | null {
+  const dangerous = findDangerousCompiledKey(messages)
+  if (dangerous !== null) {
+    return `Forbidden prototype property key "${dangerous}" in compiled A2UI payload.`
+  }
+  let bytes = 0
+  for (const msg of messages) {
+    const rec = msg as unknown as Record<string, unknown>
+    for (const [kind, payload] of Object.entries(rec)) {
+      if (
+        (kind === 'createSurface' || kind === 'updateComponents') &&
+        typeof payload === 'object' &&
+        payload !== null &&
+        Array.isArray((payload as { components?: unknown }).components) &&
+        (payload as { components: unknown[] }).components.length >
+          A2UI_LIMITS.maxComponentsPerSurface
+      ) {
+        return `Surface exceeds maximum component limit (${A2UI_LIMITS.maxComponentsPerSurface}).`
+      }
+    }
+    try {
+      bytes += JSON.stringify(msg).length
+    } catch {
+      return 'Failed to measure streamed A2UI payload.'
+    }
+    if (bytes > A2UI_LIMITS.maxCompiledBytes) {
+      return `Compiled A2UI payload exceeds limit (${A2UI_LIMITS.maxCompiledBytes} bytes).`
+    }
+  }
+  return null
 }
 
 export class StreamingExpressSession {
@@ -257,6 +290,15 @@ export class StreamingExpressSession {
           this.surfaceIdSet.clear()
           for (const id of savedSurfaceIds) this.surfaceIdSet.add(id)
         }
+      }
+    }
+    if (!this.streamRejected && this.messages.length > 0) {
+      const limitErr = validateStreamedMessages(this.messages)
+      if (limitErr !== null) {
+        this.messages = []
+        this.surfaceIdSet.clear()
+        this.streamRejected = true
+        this.lastError = limitErr
       }
     }
     return this.buildSnapshot()

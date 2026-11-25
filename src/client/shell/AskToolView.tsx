@@ -8,6 +8,7 @@ import { useShellMessages } from '../i18n.ts'
 import { LazySurfaceGroupView, useLazyStreamingExpress } from './LazySurfaceGroupView.tsx'
 import { removeSurfaceDraftsBySurface } from '../persistence.ts'
 import css from '../SurfaceView.module.css'
+import { useDarkTheme } from '../theme.ts'
 import type { ChatExternalStore, ToolViewOwnerProps } from './ToolView.tsx'
 import {
   buildReplayMessagesForSurfaceCall,
@@ -40,6 +41,7 @@ export const A2uiAskDockView = memo(function A2uiAskDockView({
   submitAskAnswer,
 }: A2uiAskDockViewProps) {
   const msg = useShellMessages()
+  const dark = useDarkTheme()
   const [submittingKeys, setSubmittingKeys] = useState<ReadonlySet<string>>(() => new Set())
   const [errorState, setErrorState] = useState<{
     readonly callId: string
@@ -130,6 +132,20 @@ export const A2uiAskDockView = memo(function A2uiAskDockView({
     return undefined
   }, [clearAskDrafts, draftSessionId, liveVisibleIds, sessionId])
 
+  useEffectCallback(() => {
+    for (const k of [...inFlightKeysRef.current]) {
+      if (k !== compositeCallKey) inFlightKeysRef.current.delete(k)
+    }
+    setSubmittingKeys((prev) => {
+      if (prev.size === 0) return prev
+      if (compositeCallKey !== '' && prev.size === 1 && prev.has(compositeCallKey)) return prev
+      const next = new Set<string>()
+      if (compositeCallKey !== '' && prev.has(compositeCallKey)) next.add(compositeCallKey)
+      return next
+    })
+    return undefined
+  }, [compositeCallKey])
+
   const removeSubmittingKey = useCallback((targetKey: string) => {
     setSubmittingKeys((prev) => {
       if (!prev.has(targetKey)) return prev
@@ -174,12 +190,11 @@ export const A2uiAskDockView = memo(function A2uiAskDockView({
         dataModels,
       }).then(
         (ok) => {
-          inFlightKeysRef.current.delete(targetKey)
           if (ok) {
             clearAskDrafts(targetDraftSessionId, targetSurfaceIds)
-            removeSubmittingKey(targetKey)
             return true
           }
+          inFlightKeysRef.current.delete(targetKey)
           removeSubmittingKey(targetKey)
           setErrorState({ callId: targetKey, message: msg.askSubmitRetry })
           return false
@@ -230,12 +245,11 @@ export const A2uiAskDockView = memo(function A2uiAskDockView({
     setErrorState(null)
     void submitAskAnswer({ callId: targetCallId, skipped: true }).then(
       (ok) => {
-        inFlightKeysRef.current.delete(targetKey)
         if (ok) {
           clearAskDrafts(targetDraftSessionId, targetSurfaceIds)
-          removeSubmittingKey(targetKey)
           return
         }
+        inFlightKeysRef.current.delete(targetKey)
         removeSubmittingKey(targetKey)
         setErrorState({ callId: targetKey, message: msg.askSkipRetry })
       },
@@ -271,7 +285,7 @@ export const A2uiAskDockView = memo(function A2uiAskDockView({
 
   return (
     <section
-      className={dockCss.root}
+      className={`${dockCss.root} ${dark ? 'a2ui-dark' : 'a2ui-light'}`}
       aria-label={title}
       data-tool="a2ui_ask"
       data-state={waiting ? 'waiting' : 'streaming'}

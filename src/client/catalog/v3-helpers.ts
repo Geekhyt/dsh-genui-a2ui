@@ -1,6 +1,6 @@
 import { isDangerousObjectKey } from '../../shared/constants.ts'
 
-export function makeUniqueIdFactory(): (rawId: string) => string {
+export function makeUniqueIdFactory(sep = '_'): (rawId: string) => string {
   const seen = new Map<string, number>()
   return (rawId: string): string => {
     const base = rawId.trim() || 'item'
@@ -10,10 +10,10 @@ export function makeUniqueIdFactory(): (rawId: string) => string {
       return base
     }
     let next = count + 1
-    let candidate = `${base}_${next}`
+    let candidate = `${base}${sep}${next}`
     while (seen.has(candidate)) {
       next += 1
-      candidate = `${base}_${next}`
+      candidate = `${base}${sep}${next}`
     }
     seen.set(base, next)
     seen.set(candidate, 1)
@@ -192,7 +192,7 @@ export interface NormalizedLogEntry {
 }
 
 const RAW_LOG_RE =
-  /^(?:(\d{2,4}[-/:]\d{2}[-/:]\d{2}[T\s]\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?|\d{2}:\d{2}:\d{2}(?:\.\d+)?)\s+)?(?:\[?(ERROR|ERR|FATAL|WARN|WARNING|INFO|DEBUG|TRACE)\]?\s+)?(?:\[([^\]]+)\]\s+)?([\s\S]*)$/i
+  /^(?:\[?(\d{2,4}[-/:]\d{2}[-/:]\d{2}[T\s]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?|\d{2}:\d{2}:\d{2}(?:\.\d+)?)\]?\s+)?(?:\[?(ERROR|ERR|FATAL|CRITICAL|WARN|WARNING|INFO|DEBUG|TRACE)\]?:?\s+)?(?:\[([^\]]+)\]:?\s+)?([\s\S]*)$/i
 
 function normalizeLogLevel(raw: unknown): LogLevel {
   const s = typeof raw === 'string' ? raw.trim().toLowerCase() : ''
@@ -453,6 +453,7 @@ export function normalizeSourceItems(raw: unknown): readonly NormalizedSourceIte
 export type MetricRingTone = 'brand' | 'success' | 'warning' | 'danger'
 
 export interface MetricRingGeometry {
+  readonly numericValue: number
   readonly clampedRatio: number
   readonly displayNumber: string
   readonly size: number
@@ -510,11 +511,14 @@ export function computeMetricRingGeometry(params: {
   const circumference = 2 * Math.PI * radius
   const dashOffset = circumference * (1 - clampedRatio)
 
+  const absVal = Math.abs(safeVal)
   const displayNumber = Number.isInteger(safeVal)
     ? String(safeVal)
     : safeVal > 99.9 && safeVal < 100
       ? formatHighPrecisionBelowHundred(safeVal)
-      : Number(safeVal.toFixed(2)).toString()
+      : absVal > 0 && absVal < 0.1
+        ? Number(safeVal.toFixed(4)).toString()
+        : Number(safeVal.toFixed(2)).toString()
 
   const resolvedUnit = params.unit !== undefined ? params.unit : max === 100 ? '%' : ''
   const innerClearDiameter = Math.max(26, radius * 2 - strokeWidth - 10)
@@ -559,6 +563,7 @@ export function computeMetricRingGeometry(params: {
   }
 
   return {
+    numericValue: safeVal,
     clampedRatio,
     displayNumber,
     size,

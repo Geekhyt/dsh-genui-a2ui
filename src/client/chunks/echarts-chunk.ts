@@ -413,8 +413,18 @@ export function buildChartOption(
       vertical = false,
       hAlign,
     ) => buildReferenceMarkLine(val, label, vertical, color, dark, pos, isCompact, hAlign),
-    markArea: (yAxisIndex = 0, yRange) =>
-      buildMarkAreaOption(props.markArea, theme, dark, isCompact, yAxisIndex, yRange),
+    markArea: (yAxisIndex = 0, yRange, categories, horizontal = false, useLog = false) =>
+      buildMarkAreaOption(
+        props.markArea,
+        theme,
+        dark,
+        isCompact,
+        yAxisIndex,
+        yRange,
+        categories,
+        horizontal,
+        useLog,
+      ),
     zoom: (horizontal = false) => buildZoomConfig(props.zoom, horizontal, theme.border),
   }
   const raw =

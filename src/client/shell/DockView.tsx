@@ -51,18 +51,21 @@ export const A2uiDockView = memo(function A2uiDockView({
 
   const batch = useMemo(() => resolveDockBatch(snapshot), [snapshot])
   const deletedSurfaceIds = useMemo(() => collectDeletedSurfaceIds(snapshot), [snapshot])
-  const prevBatchIdsRef = useRef<ReadonlySet<string> | null>(null)
+  const prevDeletedIdsRef = useRef<ReadonlySet<string> | null>(null)
 
   useEffectCallback(() => {
     if (sessionId && deletedSurfaceIds.size > 0) {
-      const prevIds = prevBatchIdsRef.current
+      const prevDeleted = prevDeletedIdsRef.current
       for (const delId of deletedSurfaceIds) {
-        if (!batch?.visibleSurfaceIds.has(delId) && (prevIds === null || prevIds.has(delId))) {
+        if (
+          !batch?.visibleSurfaceIds.has(delId) &&
+          (prevDeleted === null || !prevDeleted.has(delId))
+        ) {
           removeSurfaceDraftsBySurface(sessionId, delId)
         }
       }
     }
-    prevBatchIdsRef.current = batch?.visibleSurfaceIds ?? null
+    prevDeletedIdsRef.current = deletedSurfaceIds
     return undefined
   }, [batch, deletedSurfaceIds, sessionId])
 

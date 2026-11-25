@@ -674,10 +674,10 @@ describe('v0.5.0 7 New Zero-Dependency Widgets & Showcases', () => {
       276,
     ) as {
       yAxis: { type?: string }
-      series: Array<{ markLine?: { label?: { formatter?: string } } }>
+      series: Array<{ markLine?: { label?: { formatter?: () => string } } }>
     }
     expect(negRange.yAxis.type).toBe('value')
-    expect(negRange.series[2]?.markLine?.label?.formatter).toBe('-10')
+    expect(negRange.series[2]?.markLine?.label?.formatter?.()).toBe('-10')
 
     const rawOf = (impl: unknown) =>
       (impl as { rawRender: (p: unknown) => unknown }).rawRender as never

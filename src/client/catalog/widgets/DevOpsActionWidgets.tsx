@@ -103,7 +103,8 @@ export const DshTrackerImpl = defineComponent<{
 
   const hasError = slices.some((s) => s.status === 'error')
   const hasWarn = !hasError && slices.some((s) => s.status === 'warning')
-  const overallState = hasError ? 'error' : hasWarn ? 'warning' : 'done'
+  const allUnknown = !hasError && !hasWarn && slices.every((s) => s.status === 'unknown')
+  const overallState = hasError ? 'error' : hasWarn ? 'warning' : allUnknown ? 'pending' : 'done'
 
   const statusText = (s: TrackerSliceStatus) =>
     s === 'error'
@@ -130,7 +131,7 @@ export const DshTrackerImpl = defineComponent<{
             <span className={css.trackerTitle}>{title}</span>
           </span>
           {summary ? (
-            <span className={css.trackerSummary} data-status={hasError ? 'error' : 'ok'}>
+            <span className={css.trackerSummary} data-status={overallState}>
               {summary}
             </span>
           ) : null}
@@ -141,7 +142,7 @@ export const DshTrackerImpl = defineComponent<{
         <div
           className={css.trackerStrip}
           style={{
-            gap: slices.length > 48 ? 1 : slices.length > 28 ? 2 : 3,
+            gap: slices.length > 90 ? 0 : slices.length > 48 ? 1 : slices.length > 28 ? 2 : 3,
             gridTemplateColumns: `repeat(${slices.length}, minmax(0, 1fr))`,
           }}
           onMouseLeave={() => setActiveSliceId(null)}
@@ -228,8 +229,7 @@ export const DshTerminalImpl = defineComponent<{
       : 340
 
   const handleCopyCmd = (id: string, cmd: string) => {
-    copyTextToClipboard(cmd)
-    markCopiedId(id)
+    copyTextToClipboard(cmd, () => markCopiedId(id))
   }
 
   return (
@@ -322,7 +322,11 @@ export const DshApprovalCardImpl = defineComponent<{
     if (!Array.isArray(props.impacts)) return []
     return props.impacts.map(String).filter((s) => s.trim() !== '')
   }, [props.impacts])
-  const targetKey = `${title}\u0000${scope}\u0000${summary}\u0000${severity}\u0000${impacts.join('|')}`
+  const confirmText =
+    props.confirmLabel !== undefined && props.confirmLabel !== null
+      ? String(props.confirmLabel)
+      : ''
+  const targetKey = `${title}\u0000${scope}\u0000${summary}\u0000${severity}\u0000${confirmText}\u0000${impacts.join('\u0000')}`
   const [prevTargetKey, setPrevTargetKey] = useState(targetKey)
   const [acknowledged, setAcknowledged] = useState(false)
   const [decision, setDecision] = useState<'approved' | 'rejected' | null>(null)
@@ -333,10 +337,6 @@ export const DshApprovalCardImpl = defineComponent<{
     if (acknowledged) setAcknowledged(false)
     if (decision !== null) setDecision(null)
   }
-  const confirmText =
-    props.confirmLabel !== undefined && props.confirmLabel !== null
-      ? String(props.confirmLabel)
-      : ''
   const needsAck = confirmText.trim() !== ''
 
   const severityMeta: { label: string; tone: TagTone } =
@@ -545,8 +545,7 @@ export const DshApiEndpointImpl = defineComponent<{
       headers: props.headers,
       requestBody: props.requestBody,
     })
-    copyTextToClipboard(curl)
-    markCopiedCurl()
+    copyTextToClipboard(curl, markCopiedCurl)
   }
 
   const canAct = !readOnly && Boolean(runAction)
