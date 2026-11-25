@@ -2,6 +2,7 @@ import type * as echarts from 'echarts/core'
 import {
   type ChartBuildContext,
   ZOOM_LEGEND_BOTTOM,
+  applyMarkAreaHeadroom,
   buildCompactCategoryFormatter,
   canUseLogScale,
   computeEvenAxisInterval,
@@ -157,12 +158,25 @@ export function buildCartesianCoreChartOption(ctx: ChartBuildContext): echarts.E
     })
 
     const lineVals = lineDataList.flat().filter((v): v is number => typeof v === 'number')
-    const leftBounds =
+    const baseLeftBounds =
       lineKeys.length === 0
         ? computeRefAxisBounds(stackedComboVals, comboRefValue, false, comboUseLog)
         : {}
+    const leftBounds = applyMarkAreaHeadroom(
+      stackedComboVals,
+      props.markArea,
+      baseLeftBounds,
+      false,
+      comboUseLog,
+    )
     const rightBounds =
-      lineKeys.length > 0 ? computeRefAxisBounds(lineVals, props.referenceLine) : {}
+      lineKeys.length > 0
+        ? applyMarkAreaHeadroom(
+            lineVals,
+            props.markArea,
+            computeRefAxisBounds(lineVals, props.referenceLine),
+          )
+        : {}
     const comboMarkArea = markArea(
       0,
       lineKeys.length > 0
@@ -439,7 +453,15 @@ export function buildCartesianCoreChartOption(ctx: ChartBuildContext): echarts.E
             ? {}
             : { interval: pctStep }),
         }
-    : computeRefAxisBounds(cartesianVals, effectiveCartRef, false, useLogAxis)
+    : isHorizontal
+      ? computeRefAxisBounds(cartesianVals, effectiveCartRef, false, useLogAxis)
+      : applyMarkAreaHeadroom(
+          cartesianVals,
+          props.markArea,
+          computeRefAxisBounds(cartesianVals, effectiveCartRef, false, useLogAxis),
+          false,
+          useLogAxis,
+        )
   const cartMarkPos = isHorizontal
     ? 'insideEndTop'
     : pickMarkLinePosition(

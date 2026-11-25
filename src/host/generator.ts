@@ -36,6 +36,7 @@ import {
   type SkillDomain,
   slicePromptSnippetByDomain,
 } from './prompt-compact.ts'
+import { findDeepestFunctionCallSites } from './depth-diagnostics.ts'
 
 export type { SkillDomain }
 export {
@@ -233,11 +234,20 @@ function validateCalcCallsInNode(node: unknown): void {
 const PRUNED_MATH_FN_RE =
   /Function '(add|sub|mul|div|pow|sqrt|exp|log|abs|min|max|clamp|round|neq|gte|lte)' is not defined/i
 
-function enrichCompilerError(err: unknown): never {
+function enrichCompilerError(err: unknown, cleanedUi?: string): never {
   if (err instanceof Error) {
     if (/functionCall depth >/i.test(err.message)) {
+      const sites = cleanedUi ? findDeepestFunctionCallSites(cleanedUi, 5) : []
+      const culpritHint =
+        sites.length > 0
+          ? ` Culprit(s): ${sites
+              .map(
+                (s) => `line ${s.line} \`${s.target}\` (depth ${s.depth}: ${s.chain.join(' → ')})`,
+              )
+              .join('; ')}.`
+          : ''
       throw new A2uiError(
-        `${err.message}. Tip: A2UI caps nested function call depth at 5. NEVER nest 3+ \`cond(...)\` inside \`calc(...)\` + \`formatNumber(...)\` and NEVER chain \`calc()\` variables — collapse math into one flat \`calc()\` reading \`$/paths\` directly (e.g. \`calc("p * r * (1 + r)^n / ((1 + r)^n - 1)", { p: $/p, r: $/r, n: $/n }, decimals=2)\`), and bind derived results to plain local variables (never \`$/paths\`).`,
+        `${err.message}.${culpritHint} Tip: A2UI caps nested function call depth at 5. NEVER nest 3+ \`cond(...)\` inside \`calc(...)\` + \`formatNumber(...)\` and NEVER chain \`calc()\` variables — collapse math into one flat \`calc()\` reading \`$/paths\` directly (e.g. \`calc("p * r * (1 + r)^n / ((1 + r)^n - 1)", { p: $/p, r: $/r, n: $/n }, decimals=2)\`), and bind derived results to plain local variables (never \`$/paths\`).`,
         'VALIDATION_ERROR',
       )
     }
@@ -627,10 +637,10 @@ export class SurfaceSessions {
             }
             parts = proc.parseResponse(cleaned, { wrapped: false })
           } catch (retryErr) {
-            enrichCompilerError(retryErr)
+            enrichCompilerError(retryErr, cleaned)
           }
         } else {
-          enrichCompilerError(firstErr)
+          enrichCompilerError(firstErr, cleaned)
         }
       }
       const messages = parts.flatMap((part) => (part.type === 'a2ui' ? part.a2ui : []))

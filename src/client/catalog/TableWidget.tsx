@@ -75,6 +75,16 @@ export interface TableColumnInput {
   readonly sortable?: boolean | undefined
   readonly format?: TableColumnFormat | undefined
   readonly max?: number | undefined
+  readonly lowerIsBetter?: boolean | undefined
+}
+
+export function resolveTableTrendPolarity(
+  dir: 'up' | 'down' | 'neutral',
+  lowerIsBetter?: boolean,
+): 'good' | 'bad' | 'neutral' {
+  if (dir === 'neutral') return 'neutral'
+  if (lowerIsBetter) return dir === 'down' ? 'good' : 'bad'
+  return dir === 'up' ? 'good' : 'bad'
 }
 
 export interface TableWidgetProps {
@@ -162,6 +172,7 @@ function renderFormattedTableCell(
   format: TableColumnFormat | undefined,
   colMax: number,
   msg: RuntimeUiMessages,
+  lowerIsBetter?: boolean,
 ) {
   if (!format || format === 'text') return formatCellValue(value, msg)
   if (format === 'badge') {
@@ -193,7 +204,11 @@ function renderFormattedTableCell(
             ? 'down'
             : 'neutral'
     return (
-      <span className={css.tableDeltaCell} data-dir={dir}>
+      <span
+        className={css.tableDeltaCell}
+        data-dir={dir}
+        data-invert={lowerIsBetter ? 'true' : undefined}
+      >
         {text}
       </span>
     )
@@ -218,10 +233,14 @@ function renderFormattedTableCell(
     if (!geom) return formatCellValue(value, msg)
     const first = pts[0] ?? 0
     const last = pts[pts.length - 1] ?? 0
+    const polarity = resolveTableTrendPolarity(
+      last > first ? 'up' : last < first ? 'down' : 'neutral',
+      lowerIsBetter,
+    )
     const strokeColor =
-      last > first
+      polarity === 'good'
         ? 'var(--dsw-alias-state-success-primary, #10b981)'
-        : last < first
+        : polarity === 'bad'
           ? 'var(--dsw-alias-state-error-primary, #ef4444)'
           : 'var(--dsw-alias-state-business-primary, #4d6bfe)'
     return (
@@ -467,6 +486,7 @@ export const TableWidget = memo(function TableWidget({
                   col.format,
                   colMax,
                   msg,
+                  col.lowerIsBetter,
                 ),
             },
           )

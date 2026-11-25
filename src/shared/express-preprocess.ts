@@ -1,4 +1,4 @@
-import { ALLOWED_CALC_FUNCTIONS } from './calc-engine.ts'
+import { ALLOWED_CALC_FUNCTIONS, validateCalcExpression } from './calc-engine.ts'
 import { isDangerousObjectKey } from './constants.ts'
 
 const CALC_BUILTINS = ALLOWED_CALC_FUNCTIONS
@@ -773,7 +773,8 @@ function inlineSingleCalcCall(
     const projectedLen =
       mergedExpr.length +
       occurrences * Math.max(0, refCalc.expr.length + 2 + extraRoundingLen - k.length)
-    if (occurrences === 0 || projectedLen > 520) {
+    const maxProjectedLen = occurrences <= 2 ? 1200 : 520
+    if (occurrences === 0 || projectedLen > maxProjectedLen) {
       mergedVars[k] = rawVal
       continue
     }
@@ -809,6 +810,15 @@ function inlineSingleCalcCall(
       pendingEntries.push([targetKey, subVal])
     }
 
+    const renamedSub = replaceFormulaIdents(refCalc.expr, renameMap)
+    const wrappedSub =
+      refCalc.decimals !== null ? `round(${renamedSub}, ${refCalc.decimals})` : `(${renamedSub})`
+    const nextMergedExpr = replaceFormulaIdents(mergedExpr, new Map([[k, wrappedSub]]))
+    if (projectedLen > 520 && validateCalcExpression(nextMergedExpr) !== null) {
+      mergedVars[k] = rawVal
+      continue
+    }
+
     for (const [targetKey, subVal] of pendingEntries) {
       mergedVars[targetKey] = subVal
     }
@@ -816,10 +826,7 @@ function inlineSingleCalcCall(
       outerBuiltins.add(c)
     }
 
-    const renamedSub = replaceFormulaIdents(refCalc.expr, renameMap)
-    const wrappedSub =
-      refCalc.decimals !== null ? `round(${renamedSub}, ${refCalc.decimals})` : `(${renamedSub})`
-    mergedExpr = replaceFormulaIdents(mergedExpr, new Map([[k, wrappedSub]]))
+    mergedExpr = nextMergedExpr
     didInline = true
   }
 

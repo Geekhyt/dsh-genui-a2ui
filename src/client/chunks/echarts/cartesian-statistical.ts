@@ -2,6 +2,7 @@ import type * as echarts from 'echarts/core'
 import {
   type ChartBuildContext,
   ZOOM_LEGEND_BOTTOM,
+  applyMarkAreaHeadroom,
   buildCompactCategoryFormatter,
   canUseLogScale,
   computeEvenAxisInterval,
@@ -358,7 +359,13 @@ export function buildStatisticalChartOption(
             ],
           }
         : (refLineY ?? refLineX)
-    const bounds = computeRefAxisBounds(scatterYVals, effectiveScatterRefY, false, scatterUseLog)
+    const bounds = applyMarkAreaHeadroom(
+      scatterYVals,
+      props.markArea,
+      computeRefAxisBounds(scatterYVals, effectiveScatterRefY, false, scatterUseLog),
+      false,
+      scatterUseLog,
+    )
     const scatterCategories = numericX
       ? undefined
       : [...new Set(validRows.map((r) => sanitizeChartLabel(r[scatterXKey])))]
@@ -593,7 +600,11 @@ export function buildStatisticalChartOption(
       props.referenceLine !== undefined && Number.isFinite(props.referenceLine)
         ? props.referenceLine - baseline
         : undefined
-    const rangeBounds = computeRefAxisBounds([...baseData, ...shiftedHighs], shiftedRef)
+    const rangeBounds = applyMarkAreaHeadroom(
+      [...baseData, ...shiftedHighs],
+      props.markArea,
+      computeRefAxisBounds([...baseData, ...shiftedHighs], shiftedRef),
+    )
     const rangeMarkArea = markArea(
       -baseline,
       resolveYRange([...baseData, ...shiftedHighs], rangeBounds),

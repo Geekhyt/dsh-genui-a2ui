@@ -736,11 +736,13 @@
   font-variant-numeric: tabular-nums;
 }
 
-.tableDeltaCell[data-dir="up"] {
+.tableDeltaCell[data-dir="up"],
+.tableDeltaCell[data-dir="down"][data-invert="true"] {
   color: var(--a2ui-success-fg);
 }
 
-.tableDeltaCell[data-dir="down"] {
+.tableDeltaCell[data-dir="down"],
+.tableDeltaCell[data-dir="up"][data-invert="true"] {
   color: var(--a2ui-danger-fg);
 }
 

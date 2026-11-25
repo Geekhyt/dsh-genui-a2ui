@@ -158,6 +158,10 @@ export const TableColumnSchema = spec(
       .describe('Scalar formatter: badge/bar/delta/sparkline/code.')
       .optional(),
     max: z.number().positive().describe('Max scale for format="bar".').optional(),
+    lowerIsBetter: z
+      .boolean()
+      .describe('Invert delta/sparkline colors (green on decrease).')
+      .optional(),
   }),
   { closure: 'additionalProperties' },
 )

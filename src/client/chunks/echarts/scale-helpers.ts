@@ -158,6 +158,53 @@ export function computeRefAxisBounds(
   }
 }
 
+export function hasLabeledXMarkArea(rawMarkArea: unknown): boolean {
+  if (!Array.isArray(rawMarkArea) || rawMarkArea.length === 0) return false
+  for (const raw of rawMarkArea) {
+    if (typeof raw !== 'object' || raw === null) continue
+    const rec = raw as Record<string, unknown>
+    if (rec.axis === 'y') continue
+    const startVal = rec.start ?? rec.from ?? rec.x0
+    const endVal = rec.end ?? rec.to ?? rec.x1
+    if (startVal === undefined || endVal === undefined) continue
+    if (typeof rec.label === 'string' && rec.label.trim() !== '') return true
+  }
+  return false
+}
+
+export function applyMarkAreaHeadroom(
+  values: readonly number[],
+  rawMarkArea: unknown,
+  bounds: { min?: number | undefined; max?: number | undefined },
+  scale = false,
+  useLog = false,
+): { min?: number | undefined; max?: number | undefined } {
+  if (!hasLabeledXMarkArea(rawMarkArea)) return bounds
+  const finiteVals = values.filter(Number.isFinite)
+  if (finiteVals.length === 0) return bounds
+  if (useLog) {
+    const posVals = finiteVals.filter((v) => v > 0)
+    if (posVals.length === 0) return bounds
+    const target = niceUpperBound(Math.max(...posVals) * 1.45)
+    return bounds.max !== undefined && bounds.max >= target ? bounds : { ...bounds, max: target }
+  }
+  const rawMax = Math.max(...finiteVals)
+  const rawMin = Math.min(...finiteVals)
+  const dataMax = scale ? rawMax : Math.max(0, rawMax)
+  const dataMin = scale ? rawMin : Math.min(0, rawMin)
+  if (!scale && dataMax <= 0) return bounds
+  const span = dataMax - dataMin
+  let target: number
+  if (scale && span > 0 && span < Math.abs(dataMax) * 0.35) {
+    const step = 10 ** Math.floor(Math.log10(Math.max(1e-9, span)) - 1)
+    target = Number((Math.ceil((dataMax + span * 0.28) / step) * step).toPrecision(6))
+  } else {
+    target = niceUpperBound(dataMax * 1.18)
+  }
+  if (bounds.max !== undefined && bounds.max >= target) return bounds
+  return { ...bounds, max: target }
+}
+
 export function formatCompactTickNum(v: number, span?: number): string {
   if (!Number.isFinite(v)) return '0'
   const abs = Math.abs(v)

@@ -2,6 +2,25 @@
 
 All notable changes to `dsh-genui-a2ui` are documented in this file.
 
+## [0.5.8] - 2026-11-26
+
+### Added
+- **Table `lowerIsBetter` Semantic Polarity (`src/shared/catalog-schema.ts`, `src/client/catalog/TableWidget.tsx`, `src/client/catalog/styles/advanced-inputs.module.css`, `src/index.ts`)**:
+  - Added optional `lowerIsBetter?: boolean` on `TableColumnSchema` and pure helper `resolveTableTrendPolarity()`, inverting success/danger semantics for both `format="delta"` (preserving literal `data-dir` with `data-invert="true"`) and `format="sparkline"` on cost, latency, error-rate, and defect columns.
+- **Pinpoint `functionCall depth > 5` Host Diagnostics (`src/host/depth-diagnostics.ts`, `src/host/generator.ts`)**:
+  - Added Host-only static Express depth scanner `findDeepestFunctionCallSites()` (zero client bundle impact) and wired it into `enrichCompilerError()` so depth rejections report exact line numbers, variable names, depths, and call chains (`Culprit(s): line N \`var\` (depth D: ...)`).
+- **Live Generalization Regression Suite (`tests/generalization-v058.spec.ts`)**:
+  - Added 5 regression tests covering 276px `markArea` headroom & pill contrast across `combo`/`bar`/`range`/`scatter`/`percent-stack`, 9-parameter TCO calc flattening, `Depth > 5` pinpoint diagnostics, and `Table.lowerIsBetter` compiler/DOM/CSS parity.
+
+### Fixed
+- **ECharts Labeled `markArea` Peak Anti-Collision (`src/client/chunks/echarts/{scale-helpers,shared,cartesian-core,cartesian-statistical}.ts`)**:
+  - Added `hasLabeledXMarkArea()` and `applyMarkAreaHeadroom()` to reserve Y-axis headroom whenever a labeled X-axis `markArea` spans peak bars/lines (across `combo` dual axes, `bar`/`line`/`area`, `range`, and `scatter`, while skipping horizontal bars and 100% stacked charts), paired with theme-aware translucent label pill backdrops (`rgba(20, 24, 36, 0.84)` / `rgba(255, 255, 255, 0.88)`).
+- **Multi-Parameter Chained `calc()` Flattening Budget (`src/shared/express-preprocess.ts`)**:
+  - Differentiated linear formula composition (`occurrences <= 2`, allowed up to `1200` chars with `validateCalcExpression` guard) from multi-occurrence amplification (`occurrences > 2`, capped at `520` chars), enabling complex multi-variable calculators (e.g. 9-parameter EV vs ICE 5-year TCO) to compile on first pass without weakening anti-amplification bounds.
+
+### Changed
+- Verified full automated & live release gate: **45 suites / 281 tests**, **38/38** architectural invariants, **0** comments, **4/4** TLA+ formal specs, **5/5** bundle budgets (`lib/client.js = 75.66 kB / 21.08 kB gzip`), `eval:check` (`31/31`, `64/64` components), `check:host-api`, Dark & Light `qa:visual` runs (`6/6` zero violations), and before/after live DeepSeek Harness visual verification on 10 out-of-distribution simple & complex prompts.
+
 ## [0.5.7] - 2026-11-25
 
 ### Added
