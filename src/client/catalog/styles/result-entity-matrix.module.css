@@ -428,7 +428,7 @@
   align-items: center;
 }
 
-@container (max-width: 560px) {
+@container (max-width: 660px) {
   .kvGridBordered {
     grid-template-columns: repeat(min(var(--kv-cols, 2), 2), minmax(0, 1fr));
   }
@@ -582,7 +582,10 @@
 }
 
 @container (max-width: 720px) {
-  .responsiveGrid[data-columns="4"],
+  .responsiveGrid[data-columns="4"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .responsiveGrid[data-columns="5"],
   .responsiveGrid[data-columns="6"] {
     grid-template-columns: repeat(3, minmax(0, 1fr));

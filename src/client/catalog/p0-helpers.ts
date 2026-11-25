@@ -357,8 +357,8 @@ export function normalizeKeyValueItems(raw: unknown, defaultCopyable = false): N
         return
       }
       const rec = item as Record<string, unknown>
-      const label = String(rec.label ?? rec.key ?? rec.name ?? `#${idx + 1}`)
-      const rawVal = rec.value ?? rec.val ?? ''
+      const label = String(rec.label ?? rec.key ?? rec.name ?? rec.k ?? rec.title ?? `#${idx + 1}`)
+      const rawVal = rec.value ?? rec.val ?? rec.v ?? rec.text ?? ''
       const value =
         typeof rawVal === 'object' && rawVal !== null
           ? safeStringifyJson(rawVal, 0)

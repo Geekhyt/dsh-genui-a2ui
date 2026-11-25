@@ -2,6 +2,30 @@
 
 All notable changes to `dsh-genui-a2ui` are documented in this file.
 
+## [0.5.7] - 2026-11-25
+
+### Added
+- **2 New Architectural Invariant Rules (`scripts/check-invariants.mjs`, `tests/invariants-lint.spec.ts`)**:
+  - Expanded the static invariant gate from **36 → 38 rules**, adding `css-even-grid-no-3col-collapse` (forbidding `@container` rules from collapsing `[data-columns="4"]` grids into asymmetric 3-column layouts) and `redaction-kv-helper-parity` (enforcing shared `extractKvEntryKey` + `isKvValueField` helpers across `redaction.ts` and `ask-tool.ts` so UI shorthand KV aliases can never drift from secret redaction).
+- **Explicit `Stat.tone` Semantic Polarity (`src/shared/catalog-schema.ts`, `src/client/catalog/MediaAndDataWidgets.tsx`)**:
+  - Appended optional `tone?: 'neutral' | 'info' | 'success' | 'warning' | 'danger'` after `caption` in `StatApi` (100% positional backwards compatible) and added `resolveStatPresentation()` to override both delta badge tone and inline Sparkline stroke/gradient colors for inverted KPIs (e.g. `trend="up", tone="danger"` on latency spikes or thread-pool saturation).
+- **Generalization Regression Suite (`tests/generalization-v057.spec.ts`)**:
+  - Added 6 focused regression suites covering KV shorthand normalization + secret-redaction parity, `Stat.tone` Express compilation & rendering, `FileTree` nested flattening / directory summaries / zero-count hygiene, `.multilineTag` WCAG contrast + symmetric responsive grids, and anti-spelunking / silent-repair prompt contracts.
+
+### Fixed
+- **Catalog-Wide KV Shorthand Resilience & Secret-Redaction Parity (`src/shared/redaction.ts`, `src/host/ask-tool.ts`, `src/client/catalog/{p0,v4,v6}-helpers.ts`)**:
+  - Added shared `KV_ENTRY_KEY_FIELDS` / `KV_ENTRY_VALUE_FIELDS`, `extractKvEntryKey`, and `isKvValueField` helpers so `{ k, v }`, `{ label, val }`, and `{ name, value }` shorthand rows render cleanly across `KeyValue`, `EntityHeader.metrics`, `Result.meta`, `KvEditor`, and `ApiEndpoint` (params/headers/cURL) while remaining uniformly redacted in `redaction.ts` and `a2ui_ask`.
+- **Anti-Spelunking Execution Guard, Silent Compile Repair & Chart Data-Shape Hints (`src/index.ts`, `src/host/{prompt-compact,render-tool,ask-tool}.ts`)**:
+  - Hardened `SKILL_PREAMBLE`, domain hints (`analytics`/`devops`/`forms`), and `a2ui_render`/`a2ui_ask` retry errors to prohibit `bash`/`grep`/`glob`/`read` spelunking of `dsh-genui-a2ui`, `app.asar`, or `~/.dsh`, document 1-line data shapes for non-obvious charts (`waterfall`, `dumbbell`, `range`, `bullet`, `combo`) and quoted non-ASCII object keys, and require silent compile self-repair without narrating syntax errors to the user.
+- **Responsive Grid Symmetry, Bordered `KeyValue` Breakpoint & WCAG-Safe Multiline Tags (`src/client/catalog/styles/*.module.css`, `src/client/catalog/{MediaAndDataWidgets.tsx,widgets/DiffAndSummaryWidgets.tsx}`)**:
+  - Collapsed 4-column `.responsiveGrid` (`<=720px`) and `.checkCardGrid` (`<=640px`) directly to symmetric `2×N` columns instead of asymmetric `3+1` orphan rows, and raised `.kvGridBordered` 3→2 collapse threshold to `660px` so file paths stay intact inside DSH desktop chat cards.
+  - Added `.multilineTag` (`border-radius: 6px`, WCAG AA `--a2ui-*-fg` tokens) for long (`>18` chars or multiline) `KeyValue` and `Badge` tags, fixing both bloated `999px` pill ovals and Light-mode host `Tag` low-contrast regressions (`2.09:1` → AA pass).
+- **`FileTree` Nested Flattening, Directory Summaries & Zero-Count Hygiene (`src/client/catalog/stat-file-helpers.ts`, `src/client/catalog/widgets/StructuredTrees.tsx`)**:
+  - Recursively flattened nested `{ name/path, children }` entries, accepted `description` as a `summary` fallback, rendered `node.summary` on directory rows, suppressed `0` file-count badges, and rendered childless stub directories as non-interactive rows with alignment spacers instead of phantom toggle buttons.
+
+### Changed
+- Verified full automated & live release gate: **44 suites / 276 tests**, **38/38** architectural invariants, **0** comments, **4/4** TLA+ formal specs, **5/5** bundle budgets (`lib/client.js = 77.48 kB / 21.64 kB gzip`), `eval:check` (`31/31`, `64/64` components), `check:host-api`, **50/50** Dark & Light Visual QA runs (`overflow=0 wrap=0 clip=0 contrast=0 svgclip=0 errs=0`), and live local DeepSeek Harness OOD re-test (`C1`: `36 → 4` steps, `32 → 0` `app.asar` bash calls, `1.69M → 173K` tokens).
+
 ## [0.5.6] - 2026-11-25
 
 ### Added

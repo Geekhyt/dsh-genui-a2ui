@@ -247,18 +247,22 @@ export const StatApi = {
         ).optional(),
         trend: z
           .enum(['up', 'down', 'neutral'])
-          .describe('Semantic trend direction for coloring the delta tag and sparkline.')
+          .describe('Trend direction for delta/sparkline.')
           .optional(),
         spark: DynamicValueSchema.describe(
-          'REF:#/$defs/DynamicValue|Optional numeric array (or $/path array) rendered as a lightweight inline SVG trend sparkline.',
+          'REF:#/$defs/DynamicValue|Numeric array or $/path for inline sparkline.',
         ).optional(),
         caption: DynamicStringSchema.describe(
-          'REF:#/$defs/DynamicString|Optional secondary note under the metric.',
+          'REF:#/$defs/DynamicString|Optional note under metric.',
         ).optional(),
+        tone: z
+          .enum(['neutral', 'info', 'success', 'warning', 'danger'])
+          .describe('Color override ("danger"/"warning" for bad spikes).')
+          .optional(),
         weight: WeightSchema.optional(),
       })
       .describe(
-        'Compact KPI metric card displaying a key figure, optional unit split, trend badge, inline SVG sparkline, and caption. Pass weight=1 when placing multiple equal-width Stat cards side-by-side in a Row.',
+        'Compact KPI metric card (figure, unit split, trend/tone badge, sparkline, caption). Pass weight=1 in Row.',
       )
       .strict(),
     { mixins: [], required: ['label', 'value'] },

@@ -302,11 +302,24 @@ function extractCssBlocks(cssText) {
   }
 
   const responsiveDeclByClass = new Map()
+  const unevenFourColRules = []
   for (const rule of topRules) {
     if (rule.header.startsWith('@container')) {
       for (const m of rule.body.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
-        const declProps = extractDeclaredProps(m[2] ?? '')
-        for (const item of extractSelectorClasses(m[1])) {
+        const selText = m[1] ?? ''
+        const bodyText = m[2] ?? ''
+        if (
+          selText.includes('[data-columns="4"]') &&
+          /grid-template-columns\s*:\s*repeat\(\s*3\s*,/.test(bodyText)
+        ) {
+          unevenFourColRules.push({
+            line: rule.startLine,
+            header: rule.header,
+            selector: selText.trim(),
+          })
+        }
+        const declProps = extractDeclaredProps(bodyText)
+        for (const item of extractSelectorClasses(selText)) {
           containerQueriedClasses.add(item.cls)
           if (containerHosts.has(item.cls)) {
             containerSelfQueries.push({
@@ -371,6 +384,7 @@ function extractCssBlocks(cssText) {
     opaqueControlBgRules,
     fixedTablePreCellRules,
     rawWhiteOnStatePrimaryRules,
+    unevenFourColRules,
   }
 }
 
@@ -386,6 +400,7 @@ export function checkCssInvariants(source, relPath) {
     opaqueControlBgRules,
     fixedTablePreCellRules,
     rawWhiteOnStatePrimaryRules,
+    unevenFourColRules,
   } = extractCssBlocks(source)
 
   if (/\blight-dark\s*\(/.test(source)) {
@@ -464,6 +479,15 @@ export function checkCssInvariants(source, relPath) {
       file: relPath,
       line: sr.line,
       message: `${sr.header} overrides ".${sr.cls}" (${sr.prop}) before its base rule at line ${sr.laterLine}; move the responsive block after the base rule.`,
+    })
+  }
+
+  for (const u4 of unevenFourColRules) {
+    violations.push({
+      rule: 'css-even-grid-no-3col-collapse',
+      file: relPath,
+      line: u4.line,
+      message: `${u4.header} collapses "${u4.selector}" to 3 columns; 4-column grids must collapse symmetrically to 2 (or 1) columns to avoid 3+1 / 3+3+2 orphan rows.`,
     })
   }
 
@@ -1146,6 +1170,20 @@ export function checkTsInvariants(source, relPath) {
       }
     }
 
+    if (
+      (relPath === 'src/host/ask-tool.ts' || relPath === 'src/shared/redaction.ts') &&
+      ts.isBinaryExpression(node) &&
+      node.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken &&
+      /isKvSecret/i.test(node.left.getText(sf)) &&
+      /===\s*['"]value['"]/.test(node.right.getText(sf))
+    ) {
+      report(
+        'redaction-kv-helper-parity',
+        node,
+        'Use isKvValueField(k) and extractKvEntryKey(rec) instead of hardcoding k === "value" so all KV shorthand aliases stay redacted in lockstep.',
+      )
+    }
+
     ts.forEachChild(node, visit)
   }
 
@@ -1436,7 +1474,7 @@ function runCli() {
     process.exit(1)
   }
   console.log(
-    `[check-invariants] OK: 36 architectural invariant rules verified across ${report.filesScanned} source/CSS file(s) and locale tables.`,
+    `[check-invariants] OK: 38 architectural invariant rules verified across ${report.filesScanned} source/CSS file(s) and locale tables.`,
   )
 }
 

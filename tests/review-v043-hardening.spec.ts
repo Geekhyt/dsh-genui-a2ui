@@ -139,7 +139,7 @@ describe('v0.4.3 Comprehensive Review & Visual QA Hardening', () => {
     const compacted = compactPromptSnippet(new SurfaceSessions().rawPromptSnippet())
     expect(compacted).toContain('pluralize(value, zero?, one?, two?, few?, many?, other)')
     expect(A2UI_SYSTEM_GUIDANCE).toContain(
-      'Stat(label, value, delta?, trend?="up"|"down"|"neutral", spark?, caption?)',
+      'Stat(label, value, delta?, trend?="up"|"down"|"neutral", spark?, caption?, tone?="neutral"|"info"|"success"|"warning"|"danger")',
     )
     expect(A2UI_SYSTEM_GUIDANCE).toContain(
       'KeyValue(items, title?, columns?=2, bordered?=false, copyable?=false)',

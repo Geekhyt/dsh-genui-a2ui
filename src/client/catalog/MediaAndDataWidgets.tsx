@@ -202,6 +202,35 @@ export const DshAudioPlayerImpl = defineComponent<{
   )
 })
 
+export type StatTone = 'neutral' | 'info' | 'success' | 'warning' | 'danger'
+
+const VALID_STAT_TONES = new Set<string>(['neutral', 'info', 'success', 'warning', 'danger'])
+
+export function resolveStatPresentation(
+  trend?: 'up' | 'down' | 'neutral',
+  rawTone?: unknown,
+): { readonly tagTone: TagTone; readonly sparkColor: string } {
+  const explicitTone =
+    typeof rawTone === 'string' && VALID_STAT_TONES.has(rawTone) ? (rawTone as StatTone) : undefined
+  const tagTone: TagTone =
+    explicitTone ?? (trend === 'up' ? 'success' : trend === 'down' ? 'danger' : 'neutral')
+  const sparkColor =
+    explicitTone === 'danger'
+      ? 'var(--dsw-alias-state-error-primary, #ef4444)'
+      : explicitTone === 'warning'
+        ? 'var(--dsw-alias-state-warn-primary, #f59e0b)'
+        : explicitTone === 'success'
+          ? 'var(--dsw-alias-state-success-primary, #10b981)'
+          : explicitTone === 'info' || explicitTone === 'neutral'
+            ? 'var(--dsw-alias-brand-primary, #4d6bfe)'
+            : trend === 'up'
+              ? 'var(--dsw-alias-state-success-primary, #10b981)'
+              : trend === 'down'
+                ? 'var(--dsw-alias-state-error-primary, #ef4444)'
+                : 'var(--dsw-alias-brand-primary, #4d6bfe)'
+  return { tagTone, sparkColor }
+}
+
 export function DshStatView({
   props,
 }: {
@@ -210,14 +239,14 @@ export function DshStatView({
     value?: unknown
     delta?: unknown
     trend?: 'up' | 'down' | 'neutral'
+    tone?: StatTone
     caption?: unknown
     spark?: unknown
     weight?: number
   }
 }) {
   const gradId = useId().replace(/[^a-zA-Z0-9_-]/g, '')
-  const tone: TagTone =
-    props.trend === 'up' ? 'success' : props.trend === 'down' ? 'danger' : 'neutral'
+  const { tagTone: tone, sparkColor } = resolveStatPresentation(props.trend, props.tone)
   const deltaText =
     props.delta !== undefined && props.delta !== null && String(props.delta) !== ''
       ? String(props.delta)
@@ -227,12 +256,6 @@ export function DshStatView({
     () => buildSparklineGeometry(normalizeSparklinePoints(props.spark), 88, 26, 3),
     [props.spark],
   )
-  const sparkColor =
-    props.trend === 'up'
-      ? 'var(--dsw-alias-state-success-primary, #10b981)'
-      : props.trend === 'down'
-        ? 'var(--dsw-alias-state-error-primary, #ef4444)'
-        : 'var(--dsw-alias-brand-primary, #4d6bfe)'
 
   return (
     <div
@@ -287,6 +310,7 @@ export const DshStatImpl = defineComponent<{
   value?: unknown
   delta?: unknown
   trend?: 'up' | 'down' | 'neutral'
+  tone?: StatTone
   caption?: unknown
   spark?: unknown
   weight?: number
@@ -350,9 +374,17 @@ export const DshBadgeImpl = defineComponent<{
   tone?: TagTone
   weight?: number
 }>(BadgeApi, function DshBadge({ props }) {
+  const text = String(props.label ?? '')
+  const tone = props.tone ?? 'neutral'
   return (
     <span className={css.badgeWrap} style={weightStyle(props.weight)} data-a2ui-badge="">
-      <DshTag tone={props.tone ?? 'neutral'}>{String(props.label ?? '')}</DshTag>
+      {text.length > 18 || text.includes('\n') ? (
+        <span className={css.multilineTag} data-tone={tone}>
+          {text}
+        </span>
+      ) : (
+        <DshTag tone={tone}>{text}</DshTag>
+      )}
     </span>
   )
 })

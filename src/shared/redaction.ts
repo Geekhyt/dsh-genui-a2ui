@@ -461,6 +461,21 @@ function walkWildcardPointer(
   }
 }
 
+export const KV_ENTRY_KEY_FIELDS = ['key', 'name', 'k', 'label'] as const
+export const KV_ENTRY_VALUE_FIELDS = ['value', 'val', 'v'] as const
+
+export function extractKvEntryKey(rec: Record<string, unknown>): string {
+  for (const field of KV_ENTRY_KEY_FIELDS) {
+    const candidate = rec[field]
+    if (typeof candidate === 'string' && candidate !== '') return candidate
+  }
+  return ''
+}
+
+export function isKvValueField(field: string): boolean {
+  return field === 'value' || field === 'val' || field === 'v'
+}
+
 export function collectKvSecretsForDataModelUpdate(
   dmPath: string,
   dmValue: unknown,
@@ -507,10 +522,11 @@ export function collectKvSecretsForDataModelUpdate(
         relParts.length === 1
       ) {
         const rec = dmValue as Record<string, unknown>
-        const k =
-          typeof rec.key === 'string' ? rec.key : typeof rec.name === 'string' ? rec.name : ''
+        const k = extractKvEntryKey(rec)
         if (k !== '' && isSecretKey(k)) {
-          outObscured.add(`${normDm}/value`)
+          for (const vf of KV_ENTRY_VALUE_FIELDS) {
+            outObscured.add(`${normDm}/${vf}`)
+          }
         }
       }
     }
@@ -601,10 +617,12 @@ export function collectKvSecretsFromValue(
       const entry = node[i]
       if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) continue
       const rec = entry as Record<string, unknown>
-      const k = typeof rec.key === 'string' ? rec.key : typeof rec.name === 'string' ? rec.name : ''
+      const k = extractKvEntryKey(rec)
       if (k !== '' && isSecretKey(k)) {
-        outPointers.add(base === '/' ? `/${i}/value` : `${base}/${i}/value`)
-        recordSecretPrimitive(rec.value, outExact, outSubstrings, true)
+        for (const vf of KV_ENTRY_VALUE_FIELDS) {
+          outPointers.add(base === '/' ? `/${i}/${vf}` : `${base}/${i}/${vf}`)
+          recordSecretPrimitive(rec[vf], outExact, outSubstrings, true)
+        }
       }
     }
     return
@@ -650,13 +668,11 @@ export function collectSecretsFromNode(
     }
     if (typeof node === 'object') {
       const rec = node as Record<string, unknown>
-      const isKvSecret =
-        !isSurfaceRoot &&
-        ((typeof rec.key === 'string' && isSecretKey(rec.key)) ||
-          (typeof rec.name === 'string' && isSecretKey(rec.name)))
+      const kvEntryKey = !isSurfaceRoot ? extractKvEntryKey(rec) : ''
+      const isKvSecret = kvEntryKey !== '' && isSecretKey(kvEntryKey)
       for (const [k, v] of Object.entries(rec)) {
         const childSecret =
-          withinSecret || (!isSurfaceRoot && (isSecretKey(k) || (isKvSecret && k === 'value')))
+          withinSecret || (!isSurfaceRoot && (isSecretKey(k) || (isKvSecret && isKvValueField(k))))
         const seg = escapeJsonPointerSegment(k)
         const nextPath = isSurfaceRoot ? '' : path === '' ? `/${seg}` : `${path}/${seg}`
         walk(v, nextPath, isSurfaceRoot ? depth : depth + 1, false, childSecret)

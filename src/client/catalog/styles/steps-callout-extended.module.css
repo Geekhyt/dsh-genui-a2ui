@@ -756,3 +756,52 @@ button.fileTreeRow {
   font-variant-numeric: tabular-nums;
   color: var(--a2ui-fg-3);
 }
+
+.fileTreeSummary + .fileTreeCount {
+  margin-left: 8px;
+}
+
+.fileTreeCaretSpacer {
+  width: 12px;
+  flex-shrink: 0;
+}
+
+.multilineTag {
+  display: inline-block;
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.45;
+  white-space: normal;
+  text-align: left;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  color: var(--a2ui-fg);
+  background: var(--a2ui-bg-2);
+  border: 1px solid var(--a2ui-border-1);
+}
+
+.multilineTag[data-tone="info"] {
+  color: var(--a2ui-accent-fg);
+  background: color-mix(in srgb, var(--a2ui-accent) 11%, transparent);
+  border-color: color-mix(in srgb, var(--a2ui-accent) 26%, transparent);
+}
+
+.multilineTag[data-tone="success"] {
+  color: var(--a2ui-success-fg);
+  background: color-mix(in srgb, var(--a2ui-success) 11%, transparent);
+  border-color: color-mix(in srgb, var(--a2ui-success) 26%, transparent);
+}
+
+.multilineTag[data-tone="warning"] {
+  color: var(--a2ui-warn-fg);
+  background: color-mix(in srgb, var(--a2ui-warn) 12%, transparent);
+  border-color: color-mix(in srgb, var(--a2ui-warn) 28%, transparent);
+}
+
+.multilineTag[data-tone="danger"] {
+  color: var(--a2ui-danger-fg);
+  background: color-mix(in srgb, var(--a2ui-danger) 12%, transparent);
+  border-color: color-mix(in srgb, var(--a2ui-danger) 28%, transparent);
+}

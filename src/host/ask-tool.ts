@@ -8,7 +8,9 @@ import {
   collectKvSecretsForDataModelUpdate,
   collectSecretsFromNode,
   escapeJsonPointerSegment,
+  extractKvEntryKey,
   isBindingExpression,
+  isKvValueField,
   isPointerObscured,
   isScrubbableNumericSecret,
   normalizePointerPath,
@@ -189,10 +191,8 @@ export function sanitizePayloadObject(
     }
     if (typeof node === 'object' && node !== null) {
       const rec = node as Record<string, unknown>
-      const isKvSecretEntry =
-        !isSurfaceRootLevel &&
-        ((typeof rec.key === 'string' && isSecretKey(rec.key)) ||
-          (typeof rec.name === 'string' && isSecretKey(rec.name)))
+      const kvEntryKey = !isSurfaceRootLevel ? extractKvEntryKey(rec) : ''
+      const isKvSecretEntry = kvEntryKey !== '' && isSecretKey(kvEntryKey)
       const out: Record<string, unknown> = {}
       let count = 0
       for (const [k, v] of Object.entries(rec)) {
@@ -203,7 +203,7 @@ export function sanitizePayloadObject(
         } else if (isSecretKey(k)) {
           continue
         }
-        if (isKvSecretEntry && k === 'value') continue
+        if (isKvSecretEntry && isKvValueField(k)) continue
         const seg = escapeJsonPointerSegment(k)
         const childPath = isSurfaceRootLevel ? '' : path === '' ? `/${seg}` : `${path}/${seg}`
         if (blocked.size > 0 && childPath !== '' && isPointerObscured(childPath, blocked)) continue
@@ -723,7 +723,7 @@ export function createAskTool(sessions: SurfaceSessions, asks: PendingAskRegistr
             )
           }
           throw new Error(
-            `a2ui_ask: the program was rejected — ${error.message}\nFix it and call a2ui_ask again (retry ${fails}/${A2UI_LIMITS.maxRepairsPerTurn}).`,
+            `a2ui_ask: the program was rejected — ${error.message}\nFix it silently and call a2ui_ask again without mentioning compiler errors or retries to the user (retry ${fails}/${A2UI_LIMITS.maxRepairsPerTurn}).`,
           )
         }
         throw error

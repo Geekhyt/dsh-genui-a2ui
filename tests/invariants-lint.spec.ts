@@ -19,8 +19,8 @@ import {
 
 const ROOT_DIR = resolve(import.meta.dirname, '..')
 
-describe('Architectural invariant linter (36 rules)', () => {
-  it('passes all 36 rules on the live repository with zero violations', () => {
+describe('Architectural invariant linter (38 rules)', () => {
+  it('passes all 38 rules on the live repository with zero violations', () => {
     const report = runAllInvariantChecks(ROOT_DIR)
     expect(report.filesScanned).toBeGreaterThan(50)
     expect(report.violations).toEqual([])
@@ -302,6 +302,18 @@ describe('Architectural invariant linter (36 rules)', () => {
     expect(pieTplTooltipV.some((v) => v.rule === 'echarts-no-pie-string-template-tooltip')).toBe(
       true,
     )
+
+    const unevenFourColV = checkCssInvariants(
+      `.badGrid { display: grid; }\n@container (max-width: 720px) { .badGrid[data-columns="4"] { grid-template-columns: repeat(3, minmax(0, 1fr)); } }`,
+      'src/client/catalog/BadGrid.module.css',
+    )
+    expect(unevenFourColV.some((v) => v.rule === 'css-even-grid-no-3col-collapse')).toBe(true)
+
+    const kvRedactionParityV = checkTsInvariants(
+      `export function scrub(isKvSecretEntry: boolean, k: string) { return isKvSecretEntry && k === 'value' }`,
+      'src/host/ask-tool.ts',
+    )
+    expect(kvRedactionParityV.some((v) => v.rule === 'redaction-kv-helper-parity')).toBe(true)
   })
 
   it('verifies locale key parity across locale/*.json and TypeScript message tables', () => {

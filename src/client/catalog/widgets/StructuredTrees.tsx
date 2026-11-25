@@ -281,25 +281,42 @@ function FileTreeBranch(props: {
   const indent = 10 + depth * 16
 
   if (node.kind === 'dir') {
-    return (
-      <li className={css.fileTreeLi} role="treeitem" aria-expanded={open}>
-        <button
-          type="button"
-          className={css.fileTreeRow}
-          aria-expanded={open}
-          style={{ paddingLeft: indent }}
-          onClick={() => setOpen((v) => !v)}
-        >
+    const hasChildren = node.children.length > 0
+    const dirContent = (
+      <>
+        {hasChildren ? (
           <span className={css.fileTreeCaret} aria-hidden="true">
             {open ? '▾' : '▸'}
           </span>
-          <span className={css.fileTreeFolderIcon}>
-            {open ? FOLDER_OPEN_GLYPH : FOLDER_CLOSED_GLYPH}
-          </span>
-          <span className={css.fileTreeName}>{node.name}</span>
-          <span className={css.fileTreeCount}>{node.fileCount}</span>
-        </button>
-        {open && node.children.length > 0 ? (
+        ) : (
+          <span className={css.fileTreeCaretSpacer} aria-hidden="true" />
+        )}
+        <span className={css.fileTreeFolderIcon}>
+          {hasChildren && open ? FOLDER_OPEN_GLYPH : FOLDER_CLOSED_GLYPH}
+        </span>
+        <span className={css.fileTreeName}>{node.name}</span>
+        {node.summary ? <span className={css.fileTreeSummary}>{node.summary}</span> : null}
+        {node.fileCount > 0 ? <span className={css.fileTreeCount}>{node.fileCount}</span> : null}
+      </>
+    )
+    return (
+      <li className={css.fileTreeLi} role="treeitem" aria-expanded={hasChildren ? open : undefined}>
+        {hasChildren ? (
+          <button
+            type="button"
+            className={css.fileTreeRow}
+            aria-expanded={open}
+            style={{ paddingLeft: indent }}
+            onClick={() => setOpen((v) => !v)}
+          >
+            {dirContent}
+          </button>
+        ) : (
+          <div className={css.fileTreeRow} style={{ paddingLeft: indent }}>
+            {dirContent}
+          </div>
+        )}
+        {open && hasChildren ? (
           <ul className={css.fileTreeUl} role="group">
             {node.children.map((child) => (
               <FileTreeBranch

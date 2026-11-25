@@ -272,7 +272,7 @@ export function normalizeApiParamsAndHeaders(
     for (const p of rawParams) {
       if (typeof p !== 'object' || p === null) continue
       const rec = p as Record<string, unknown>
-      const name = String(rec.name ?? rec.key ?? '')
+      const name = String(rec.name ?? rec.key ?? rec.k ?? '')
       if (!name) continue
       out.push({
         name,
@@ -287,12 +287,12 @@ export function normalizeApiParamsAndHeaders(
     for (const h of rawHeaders) {
       if (typeof h !== 'object' || h === null) continue
       const rec = h as Record<string, unknown>
-      const name = String(rec.name ?? rec.key ?? '')
+      const name = String(rec.name ?? rec.key ?? rec.k ?? '')
       if (!name) continue
       out.push({
         name,
         location: 'HEADER',
-        type: String(rec.value ?? rec.example ?? 'string'),
+        type: String(rec.value ?? rec.val ?? rec.v ?? rec.example ?? 'string'),
         required: Boolean(rec.required),
         description: rec.description ? String(rec.description) : '',
       })
@@ -363,12 +363,12 @@ export function buildEndpointCurl(params: {
     for (const item of params.params) {
       if (typeof item !== 'object' || item === null) continue
       const rec = item as Record<string, unknown>
-      const name = stripCrlf(String(rec.name ?? rec.key ?? ''))
+      const name = stripCrlf(String(rec.name ?? rec.key ?? rec.k ?? ''))
       if (!name) continue
       const loc = String(rec.in ?? rec.location ?? 'query')
         .trim()
         .toLowerCase()
-      const rawSample = rec.example ?? rec.default ?? rec.value
+      const rawSample = rec.example ?? rec.default ?? rec.value ?? rec.val ?? rec.v
       const sample =
         rawSample !== undefined && rawSample !== null && String(rawSample).trim() !== ''
           ? stripCrlf(String(rawSample))
@@ -406,7 +406,10 @@ export function buildEndpointCurl(params: {
     for (const item of params.headers) {
       if (typeof item !== 'object' || item === null) continue
       const rec = item as Record<string, unknown>
-      pushHeader(String(rec.name ?? rec.key ?? ''), String(rec.value ?? rec.example ?? ''))
+      pushHeader(
+        String(rec.name ?? rec.key ?? rec.k ?? ''),
+        String(rec.value ?? rec.val ?? rec.v ?? rec.example ?? ''),
+      )
     }
   } else if (typeof params.headers === 'object' && params.headers !== null) {
     for (const [k, v] of Object.entries(params.headers as Record<string, unknown>)) {

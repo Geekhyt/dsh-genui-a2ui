@@ -326,10 +326,10 @@ export function slicePromptSnippetByDomain(raw: string, domain: SkillDomain): st
   const meta = DOMAIN_SKILL_META[domain]
   const domainHint =
     domain === 'analytics'
-      ? 'Use with `a2ui_render`. For `Chart`, bind row arrays in `$/paths`, use `y2Field` for dual-axis `combo`, and `referenceLine` for dynamic SLO/target thresholds. Keep `Table` cells plain scalars only.'
+      ? 'Use with `a2ui_render` directly (never inspect plugin/app.asar source via shell). Chart data shapes: `waterfall` takes per-step deltas `[{ x, y, total?: true }]`; `dumbbell` uses `yField=["before", "after"]`; `range` uses `yField=["low", "mid", "high"]`; `bullet` uses `[{ x, actual, target, max? }]`; `combo` uses `yField` (left bars) + `y2Field` (right lines); `referenceLine` sets dynamic thresholds. Keep `Table` cells plain scalars only. In `Comparison`, use `ok:`/`warn:`/`no:` prefixes only for positive/caution/negative verdicts (leave neutral descriptors unprefixed). In `Mermaid`, prefer concise `flowchart TD`/`TB` (<=12 nodes) so text stays legible inside 640px cards.'
       : domain === 'devops'
-        ? 'Use with `a2ui_render` or `a2ui_ask`. Pass `filePath` (and optional `line`) on `DiffView`, `Code`, `LogViewer`, `FileTree` to enable one-click right-sidebar source jumps.'
-        : 'Use with `a2ui_render` or `a2ui_ask`. Bind mutable literals to `$/paths`, assign ALL `calc(...)`/`cond(...)` results to plain local variables (never `$/paths`), avoid nesting 3+ `cond()` inside `calc()` (max call depth 5), and use `TextField(..., variant="longText")` for multiline input (no `TextArea`).'
+        ? 'Use with `a2ui_render` or `a2ui_ask` directly (never inspect plugin/app.asar source via shell). Pass `filePath` (and optional `line`) on `DiffView`, `Code`, `LogViewer`, `FileTree` to enable one-click right-sidebar source jumps; use `Stat(..., tone="danger"|"warning")` for bad metric spikes (latency, exhaustion).'
+        : 'Use with `a2ui_render` or `a2ui_ask` directly (never inspect plugin/app.asar source via shell). Bind mutable literals to `$/paths`, assign ALL `calc(...)`/`cond(...)` results to plain local variables (never `$/paths`), avoid nesting 3+ `cond()` inside `calc()` (max call depth 5), and use `TextField(..., variant="longText")` for multiline input (no `TextArea`).'
 
   return [
     `# ${meta.title}`,

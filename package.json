@@ -1,6 +1,6 @@
 {
   "name": "dsh-genui-a2ui",
-  "version": "0.5.6",
+  "version": "0.5.7",
   "description": "Google A2UI 1.0 Generative UI plugin for DeepSeek Harness — stream 64 native interactive components, 26 chart types, Mermaid diagrams, 0ms simulators, and approval gates inline in chat.",
   "license": "MIT",
   "author": "Geekhyt",

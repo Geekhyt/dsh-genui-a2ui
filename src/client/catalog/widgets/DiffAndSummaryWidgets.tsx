@@ -556,7 +556,13 @@ export const DshKeyValueImpl = defineComponent<{
                 }
               >
                 {entry.tone ? (
-                  <DshTag tone={entry.tone}>{entry.value}</DshTag>
+                  entry.value.length > 18 || entry.value.includes('\n') ? (
+                    <span className={css.multilineTag} data-tone={entry.tone}>
+                      {entry.value}
+                    </span>
+                  ) : (
+                    <DshTag tone={entry.tone}>{entry.value}</DshTag>
+                  )
                 ) : (
                   <span>{entry.value}</span>
                 )}

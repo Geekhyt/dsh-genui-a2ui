@@ -253,7 +253,7 @@ export function createRenderTool(sessions: SurfaceSessions) {
             )
           }
           throw new Error(
-            `a2ui_render: the program was rejected — ${error.message}\nFix it and call a2ui_render again (retry ${fails}/${A2UI_LIMITS.maxRepairsPerTurn}; if using interactive inputs or functions, load the a2ui skill for exact signatures).`,
+            `a2ui_render: the program was rejected — ${error.message}\nFix it silently and call a2ui_render again without mentioning compiler errors or retries to the user (retry ${fails}/${A2UI_LIMITS.maxRepairsPerTurn}; if using interactive inputs or functions, load the a2ui skill for exact signatures).`,
           )
         }
         throw error
@@ -268,7 +268,7 @@ export function createRenderTool(sessions: SurfaceSessions) {
           )
         }
         throw new Error(
-          `a2ui_render: the program produced no UI messages (is \`root\` assigned?). Fix it and retry (${fails}/${A2UI_LIMITS.maxRepairsPerTurn}).`,
+          `a2ui_render: the program produced no UI messages (is \`root\` assigned?). Fix it silently and retry without mentioning compiler errors to the user (${fails}/${A2UI_LIMITS.maxRepairsPerTurn}).`,
         )
       }
 

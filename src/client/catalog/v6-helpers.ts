@@ -225,8 +225,8 @@ export function normalizeKvEditorRows(raw: unknown): readonly NormalizedKvEditor
     for (const entry of raw) {
       if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) continue
       const rec = entry as Record<string, unknown>
-      const key = String(rec.key ?? rec.name ?? '')
-      const rawVal = rec.value ?? ''
+      const key = String(rec.key ?? rec.name ?? rec.k ?? rec.label ?? '')
+      const rawVal = rec.value ?? rec.val ?? rec.v ?? ''
       const value =
         typeof rawVal === 'object' && rawVal !== null
           ? safeStringifyJson(rawVal, 0)

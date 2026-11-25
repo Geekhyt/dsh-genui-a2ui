@@ -119,47 +119,83 @@ function trimEdgeSlashes(src: string): string {
 export function normalizeFileEntries(rawItems: unknown): NormalizedFileEntry[] {
   if (!Array.isArray(rawItems)) return []
   const out: NormalizedFileEntry[] = []
-  for (const item of rawItems) {
-    if (typeof item === 'string') {
-      const normalizedSlashes = item
-        .replace(/\\/g, '/')
-        .replace(/^(?:\.\/)+/, '')
-        .trim()
-      const isAbs = normalizedSlashes.startsWith('/')
-      const body = trimEdgeSlashes(normalizedSlashes).trim()
-      if (body !== '') {
-        const clean = isAbs ? `/${body}` : body
-        const isDir = normalizedSlashes.endsWith('/')
-        out.push({ path: clean, kind: isDir ? 'dir' : 'file', raw: { path: clean } })
+
+  const visit = (list: readonly unknown[], parentPrefix: string, depth: number) => {
+    if (depth > 16) return
+    for (const item of list) {
+      if (typeof item === 'string') {
+        const normalizedSlashes = item
+          .replace(/\\/g, '/')
+          .replace(/^(?:\.\/)+/, '')
+          .trim()
+        const isAbs = normalizedSlashes.startsWith('/')
+        const body = trimEdgeSlashes(normalizedSlashes).trim()
+        if (body !== '') {
+          const clean =
+            isAbs || parentPrefix === '' ? (isAbs ? `/${body}` : body) : `${parentPrefix}/${body}`
+          const isDir = normalizedSlashes.endsWith('/')
+          out.push({ path: clean, kind: isDir ? 'dir' : 'file', raw: { path: clean } })
+        }
+        continue
       }
-      continue
-    }
-    if (typeof item === 'object' && item !== null && !Array.isArray(item)) {
-      const rec = item as Record<string, unknown>
-      const rawPath =
-        typeof rec.path === 'string' ? rec.path : typeof rec.file === 'string' ? rec.file : ''
-      const normalizedSlashes = rawPath
-        .replace(/\\/g, '/')
-        .replace(/^(?:\.\/)+/, '')
-        .trim()
-      const isAbs = normalizedSlashes.startsWith('/')
-      const body = trimEdgeSlashes(normalizedSlashes).trim()
-      if (body === '') continue
-      const clean = isAbs ? `/${body}` : body
-      const explicitKind =
-        rec.kind === 'dir' || rec.type === 'dir' || normalizedSlashes.endsWith('/') ? 'dir' : 'file'
-      const status = normalizeStatus(rec.status)
-      const summary =
-        typeof rec.summary === 'string' && rec.summary.trim() !== ''
-          ? rec.summary.trim()
-          : undefined
-      const line =
-        typeof rec.line === 'number' && Number.isFinite(rec.line) && rec.line >= 1
-          ? Math.trunc(rec.line)
-          : undefined
-      out.push({ path: clean, kind: explicitKind, status, summary, line, raw: rec })
+      if (typeof item === 'object' && item !== null && !Array.isArray(item)) {
+        const rec = item as Record<string, unknown>
+        const rawPath =
+          typeof rec.path === 'string'
+            ? rec.path
+            : typeof rec.file === 'string'
+              ? rec.file
+              : typeof rec.name === 'string'
+                ? rec.name
+                : ''
+        const normalizedSlashes = rawPath
+          .replace(/\\/g, '/')
+          .replace(/^(?:\.\/)+/, '')
+          .trim()
+        const isAbs = normalizedSlashes.startsWith('/')
+        const body = trimEdgeSlashes(normalizedSlashes).trim()
+        if (body === '') continue
+        const clean =
+          isAbs || parentPrefix === '' || body.includes('/')
+            ? isAbs
+              ? `/${body}`
+              : body
+            : `${parentPrefix}/${body}`
+        const nestedChildren = Array.isArray(rec.children) ? rec.children : undefined
+        const explicitKind =
+          rec.kind === 'dir' ||
+          rec.type === 'dir' ||
+          normalizedSlashes.endsWith('/') ||
+          nestedChildren !== undefined
+            ? 'dir'
+            : 'file'
+        const status = normalizeStatus(rec.status)
+        const rawSummary =
+          typeof rec.summary === 'string' && rec.summary.trim() !== ''
+            ? rec.summary.trim()
+            : typeof rec.description === 'string' && rec.description.trim() !== ''
+              ? rec.description.trim()
+              : undefined
+        const line =
+          typeof rec.line === 'number' && Number.isFinite(rec.line) && rec.line >= 1
+            ? Math.trunc(rec.line)
+            : undefined
+        out.push({
+          path: clean,
+          kind: explicitKind,
+          status,
+          summary: rawSummary,
+          line,
+          raw: rec,
+        })
+        if (nestedChildren && nestedChildren.length > 0) {
+          visit(nestedChildren, clean, depth + 1)
+        }
+      }
     }
   }
+
+  visit(rawItems, '', 0)
   return out
 }
 
