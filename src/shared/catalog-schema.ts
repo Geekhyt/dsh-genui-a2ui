@@ -110,7 +110,7 @@ export const ChartApi = {
         stacked: z.boolean().default(false).describe('Stack series.').optional(),
         horizontal: z.boolean().default(false).describe('Horizontal bar chart.').optional(),
         zoom: z.boolean().default(false).describe('Enable dataZoom.').optional(),
-        height: z.number().min(140).max(640).default(260).describe('Height px.').optional(),
+        height: z.number().min(100).max(640).default(260).describe('Height px.').optional(),
         selected: DynamicValueSchema.describe(
           'REF:#/$defs/DynamicValue|Two-way $/path (string or string[]) for 0ms cross-filtering.',
         ).optional(),
@@ -437,7 +437,7 @@ export const CalloutApi = {
           'REF:#/$defs/DynamicString|Optional Markdown explanation body.',
         ).optional(),
         tone: z
-          .enum(['info', 'success', 'warning', 'danger'])
+          .enum(['info', 'success', 'warning', 'danger', 'neutral'])
           .default('info')
           .describe('Semantic severity tone.')
           .optional(),
@@ -452,7 +452,7 @@ export const CalloutApi = {
         weight: WeightSchema.optional(),
       })
       .describe(
-        'Highlighted semantic alert banner (`info`, `success`, `warning`, `danger`) with optional nested child.',
+        'Highlighted semantic alert banner (`info`, `success`, `warning`, `danger`, `neutral`) with optional nested child.',
       )
       .strict(),
     { mixins: [], required: ['title'] },
@@ -799,7 +799,7 @@ export const TimelineItemSchema = spec(
       'REF:#/$defs/DynamicString|Optional actor, service, or author name.',
     ).optional(),
     status: z
-      .enum(['info', 'success', 'warning', 'danger', 'pending'])
+      .enum(['info', 'success', 'warning', 'danger', 'pending', 'error', 'healthy'])
       .default('info')
       .describe('Semantic status indicator color.')
       .optional(),

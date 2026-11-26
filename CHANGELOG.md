@@ -2,6 +2,27 @@
 
 All notable changes to `dsh-genui-a2ui` are documented in this file.
 
+## [0.5.12] - 2026-11-27
+
+### Added
+- **Currency `$` Markdown Protection (`src/shared/markdown-currency.ts`, `src/client/ui/primitives.tsx`)**:
+  - Added linear-time, zero-dependency `escapeCurrencyDollarsForMarkdown()` in `DshMarkdown` so currency spans like `US$59` / `US$25 - US$99` / `$10k - $50k` never trigger host KaTeX inline math corruption while preserving genuine LaTeX formulas (`$E = mc^2$`, `$2x + 3 = 7$`, `$10^6$`), code spans, fenced blocks, and `$$...$$` display math.
+- **`AnnotationText` Click-to-Inspect Detail Panel (`src/client/catalog/widgets/RatingAndMediaCompare.tsx`, `src/client/catalog/styles/nextgen-media.module.css`, `src/client/catalog/v6-helpers.ts`, `src/shared/i18n.ts`)**:
+  - Added click/keyboard toggle state on highlighted `<mark>` spans (even without a bound `action`) to open an inline semantic detail panel displaying tag, `sourceId`, excerpt, full risk note, and close button, complementing desktop `HoverCard` tooltips; also accepted `text` as a fallback alias for `match` in `buildAnnotatedTextSegments()`.
+- **`ServiceGraph` Wide-Topology Auto-Fit, `100%`/Fit Toggle & Scroll Fade (`src/client/catalog/v3-helpers.ts`, `src/client/catalog/widgets/TelemetryVisualWidgets.tsx`, `src/client/catalog/styles/sources-metrics-tracker.module.css`, `src/shared/i18n.ts`)**:
+  - Added `computeServiceGraphFitScale()` (scaling wide multi-tier LR topologies smoothly down to `0.56×` instead of snapping back to `1.0×` at `< 0.72×`), tightened 4+ rank LR node/gap caps, wired a `100%` / `Fit` header toggle button, and added `useHorizontalScrollEdges` edge-fade masks on `.serviceGraphViewport` for ultra-wide 5+ tier graphs.
+- **First-Pass Compile Schema Ergonomics (`src/shared/catalog-schema.ts`, `src/client/catalog/widgets/DiffAndSummaryWidgets.tsx`, `src/client/catalog/styles/steps-callout-extended.module.css`, `src/client/catalog/EChartsWidget.tsx`)**:
+  - Added `tone="neutral"` support to `Callout`, accepted `error` and `healthy` status aliases in `TimelineItemSchema` (matching `ServiceGraph` & `DshTimelineImpl`), and lowered `Chart.height` minimum from `140` to `100` for compact single-bar/bullet charts.
+- **Live Generalization Regression Suite (`tests/generalization-v0512.spec.ts`)**:
+  - Added regression coverage for P0 prompt routing & placement contracts, 4-tier `ServiceGraph` fit geometry, currency `$` vs LaTeX escaping, `AnnotationText` click/close DOM interaction, and `Callout`/`Timeline`/`Chart` schema tolerances.
+
+### Fixed
+- **Cross-Filter Routing & `placement="inline"` Wording Collision (`src/index.ts`, `src/host/render-tool.ts`)**:
+  - Documented native 0ms `Chart(selected=$/sel) ↔ Table(filterField, filterValue=$/sel)` + conditional `sum`/`avg`/`count` cross-filtering directly in always-on `A2UI_SYSTEM_GUIDANCE` (preventing standalone HTML bypasses on cross-filtered dashboard prompts) and replaced ambiguous `"inline"` prose with explicit default `placement="answer"` guidance so user-facing calculators/dashboards never hide inside the collapsed tool-call drawer.
+
+### Changed
+- Verified full automated & live release gate: **49 suites / 296 tests**, **39/39** architectural invariants, **0** comments, **4/4** strict TLA+ formal specs (**31,542** distinct states), **6/6** bundle budgets (`lib/client.js = 77.04 kB / 21.54 kB gzip`, +0 B cold-boot impact), `eval:check` (`31/31`, `64/64` components), `check:host-api`, **8/8** Dark & Light `qa:visual` runs, **26/26** live Chrome `qa:e2e` checks, and live local DeepSeek Harness (`DeepSeek-V4.1-Flash High`) Before → After verification across S3, C2 (`9.5M → 114K` tokens, `70 → 3` steps, 0 retries, live 0ms cross-filter), C4 (0 retries, 4-tier `ServiceGraph` 0 clipping), and C5 (0 KaTeX currency corruption, working `AnnotationText` click detail panel).
+
 ## [0.5.11] - 2026-11-26
 
 ### Added

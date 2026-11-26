@@ -46,7 +46,7 @@ const PARAMETERS = {
       type: 'string',
       enum: ['answer', 'inline', 'dock'],
       description:
-        'Where to place the surface: "answer" (default, permanent card below your reply), "inline" (inside the tool row only), or "dock" (persistent workspace panel above the chat composer across turns; update in place via update=true).',
+        'Where to place the surface: "answer" (default — ALWAYS use for user-facing calculators, dashboards, comparisons, and reports; permanently visible below your reply), "inline" (collapsed inside the tool-call drawer; use only for tiny intermediate step cards), or "dock" (persistent workspace panel above the chat composer across turns; update in place via update=true).',
     },
   },
   required: ['ui'],

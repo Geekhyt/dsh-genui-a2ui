@@ -355,8 +355,16 @@ export function buildAnnotatedTextSegments(
         occupied.push([start, end])
         candidates.push(buildAnnotation(rec, start, end))
       }
-    } else if (typeof rec.match === 'string' && rec.match !== '') {
-      pendingMatches.push(rec)
+    } else {
+      const needle =
+        typeof rec.match === 'string' && rec.match !== ''
+          ? rec.match
+          : typeof rec.text === 'string' && rec.text !== ''
+            ? rec.text
+            : ''
+      if (needle !== '') {
+        pendingMatches.push({ ...rec, match: needle })
+      }
     }
   }
 

@@ -1,7 +1,7 @@
 import type { ActionDispatchOptions } from '@a2ui/web_core/v1_0'
 import { useContext, useId, useMemo, useRef, useState } from 'react'
 import { MetricRingApi, ServiceGraphApi, SourceListApi } from '../../../shared/catalog-schema.ts'
-import { useElementWidth } from '../../dom-hooks.ts'
+import { useElementWidth, useHorizontalScrollEdges } from '../../dom-hooks.ts'
 import { useRuntimeMessages } from '../../i18n.ts'
 import { DshButton, DshLinkIcon, DshTag, type TagTone } from '../../ui/primitives.tsx'
 import css from '../Catalog.module.css'
@@ -9,6 +9,7 @@ import { FileOpenChip } from '../FileOpenChip.tsx'
 import {
   buildServiceGraphLayout,
   computeMetricRingGeometry,
+  computeServiceGraphFitScale,
   normalizeSourceItems,
   type ServiceHealthStatus,
 } from '../v3-helpers.ts'
@@ -281,6 +282,7 @@ export const DshServiceGraphImpl = defineComponent<{
   const viewportRef = useRef<HTMLDivElement | null>(null)
   const viewportW = useElementWidth(viewportRef, layout.nodes.length > 0)
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
+  const [zoomMode, setZoomMode] = useState<'auto' | 'actual'>('auto')
   const canAct = !readOnly && Boolean(runAction)
   const title = props.title !== undefined && props.title !== null ? String(props.title) : ''
 
@@ -298,13 +300,17 @@ export const DshServiceGraphImpl = defineComponent<{
     return m
   }, [layout.nodes])
 
-  if (layout.nodes.length === 0) return null
-
   const availW = viewportW > 8 ? viewportW - 4 : 0
-  const fitScale =
-    availW > 0 && layout.width > availW && availW / layout.width >= 0.72 ? availW / layout.width : 1
+  const fitScale = computeServiceGraphFitScale(layout.width, availW, zoomMode)
   const scaledW = Math.ceil(layout.width * fitScale)
   const scaledH = Math.ceil(layout.height * fitScale)
+  const canToggleZoom = availW > 0 && layout.width > availW
+  const scrollEdges = useHorizontalScrollEdges(
+    viewportRef,
+    `${scaledW}:${viewportW}:${zoomMode}:${layout.nodes.length}`,
+  )
+
+  if (layout.nodes.length === 0) return null
 
   const statusText = (s: ServiceHealthStatus) =>
     s === 'error'
@@ -339,10 +345,25 @@ export const DshServiceGraphImpl = defineComponent<{
           <span className={css.serviceLegendItem} data-status="error">
             <i /> {msg.serviceGraphError}
           </span>
+          {canToggleZoom ? (
+            <button
+              type="button"
+              className={css.serviceGraphScaleBtn}
+              aria-pressed={zoomMode === 'actual'}
+              onClick={() => setZoomMode((m) => (m === 'auto' ? 'actual' : 'auto'))}
+            >
+              {zoomMode === 'auto' ? msg.serviceGraphZoomActual : msg.serviceGraphZoomFit}
+            </button>
+          ) : null}
         </div>
       </div>
 
-      <div ref={viewportRef} className={css.serviceGraphViewport}>
+      <div
+        ref={viewportRef}
+        className={css.serviceGraphViewport}
+        data-scroll-left={scrollEdges.canScrollLeft ? 'true' : undefined}
+        data-scroll-right={scrollEdges.canScrollRight ? 'true' : undefined}
+      >
         <div
           style={{
             width: scaledW,

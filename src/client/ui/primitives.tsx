@@ -24,6 +24,7 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import { SHELL_MESSAGES, type UiLocale } from '../../shared/i18n.ts'
+import { escapeCurrencyDollarsForMarkdown } from '../../shared/markdown-currency.ts'
 import {
   copyTextToClipboard,
   useAutoDismissTimer,
@@ -664,7 +665,7 @@ export function DshMarkdown(props: {
   if (hasComponent(raw.MarkdownText)) {
     return (
       <HostPrimitives.MarkdownText
-        text={props.text}
+        text={escapeCurrencyDollarsForMarkdown(props.text)}
         variant={props.variant ?? 'compact'}
         streaming={props.streaming}
         omitHtml={true}

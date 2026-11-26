@@ -744,6 +744,16 @@ function normalizeEdgeStatus(raw: unknown): 'healthy' | 'warning' | 'error' {
   return h === 'unknown' ? 'healthy' : h
 }
 
+export function computeServiceGraphFitScale(
+  layoutWidth: number,
+  availWidth: number,
+  mode: 'auto' | 'actual' = 'auto',
+): number {
+  if (mode === 'actual' || availWidth <= 0 || layoutWidth <= availWidth) return 1
+  const ratio = availWidth / layoutWidth
+  return Math.max(ratio, 0.56)
+}
+
 export function buildServiceGraphLayout(
   rawNodes: unknown,
   rawEdges: unknown,
@@ -914,7 +924,7 @@ export function buildServiceGraphLayout(
     })
   }
 
-  const maxNodeWCap = maxRank <= 2 ? 182 : 156
+  const maxNodeWCap = maxRank <= 2 ? 182 : 144
   const estimateNodeIdealW = (n: (typeof parsedNodes)[number]): number => {
     const topW = 34 + estimateInlineTextPx(n.label, 7.6, 12.6)
     const subText = n.sublabel ?? n.group
@@ -948,7 +958,8 @@ export function buildServiceGraphLayout(
   const TB_RANK_GAP = hasTbForwardLabel ? 64 : 56
   const SIBLING_GAP = direction === 'LR' ? 18 : 20
 
-  const lrRankGaps = new Array<number>(Math.max(0, maxRank)).fill(52)
+  const baseLrGap = maxRank >= 3 ? 42 : 52
+  const lrRankGaps = new Array<number>(Math.max(0, maxRank)).fill(baseLrGap)
   if (direction === 'LR' && maxRank > 0) {
     for (const e of parsedEdges) {
       if (!e.label || backEdgeKeys.has(`${e.from}->${e.to}`)) continue
@@ -958,7 +969,8 @@ export function buildServiceGraphLayout(
       const span = rTo - rFrom
       const neededTotal = estimateEdgeLabelWidth(e.label) + 24
       if (span === 1) {
-        lrRankGaps[rFrom] = Math.max(lrRankGaps[rFrom] ?? 52, neededTotal)
+        const capped = maxRank >= 3 ? Math.min(116, neededTotal) : neededTotal
+        lrRankGaps[rFrom] = Math.max(lrRankGaps[rFrom] ?? baseLrGap, capped)
       } else {
         const intermediateNodesW = lrRankWidths.slice(rFrom + 1, rTo).reduce((sum, w) => sum + w, 0)
         const currentSpanWidth =
@@ -966,7 +978,7 @@ export function buildServiceGraphLayout(
         if (currentSpanWidth < neededTotal) {
           const extraEach = Math.ceil((neededTotal - currentSpanWidth) / span)
           for (let r = rFrom; r < rTo; r++) {
-            lrRankGaps[r] = (lrRankGaps[r] ?? 52) + extraEach
+            lrRankGaps[r] = (lrRankGaps[r] ?? baseLrGap) + extraEach
           }
         }
       }

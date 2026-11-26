@@ -358,6 +358,8 @@ export interface RuntimeUiMessages {
   readonly serviceGraphDownstream: string
   readonly serviceGraphNone: string
   readonly serviceGraphInspect: string
+  readonly serviceGraphZoomFit: string
+  readonly serviceGraphZoomActual: string
   readonly imageLightboxDialog: string
   readonly imageLightboxClose: string
   readonly imageZoomHint: string
@@ -453,6 +455,7 @@ export interface RuntimeUiMessages {
   readonly imageCompareSliderAria: string
   readonly annotationDefaultTitle: string
   readonly annotationEmpty: string
+  readonly annotationCloseDetail: string
 }
 
 export const RUNTIME_MESSAGES: Record<UiLocale, RuntimeUiMessages> = {
@@ -568,6 +571,8 @@ export const RUNTIME_MESSAGES: Record<UiLocale, RuntimeUiMessages> = {
     serviceGraphDownstream: '下游',
     serviceGraphNone: '无',
     serviceGraphInspect: '下钻排查',
+    serviceGraphZoomFit: '适应宽度',
+    serviceGraphZoomActual: '100%',
     imageLightboxDialog: '图片大图预览',
     imageLightboxClose: '关闭预览',
     imageZoomHint: '点击放大预览',
@@ -663,6 +668,7 @@ export const RUNTIME_MESSAGES: Record<UiLocale, RuntimeUiMessages> = {
     imageCompareSliderAria: '拖动对比前后图像',
     annotationDefaultTitle: '标注与溯源',
     annotationEmpty: '暂无标注文本',
+    annotationCloseDetail: '收起说明',
   },
   en: {
     generating: 'Generating…',
@@ -776,6 +782,8 @@ export const RUNTIME_MESSAGES: Record<UiLocale, RuntimeUiMessages> = {
     serviceGraphDownstream: 'Downstream',
     serviceGraphNone: 'None',
     serviceGraphInspect: 'Inspect',
+    serviceGraphZoomFit: 'Fit',
+    serviceGraphZoomActual: '100%',
     imageLightboxDialog: 'Image preview',
     imageLightboxClose: 'Close preview',
     imageZoomHint: 'Click to enlarge',
@@ -871,5 +879,6 @@ export const RUNTIME_MESSAGES: Record<UiLocale, RuntimeUiMessages> = {
     imageCompareSliderAria: 'Drag to compare before and after images',
     annotationDefaultTitle: 'Annotations',
     annotationEmpty: 'No annotated text',
+    annotationCloseDetail: 'Close detail',
   },
 }

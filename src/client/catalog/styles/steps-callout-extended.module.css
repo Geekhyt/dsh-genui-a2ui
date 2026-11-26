@@ -188,11 +188,20 @@
   background: color-mix(in srgb, var(--a2ui-danger) 9%, transparent);
 }
 
+.callout[data-tone="neutral"] {
+  border-left-color: var(--a2ui-border-2);
+  background: var(--a2ui-bg-2);
+}
+
 .calloutIcon {
   flex-shrink: 0;
   margin-top: 2px;
   display: inline-flex;
   color: var(--a2ui-brand);
+}
+
+.callout[data-tone="neutral"] .calloutIcon {
+  color: var(--a2ui-fg-2);
 }
 
 .callout[data-tone="success"] .calloutIcon {

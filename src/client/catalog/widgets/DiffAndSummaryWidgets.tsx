@@ -393,7 +393,11 @@ const CALLOUT_INFO_GLYPH = (
   </svg>
 )
 
-function CalloutGlyph({ tone }: { readonly tone: 'info' | 'success' | 'warning' | 'danger' }) {
+function CalloutGlyph({
+  tone,
+}: {
+  readonly tone: 'info' | 'success' | 'warning' | 'danger' | 'neutral'
+}) {
   if (tone === 'success') return CALLOUT_SUCCESS_GLYPH
   if (tone === 'warning' || tone === 'danger') return CALLOUT_WARNING_GLYPH
   return CALLOUT_INFO_GLYPH
@@ -402,7 +406,7 @@ function CalloutGlyph({ tone }: { readonly tone: 'info' | 'success' | 'warning' 
 export const DshCalloutImpl = defineComponent<{
   title?: unknown
   message?: unknown
-  tone?: 'info' | 'success' | 'warning' | 'danger'
+  tone?: 'info' | 'success' | 'warning' | 'danger' | 'neutral'
   collapsible?: boolean
   child?: ChildRef
   weight?: number

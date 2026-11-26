@@ -542,6 +542,98 @@
   cursor: pointer;
 }
 
+.annotationMark[data-selected="true"] {
+  outline: 1.5px solid var(--a2ui-accent);
+  outline-offset: 1px;
+}
+
+.annotationMark[data-selected="true"][data-tone="danger"] {
+  outline-color: var(--a2ui-danger);
+}
+
+.annotationMark[data-selected="true"][data-tone="warning"] {
+  outline-color: var(--a2ui-warn);
+}
+
+.annotationMark[data-selected="true"][data-tone="success"] {
+  outline-color: var(--a2ui-success);
+}
+
+.annotationDetailPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: var(--a2ui-r-sm);
+  border: 1px solid var(--a2ui-border-2);
+  border-left-width: 3px;
+  border-left-color: var(--a2ui-accent);
+  background: var(--a2ui-bg-2);
+  min-width: 0;
+}
+
+.annotationDetailPanel[data-tone="danger"] {
+  border-left-color: var(--a2ui-danger);
+}
+
+.annotationDetailPanel[data-tone="warning"] {
+  border-left-color: var(--a2ui-warn);
+}
+
+.annotationDetailPanel[data-tone="success"] {
+  border-left-color: var(--a2ui-success);
+}
+
+.annotationDetailPanel[data-tone="neutral"] {
+  border-left-color: var(--a2ui-border-2);
+}
+
+.annotationDetailHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.annotationDetailClose {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--a2ui-fg-2);
+  font-size: 16px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.annotationDetailClose:hover {
+  border-color: var(--a2ui-border-2);
+  background: var(--a2ui-bg-1);
+  color: var(--a2ui-fg);
+}
+
+.annotationDetailExcerpt {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--a2ui-fg-2);
+  overflow-wrap: anywhere;
+}
+
+.annotationDetailNote {
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--a2ui-fg);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .annotationMarkTag {
   display: inline-block;
   margin-left: 4px;

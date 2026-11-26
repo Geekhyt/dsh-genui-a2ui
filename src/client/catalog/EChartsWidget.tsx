@@ -228,7 +228,7 @@ export const EChartsWidget = memo(function EChartsWidget(props: ChartWidgetProps
 
   const safeRawHeight =
     typeof rawHeight === 'number' && Number.isFinite(rawHeight) ? rawHeight : 260
-  const height = Math.min(640, Math.max(140, safeRawHeight))
+  const height = Math.min(640, Math.max(100, safeRawHeight))
 
   const { option, buildError } = useMemo(() => {
     if (!chunk || !chartHasData) return { option: null, buildError: null as string | null }

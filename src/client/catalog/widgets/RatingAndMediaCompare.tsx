@@ -371,6 +371,7 @@ export const DshAnnotationTextImpl = defineComponent<{
   const msg = useRuntimeMessages()
   const readOnly = useContext(SurfaceReadOnlyContext)
   const runAction = useSurfaceActionRunner(context, props.action)
+  const [selectedSegIdx, setSelectedSegIdx] = useState<number | null>(null)
 
   const sourceText = props.text !== undefined && props.text !== null ? String(props.text) : ''
   const { segments, legend } = useMemo(
@@ -380,6 +381,14 @@ export const DshAnnotationTextImpl = defineComponent<{
   const title = props.title !== undefined && props.title !== null ? String(props.title) : ''
   const showLegend = props.showLegend !== false && legend.length > 0
   const clickable = !readOnly && Boolean(runAction)
+
+  const activeSegment = selectedSegIdx !== null ? segments[selectedSegIdx] : undefined
+  const activeAnn =
+    activeSegment &&
+    activeSegment.kind === 'mark' &&
+    (activeSegment.annotation.note || activeSegment.annotation.sourceId)
+      ? activeSegment.annotation
+      : null
 
   const triggerSpan = (ann: Extract<(typeof segments)[number], { kind: 'mark' }>['annotation']) => {
     if (!clickable || !runAction) return
@@ -396,6 +405,16 @@ export const DshAnnotationTextImpl = defineComponent<{
         },
       },
     })
+  }
+
+  const handleMarkActivate = (
+    idx: number,
+    ann: Extract<(typeof segments)[number], { kind: 'mark' }>['annotation'],
+  ) => {
+    if (ann.note || ann.sourceId) {
+      setSelectedSegIdx((prev) => (prev === idx ? null : idx))
+    }
+    triggerSpan(ann)
   }
 
   return (
@@ -436,17 +455,22 @@ export const DshAnnotationTextImpl = defineComponent<{
                   return <span key={idx}>{seg.text}</span>
                 }
                 const ann = seg.annotation
-                const markEl = clickable ? (
+                const hasDetail = Boolean(ann.note || ann.sourceId)
+                const isInteractive = clickable || hasDetail
+                const isSelected = selectedSegIdx === idx && hasDetail
+                const markEl = isInteractive ? (
                   <mark
                     role="button"
                     tabIndex={0}
+                    aria-pressed={hasDetail ? isSelected : undefined}
                     className={`${css.annotationMark} ${css.annotationMarkBtn}`}
                     data-tone={ann.tone}
-                    onClick={() => triggerSpan(ann)}
+                    data-selected={isSelected ? 'true' : undefined}
+                    onClick={() => handleMarkActivate(idx, ann)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault()
-                        triggerSpan(ann)
+                        handleMarkActivate(idx, ann)
                       }
                     }}
                   >
@@ -454,16 +478,12 @@ export const DshAnnotationTextImpl = defineComponent<{
                     {ann.label ? <span className={css.annotationMarkTag}>{ann.label}</span> : null}
                   </mark>
                 ) : (
-                  <mark
-                    className={css.annotationMark}
-                    data-tone={ann.tone}
-                    tabIndex={ann.note || ann.sourceId ? 0 : undefined}
-                  >
+                  <mark className={css.annotationMark} data-tone={ann.tone}>
                     <span>{ann.text}</span>
                     {ann.label ? <span className={css.annotationMarkTag}>{ann.label}</span> : null}
                   </mark>
                 )
-                if (!ann.note && !ann.sourceId) {
+                if (!hasDetail) {
                   return <span key={idx}>{markEl}</span>
                 }
                 const hoverContent = (
@@ -493,6 +513,38 @@ export const DshAnnotationTextImpl = defineComponent<{
             </DshHoverCardGroup>
           </div>
         )}
+
+        {activeAnn ? (
+          <div
+            className={css.annotationDetailPanel}
+            data-a2ui-annotation-detail=""
+            data-tone={activeAnn.tone}
+            role="note"
+          >
+            <div className={css.annotationDetailHeader}>
+              <div className={css.annotationHoverTitle}>
+                {activeAnn.label ? (
+                  <DshTag tone={activeAnn.tone as TagTone}>{activeAnn.label}</DshTag>
+                ) : null}
+                {activeAnn.sourceId ? (
+                  <span className={css.annotationHoverSrc}>{activeAnn.sourceId}</span>
+                ) : null}
+              </div>
+              <button
+                type="button"
+                className={css.annotationDetailClose}
+                aria-label={msg.annotationCloseDetail}
+                onClick={() => setSelectedSegIdx(null)}
+              >
+                ×
+              </button>
+            </div>
+            <div className={css.annotationDetailExcerpt}>“{activeAnn.text}”</div>
+            {activeAnn.note ? (
+              <div className={css.annotationDetailNote}>{activeAnn.note}</div>
+            ) : null}
+          </div>
+        ) : null}
       </div>
     </div>
   )
