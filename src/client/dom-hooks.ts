@@ -924,6 +924,48 @@ export function useEffectCallback(
   useEffect(() => effectRef.current(), deps)
 }
 
+export interface HorizontalScrollEdges {
+  readonly canScrollLeft: boolean
+  readonly canScrollRight: boolean
+}
+
+export function useHorizontalScrollEdges(
+  ref: RefObject<HTMLElement | null>,
+  depsKey: string,
+): HorizontalScrollEdges {
+  const [edges, setEdges] = useState<HorizontalScrollEdges>({
+    canScrollLeft: false,
+    canScrollRight: false,
+  })
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const sync = () => {
+      const canScrollLeft = el.scrollLeft > 2
+      const canScrollRight = el.scrollLeft + el.clientWidth < el.scrollWidth - 2
+      setEdges((prev) =>
+        prev.canScrollLeft === canScrollLeft && prev.canScrollRight === canScrollRight
+          ? prev
+          : { canScrollLeft, canScrollRight },
+      )
+    }
+    sync()
+    el.addEventListener('scroll', sync, { passive: true })
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(sync) : null
+    ro?.observe(el)
+    if (el.firstElementChild instanceof HTMLElement) {
+      ro?.observe(el.firstElementChild)
+    }
+    return () => {
+      el.removeEventListener('scroll', sync)
+      ro?.disconnect()
+    }
+  }, [ref, depsKey])
+
+  return edges
+}
+
 export function copyTextToClipboard(text: string, onSuccess?: () => void): void {
   if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
     void navigator.clipboard

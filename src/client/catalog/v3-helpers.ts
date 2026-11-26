@@ -555,6 +555,7 @@ export function computeMetricRingGeometry(params: {
   readonly max?: number | undefined
   readonly size?: number | undefined
   readonly tone?: 'brand' | 'success' | 'warning' | 'danger' | 'auto' | undefined
+  readonly higherIsBetter?: boolean | undefined
   readonly unit?: string | undefined
 }): MetricRingGeometry {
   const safeVal = parseMetricRingNumber(params.value)
@@ -616,7 +617,17 @@ export function computeMetricRingGeometry(params: {
   if (!params.tone || params.tone === 'brand') {
     resolvedTone = 'brand'
   } else if (params.tone === 'auto') {
-    resolvedTone = clampedRatio >= 0.88 ? 'danger' : clampedRatio >= 0.7 ? 'warning' : 'success'
+    resolvedTone = params.higherIsBetter
+      ? clampedRatio >= 0.88
+        ? 'success'
+        : clampedRatio >= 0.7
+          ? 'warning'
+          : 'danger'
+      : clampedRatio >= 0.88
+        ? 'danger'
+        : clampedRatio >= 0.7
+          ? 'warning'
+          : 'success'
   } else if (VALID_RING_TONES.has(params.tone)) {
     resolvedTone = params.tone
   } else {

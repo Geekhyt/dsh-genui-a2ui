@@ -7,8 +7,17 @@ import {
   RowApi,
   TabsApi,
 } from '@a2ui/web_core/v1_0'
-import { type CSSProperties, type ReactNode, useCallback, useContext, useId, useState } from 'react'
+import {
+  type CSSProperties,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useId,
+  useRef,
+  useState,
+} from 'react'
 import { DshTextApi, GridApi } from '../../shared/catalog-schema.ts'
+import { useHorizontalScrollEdges } from '../dom-hooks.ts'
 import { useRuntimeMessages } from '../i18n.ts'
 import { useDarkTheme } from '../theme.ts'
 import { DshMarkdown, DshModal, DshSegmentedTabs, type SegmentedTab } from '../ui/primitives.tsx'
@@ -271,10 +280,13 @@ export const DshTabsImpl = defineComponent<{
       )
     : []
   const baseId = useId()
+  const tabsScrollRef = useRef<HTMLDivElement | null>(null)
   const [activeIdx, setActiveIdx] = useState(0)
   const [visitedIndices, setVisitedIndices] = useState<ReadonlySet<number>>(() => new Set([0]))
   const [prevTabCount, setPrevTabCount] = useState(tabs.length)
   const safeIdx = tabs.length === 0 ? 0 : Math.min(activeIdx, tabs.length - 1)
+  const tabsKey = tabs.map((t, idx) => String(t.title ?? idx)).join('\u0001')
+  const scrollEdges = useHorizontalScrollEdges(tabsScrollRef, tabsKey)
 
   if (tabs.length !== prevTabCount) {
     setPrevTabCount(tabs.length)
@@ -313,7 +325,12 @@ export const DshTabsImpl = defineComponent<{
 
   return (
     <div className={css.tabsWrap} style={weightStyle(props.weight, 220)} data-a2ui-tabs="">
-      <div className={css.tabsHeaderScroll}>
+      <div
+        ref={tabsScrollRef}
+        className={css.tabsHeaderScroll}
+        data-scroll-left={scrollEdges.canScrollLeft ? 'true' : undefined}
+        data-scroll-right={scrollEdges.canScrollRight ? 'true' : undefined}
+      >
         <DshSegmentedTabs
           items={items}
           value={String(safeIdx)}

@@ -2,6 +2,25 @@
 
 All notable changes to `dsh-genui-a2ui` are documented in this file.
 
+## [0.5.11] - 2026-11-26
+
+### Added
+- **`MetricRing.higherIsBetter` Polarity for Positive Attainment (`src/shared/catalog-schema.ts`, `src/client/catalog/v3-helpers.ts`, `src/client/catalog/widgets/TelemetryVisualWidgets.tsx`)**:
+  - Appended optional `higherIsBetter?: boolean` after `size` in `MetricRingApi` (100% positional backwards compatible) and clarified `tone="auto"` utilization semantics, flipping thresholds to `>=88% success / >=70% warning / <70% danger` when `higherIsBetter=true` so 100% payback/progress/SLA rings render green instead of danger red.
+- **Overflow-Aware Horizontal Scroll Fade on `Tabs` (`src/client/dom-hooks.ts`, `src/client/catalog/LayoutWidgets.tsx`, `src/client/catalog/styles/media-table-diff.module.css`)**:
+  - Added `useHorizontalScrollEdges()` (keeping zero `useEffect` in `.tsx`) and theme-agnostic `mask-image` edge fades driven by `data-scroll-left` / `data-scroll-right` so wide multi-tab bars indicate scrollability without affecting non-overflowing tab lists.
+- **Live Generalization Regression Suite (`tests/generalization-live-fixes.spec.ts`)**:
+  - Added regression tests covering `MetricRing.higherIsBetter` (geometry, compiler, DOM), `Tracker` trailing-percentage deduplication edge cases (including negative-sign preservation), `Tabs` overflow scroll-edge attributes & CSS, and `SKILL_PREAMBLE` `calc + lookup` flat compilation.
+
+### Fixed
+- **`Tracker` Category Mode Redundant Percentage Deduplication (`src/client/catalog/v4-helpers.ts`)**:
+  - Added `O(N)` linear backward-scan helper `stripRedundantTrailingPct()` inside `normalizeCategorySegments()` to strip trailing percentage suffixes matching the segment's own `pct` (preventing duplicate labels like `电商快递 62% 62%`) while preserving distinct numbers, negative deltas (e.g. `-12%`), and non-trailing percentages.
+- **Core Skill Anti-Pitfall Guidance (`src/index.ts`)**:
+  - Updated `SKILL_PREAMBLE` within the strict `25,000`-char core skill budget to clarify local derived `Chart` arrays (`series = [{ x: "A", y: pmt }]`) instead of `$/path = fn(...)`, and the flat depth-2 `calc(tier) + lookup(...)` idiom for multi-tier status/advice labels.
+
+### Changed
+- Verified full automated & live release gate: **48 suites / 291 tests**, **39/39** architectural invariants, **0** comments, **4/4** strict TLA+ formal specs, **6/6** bundle budgets (`lib/client.js = 77.04 kB / 21.54 kB gzip`), `eval:check` (`31/31`, `64/64` components), `check:host-api`, **10/10** Dark & Light `qa:visual` runs, and **26/26** live Chrome `qa:e2e` interactive checks with 0 console/page errors.
+
 ## [0.5.10] - 2026-11-26
 
 ### Added

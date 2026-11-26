@@ -158,6 +158,7 @@ export const DshMetricRingImpl = defineComponent<{
   unit?: unknown
   sublabel?: unknown
   tone?: 'brand' | 'success' | 'warning' | 'danger' | 'auto'
+  higherIsBetter?: boolean
   size?: number
   weight?: number
 }>(MetricRingApi, function DshMetricRing({ props }) {
@@ -175,9 +176,10 @@ export const DshMetricRingImpl = defineComponent<{
         max: props.max,
         size: props.size,
         tone: props.tone,
+        higherIsBetter: props.higherIsBetter,
         unit,
       }),
-    [props.value, props.max, props.size, props.tone, unit],
+    [props.value, props.max, props.size, props.tone, props.higherIsBetter, unit],
   )
   const safeAriaNow = Math.max(0, Math.min(maxVal, geom.numericValue))
   const center = geom.size / 2

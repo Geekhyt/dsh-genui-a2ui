@@ -89,6 +89,53 @@ export function normalizeTrackerSlices(raw: unknown): readonly NormalizedTracker
   return out
 }
 
+const PCT_SEP_CHARS = new Set(['·', '•', '-', '—', '–', ':', '/'])
+
+export function stripRedundantTrailingPct(label: string, pct: number): string {
+  const s = label.trimEnd()
+  if (s.length === 0) return label
+  let end = s.length
+  const closeParen = s[end - 1]
+  const hasParens = closeParen === ')' || closeParen === '）'
+  if (hasParens) {
+    end -= 1
+    while (end > 0 && /\s/.test(s[end - 1]!)) end -= 1
+  }
+  if (end <= 0 || s[end - 1] !== '%') return label
+  end -= 1
+  while (end > 0 && /\s/.test(s[end - 1]!)) end -= 1
+  const numEnd = end
+  let dotSeen = false
+  while (end > 0) {
+    const ch = s[end - 1]!
+    if (ch >= '0' && ch <= '9') {
+      end -= 1
+      continue
+    }
+    if (ch === '.' && !dotSeen) {
+      dotSeen = true
+      end -= 1
+      continue
+    }
+    break
+  }
+  if (end === numEnd) return label
+  const rawPct = Number(s.slice(end, numEnd))
+  if (!Number.isFinite(rawPct) || Math.abs(rawPct - pct) > 0.15) return label
+  const numStart = end
+  if (!hasParens && numStart > 0 && /[A-Za-z0-9_.-]/.test(s[numStart - 1]!)) return label
+  while (end > 0 && /\s/.test(s[end - 1]!)) end -= 1
+  if (hasParens) {
+    const openParen = end > 0 ? s[end - 1] : ''
+    if (openParen !== '(' && openParen !== '（') return label
+    end -= 1
+  } else if (end > 0 && PCT_SEP_CHARS.has(s[end - 1]!)) {
+    end -= 1
+  }
+  const trimmed = s.slice(0, end).trimEnd()
+  return trimmed.length > 0 ? trimmed : label
+}
+
 export function normalizeCategorySegments(raw: unknown): readonly NormalizedCategorySegment[] {
   if (!Array.isArray(raw)) return []
   const temp: Array<{ id: string; label: string; value: number; tone: TrackerSegmentTone }> = []
@@ -116,10 +163,14 @@ export function normalizeCategorySegments(raw: unknown): readonly NormalizedCate
   })
   const total = temp.reduce((acc, s) => acc + s.value, 0)
   if (total <= 0) return []
-  return temp.map((s) => ({
-    ...s,
-    pct: Number(((s.value / total) * 100).toFixed(1)),
-  }))
+  return temp.map((s) => {
+    const pct = Number(((s.value / total) * 100).toFixed(1))
+    return {
+      ...s,
+      label: stripRedundantTrailingPct(s.label, pct),
+      pct,
+    }
+  })
 }
 
 export interface NormalizedTerminalStep {

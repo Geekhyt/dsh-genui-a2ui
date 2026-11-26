@@ -916,7 +916,7 @@ export const MetricRingApi = {
           .enum(['brand', 'success', 'warning', 'danger', 'auto'])
           .default('brand')
           .describe(
-            'Ring stroke color ("auto" switches green -> warning -> danger by utilization thresholds).',
+            'Ring stroke color. "auto" treats high % as utilization risk (>=88% danger, >=70% warning, <70% success) unless higherIsBetter=true; for positive progress/SLA rings pass higherIsBetter=true or tone="success".',
           )
           .optional(),
         size: z
@@ -927,6 +927,12 @@ export const MetricRingApi = {
           .default(88)
           .describe('SVG ring diameter in pixels (default 88).')
           .optional(),
+        higherIsBetter: z
+          .boolean()
+          .optional()
+          .describe(
+            'When true with tone="auto", flips thresholds for positive attainment/progress (>=88% success, >=70% warning, <70% danger).',
+          ),
         weight: WeightSchema.optional(),
       })
       .describe(

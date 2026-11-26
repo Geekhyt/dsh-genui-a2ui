@@ -65,6 +65,33 @@
   scrollbar-width: thin;
 }
 
+.tabsHeaderScroll[data-scroll-right="true"] {
+  mask-image: linear-gradient(to right, black calc(100% - 28px), transparent);
+  -webkit-mask-image: linear-gradient(to right, black calc(100% - 28px), transparent);
+}
+
+.tabsHeaderScroll[data-scroll-left="true"] {
+  mask-image: linear-gradient(to left, black calc(100% - 28px), transparent);
+  -webkit-mask-image: linear-gradient(to left, black calc(100% - 28px), transparent);
+}
+
+.tabsHeaderScroll[data-scroll-left="true"][data-scroll-right="true"] {
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    black 24px,
+    black calc(100% - 28px),
+    transparent
+  );
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent,
+    black 24px,
+    black calc(100% - 28px),
+    transparent
+  );
+}
+
 .tabsHeaderScroll [role="tablist"] {
   width: max-content;
   min-width: 100%;

@@ -296,11 +296,11 @@ Placements & tools:
 - \`a2ui_ask\`: blocking in-turn wizard/approval card with \`Button(..., action=Event(...))\`. For a simple 2-option text question, prefer the lightweight built-in \`ask_user_question\` tool instead.
 
 Modality & safety rules:
-- **Availability guard (\`/a2ui off\`)**: If \`a2ui_render\` and \`a2ui_ask\` are absent from your current tool declarations, A2UI is disabled — reply in concise Markdown. Never run shell/grep/read to inspect \`dsh-genui-a2ui\`, \`app.asar\`, or \`~/.dsh\` to verify grammar, schemas, or plugin state — call \`a2ui_render\` directly and repair rejections silently.
-- Deliver calculators, simulators, and dashboards inline via \`a2ui_render\` unless the user explicitly asks to write a standalone \`.html\` file on disk.
-- Store mutable literals in \`$/paths\` and assign reactive formulas to local variables WITHOUT \`$/\` (\`pmt = calc(...)\`); never assign \`fn(...)\` to a \`$/path\`.
-- **\`Table\` cells are plain scalar text only**: never pass nested \`Badge\`/\`Button\`/\`Icon\` inside \`Table\` \`rows\` (use \`Comparison\` for badge matrices or emoji prefixes like \`"🟢 正常"\`).
-- Uphold **Thin UI, Thick Agent**: use \`calc\` for closed-form scalar math; delegate iterative schedules or external queries to Agent actions via \`Event(...)\` + \`surface("id", update=true)\`.
+- **Availability guard (\`/a2ui off\`)**: When \`a2ui_render\`/\`a2ui_ask\` are absent, reply in Markdown. Never inspect \`dsh-genui-a2ui\`, \`app.asar\`, or \`~/.dsh\` via shell/read — call \`a2ui_render\` directly and repair rejections silently.
+- Render calculators, simulators, and dashboards inline via \`a2ui_render\` unless asked for a standalone \`.html\` file.
+- Store mutable literals in \`$/paths\`; put reactive formulas & derived \`Chart\` arrays in local vars WITHOUT \`$/\` (\`pmt = calc(...)\`, \`series = [{ x: "A", y: pmt }]\`) — never \`$/path = fn(...)\`.
+- **\`Table\` cells are plain scalar text only**: never nest \`Badge\`/\`Button\`/\`Icon\` in \`rows\` (use \`Comparison\` or \`"🟢 正常"\`).
+- **Thin UI, Thick Agent**: use \`calc\` for closed-form math; for multi-tier advice use \`tier = calc("v>=18?2:v>=12?1:0", ...)\` + \`lookup(tier, { "0": "...", "1": "...", "2": "..." })\` (depth 2, not nested \`cond\`/\`concat\`); delegate iterative schedules/queries to \`Event(...)\` + \`update=true\`.
 - Mark illustrative data visibly; never fabricate live readings, claim unperformed actions, ask for secrets, or restate UI data in prose.
 
 ## Client Validation Rules (\`?check\`)
