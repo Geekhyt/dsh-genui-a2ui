@@ -16,6 +16,7 @@
 | [ADR-0006](./ADR-0006-security-boundaries-and-sanitization.md) | 安全边界：Mermaid 严格净化、`openUrl` 手势门禁、凭据脱敏与 CSV 防注入 | 已采纳 |
 | [ADR-0007](./ADR-0007-narrow-container-layout-and-echarts-collision.md) | 306px/276px 窄容器适配、ECharts 防碰撞与 0ms 跨组件联动匹配 | 已采纳 |
 | [ADR-0008](./ADR-0008-formal-verification-and-invariants.md) | TLA+ 并发状态机形式化验证、路径语义分层、12 条静态不变量门禁与 5 分片包体棘轮 | 已采纳 |
+| [ADR-0009](./ADR-0009-modular-chunks-streaming-perf-and-catalog-convergence.md) | 六分片流式编译器隔离、去 React Aria 化、Mermaid 死代码裁剪与单组件错误隔离 | 已采纳 |
 
 ## 关联追踪
 

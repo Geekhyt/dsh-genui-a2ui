@@ -6,7 +6,6 @@ import {
   VideoApi,
 } from '@a2ui/web_core/v1_0'
 import { useContext, useId, useMemo, useState } from 'react'
-import { ProgressBar as AriaProgressBar } from 'react-aria-components'
 import {
   BadgeApi,
   ChartApi,
@@ -346,11 +345,13 @@ export const DshProgressImpl = defineComponent<{
 
   return (
     <div className={css.field} style={weightStyle(props.weight, 140)} data-a2ui-progress="">
-      <AriaProgressBar
+      <div
+        role="progressbar"
         className={css.progress}
-        minValue={0}
-        maxValue={max}
-        value={val}
+        aria-valuemin={0}
+        aria-valuemax={max}
+        aria-valuenow={val}
+        aria-valuetext={`${displayPct}%`}
         aria-label={label || msg.progressAria}
       >
         <div className={css.progressHeader}>
@@ -364,7 +365,7 @@ export const DshProgressImpl = defineComponent<{
             style={{ width: fillWidthPct }}
           />
         </div>
-      </AriaProgressBar>
+      </div>
     </div>
   )
 })

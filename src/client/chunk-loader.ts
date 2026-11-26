@@ -1,6 +1,7 @@
 import type * as EchartsChunk from './chunks/echarts-chunk.ts'
 import type * as MermaidChunk from './chunks/mermaid-chunk.ts'
 import type * as RuntimeChunk from './chunks/runtime-chunk.ts'
+import type * as StreamingChunk from './chunks/streaming-chunk.ts'
 import { notifySubscribers } from './notify.ts'
 import { isPluginStylesMounted } from './style-lifecycle.ts'
 
@@ -10,186 +11,217 @@ declare const require: ((id: string) => unknown) & {
 }
 
 export type RuntimeChunkModule = typeof RuntimeChunk
+export type StreamingChunkModule = typeof StreamingChunk
 export type EchartsChunkModule = typeof EchartsChunk
 export type MermaidChunkModule = typeof MermaidChunk
 
 export const RUNTIME_LOAD_ERROR_SENTINEL = '__RUNTIME_LOAD_FAILED__'
+export const STREAMING_LOAD_ERROR_SENTINEL = '__STREAMING_LOAD_FAILED__'
 export const CHART_LOAD_ERROR_SENTINEL = '__CHART_LOAD_FAILED__'
 export const MERMAID_RENDER_ERROR_SENTINEL = '__MERMAID_RENDER_FAILED__'
 
-export interface RuntimeChunkSnapshot {
-  readonly chunk: RuntimeChunkModule | null
+export interface LazyChunkSnapshot<T> {
+  readonly chunk: T | null
   readonly error: string | null
 }
 
-const PENDING_RUNTIME_SNAPSHOT: RuntimeChunkSnapshot = /* @__PURE__ */ Object.freeze({
-  chunk: null,
-  error: null,
+export type RuntimeChunkSnapshot = LazyChunkSnapshot<RuntimeChunkModule>
+export type StreamingChunkSnapshot = LazyChunkSnapshot<StreamingChunkModule>
+export type EchartsChunkSnapshot = LazyChunkSnapshot<EchartsChunkModule>
+
+interface LazyChunkStore<T> {
+  getLoaded(): T | null
+  getSnapshot(): LazyChunkSnapshot<T>
+  getServerSnapshot(): LazyChunkSnapshot<T>
+  load(): Promise<T>
+  retry(): void
+  subscribe(enabled: boolean, listener: () => void): () => void
+}
+
+function createLazyChunkStore<T>(options: {
+  readonly loadBundled: () => Promise<T>
+  readonly importDev: () => Promise<T>
+  readonly errorSentinel: string
+  readonly warnLabel?: string
+  readonly onLoaded?: (mod: T) => void
+  readonly serverSnapshotReturnsLoaded?: boolean
+}): LazyChunkStore<T> {
+  const pendingSnapshot: LazyChunkSnapshot<T> = Object.freeze({ chunk: null, error: null })
+  let moduleSync: T | null = null
+  let inflightPromise: Promise<T> | null = null
+  let snapshot: LazyChunkSnapshot<T> = pendingSnapshot
+  const listeners = new Set<() => void>()
+
+  const load = (): Promise<T> => {
+    if (moduleSync !== null) {
+      options.onLoaded?.(moduleSync)
+      return Promise.resolve(moduleSync)
+    }
+    if (inflightPromise === null) {
+      if (snapshot.error !== null) {
+        snapshot = pendingSnapshot
+        notifySubscribers(listeners, 'Chunk store')
+      }
+      const rawPromise = Promise.resolve().then(() =>
+        typeof __DSH_BUNDLED_CLIENT__ !== 'undefined' && __DSH_BUNDLED_CLIENT__
+          ? options.loadBundled()
+          : options.importDev(),
+      )
+      inflightPromise = rawPromise.then(
+        (mod) => {
+          moduleSync = mod
+          snapshot = Object.freeze({ chunk: mod, error: null })
+          options.onLoaded?.(mod)
+          notifySubscribers(listeners, 'Chunk store')
+          return mod
+        },
+        (err: unknown) => {
+          inflightPromise = null
+          if (listeners.size > 0) {
+            const errMsg = err instanceof Error && err.message ? err.message : options.errorSentinel
+            snapshot = Object.freeze({ chunk: null, error: errMsg })
+            notifySubscribers(listeners, 'Chunk store')
+          } else {
+            snapshot = pendingSnapshot
+          }
+          throw err
+        },
+      )
+    }
+    return inflightPromise
+  }
+
+  const logFailure = (verb: string, err: unknown) => {
+    if (options.warnLabel) {
+      console.warn(`[dsh-genui-a2ui] failed to ${verb} ${options.warnLabel}:`, err)
+    }
+  }
+
+  return {
+    getLoaded: () => moduleSync,
+    getSnapshot: () => snapshot,
+    getServerSnapshot: () =>
+      options.serverSnapshotReturnsLoaded && moduleSync !== null ? snapshot : pendingSnapshot,
+    load,
+    retry: () => {
+      if (moduleSync !== null || inflightPromise !== null) return
+      load().catch((err: unknown) => logFailure('retry', err))
+    },
+    subscribe: (enabled: boolean, listener: () => void) => {
+      if (!enabled) return () => {}
+      listeners.add(listener)
+      if (moduleSync === null && inflightPromise === null && snapshot.error === null) {
+        load().catch((err: unknown) => logFailure('load', err))
+      }
+      return () => {
+        listeners.delete(listener)
+        if (listeners.size === 0 && snapshot.error !== null && inflightPromise === null) {
+          snapshot = pendingSnapshot
+        }
+      }
+    },
+  }
+}
+
+const runtimeStore = /* @__PURE__ */ createLazyChunkStore<RuntimeChunkModule>({
+  loadBundled: () => require.async('./client.runtime.js') as Promise<RuntimeChunkModule>,
+  importDev: () => import('./chunks/runtime-chunk.ts'),
+  errorSentinel: RUNTIME_LOAD_ERROR_SENTINEL,
+  warnLabel: 'client.runtime.js',
+  onLoaded: (mod) => {
+    if (isPluginStylesMounted()) mod.ensureA2uiRuntimeStyles()
+  },
+  serverSnapshotReturnsLoaded: true,
 })
 
-let runtimeModuleSync: RuntimeChunkModule | null = null
-let runtimePromise: Promise<RuntimeChunkModule> | null = null
-let runtimeSnapshot: RuntimeChunkSnapshot = PENDING_RUNTIME_SNAPSHOT
-const runtimeListeners = /* @__PURE__ */ new Set<() => void>()
-
 export function getLoadedRuntimeChunk(): RuntimeChunkModule | null {
-  return runtimeModuleSync
+  return runtimeStore.getLoaded()
 }
 
 export function getRuntimeChunkServerSnapshot(): RuntimeChunkModule | null {
-  return runtimeModuleSync
+  return runtimeStore.getLoaded()
 }
 
 export function getRuntimeChunkSnapshot(): RuntimeChunkSnapshot {
-  return runtimeSnapshot
+  return runtimeStore.getSnapshot()
 }
 
 export function getRuntimeChunkStateServerSnapshot(): RuntimeChunkSnapshot {
-  return runtimeModuleSync !== null ? runtimeSnapshot : PENDING_RUNTIME_SNAPSHOT
+  return runtimeStore.getServerSnapshot()
 }
 
 export function loadRuntimeChunk(): Promise<RuntimeChunkModule> {
-  if (runtimeModuleSync !== null) {
-    if (isPluginStylesMounted()) runtimeModuleSync.ensureA2uiRuntimeStyles()
-    return Promise.resolve(runtimeModuleSync)
-  }
-  if (runtimePromise === null) {
-    if (runtimeSnapshot.error !== null) {
-      runtimeSnapshot = PENDING_RUNTIME_SNAPSHOT
-      notifySubscribers(runtimeListeners, 'Chunk store')
-    }
-    const rawPromise = Promise.resolve().then(() =>
-      typeof __DSH_BUNDLED_CLIENT__ !== 'undefined' && __DSH_BUNDLED_CLIENT__
-        ? (require.async('./client.runtime.js') as Promise<RuntimeChunkModule>)
-        : import('./chunks/runtime-chunk.ts'),
-    )
-    runtimePromise = rawPromise.then(
-      (mod) => {
-        runtimeModuleSync = mod
-        runtimeSnapshot = Object.freeze({ chunk: mod, error: null })
-        if (isPluginStylesMounted()) mod.ensureA2uiRuntimeStyles()
-        notifySubscribers(runtimeListeners, 'Chunk store')
-        return mod
-      },
-      (err: unknown) => {
-        runtimePromise = null
-        if (runtimeListeners.size > 0) {
-          const errMsg =
-            err instanceof Error && err.message ? err.message : RUNTIME_LOAD_ERROR_SENTINEL
-          runtimeSnapshot = Object.freeze({ chunk: null, error: errMsg })
-          notifySubscribers(runtimeListeners, 'Chunk store')
-        } else {
-          runtimeSnapshot = PENDING_RUNTIME_SNAPSHOT
-        }
-        throw err
-      },
-    )
-  }
-  return runtimePromise
+  return runtimeStore.load()
 }
 
 export function retryRuntimeChunk(): void {
-  if (runtimeModuleSync !== null || runtimePromise !== null) return
-  loadRuntimeChunk().catch((err: unknown) => {
-    console.warn('[dsh-genui-a2ui] failed to retry client.runtime.js:', err)
-  })
+  runtimeStore.retry()
 }
 
 export function subscribeRuntimeChunk(enabled: boolean, listener: () => void): () => void {
-  if (!enabled) return () => {}
-  runtimeListeners.add(listener)
-  if (runtimeModuleSync === null && runtimePromise === null && runtimeSnapshot.error === null) {
-    loadRuntimeChunk().catch((err: unknown) => {
-      console.warn('[dsh-genui-a2ui] failed to load client.runtime.js:', err)
-    })
-  }
-  return () => {
-    runtimeListeners.delete(listener)
-    if (runtimeListeners.size === 0 && runtimeSnapshot.error !== null && runtimePromise === null) {
-      runtimeSnapshot = PENDING_RUNTIME_SNAPSHOT
-    }
-  }
+  return runtimeStore.subscribe(enabled, listener)
 }
 
-export interface EchartsChunkSnapshot {
-  readonly chunk: EchartsChunkModule | null
-  readonly error: string | null
-}
-
-const PENDING_ECHARTS_SNAPSHOT: EchartsChunkSnapshot = /* @__PURE__ */ Object.freeze({
-  chunk: null,
-  error: null,
+const streamingStore = /* @__PURE__ */ createLazyChunkStore<StreamingChunkModule>({
+  loadBundled: () => require.async('./client.streaming.js') as Promise<StreamingChunkModule>,
+  importDev: () => import('./chunks/streaming-chunk.ts'),
+  errorSentinel: STREAMING_LOAD_ERROR_SENTINEL,
+  warnLabel: 'client.streaming.js',
+  serverSnapshotReturnsLoaded: true,
 })
 
-let echartsModuleSync: EchartsChunkModule | null = null
-let echartsPromise: Promise<EchartsChunkModule> | null = null
-let echartsSnapshot: EchartsChunkSnapshot = PENDING_ECHARTS_SNAPSHOT
-const echartsListeners = /* @__PURE__ */ new Set<() => void>()
+export function getLoadedStreamingChunk(): StreamingChunkModule | null {
+  return streamingStore.getLoaded()
+}
+
+export function getStreamingChunkSnapshot(): StreamingChunkSnapshot {
+  return streamingStore.getSnapshot()
+}
+
+export function getStreamingChunkServerSnapshot(): StreamingChunkSnapshot {
+  return streamingStore.getServerSnapshot()
+}
+
+export function loadStreamingChunk(): Promise<StreamingChunkModule> {
+  return streamingStore.load()
+}
+
+export function retryStreamingChunk(): void {
+  streamingStore.retry()
+}
+
+export function subscribeStreamingChunk(enabled: boolean, listener: () => void): () => void {
+  return streamingStore.subscribe(enabled, listener)
+}
+
+const echartsStore = /* @__PURE__ */ createLazyChunkStore<EchartsChunkModule>({
+  loadBundled: () => require.async('./client.echarts.js') as Promise<EchartsChunkModule>,
+  importDev: () => import('./chunks/echarts-chunk.ts'),
+  errorSentinel: CHART_LOAD_ERROR_SENTINEL,
+})
 
 export function getLoadedEchartsChunk(): EchartsChunkModule | null {
-  return echartsModuleSync
+  return echartsStore.getLoaded()
 }
 
 export function getEchartsChunkSnapshot(): EchartsChunkSnapshot {
-  return echartsSnapshot
+  return echartsStore.getSnapshot()
 }
 
 export function getEchartsChunkServerSnapshot(): EchartsChunkSnapshot {
-  return PENDING_ECHARTS_SNAPSHOT
+  return echartsStore.getServerSnapshot()
 }
 
 export function loadEchartsChunk(): Promise<EchartsChunkModule> {
-  if (echartsModuleSync !== null) return Promise.resolve(echartsModuleSync)
-  if (echartsPromise === null) {
-    if (echartsSnapshot.error !== null) {
-      echartsSnapshot = PENDING_ECHARTS_SNAPSHOT
-      notifySubscribers(echartsListeners, 'Chunk store')
-    }
-    const rawPromise = Promise.resolve().then(() =>
-      typeof __DSH_BUNDLED_CLIENT__ !== 'undefined' && __DSH_BUNDLED_CLIENT__
-        ? (require.async('./client.echarts.js') as Promise<EchartsChunkModule>)
-        : import('./chunks/echarts-chunk.ts'),
-    )
-    echartsPromise = rawPromise.then(
-      (mod) => {
-        echartsModuleSync = mod
-        echartsSnapshot = Object.freeze({ chunk: mod, error: null })
-        notifySubscribers(echartsListeners, 'Chunk store')
-        return mod
-      },
-      (err: unknown) => {
-        echartsPromise = null
-        if (echartsListeners.size > 0) {
-          const errMsg =
-            err instanceof Error && err.message ? err.message : CHART_LOAD_ERROR_SENTINEL
-          echartsSnapshot = Object.freeze({ chunk: null, error: errMsg })
-          notifySubscribers(echartsListeners, 'Chunk store')
-        } else {
-          echartsSnapshot = PENDING_ECHARTS_SNAPSHOT
-        }
-        throw err
-      },
-    )
-  }
-  return echartsPromise
+  return echartsStore.load()
 }
 
 export function retryEchartsChunk(): void {
-  if (echartsModuleSync !== null || echartsPromise !== null) return
-  loadEchartsChunk().catch(() => {})
+  echartsStore.retry()
 }
 
 export function subscribeEchartsChunk(listener: () => void): () => void {
-  echartsListeners.add(listener)
-  if (echartsModuleSync === null && echartsPromise === null && echartsSnapshot.error === null) {
-    loadEchartsChunk().catch(() => {})
-  }
-  return () => {
-    echartsListeners.delete(listener)
-    if (echartsListeners.size === 0 && echartsSnapshot.error !== null && echartsPromise === null) {
-      echartsSnapshot = PENDING_ECHARTS_SNAPSHOT
-    }
-  }
+  return echartsStore.subscribe(true, listener)
 }
 
 export interface MermaidDiagramSnapshot {

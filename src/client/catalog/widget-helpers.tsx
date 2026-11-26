@@ -20,6 +20,7 @@ import {
 import { createPortal } from 'react-dom'
 import { usePortalPopover } from '../dom-hooks.ts'
 import { isSafeStaticSvgImage } from '../mermaid-safe.ts'
+import { ErrorBoundary } from '../runtime/ErrorBoundary.tsx'
 import css from './Catalog.module.css'
 
 export type ChildRef =
@@ -31,6 +32,8 @@ export type ChildRef =
 export const InsideButtonContext = createContext(false)
 
 export const SurfaceReadOnlyContext = createContext(false)
+
+export const SurfaceResetKeyContext = createContext('0:0')
 
 export const ModalCloseContext = createContext<(() => void) | null>(null)
 
@@ -254,7 +257,16 @@ export function defineComponent<Props>(
   render: FC<ReactA2uiComponentProps<Props>>,
 ): ReactCatalogComponent {
   const tagName = toDshCustomElementTag(api.name)
-  const impl = Object.assign(createComponentImplementation(api as never, render as never), {
+  const GuardedRender: FC<ReactA2uiComponentProps<Props>> = (allProps) => {
+    const resetKey = useContext(SurfaceResetKeyContext)
+    const RenderComp = render
+    return (
+      <ErrorBoundary resetKey={resetKey} label={api.name} widgetName={api.name}>
+        <RenderComp {...allProps} />
+      </ErrorBoundary>
+    )
+  }
+  const impl = Object.assign(createComponentImplementation(api as never, GuardedRender as never), {
     rawRender: render,
     tagName,
   })

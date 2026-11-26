@@ -57,38 +57,6 @@ function collectSurfaceIds(messages: readonly AgentToRendererMessage[], target: 
   }
 }
 
-function validateStreamedMessages(messages: readonly AgentToRendererMessage[]): string | null {
-  const dangerous = findDangerousCompiledKey(messages)
-  if (dangerous !== null) {
-    return `Forbidden prototype property key "${dangerous}" in compiled A2UI payload.`
-  }
-  let bytes = 0
-  for (const msg of messages) {
-    const rec = msg as unknown as Record<string, unknown>
-    for (const [kind, payload] of Object.entries(rec)) {
-      if (
-        (kind === 'createSurface' || kind === 'updateComponents') &&
-        typeof payload === 'object' &&
-        payload !== null &&
-        Array.isArray((payload as { components?: unknown }).components) &&
-        (payload as { components: unknown[] }).components.length >
-          A2UI_LIMITS.maxComponentsPerSurface
-      ) {
-        return `Surface exceeds maximum component limit (${A2UI_LIMITS.maxComponentsPerSurface}).`
-      }
-    }
-    try {
-      bytes += JSON.stringify(msg).length
-    } catch {
-      return 'Failed to measure streamed A2UI payload.'
-    }
-    if (bytes > A2UI_LIMITS.maxCompiledBytes) {
-      return `Compiled A2UI payload exceeds limit (${A2UI_LIMITS.maxCompiledBytes} bytes).`
-    }
-  }
-  return null
-}
-
 export class StreamingExpressSession {
   private readonly parser = new ExpressParser([dshSchemaCatalog])
   private stream = this.parser.openStream({ wrapped: false })
@@ -102,6 +70,12 @@ export class StreamingExpressSession {
   private lastSnapshotMessages: readonly AgentToRendererMessage[] | null = null
   private lastSnapshotError: string | null = null
   private lastSnapshotWarningsCount = 0
+
+  private lastPreprocessedPrefixRaw = ''
+  private lastPreprocessedPrefixOut = ''
+  private lastCheckedClean = ''
+  private validatedMessageCount = 0
+  private validatedCompiledBytes = 0
 
   private closed = false
   private streamRejected = false
@@ -131,6 +105,48 @@ export class StreamingExpressSession {
     return this.lastSnapshot
   }
 
+  private resetIncrementalValidation(): void {
+    this.validatedMessageCount = 0
+    this.validatedCompiledBytes = 0
+  }
+
+  private validateNewMessagesIncremental(): string | null {
+    if (this.validatedMessageCount > this.messages.length) {
+      this.resetIncrementalValidation()
+    }
+    if (this.validatedMessageCount === this.messages.length) return null
+    const fresh = this.messages.slice(this.validatedMessageCount)
+    const dangerous = findDangerousCompiledKey(fresh)
+    if (dangerous !== null) {
+      return `Forbidden prototype property key "${dangerous}" in compiled A2UI payload.`
+    }
+    for (const msg of fresh) {
+      const rec = msg as unknown as Record<string, unknown>
+      for (const [kind, payload] of Object.entries(rec)) {
+        if (
+          (kind === 'createSurface' || kind === 'updateComponents') &&
+          typeof payload === 'object' &&
+          payload !== null &&
+          Array.isArray((payload as { components?: unknown }).components) &&
+          (payload as { components: unknown[] }).components.length >
+            A2UI_LIMITS.maxComponentsPerSurface
+        ) {
+          return `Surface exceeds maximum component limit (${A2UI_LIMITS.maxComponentsPerSurface}).`
+        }
+      }
+      try {
+        this.validatedCompiledBytes += JSON.stringify(msg).length
+      } catch {
+        return 'Failed to measure streamed A2UI payload.'
+      }
+      if (this.validatedCompiledBytes > A2UI_LIMITS.maxCompiledBytes) {
+        return `Compiled A2UI payload exceeds limit (${A2UI_LIMITS.maxCompiledBytes} bytes).`
+      }
+    }
+    this.validatedMessageCount = this.messages.length
+    return null
+  }
+
   reset(preserveSeeds = false): void {
     this.stream = this.parser.openStream({ wrapped: false })
     this.seedWarnings = []
@@ -156,6 +172,10 @@ export class StreamingExpressSession {
     this.surfaceIdSet.clear()
     this.lastError = null
     this.lastSnapshot = null
+    this.lastPreprocessedPrefixRaw = ''
+    this.lastPreprocessedPrefixOut = ''
+    this.lastCheckedClean = ''
+    this.resetIncrementalValidation()
     this.closed = false
     this.streamRejected = false
   }
@@ -208,6 +228,7 @@ export class StreamingExpressSession {
       this.streamRejected = true
       this.messages = []
       this.surfaceIdSet.clear()
+      this.resetIncrementalValidation()
       this.lastError = `Express program length (${rawClean.length} chars) exceeds maximum (${A2UI_LIMITS.maxUiChars} chars).`
       return this.buildSnapshot()
     }
@@ -217,6 +238,7 @@ export class StreamingExpressSession {
       this.streamRejected = true
       this.messages = []
       this.surfaceIdSet.clear()
+      this.resetIncrementalValidation()
       this.lastError = err instanceof Error ? err.message : String(err)
       return this.buildSnapshot()
     }
@@ -226,18 +248,31 @@ export class StreamingExpressSession {
     } else {
       const lastNl = rawClean.lastIndexOf('\n')
       if (lastNl >= 0) {
-        clean = `${preprocessExpressProgram(rawClean.slice(0, lastNl))}\n${rawClean.slice(lastNl + 1)}`
+        const prefix = rawClean.slice(0, lastNl)
+        let processedPrefix: string
+        if (prefix === this.lastPreprocessedPrefixRaw && this.lastPreprocessedPrefixOut !== '') {
+          processedPrefix = this.lastPreprocessedPrefixOut
+        } else {
+          processedPrefix = preprocessExpressProgram(prefix)
+          this.lastPreprocessedPrefixRaw = prefix
+          this.lastPreprocessedPrefixOut = processedPrefix
+        }
+        clean = `${processedPrefix}\n${rawClean.slice(lastNl + 1)}`
       } else {
         clean = rawClean
       }
     }
-    const maxExpansion = A2UI_LIMITS.maxCompiledBytes * 2
-    if (estimateExpressExpansionSize(clean, maxExpansion) > maxExpansion) {
-      this.streamRejected = true
-      this.messages = []
-      this.surfaceIdSet.clear()
-      this.lastError = `Express local-variable expansion exceeds limit (${maxExpansion} chars).`
-      return this.buildSnapshot()
+    if (clean !== this.lastCheckedClean) {
+      const maxExpansion = A2UI_LIMITS.maxCompiledBytes * 2
+      if (estimateExpressExpansionSize(clean, maxExpansion) > maxExpansion) {
+        this.streamRejected = true
+        this.messages = []
+        this.surfaceIdSet.clear()
+        this.resetIncrementalValidation()
+        this.lastError = `Express local-variable expansion exceeds limit (${maxExpansion} chars).`
+        return this.buildSnapshot()
+      }
+      this.lastCheckedClean = clean
     }
     let savedMessages: readonly AgentToRendererMessage[] | null = null
     let savedSurfaceIds: Set<string> | null = null
@@ -273,6 +308,7 @@ export class StreamingExpressSession {
           this.messages = [...savedMessages]
           this.surfaceIdSet.clear()
           for (const id of savedSurfaceIds) this.surfaceIdSet.add(id)
+          this.resetIncrementalValidation()
         }
       }
     }
@@ -295,14 +331,16 @@ export class StreamingExpressSession {
           this.messages = [...savedMessages]
           this.surfaceIdSet.clear()
           for (const id of savedSurfaceIds) this.surfaceIdSet.add(id)
+          this.resetIncrementalValidation()
         }
       }
     }
     if (!this.streamRejected && this.messages.length > 0) {
-      const limitErr = validateStreamedMessages(this.messages)
+      const limitErr = this.validateNewMessagesIncremental()
       if (limitErr !== null) {
         this.messages = []
         this.surfaceIdSet.clear()
+        this.resetIncrementalValidation()
         this.streamRejected = true
         this.lastError = limitErr
       }

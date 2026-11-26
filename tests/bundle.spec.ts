@@ -39,6 +39,7 @@ describe('Spike 1 & Dynamic Chunk Architecture: DSH bundle purity & <500 kB gate
     ).toBe(true)
     expect(/return module\.exports;\s*\}\s*\}\);/.test(clientCode)).toBe(true)
     expect(/require\.async\(["'`]\.\/client\.runtime\.js["'`]\)/.test(clientCode)).toBe(true)
+    expect(/require\.async\(["'`]\.\/client\.streaming\.js["'`]\)/.test(clientCode)).toBe(true)
 
     const syncRequires = extractSyncRequires(clientCode)
     expect(syncRequires.length).toBeGreaterThan(0)
@@ -66,14 +67,21 @@ describe('Spike 1 & Dynamic Chunk Architecture: DSH bundle purity & <500 kB gate
       expect.arrayContaining([
         'lib/client.js',
         'lib/client.runtime.js',
+        'lib/client.streaming.js',
         'lib/client.echarts.js',
         'lib/client.mermaid.js',
       ]),
     )
   })
 
-  it('emits self-contained DSH chunks (client.runtime.js, client.echarts.js, client.mermaid.js) with zero relative sync requires', () => {
-    for (const chunkName of ['client.runtime.js', 'client.echarts.js', 'client.mermaid.js']) {
+  it('emits self-contained DSH lazy chunks with zero relative sync requires and clean isolation', () => {
+    const lazyChunks = [
+      'client.runtime.js',
+      'client.streaming.js',
+      'client.echarts.js',
+      'client.mermaid.js',
+    ]
+    for (const chunkName of lazyChunks) {
       const chunkPath = resolve(LIB_DIR, chunkName)
       expect(existsSync(chunkPath)).toBe(true)
       const code = readFileSync(chunkPath, 'utf8')
@@ -95,6 +103,8 @@ describe('Spike 1 & Dynamic Chunk Architecture: DSH bundle purity & <500 kB gate
     expect(/require\.async\(["'`]\.\/client\.echarts\.js["'`]\)/.test(runtimeCode)).toBe(true)
     expect(/require\.async\(["'`]\.\/client\.mermaid\.js["'`]\)/.test(runtimeCode)).toBe(true)
     expect(runtimeCode.includes('CandlestickChart')).toBe(false)
+    expect(runtimeCode.includes('ExpressLexer')).toBe(false)
+    expect(runtimeCode.includes('react-aria-Slider')).toBe(false)
   })
 
   it('enforces unidirectional shared <- client / shared <- host module boundaries (zero client->host imports)', () => {

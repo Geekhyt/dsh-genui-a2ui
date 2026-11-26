@@ -7,16 +7,16 @@ import {
   SliderApi,
   TextFieldApi,
 } from '@a2ui/web_core/v1_0'
-import { type ReactNode, useContext, useDeferredValue, useId, useMemo, useState } from 'react'
 import {
-  Label as AriaLabel,
-  Radio as AriaRadio,
-  RadioGroup as AriaRadioGroup,
-  Slider as AriaSlider,
-  SliderOutput as AriaSliderOutput,
-  SliderThumb as AriaSliderThumb,
-  SliderTrack as AriaSliderTrack,
-} from 'react-aria-components'
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+  useContext,
+  useDeferredValue,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { formatNativeTemporalValue } from '../../../shared/temporal.ts'
 import { useRuntimeMessages } from '../../i18n.ts'
 import { useDarkTheme } from '../../theme.ts'
@@ -406,6 +406,7 @@ export const DshChoicePickerImpl = defineComponent<{
   const showError = !readOnly && (touched || submitAttempted) && props.isValid === false
   const err = showError ? props.validationErrors?.[0] : undefined
   const label = props.label ? String(props.label) : ''
+  const radioRefs = useRef<Array<HTMLButtonElement | null>>([])
 
   const toggleOption = (val: string) => {
     if (readOnly) return
@@ -417,6 +418,30 @@ export const DshChoicePickerImpl = defineComponent<{
     const next = selectedSet.has(val) ? selected.filter((v) => v !== val) : [...selected, val]
     commitSelected(next)
   }
+
+  const handleRadioKeyDown = (e: ReactKeyboardEvent<HTMLButtonElement>, idx: number) => {
+    if (readOnly || filtered.length === 0) return
+    let nextIdx = -1
+    if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+      nextIdx = (idx + 1) % filtered.length
+    } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+      nextIdx = (idx - 1 + filtered.length) % filtered.length
+    } else if (e.key === 'Home') {
+      nextIdx = 0
+    } else if (e.key === 'End') {
+      nextIdx = filtered.length - 1
+    } else {
+      return
+    }
+    e.preventDefault()
+    const target = filtered[nextIdx]
+    if (!target) return
+    setTouched(true)
+    commitSelected([target.value])
+    radioRefs.current[nextIdx]?.focus()
+  }
+
+  const activeSingleIdx = filtered.findIndex((opt) => opt.value === selected[0])
 
   return (
     <div className={css.choiceGroup} style={weightStyle(props.weight, 160)}>
@@ -460,25 +485,39 @@ export const DshChoicePickerImpl = defineComponent<{
           ))}
         </div>
       ) : isSingle ? (
-        <AriaRadioGroup
+        <div
           className={css.radioList}
+          role="radiogroup"
           aria-label={label || msg.radioGroupAria}
-          value={selected[0] ?? null}
-          isDisabled={readOnly}
-          isInvalid={showError || undefined}
-          onChange={(val) => {
-            if (readOnly) return
-            setTouched(true)
-            commitSelected([val])
-          }}
+          aria-disabled={readOnly || undefined}
+          aria-invalid={showError || undefined}
         >
-          {filtered.map((opt) => (
-            <AriaRadio key={opt.value} value={opt.value} className={css.radioItem}>
-              <span className={css.radioDot} aria-hidden="true" />
-              <span>{String(opt.label ?? opt.value)}</span>
-            </AriaRadio>
-          ))}
-        </AriaRadioGroup>
+          {filtered.map((opt, idx) => {
+            const checked = selected[0] === opt.value
+            const isTabStop = activeSingleIdx === -1 ? idx === 0 : idx === activeSingleIdx
+            return (
+              <button
+                key={opt.value}
+                ref={(el) => {
+                  radioRefs.current[idx] = el
+                }}
+                type="button"
+                role="radio"
+                aria-checked={checked}
+                disabled={readOnly}
+                tabIndex={readOnly ? -1 : isTabStop ? 0 : -1}
+                data-selected={checked ? '' : undefined}
+                data-disabled={readOnly ? '' : undefined}
+                className={css.radioItem}
+                onClick={() => toggleOption(opt.value)}
+                onKeyDown={(e) => handleRadioKeyDown(e, idx)}
+              >
+                <span className={css.radioDot} aria-hidden="true" />
+                <span>{String(opt.label ?? opt.value)}</span>
+              </button>
+            )
+          })}
+        </div>
       ) : (
         <div
           className={css.radioList}
@@ -512,6 +551,7 @@ export const DshSliderImpl = defineComponent<{
   validationErrors?: readonly string[]
   weight?: number
 }>(SliderApi, function DshSlider({ props, context }) {
+  const sliderId = useId()
   const msg = useRuntimeMessages()
   const readOnly = useContext(SurfaceReadOnlyContext)
   const { submitAttempted } = useContext(SurfaceValidationContext)
@@ -541,6 +581,7 @@ export const DshSliderImpl = defineComponent<{
   const label = props.label ? String(props.label) : ''
   const showError = !readOnly && (touched || submitAttempted) && props.isValid === false
   const err = showError ? props.validationErrors?.[0] : undefined
+  const formattedValue = Number.isInteger(value) ? String(value) : String(Number(value.toFixed(6)))
 
   return (
     <div
@@ -549,38 +590,55 @@ export const DshSliderImpl = defineComponent<{
       data-a2ui-slider=""
       aria-invalid={showError || undefined}
     >
-      <AriaSlider
-        className={css.slider}
-        minValue={min}
-        maxValue={max}
-        step={step}
-        value={value}
-        isDisabled={readOnly}
-        aria-label={label || msg.sliderAria}
-        onChange={(next) => {
-          if (readOnly) return
-          setTouched(true)
-          const raw = Array.isArray(next) ? (next[0] ?? min) : next
-          const snapped = Number.isFinite(raw)
-            ? Math.abs(raw - max) <= step * 0.25
-              ? max
-              : Number(raw.toFixed(6))
-            : min
-          commitValue(Math.min(max, Math.max(min, snapped)))
-        }}
-      >
+      <div className={css.slider}>
         <div className={css.sliderHeader}>
-          {label ? <AriaLabel className={css.label}>{label}</AriaLabel> : <span />}
-          <AriaSliderOutput className={css.sliderOutput} />
+          {label ? (
+            <label htmlFor={sliderId} className={css.label}>
+              {label}
+            </label>
+          ) : (
+            <span />
+          )}
+          <output htmlFor={sliderId} className={css.sliderOutput}>
+            {formattedValue}
+          </output>
         </div>
-        <AriaSliderTrack className={css.sliderTrack}>
-          <div className={css.sliderFill} style={{ width: `calc((100% - 22px) * ${pct / 100})` }} />
-          <AriaSliderThumb
+        <div className={css.sliderTrack}>
+          <div
+            className={css.sliderFill}
+            style={{ width: `calc((100% - 22px) * ${pct / 100})` }}
+            aria-hidden="true"
+          />
+          <div
             className={css.sliderThumb}
             style={{ left: `calc(11px + (100% - 22px) * ${pct / 100})` }}
+            aria-hidden="true"
           />
-        </AriaSliderTrack>
-      </AriaSlider>
+          <input
+            id={sliderId}
+            type="range"
+            className={css.sliderNativeInput}
+            min={min}
+            max={max}
+            step={step}
+            value={value}
+            disabled={readOnly}
+            aria-label={label || msg.sliderAria}
+            aria-invalid={showError || undefined}
+            onChange={(e) => {
+              if (readOnly) return
+              setTouched(true)
+              const raw = Number(e.target.value)
+              const snapped = Number.isFinite(raw)
+                ? Math.abs(raw - max) <= step * 0.25
+                  ? max
+                  : Number(raw.toFixed(6))
+                : min
+              commitValue(Math.min(max, Math.max(min, snapped)))
+            }}
+          />
+        </div>
+      </div>
       {err ? <span className={css.errorText}>{err}</span> : null}
     </div>
   )

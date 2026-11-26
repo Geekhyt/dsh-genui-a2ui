@@ -224,7 +224,10 @@ describe('Built-bundle cross-chunk integration & security contracts (lib/*.js)',
       const enabledOrder = stateAfterRuntime?.cachedEnabledOrder as Map<string, boolean>
       expect(enabledOrder.get('sess-chunk-1')).toBe(true)
 
-      const StreamingCtor = runtimeExports.StreamingExpressSession as new () => {
+      expect(runtimeExports.StreamingExpressSession).toBeUndefined()
+
+      const streamingExports = loadChunk('client.streaming.js')
+      const StreamingCtor = streamingExports.StreamingExpressSession as new () => {
         advance: (
           src: string,
           isFinal: boolean,

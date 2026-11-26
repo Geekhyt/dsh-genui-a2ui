@@ -615,7 +615,7 @@ export function checkTsInvariants(source, relPath) {
   const isCatalogHelper = /^src\/client\/catalog\/.*-helpers\.ts$/.test(relPath)
   const isClientFile = relPath.startsWith('src/client/')
   const isEchartsChunk =
-    relPath === 'src/client/chunks/echarts-chunk.ts' ||
+    /^src\/client\/chunks\/echarts(?:-[a-z]+)?-chunk\.ts$/.test(relPath) ||
     relPath.startsWith('src/client/chunks/echarts/')
   const isMermaidChunk = relPath === 'src/client/chunks/mermaid-chunk.ts'
 
@@ -696,6 +696,17 @@ export function checkTsInvariants(source, relPath) {
             }
           }
         }
+      }
+
+      if (
+        hasVal &&
+        (spec === 'react-aria-components' || spec.startsWith('react-aria-components/'))
+      ) {
+        report(
+          'no-react-aria-components',
+          node,
+          'react-aria-components is banned in src/; use native accessible HTML/ARIA controls to keep runtime bundles lean.',
+        )
       }
 
       if (isShell && hasVal) {
@@ -1474,7 +1485,7 @@ function runCli() {
     process.exit(1)
   }
   console.log(
-    `[check-invariants] OK: 38 architectural invariant rules verified across ${report.filesScanned} source/CSS file(s) and locale tables.`,
+    `[check-invariants] OK: 39 architectural invariant rules verified across ${report.filesScanned} source/CSS file(s) and locale tables.`,
   )
 }
 

@@ -3,6 +3,7 @@ import { RUNTIME_MESSAGES, resolveClientLocale } from '../../shared/i18n.ts'
 
 export interface ErrorBoundaryProps {
   readonly label?: string
+  readonly widgetName?: string
   readonly resetKey?: string | number | undefined
   readonly children: ReactNode
 }
@@ -41,7 +42,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
   override componentDidCatch(error: unknown, info: ErrorInfo): void {
     console.warn(
-      '[dsh-genui-a2ui] surface render failed:',
+      `[dsh-genui-a2ui] ${this.props.widgetName ? `widget ${this.props.widgetName}` : 'surface'} render failed:`,
       toErrorObject(error).message,
       info.componentStack,
     )
@@ -53,8 +54,22 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       return (
         <div
           role="alert"
-          data-a2ui-error
-          style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'baseline' }}
+          data-a2ui-error=""
+          data-a2ui-widget-error={this.props.widgetName || undefined}
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: 6,
+            alignItems: 'baseline',
+            ...(this.props.widgetName
+              ? {
+                  padding: '8px 10px',
+                  borderRadius: 8,
+                  border: '1px solid var(--dsw-alias-state-error-primary, rgba(239,68,68,0.4))',
+                  fontSize: 12,
+                }
+              : undefined),
+          }}
         >
           <strong>{this.props.label ?? defaultLabel}</strong>
           <span>{this.state.error.message}</span>

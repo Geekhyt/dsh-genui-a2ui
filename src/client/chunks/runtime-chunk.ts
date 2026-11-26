@@ -65,4 +65,3 @@ export {
   SurfaceGroupView,
   type SurfaceGroupViewProps,
 } from '../runtime/SurfaceView.tsx'
-export { type StreamingCompileSnapshot, StreamingExpressSession } from '../runtime/streaming.ts'

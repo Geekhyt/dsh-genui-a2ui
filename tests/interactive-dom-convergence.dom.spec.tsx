@@ -6,7 +6,7 @@ import { TableWidget } from '../src/client/catalog/TableWidget.tsx'
 import { resolveDshHostElement } from '../src/client/catalog/widget-helpers.tsx'
 import { DshTextFieldView } from '../src/client/catalog/widgets/FormFields.tsx'
 import { DshSelectView } from '../src/client/catalog/widgets/SelectControls.tsx'
-import { loadRuntimeChunk } from '../src/client/chunk-loader.ts'
+import { loadRuntimeChunk, loadStreamingChunk } from '../src/client/chunk-loader.ts'
 import { useEChartsMount } from '../src/client/dom-hooks.ts'
 import { isSafeStaticSvgImage } from '../src/client/mermaid-safe.ts'
 import {
@@ -205,7 +205,7 @@ describe('Real Interactive DOM Convergence Tests (happy-dom + React 18)', () => 
   })
 
   it('preserves pending ask drafts across session switch and clears them only when the same session settles', async () => {
-    await loadRuntimeChunk()
+    await Promise.all([loadRuntimeChunk(), loadStreamingChunk()])
     const makeAskSnapshot = (callId: string, surfaceId: string): ChatTargetSnapshot => ({
       nodes: new Map([
         [

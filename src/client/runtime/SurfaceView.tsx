@@ -40,6 +40,7 @@ import {
   type SurfaceActionStatus,
   SurfaceActionStatusContext,
   SurfaceReadOnlyContext,
+  SurfaceResetKeyContext,
   SurfaceValidationContext,
   type SurfaceValidationContextValue,
 } from '../catalog/widget-helpers.tsx'
@@ -1090,12 +1091,16 @@ export const SurfaceGroupView = memo(function SurfaceGroupView({
                               className={partialReadOnly ? css.surfaceStackReadOnly : undefined}
                               data-surface-readonly={partialReadOnly ? 'true' : undefined}
                             >
-                              <ErrorBoundary
-                                resetKey={`${storeGeneration}:${streaming ? 1 : 0}`}
-                                label={msg.surfaceRenderFailed(surface.id)}
+                              <SurfaceResetKeyContext.Provider
+                                value={`${storeGeneration}:${streaming ? 1 : 0}`}
                               >
-                                <A2uiSurface surface={surface} />
-                              </ErrorBoundary>
+                                <ErrorBoundary
+                                  resetKey={`${storeGeneration}:${streaming ? 1 : 0}`}
+                                  label={msg.surfaceRenderFailed(surface.id)}
+                                >
+                                  <A2uiSurface surface={surface} />
+                                </ErrorBoundary>
+                              </SurfaceResetKeyContext.Provider>
                             </div>
                           </FileOpenContext.Provider>
                         </SurfaceReadOnlyContext.Provider>

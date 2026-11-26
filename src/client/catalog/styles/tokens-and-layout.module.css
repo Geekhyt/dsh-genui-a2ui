@@ -636,9 +636,21 @@
   color: var(--a2ui-fg);
   cursor: pointer;
   user-select: none;
+  background: transparent;
+  border: none;
+  padding: 0;
+  text-align: left;
+  font-family: inherit;
+  outline: none;
 }
 
-.radioItem[data-focus-visible] .radioDot {
+.radioItem[data-disabled] {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.radioItem[data-focus-visible] .radioDot,
+.radioItem:focus-visible .radioDot {
   box-shadow: 0 0 0 3px var(--dsw-focus-ring-color, rgba(59, 130, 246, 0.35));
 }
 
@@ -736,4 +748,29 @@
 
 .sliderThumb[data-focus-visible] {
   box-shadow: 0 0 0 3px var(--dsw-focus-ring-color, rgba(59, 130, 246, 0.35));
+}
+
+.sliderNativeInput {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 2;
+}
+
+.sliderNativeInput:disabled {
+  cursor: not-allowed;
+}
+
+.sliderTrack:has(.sliderNativeInput:focus-visible) .sliderThumb {
+  box-shadow: 0 0 0 3px var(--dsw-focus-ring-color, rgba(59, 130, 246, 0.35));
+}
+
+.sliderThumb {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
 }

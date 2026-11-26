@@ -19,8 +19,8 @@ import {
 
 const ROOT_DIR = resolve(import.meta.dirname, '..')
 
-describe('Architectural invariant linter (38 rules)', () => {
-  it('passes all 38 rules on the live repository with zero violations', () => {
+describe('Architectural invariant linter (39 rules)', () => {
+  it('passes all 39 rules on the live repository with zero violations', () => {
     const report = runAllInvariantChecks(ROOT_DIR)
     expect(report.filesScanned).toBeGreaterThan(50)
     expect(report.violations).toEqual([])
@@ -96,6 +96,12 @@ describe('Architectural invariant linter (38 rules)', () => {
       'src/client/catalog/BadWidget.tsx',
     )
     expect(effectViolation.some((v) => v.rule === 'no-useeffect-outside-dom-hooks')).toBe(true)
+
+    const ariaViolation = checkTsInvariants(
+      `import { Slider } from 'react-aria-components'\nexport const x = Slider`,
+      'src/client/catalog/BadAriaWidget.tsx',
+    )
+    expect(ariaViolation.some((v) => v.rule === 'no-react-aria-components')).toBe(true)
   })
 
   it('catches direct localStorage, global keydown, raw date inputs, richText HTML, weight full-width, and unsafe sinks', () => {
@@ -321,12 +327,12 @@ describe('Architectural invariant linter (38 rules)', () => {
   })
 })
 
-describe('5-chunk raw + gzip bundle budget ratchet', () => {
-  it('verifies all 5 built outputs against .bundle-budget.json', () => {
+describe('6-chunk raw + gzip bundle budget ratchet', () => {
+  it('verifies all 6 built outputs against .bundle-budget.json', () => {
     const budget = loadBundleBudget(resolve(ROOT_DIR, '.bundle-budget.json'))
     const report = evaluateBundleBudgets(ROOT_DIR, budget)
     expect(report.ok).toBe(true)
-    expect(report.results.length).toBe(5)
+    expect(report.results.length).toBe(6)
     expect(report.violations).toEqual([])
   })
 

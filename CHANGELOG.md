@@ -2,6 +2,29 @@
 
 All notable changes to `dsh-genui-a2ui` are documented in this file.
 
+## [0.5.9] - 2026-11-26
+
+### Added
+- **Dedicated Streaming Compiler Chunk `lib/client.streaming.js` (`src/client/chunks/streaming-chunk.ts`, `src/client/chunk-loader.ts`, `src/client/shell/LazySurfaceGroupView.tsx`, `build/preset.ts`, `package.json`, `.bundle-budget.json`)**:
+  - Split ANTLR4 / `@a2ui/agent` out of `lib/client.runtime.js` into a standalone on-demand `lib/client.streaming.js` chunk (`651.27 kB` raw / `170.85 kB` gzip) loaded exclusively during live streaming previews via `require.async('./client.streaming.js')`, paired with `useDeferredValue(ui)` throttling so settled/historical conversations never download or parse the Express compiler.
+  - Expanded `.bundle-budget.json` and `package.json` `files` to gate all 6 self-contained chunks (`lib/index.js`, `lib/client.js`, `lib/client.runtime.js`, `lib/client.streaming.js`, `lib/client.echarts.js`, `lib/client.mermaid.js`).
+- **Per-Widget `ErrorBoundary` Isolation (`src/client/catalog/widget-helpers.tsx`, `src/client/runtime/ErrorBoundary.tsx`, `src/client/runtime/SurfaceView.tsx`)**:
+  - Wrapped every `defineComponent` render inside a lightweight widget-scoped `<ErrorBoundary>` driven by `SurfaceResetKeyContext` so an unexpected render failure in one widget degrades only that widget instead of blanking sibling widgets in the same surface.
+- **Architectural Invariant Rule #39 `no-react-aria-components` & ADR-0009 (`scripts/check-invariants.mjs`, `docs/adr/ADR-0009-modular-chunks-streaming-perf-and-catalog-convergence.md`, `tests/architecture-optimization-v059*.{ts,tsx}`)**:
+  - Added static invariant #39 and browser bundle purity guard permanently prohibiting `react-aria-components` from re-entering `src/` or browser chunks, backed by Node & DOM regression suites.
+
+### Changed
+- **Removed `react-aria-components` & Replaced with Native Accessible Controls (`src/client/catalog/MediaAndDataWidgets.tsx`, `src/client/catalog/widgets/FormFields.tsx`, `src/client/catalog/styles/tokens-and-layout.module.css`)**:
+  - Replaced all 3 `react-aria-components` usages with zero-dependency native ARIA controls: `Progress` (`role="progressbar"`), `Slider` (`<input type="range">` + `<output>`), and mutually-exclusive `ChoicePicker` (`role="radiogroup"` with roving `tabIndex` and `Arrow`/`Home`/`End` keyboard navigation).
+- **Browser Zod `.describe()` Prose Stripping & Mermaid Dead-Code Trimming (`build/preset.ts`)**:
+  - Added TypeScript AST `stripZodDescribeProse()` transform for `src/shared/catalog-schema.ts` in browser chunks (preserving `REF:#/$defs/<Name>` markers and `redos-detector` CWE-1333 protection), cutting `lib/client.runtime.js` from **`1,496 kB → 1,037.34 kB` raw (-30.7%)** and **`391.9 kB → 264.14 kB` gzip (-32.6%)**.
+  - Stubbed the 16 diagram engines already blocked by `ALLOWED_MERMAID_KINDS` in `mermaid-safe.ts` plus unused `katex` (preserving `cose-bilkent` for `mindmap`), shrinking `lib/client.mermaid.js` from **`3,474 kB → 2,672.47 kB` raw (-23.1%)** and **`922.8 kB → 702.25 kB` gzip (-23.9%)**.
+- **Incremental Streaming Preprocess Cache & `O(Δ)` Validation (`src/client/runtime/streaming.ts`)**:
+  - Cached the last completed newline prefix output of `preprocessExpressProgram` and validated only newly emitted messages per token batch, avoiding repeated full-buffer preprocessing and validation during live streaming.
+- **Compacted Always-On `A2UI_SYSTEM_GUIDANCE` (`src/index.ts`)**:
+  - Tightened always-on system prompt prose while preserving fast-path grammar contracts and scoped skill routing (`eval:check` scoped avg `5,262` tokens vs `18,961` monolithic, `64/64` unique components, `100%` routing & final compile rate).
+- Verified full automated & live release gate: **47 suites / 285 tests**, **39/39** architectural invariants, **0** comments, **4/4** TLA+ formal specs, **6/6** bundle budgets (`lib/client.js = 77.04 kB / 21.54 kB gzip`), `eval:check` (`31/31`, `64/64` components), `check:host-api`, **50/50** Dark & Light `qa:visual` runs, and **26/26** live Chrome `qa:e2e` interactive checks with 0 console/page errors.
+
 ## [0.5.8] - 2026-11-26
 
 ### Added

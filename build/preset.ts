@@ -6,11 +6,13 @@ import { fileURLToPath } from 'node:url'
 import { gzipSync } from 'node:zlib'
 import { transform } from 'lightningcss'
 import type { UserConfig } from 'tsdown'
+import ts from 'typescript'
 import { PLATFORM_MODULES } from './web-platform.ts'
 
 const CSS_VIRTUAL_PREFIX = '\0dsh-css:'
 const CSS_VIRTUAL_SUFFIX = '.mjs'
 const NODE_STUB_ID = '\0dsh-node-empty'
+const MERMAID_STUB_ID = '\0dsh-mermaid-unused-stub'
 
 const NODE_BUILTINS = new Set([...builtinModules, ...builtinModules.map((m) => `node:${m}`)])
 
@@ -18,8 +20,15 @@ const INLINE_SAFE = /^@deepseek-ai\/dsh-(host-apiproxy|session|llm|tools|brand)(
 
 const HEAVY_VIZ_ONLY = /^(echarts|zrender|mermaid|dagre-d3-es|cytoscape|katex)(\/|$)/
 
+const STREAMING_COMPILER_ONLY = /^(@a2ui\/agent|antlr4ng)(\/|$)/
+
+const ARIA_FORBIDDEN = /^react-aria-components(\/|$)/
+
 const RUNTIME_CHUNK_ONLY =
   /^(@a2ui\/(web_core|react|agent)|antlr4ng|@tanstack\/react-table|react-aria-components)(\/|$)/
+
+const MERMAID_FORBIDDEN_DIAGRAM_RE =
+  /(?:^|\/)(?:abnfDiagram|architectureDiagram|blockDiagram|c4Diagram|cynefinDiagram|ebnfDiagram|infoDiagram|ishikawaDiagram|kanban-definition|pegDiagram|railroadDiagram|requirementDiagram|sankeyDiagram|swimlanesDiagram|vennDiagram|wardleyDiagram)(?:-[A-Za-z0-9]+)?\.mjs$/
 
 const MAX_MAIN_CLIENT_BYTES = 100 * 1024
 
@@ -97,9 +106,22 @@ export interface PluginBuildOptions {
 export function pluginBuild(id: string, options: PluginBuildOptions = {}): UserConfig[] {
   return [
     hostConfig(id, options.libExternal ?? []),
-    clientChunkConfig(id, 'client.runtime.js', 'src/client/chunks/runtime-chunk.ts', true),
-    clientChunkConfig(id, 'client.echarts.js', 'src/client/chunks/echarts-chunk.ts', false),
-    clientChunkConfig(id, 'client.mermaid.js', 'src/client/chunks/mermaid-chunk.ts', false),
+    clientChunkConfig(id, 'client.runtime.js', 'src/client/chunks/runtime-chunk.ts', {
+      forbidVizEngines: true,
+      forbidStreamingCompiler: true,
+      stripSchemaProse: true,
+    }),
+    clientChunkConfig(id, 'client.streaming.js', 'src/client/chunks/streaming-chunk.ts', {
+      forbidVizEngines: true,
+      stripSchemaProse: true,
+    }),
+    clientChunkConfig(id, 'client.echarts.js', 'src/client/chunks/echarts-chunk.ts', {
+      forbidVizEngines: false,
+    }),
+    clientChunkConfig(id, 'client.mermaid.js', 'src/client/chunks/mermaid-chunk.ts', {
+      forbidVizEngines: false,
+      trimMermaid: true,
+    }),
     clientConfig(id),
   ]
 }
@@ -147,10 +169,65 @@ function hostConfig(id: string, extraExternal: readonly (string | RegExp)[]): Us
   }
 }
 
-function sharedBrowserPlugins(
-  id: string,
-  options: { readonly forbidVizEngines: boolean; readonly forbidA2uiRuntime: boolean },
-) {
+function stripZodDescribeProse(code: string, id: string): string {
+  const sf = ts.createSourceFile(id, code, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
+  const replacements: Array<{
+    readonly start: number
+    readonly end: number
+    readonly text: string
+  }> = []
+
+  const visit = (node: ts.Node) => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      node.expression.name.text === 'describe' &&
+      node.arguments.length === 1 &&
+      ts.isStringLiteralLike(node.arguments[0]!)
+    ) {
+      const argNode = node.arguments[0]!
+      const rawText = argNode.text
+      if (rawText.startsWith('REF:#/$defs/')) {
+        const pipeIdx = rawText.indexOf('|')
+        if (pipeIdx !== -1) {
+          replacements.push({
+            start: argNode.getStart(sf),
+            end: argNode.getEnd(),
+            text: JSON.stringify(rawText.slice(0, pipeIdx)),
+          })
+        }
+      } else {
+        replacements.push({
+          start: node.expression.expression.getEnd(),
+          end: node.getEnd(),
+          text: '',
+        })
+      }
+      visit(node.expression.expression)
+      return
+    }
+    ts.forEachChild(node, visit)
+  }
+
+  visit(sf)
+  if (replacements.length === 0) return code
+  replacements.sort((a, b) => b.start - a.start)
+  let out = code
+  for (const rep of replacements) {
+    out = `${out.slice(0, rep.start)}${rep.text}${out.slice(rep.end)}`
+  }
+  return out
+}
+
+interface BrowserPluginOptions {
+  readonly forbidVizEngines: boolean
+  readonly forbidA2uiRuntime: boolean
+  readonly forbidStreamingCompiler?: boolean
+  readonly stripSchemaProse?: boolean
+  readonly trimMermaid?: boolean
+}
+
+function sharedBrowserPlugins(id: string, options: BrowserPluginOptions) {
   return [
     {
       name: 'dsh-client-node-stub',
@@ -159,6 +236,11 @@ function sharedBrowserPlugins(
         if (NODE_BUILTINS.has(source)) return NODE_STUB_ID
         if (importer?.endsWith('chunk-loader.ts') && source.startsWith('./chunks/')) {
           return NODE_STUB_ID
+        }
+        if (options.trimMermaid) {
+          if (source === 'katex' || MERMAID_FORBIDDEN_DIAGRAM_RE.test(source)) {
+            return MERMAID_STUB_ID
+          }
         }
         return null
       },
@@ -173,12 +255,36 @@ function sharedBrowserPlugins(
             'export const sep = "/", posix = {}, win32 = {};',
           ].join('\n')
         }
+        if (modId === MERMAID_STUB_ID) {
+          return [
+            'export const diagram = {};',
+            'export default { renderToString: (expr) => String(expr ?? "") };',
+          ].join('\n')
+        }
         return null
       },
     },
+    ...(options.stripSchemaProse
+      ? [
+          {
+            name: 'dsh-strip-schema-prose',
+            transform(code: string, modId: string) {
+              if (!modId.replace(/\\/g, '/').endsWith('src/shared/catalog-schema.ts')) {
+                return null
+              }
+              return { code: stripZodDescribeProse(code, modId), map: null }
+            },
+          },
+        ]
+      : []),
     {
       name: 'dsh-client-bundle-purity',
       resolveId(source: string) {
+        if (ARIA_FORBIDDEN.test(source)) {
+          throw new Error(
+            `client bundle size gate: "${source}" is banned; use native accessible HTML/ARIA controls`,
+          )
+        }
         if (options.forbidVizEngines && HEAVY_VIZ_ONLY.test(source)) {
           throw new Error(
             `client bundle size gate: "${source}" must stay in its lazy client.<name>.js chunk`,
@@ -187,6 +293,11 @@ function sharedBrowserPlugins(
         if (options.forbidA2uiRuntime && RUNTIME_CHUNK_ONLY.test(source)) {
           throw new Error(
             `client bundle size gate: "${source}" must stay in lazy client.runtime.js, never in main lib/client.js`,
+          )
+        }
+        if (options.forbidStreamingCompiler && STREAMING_COMPILER_ONLY.test(source)) {
+          throw new Error(
+            `client bundle size gate: "${source}" must stay in lazy client.streaming.js`,
           )
         }
         if (!source.startsWith('@deepseek-ai/')) return null
@@ -201,11 +312,18 @@ function sharedBrowserPlugins(
   ]
 }
 
+interface ClientChunkOptions {
+  readonly forbidVizEngines: boolean
+  readonly forbidStreamingCompiler?: boolean
+  readonly stripSchemaProse?: boolean
+  readonly trimMermaid?: boolean
+}
+
 function clientChunkConfig(
   id: string,
   chunkFileName: string,
   entryPath: string,
-  forbidVizEngines: boolean,
+  opts: ClientChunkOptions,
 ): UserConfig {
   const enableSourcemap = process.env.A2UI_SOURCEMAP === '1'
   return {
@@ -232,7 +350,13 @@ function clientChunkConfig(
     },
     inputOptions: browserChunkInputOptions(),
     plugins: [
-      ...sharedBrowserPlugins(id, { forbidVizEngines, forbidA2uiRuntime: false }),
+      ...sharedBrowserPlugins(id, {
+        forbidVizEngines: opts.forbidVizEngines,
+        forbidA2uiRuntime: false,
+        forbidStreamingCompiler: opts.forbidStreamingCompiler,
+        stripSchemaProse: opts.stripSchemaProse,
+        trimMermaid: opts.trimMermaid,
+      }),
       {
         name: `dsh-client-chunk-wrap:${chunkFileName}`,
         generateBundle(

@@ -1,17 +1,21 @@
-import { memo, useCallback, useMemo, useRef, useSyncExternalStore } from 'react'
+import { memo, useCallback, useDeferredValue, useMemo, useRef, useSyncExternalStore } from 'react'
 import {
   getRuntimeChunkSnapshot,
   getRuntimeChunkStateServerSnapshot,
+  getStreamingChunkServerSnapshot,
+  getStreamingChunkSnapshot,
   RUNTIME_LOAD_ERROR_SENTINEL,
   type RuntimeChunkModule,
   type RuntimeChunkSnapshot,
   retryRuntimeChunk,
+  type StreamingChunkModule,
   subscribeRuntimeChunk,
+  subscribeStreamingChunk,
 } from '../chunk-loader.ts'
 import { useShellMessages } from '../i18n.ts'
-import css from '../SurfaceView.module.css'
 import type { SurfaceGroupViewProps } from '../runtime/SurfaceView.tsx'
 import type { StreamingCompileSnapshot, StreamingExpressSession } from '../runtime/streaming.ts'
+import css from '../SurfaceView.module.css'
 
 const SKELETON_BLOCK = <div className={css.skeletonBlock} />
 
@@ -31,28 +35,39 @@ export function useRuntimeChunk(enabled = true): RuntimeChunkModule | null {
   return useRuntimeChunkState(enabled).chunk
 }
 
+export function useStreamingChunk(enabled = true): StreamingChunkModule | null {
+  const subscribe = useCallback(
+    (listener: () => void) => subscribeStreamingChunk(enabled, listener),
+    [enabled],
+  )
+  return useSyncExternalStore(subscribe, getStreamingChunkSnapshot, getStreamingChunkServerSnapshot)
+    .chunk
+}
+
 export function useLazyStreamingExpress(
   active: boolean,
   ui: string,
   complete: boolean,
   sessionKey = 'default',
 ): StreamingCompileSnapshot | null {
-  const runtime = useRuntimeChunk(active)
+  const streamingMod = useStreamingChunk(active)
+  const deferredUi = useDeferredValue(ui)
+  const effectiveUi = complete ? ui : deferredUi
   const ref = useRef<{ key: string; session: StreamingExpressSession } | null>(null)
 
   return useMemo(() => {
-    if (!active || runtime === null) {
+    if (!active || streamingMod === null) {
       ref.current = null
       return null
     }
     if (ref.current === null || ref.current.key !== sessionKey) {
       ref.current = {
         key: sessionKey,
-        session: new runtime.StreamingExpressSession(),
+        session: new streamingMod.StreamingExpressSession(),
       }
     }
-    return ref.current.session.advance(ui, complete)
-  }, [active, runtime, ui, complete, sessionKey])
+    return ref.current.session.advance(effectiveUi, complete)
+  }, [active, streamingMod, effectiveUi, complete, sessionKey])
 }
 
 export const LazySurfaceGroupView = memo(function LazySurfaceGroupView(
