@@ -18,17 +18,26 @@ export const TLA2TOOLS_RELEASE_URL =
   'https://github.com/tlaplus/tlaplus/releases/download/v1.7.4/tla2tools.jar'
 
 export function resolveJavaBinary() {
+  const javaExe = process.platform === 'win32' ? 'java.exe' : 'java'
+  const javaHomeVars = [
+    process.env.JAVA_HOME,
+    process.env.JAVA_HOME_21_X64,
+    process.env.JAVA_HOME_21_ARM64,
+    process.env.JAVA_HOME_17_X64,
+    process.env.JAVA_HOME_17_ARM64,
+  ].filter(Boolean)
+
   const candidates = [
-    process.env.JAVA_HOME ? join(process.env.JAVA_HOME, 'bin', 'java') : '',
+    ...javaHomeVars.map((home) => join(home, 'bin', javaExe)),
     '/opt/homebrew/opt/openjdk@21/bin/java',
     '/opt/homebrew/opt/openjdk/bin/java',
     '/usr/local/opt/openjdk@21/bin/java',
     '/usr/local/opt/openjdk/bin/java',
-    'java',
+    javaExe,
   ].filter(Boolean)
 
   for (const bin of candidates) {
-    if (bin !== 'java' && !existsSync(bin)) continue
+    if (bin !== javaExe && !existsSync(bin)) continue
     const probe = spawnSync(bin, ['-version'], { encoding: 'utf8' })
     if (probe.status === 0) return bin
   }
@@ -94,13 +103,15 @@ export function validateSpecStructure(spec) {
 }
 
 export function parseTlcOutput(stdout) {
-  const statesMatch = /(\d+)\s+states generated,\s+(\d+)\s+distinct states found/.exec(stdout)
+  const statesMatch = /^(\d+)\s+states generated,\s+(\d+)\s+distinct states found/m.exec(stdout)
+  const fallbackMatch =
+    statesMatch ?? /([\d,]+)\s+states generated,\s+([\d,]+)\s+distinct states found/.exec(stdout)
   const depthMatch = /The depth of the complete state graph search is (\d+)\./.exec(stdout)
   const ok = /Model checking completed\.\s+No error has been found\./.test(stdout)
   return {
     ok,
-    statesGenerated: statesMatch ? Number(statesMatch[1]) : 0,
-    distinctStates: statesMatch ? Number(statesMatch[2]) : 0,
+    statesGenerated: fallbackMatch ? Number(fallbackMatch[1].replaceAll(',', '')) : 0,
+    distinctStates: fallbackMatch ? Number(fallbackMatch[2].replaceAll(',', '')) : 0,
     diameter: depthMatch ? Number(depthMatch[1]) : 0,
   }
 }

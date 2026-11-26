@@ -1,4 +1,5 @@
 import { type AgentToRendererMessage, ExpressParser } from '@a2ui/agent'
+import { collectMessageSurfaceIds, getMessagePayloads } from '../../shared/a2ui-message.ts'
 import { dshSchemaCatalog } from '../../shared/catalog-schema.ts'
 import { A2UI_LIMITS } from '../../shared/constants.ts'
 import {
@@ -47,14 +48,7 @@ export interface StreamingCompileSnapshot {
 }
 
 function collectSurfaceIds(messages: readonly AgentToRendererMessage[], target: Set<string>): void {
-  for (const msg of messages) {
-    for (const val of Object.values(msg as unknown as Record<string, unknown>)) {
-      if (typeof val === 'object' && val !== null && 'surfaceId' in val) {
-        const id = (val as { surfaceId: unknown }).surfaceId
-        if (typeof id === 'string') target.add(id)
-      }
-    }
-  }
+  collectMessageSurfaceIds(messages, target)
 }
 
 export class StreamingExpressSession {
@@ -121,15 +115,11 @@ export class StreamingExpressSession {
       return `Forbidden prototype property key "${dangerous}" in compiled A2UI payload.`
     }
     for (const msg of fresh) {
-      const rec = msg as unknown as Record<string, unknown>
-      for (const [kind, payload] of Object.entries(rec)) {
+      for (const [kind, payload] of getMessagePayloads(msg)) {
         if (
           (kind === 'createSurface' || kind === 'updateComponents') &&
-          typeof payload === 'object' &&
-          payload !== null &&
-          Array.isArray((payload as { components?: unknown }).components) &&
-          (payload as { components: unknown[] }).components.length >
-            A2UI_LIMITS.maxComponentsPerSurface
+          Array.isArray(payload.components) &&
+          payload.components.length > A2UI_LIMITS.maxComponentsPerSurface
         ) {
           return `Surface exceeds maximum component limit (${A2UI_LIMITS.maxComponentsPerSurface}).`
         }

@@ -1,5 +1,11 @@
 import { A2uiError, type AgentToRendererMessage } from '@a2ui/agent'
 import { z } from 'zod'
+import {
+  collectMessageComponents,
+  getCreateSurfaceDataModel,
+  getUpdateDataModelPayload,
+  isPlainRecord,
+} from '../shared/a2ui-message.ts'
 import { A2UI_LIMITS } from '../shared/catalog-schema.ts'
 import { isDangerousObjectKey, isSecretKey } from '../shared/constants.ts'
 import { HOST_MESSAGES, resolveHostLocale } from '../shared/i18n.ts'
@@ -49,23 +55,7 @@ export function collectObscuredContextPointersFromMessages(
   const out = new Set<string>(obscuredPointers)
   if (obscuredPointers.size === 0) return out
   const allComponents: Record<string, unknown>[] = priorComponents ? [...priorComponents] : []
-  const collectList = (list: unknown) => {
-    if (!Array.isArray(list)) return
-    for (const item of list) {
-      if (typeof item === 'object' && item !== null) {
-        allComponents.push(item as Record<string, unknown>)
-      }
-    }
-  }
-  for (const msg of messages) {
-    const rec = msg as unknown as Record<string, unknown>
-    if (rec.createSurface && typeof rec.createSurface === 'object') {
-      collectList((rec.createSurface as Record<string, unknown>).components)
-    }
-    if (rec.updateComponents && typeof rec.updateComponents === 'object') {
-      collectList((rec.updateComponents as Record<string, unknown>).components)
-    }
-  }
+  collectMessageComponents(messages, allComponents)
   const templatePathByCompId = buildTemplatePathMap(allComponents)
   const inspectContext = (
     ctx: unknown,
@@ -73,8 +63,8 @@ export function collectObscuredContextPointersFromMessages(
     depth: number,
     templatePrefixes?: ReadonlySet<string>,
   ) => {
-    if (depth > 8 || typeof ctx !== 'object' || ctx === null || Array.isArray(ctx)) return
-    for (const [k, v] of Object.entries(ctx as Record<string, unknown>)) {
+    if (depth > 8 || !isPlainRecord(ctx)) return
+    for (const [k, v] of Object.entries(ctx)) {
       const seg = escapeJsonPointerSegment(k)
       const nextPath = prefix === '' ? `/${seg}` : `${prefix}/${seg}`
       if (isBindingExpression(v)) {
@@ -85,16 +75,14 @@ export function collectObscuredContextPointersFromMessages(
         if (referencesObscuredPointer(v, obscuredPointers, 0, templatePrefixes)) {
           out.add(nextPath)
         }
-      } else if (typeof v === 'object' && v !== null) {
+      } else if (isPlainRecord(v)) {
         inspectContext(v, nextPath, depth + 1, templatePrefixes)
       }
     }
   }
   const inspectAction = (action: unknown, templatePrefixes?: ReadonlySet<string>) => {
-    if (typeof action !== 'object' || action === null) return
-    const event = (action as Record<string, unknown>).event
-    if (typeof event !== 'object' || event === null) return
-    inspectContext((event as Record<string, unknown>).context, '', 0, templatePrefixes)
+    if (!isPlainRecord(action) || !isPlainRecord(action.event)) return
+    inspectContext(action.event.context, '', 0, templatePrefixes)
   }
   for (const rec of allComponents) {
     const id = typeof rec.id === 'string' ? rec.id : ''
@@ -112,37 +100,18 @@ export function collectObscuredPointersFromMessages(
 ): Set<string> {
   const obscured = new Set<string>()
   const allComponents: Record<string, unknown>[] = []
-  const collectComponents = (list: unknown) => {
-    if (!Array.isArray(list)) return
-    for (const item of list) {
-      if (typeof item === 'object' && item !== null) {
-        allComponents.push(item as Record<string, unknown>)
-      }
-    }
-  }
-  for (const msg of messages) {
-    const rec = msg as unknown as Record<string, unknown>
-    if (rec.createSurface && typeof rec.createSurface === 'object') {
-      collectComponents((rec.createSurface as Record<string, unknown>).components)
-    }
-    if (rec.updateComponents && typeof rec.updateComponents === 'object') {
-      collectComponents((rec.updateComponents as Record<string, unknown>).components)
-    }
-  }
+  collectMessageComponents(messages, allComponents)
   const kvPointers = new Set<string>(extraKvPointers ?? [])
   resolveTemplateKvPointers(allComponents, kvPointers)
   resolveTemplateObscuredPointers(allComponents, obscured)
   if (kvPointers.size > 0) {
     for (const msg of messages) {
-      const rec = msg as unknown as Record<string, unknown>
-      if (rec.createSurface && typeof rec.createSurface === 'object') {
-        const cs = rec.createSurface as Record<string, unknown>
-        if (cs.dataModel !== undefined) {
-          collectKvSecretsForDataModelUpdate('/', cs.dataModel, kvPointers, obscured)
-        }
+      const createDataModel = getCreateSurfaceDataModel(msg)
+      if (createDataModel !== undefined) {
+        collectKvSecretsForDataModelUpdate('/', createDataModel, kvPointers, obscured)
       }
-      if (rec.updateDataModel && typeof rec.updateDataModel === 'object') {
-        const dm = rec.updateDataModel as { path?: unknown; value?: unknown }
+      const dm = getUpdateDataModelPayload(msg)
+      if (dm !== null) {
         const dmPath = normalizePointerPath(typeof dm.path === 'string' ? dm.path : '/')
         collectKvSecretsForDataModelUpdate(dmPath, dm.value, kvPointers, obscured)
       }
@@ -189,17 +158,16 @@ export function sanitizePayloadObject(
       }
       return out
     }
-    if (typeof node === 'object' && node !== null) {
-      const rec = node as Record<string, unknown>
-      const kvEntryKey = !isSurfaceRootLevel ? extractKvEntryKey(rec) : ''
+    if (isPlainRecord(node)) {
+      const kvEntryKey = !isSurfaceRootLevel ? extractKvEntryKey(node) : ''
       const isKvSecretEntry = kvEntryKey !== '' && isSecretKey(kvEntryKey)
       const out: Record<string, unknown> = {}
       let count = 0
-      for (const [k, v] of Object.entries(rec)) {
+      for (const [k, v] of Object.entries(node)) {
         if (count >= MAX_ANSWER_KEYS) break
         if (isDangerousObjectKey(k)) continue
         if (isSurfaceRootLevel) {
-          if (typeof v !== 'object' || v === null || Array.isArray(v)) continue
+          if (!isPlainRecord(v)) continue
         } else if (isSecretKey(k)) {
           continue
         }
@@ -222,7 +190,8 @@ export function sanitizePayloadObject(
     }
     return node
   }
-  return (clean(value, '', 0, stripPerSurfaceRoot) as Record<string, unknown>) ?? {}
+  const cleaned = clean(value, '', 0, stripPerSurfaceRoot)
+  return isPlainRecord(cleaned) ? cleaned : {}
 }
 
 export type AskSettlement =
@@ -469,16 +438,11 @@ export class PendingAskRegistry {
         : ''
 
     const scopedDataModels = (() => {
-      if (
-        target.allowedSurfaceIds === null ||
-        typeof input.dataModels !== 'object' ||
-        input.dataModels === null ||
-        Array.isArray(input.dataModels)
-      ) {
+      if (target.allowedSurfaceIds === null || !isPlainRecord(input.dataModels)) {
         return input.dataModels
       }
       const filtered: Record<string, unknown> = {}
-      for (const [sidKey, val] of Object.entries(input.dataModels as Record<string, unknown>)) {
+      for (const [sidKey, val] of Object.entries(input.dataModels)) {
         if (target.allowedSurfaceIds.has(sidKey)) {
           Object.defineProperty(filtered, sidKey, {
             value: val,

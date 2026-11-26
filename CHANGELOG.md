@@ -2,6 +2,28 @@
 
 All notable changes to `dsh-genui-a2ui` are documented in this file.
 
+## [0.5.10] - 2026-11-26
+
+### Added
+- **Shared Protocol Boundary Narrowing Module (`src/shared/a2ui-message.ts`, `tests/formal-specs.spec.ts`)**:
+  - Added pure, zero-dependency A2UI message narrowing helpers (`isPlainRecord`, `getMessageRecord`, `getMessagePayloads`, `collectMessageSurfaceIds`, `collectMessageComponents`, `getCreateSurfaceDataModel`, `getUpdateDataModelPayload`) and consolidated repeated `as unknown as Record<string, unknown>` casts across `src/host/ask-tool.ts`, `src/host/generator.ts`, `src/host/render-tool.ts`, `src/host/eval-suite.ts`, and `src/client/runtime/streaming.ts` (cutting `as` casts across the 5 protocol files from **43 → 1 (-97.7%)** and trimming `lib/index.js` by `640 B`).
+- **Strict CI & Release TLA+ TLC Verification (`package.json`, `.github/workflows/ci.yml`, `.github/workflows/release.yml`)**:
+  - Added `npm run verify:tla:strict` (`node scripts/verify-tla.mjs --download --strict`) backed by `actions/cache@v4` (`~/.cache/tla`, key `tla2tools-v1.7.4`) so GitHub Actions CI and Release runs execute real exhaustive TLC model checking instead of silently skipping when `tla2tools.jar` is uncached.
+
+### Fixed
+- **TLA+ State-Machine Drift Re-Alignment & Mutation Proofs (`specs/{AskLifecycle,SurfaceTurnLifecycle,OverlayEscapeStack}.{tla,cfg}`, `docs/adr/ADR-0008-formal-verification-and-invariants.md`, `tests/formal-specs.spec.ts`)**:
+  - Updated `AskLifecycle.tla` to model indefinite waits (`timeout: -1` via `hasTimeout[c]`) and per-session pending capacity (`MaxPending`), adding `IndefiniteAskNeverTimesOut`, `PendingWithinCapacity`, `BoundedWaitingEventuallyResolves`, and `InFlightMessageEventuallyDrains`.
+  - Updated `SurfaceTurnLifecycle.tla` to model cross-session draft flushes (`SwitchSession` + `NoCrossSessionDirtyDraft`) and per-widget `ErrorBoundary` isolation (`WidgetRenderFail`, `WidgetErrorIsolatedFromRoot`, `DeletedHasNoWidgetError`, and `StreamAbortToClosed` `resetKey` reset).
+  - Updated `OverlayEscapeStack.tla` to model unmanaged host overlay nesting (`OpenHostOverlay`, `FocusUnmanagedHost`, `PressEscapeInUnmanagedHost`, `UnmanagedHostFocusRequiresOpenHost`, `HostOverlayDoesNotBlockNestedManaged`) and modal-to-portal-popover Tab focus trapping (`TabInModalWithPortalPopover`, `PortalTabKeepsPopoverFocus`), expanding exhaustive TLC state-space coverage from **9,326 → 31,542 distinct states (3.38×)** with **5/5** scratch mutation checks verified able-to-fail.
+- **Cross-Platform TLC Runner & Comma-Safe Output Parsing (`scripts/verify-tla.mjs`)**:
+  - Fixed `resolveJavaBinary()` to probe `java.exe` on Windows and `JAVA_HOME_{21,17}_{X64,ARM64}` environment variables, and fixed `parseTlcOutput()` so comma-formatted TLC progress counts (e.g. `3,519 states generated`) are never truncated to `519`.
+
+### Changed
+- **Engineering Rules & Architecture Docs Synchronization (`AGENTS.md`, `docs/DEVELOPMENT.md`, `docs/DEVELOPMENT.zh-CN.md`, `.github/workflows/ci.yml`, `.github/ISSUE_TEMPLATE/config.yml`)**:
+  - Synchronized all references to the 6-chunk architecture (`Host + 5 Client chunks`, including `lib/client.streaming.js`), 64 components, 26 ECharts kinds, 44 showcases, and removed stale `react-aria-components` / `4-Chunk` / `5-Chunk` descriptions.
+  - Added the Rule-to-Enforcement Table and compact debugging/verification disciplines (`Attack the Premise`, 5-level Blast Radius evidence ladder, subagent scope discipline) to `AGENTS.md`.
+- Verified full automated & live release gate: **47 suites / 287 tests**, **39/39** architectural invariants, **0** comments, **4/4** strict TLA+ formal specs (**31,542** distinct states, **5/5** mutation proofs), **6/6** bundle budgets (`lib/client.js = 77.04 kB / 21.54 kB gzip`), `eval:check` (`31/31`, `64/64` components), `check:host-api`, **8/8** Dark & Light `qa:visual` runs, and **26/26** live Chrome `qa:e2e` interactive checks with 0 console/page errors.
+
 ## [0.5.9] - 2026-11-26
 
 ### Added

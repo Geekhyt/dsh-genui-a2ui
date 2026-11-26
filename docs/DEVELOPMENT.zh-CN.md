@@ -2,7 +2,7 @@
 
 [English](./DEVELOPMENT.md) | **简体中文** | [返回产品主页 README](../README.md)
 
-本文档面向插件开发者、架构评审者与社区贡献者，详细介绍 `dsh-genui-a2ui` 的三阶段运行机制、**Google A2UI 1.0** 协议落地规范、**DeepSeek Harness（DSH）** 零 Hack 官方扩展点映射、四分包体积预算、**64 组件 Express DSL 语法契约**以及本地调试测试流程。
+本文档面向插件开发者、架构评审者与社区贡献者，详细介绍 `dsh-genui-a2ui` 的三阶段运行机制、**Google A2UI 1.0** 协议落地规范、**DeepSeek Harness（DSH）** 零 Hack 官方扩展点映射、六分片体积预算、**64 组件 Express DSL 语法契约**以及本地调试测试流程。
 
 ---
 
@@ -35,21 +35,23 @@ flowchart TB
     ZOD -->|"校验通过"| WIRE
   end
 
-  subgraph S3["阶段 3 · Client 四分包懒加载与原生 Light-DOM 槽位"]
-    SHELL["冷启动轻量壳 lib/client.js (60.5 kB)"]
-    RT["按需核心包 client.runtime.js (64 组件 + StreamingExpressSession)"]
+  subgraph S3["阶段 3 · Client 五分包懒加载与原生 Light-DOM 槽位"]
+    SHELL["冷启动轻量壳 lib/client.js (77.0 kB)"]
+    RT["按需核心包 client.runtime.js (64 组件, 不含流式编译器)"]
+    ST["按需流式编译包 client.streaming.js (60fps 增量 Express)"]
     EC["按需图表包 client.echarts.js (26 类 ECharts 6)"]
     MM["按需架构图包 client.mermaid.js (Mermaid 11 严格沙箱)"]
     SLOTS["DSH 官方槽位 (turnTail / toolview / input.dock / input.left)"]
     SIDE["右侧边栏源码直达 sidebarRight.openResource"]
     SHELL -->|"首次渲染卡片"| RT
+    SHELL -.->|"流式生成期间"| ST
     RT -.->|"遇到 Chart"| EC
     RT -.->|"遇到 Mermaid"| MM
     RT --> SLOTS
     SLOTS --> SIDE
   end
 
-  LLM -->|"工具流式增量参数 (60fps 渐进上屏)"| RT
+  LLM -->|"工具流式增量参数 (60fps 渐进上屏)"| ST
   LLM -->|"调用 a2ui_render / a2ui_ask"| COMP
   WIRE -->|"固化回合投影与跨轮次状态"| RT
   SLOTS -->|"按钮动作 [a2ui-action] 或 /a2ui-answer"| LLM
@@ -83,15 +85,16 @@ flowchart TB
 | **右侧边栏联动** | `@deepseek-ai/dsh-client-ui-sidebar-right` | 在 `FileTree`、`DiffView`、`Code`、`LogViewer`、`SourceList` 中调用 `sidebarRight.openResource` 打开真实文件并定位行号。 |
 | **客户端按需分包** | `window.__ModuleLoader__.load({ id: "dsh-genui-a2ui", entry })` | 按需动态加载界面运行时、ECharts 图表引擎与 Mermaid 引擎。 |
 
-### 四分包按需懒加载体积明细
+### 六分片按需懒加载体积明细（Host + 5 客户端分片）
 
 | 构建产物 | 原始体积 | Gzip 体积 | 职责与加载触发时机 |
 | :--- | :--- | :--- | :--- |
-| `lib/client.js` | **`68.1 kB`** | **`19.2 kB`** | 首屏冷启动轻量壳：注册 UI Slots、双语自适应、空会话原生轻提示与胶囊开关（构建与单测双重强制 `< 100 kB` 门禁）。 |
-| `lib/client.runtime.js` | `1.41 MB` | ~`365 kB` | 仅当对话中真正挂载 A2UI 卡片时才加载（含 `@a2ui/react`、64 组件目录、TanStack Table、0ms 交叉筛选与流式防抖）。 |
-| `lib/client.echarts.js` | `908 kB` | `296 kB` | 仅当卡片使用 `Chart` 组件时按需加载 ECharts 6（按需注册 26 类图表、标线与区间带模块、交叉筛选高亮、2× PNG 导出与 276px 紧凑自适应）。 |
-| `lib/client.mermaid.js` | `3.47 MB` | ~`930 kB` | 仅当卡片使用 `Mermaid` 组件时按需加载 Mermaid 11（强制 `securityLevel: "strict"` + 逐条 CSS 作用域过滤 + SVG 净化 + LRU-64 缓存）。 |
-| `lib/index.js` | `755.0 kB` | `208.0 kB` | 自包含 Host ESM 产物（打包 `@a2ui/agent`、分域 Skill 压缩器、线性 Express 编译降维预处理与同构 Zod 契约），用户安装时零运行时 npm 依赖。 |
+| `lib/client.js` | **`77.0 kB`** | **`21.5 kB`** | 首屏冷启动轻量壳：注册 UI Slots、双语自适应、空会话原生轻提示与胶囊开关（构建与 `.bundle-budget.json` 原始/Gzip 双重门禁强制 `< 100 kB`）。 |
+| `lib/client.runtime.js` | `1.01 MB` | `264 kB` | 仅当对话中真正挂载 A2UI 卡片时才加载（含 `@a2ui/react`、64 组件目录、TanStack Table、0ms 交叉筛选与单组件 `ErrorBoundary`，不含流式编译器与 `react-aria-components`）。 |
+| `lib/client.streaming.js` | `651 kB` | `171 kB` | 仅在实时流式生成卡片期间按需加载（`StreamingExpressSession` 前缀增量缓存与 `@a2ui/agent` 流式解析器，历史静态会话零加载成本）。 |
+| `lib/client.echarts.js` | `923 kB` | `303 kB` | 仅当卡片使用 `Chart` 组件时按需加载 ECharts 6（按需注册 26 类图表、标线与区间带模块、交叉筛选高亮、2× PNG 导出与 276px 紧凑自适应）。 |
+| `lib/client.mermaid.js` | `2.67 MB` | `702 kB` | 仅当卡片使用 `Mermaid` 组件时按需加载 Mermaid 11（编译期剔除 16 种白名单禁用图种与 `katex`，强制 `securityLevel: "strict"` + 逐条 CSS 作用域过滤 + SVG 净化 + LRU-64 缓存）。 |
+| `lib/index.js` | `768 kB` | `211 kB` | 自包含 Host ESM 产物（打包 `@a2ui/agent`、分域 Skill 压缩器、线性 Express 编译降维预处理与同构 Zod 契约），用户安装时零运行时 npm 依赖。 |
 
 ---
 
@@ -245,8 +248,11 @@ npm run lint
 # TypeScript 类型检查
 npm run typecheck
 
-# 构建 Host ESM + 4 个 Client 分包（自动校验首屏 < 100 kB 门禁）
-npm run build
+# 构建 Host ESM + 5 个 Client 分包并校验六分片原始/Gzip 体积棘轮
+npm run build && npm run check:bundle
+
+# 运行 4 大并发状态机 TLA+ 严格模型检验（TLC）
+npm run verify:tla:strict
 
 # 运行全部单元、React 架构最佳实践、安全、契约、确定性回放与分包门禁测试
 npm test
@@ -272,8 +278,8 @@ node scripts/dev-env.mjs serve
 - `src/shared/` —— 前后端同构 `dshSchemaCatalog`（64 组件 / 28 函数）、Express 降维预处理（`express-preprocess.ts`）、跨端协议类型 `wire-types.ts`、`calc` 公式解析器、安全脱敏、本地时间辅助与跨分包双语词条
 - `src/client/index.ts` —— `68.1 kB` 首屏冷启动轻量壳与输入框胶囊开关
 - `src/client/dom-hooks.ts` —— 全仓唯一底层 DOM / ECharts PNG 导出 / 流式高度稳定器 / Mermaid 生命周期隔离层（业务 `.tsx` 强制 `0` `useEffect`）
-- `src/client/chunks/` —— 按需加载分包入口（`runtime-chunk.ts`、`echarts-chunk.ts`、`mermaid-chunk.ts`）
+- `src/client/chunks/` —— 按需加载分包入口（`runtime-chunk.ts`、`streaming-chunk.ts`、`echarts-chunk.ts`、`mermaid-chunk.ts`）
 - `src/client/catalog/` —— 64 个 Light-DOM 原生组件与 28 个客户端函数的具体实现
-- `build/` —— `tsdown` 五目标构建预设与 DSH 宿主模块外部化配置
+- `build/` —— `tsdown` 六目标构建预设与 DSH 宿主模块外部化配置
 - `scripts/` —— Host API 契约核验脚本（`check-host-api.mjs`）、真模型评测脚本（`eval-llm.mjs`）与隔离演示环境（`dev-env.mjs`、`mock-llm.mjs`）
 - `AGENTS.md` —— `306px` 半宽优先 `@container` 排版、ECharts `276px` 防碰撞契约与发版前视觉回归工程规范

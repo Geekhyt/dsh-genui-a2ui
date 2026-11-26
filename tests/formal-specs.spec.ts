@@ -1,5 +1,6 @@
 import { resolve } from 'node:path'
-import { beforeEach, describe, expect, it } from 'vitest'
+import type { AgentToRendererMessage } from '@a2ui/agent'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   discoverSpecs,
   parseTlcOutput,
@@ -15,6 +16,15 @@ import {
   seedMermaidDiagramCacheForTests,
   subscribeMermaidDiagram,
 } from '../src/client/chunk-loader.ts'
+import { PendingAskRegistry } from '../src/host/ask-tool.ts'
+import {
+  collectMessageComponents,
+  collectMessageSurfaceIds,
+  getCreateSurfaceDataModel,
+  getMessagePayloads,
+  getUpdateDataModelPayload,
+  isPlainRecord,
+} from '../src/shared/a2ui-message.ts'
 
 const ROOT_DIR = resolve(import.meta.dirname, '..')
 
@@ -36,16 +46,29 @@ describe('TLA+ formal state-machine specifications & TLC verification', () => {
     }
   })
 
-  it('parses TLC summary statistics accurately', () => {
+  it('parses TLC summary statistics accurately including comma-formatted progress lines', () => {
     const sample = [
+      'Progress(9) at 2026-11-26 11:24:46: 3,519 states generated, 579 distinct states found, 0 states left on queue.',
       'Model checking completed. No error has been found.',
-      '13503 states generated, 2906 distinct states found, 0 states left on queue.',
-      'The depth of the complete state graph search is 10.',
+      '3519 states generated, 579 distinct states found, 0 states left on queue.',
+      'The depth of the complete state graph search is 9.',
     ].join('\n')
     expect(parseTlcOutput(sample)).toEqual({
       ok: true,
-      statesGenerated: 13503,
-      distinctStates: 2906,
+      statesGenerated: 3519,
+      distinctStates: 579,
+      diameter: 9,
+    })
+
+    const commaOnly = [
+      'Model checking completed. No error has been found.',
+      'Progress(10): 45,493 states generated, 11,040 distinct states found, 0 states left on queue.',
+      'The depth of the complete state graph search is 10.',
+    ].join('\n')
+    expect(parseTlcOutput(commaOnly)).toEqual({
+      ok: true,
+      statesGenerated: 45493,
+      distinctStates: 11040,
       diameter: 10,
     })
   })
@@ -87,5 +110,97 @@ describe('TLA+ formal state-machine specifications & TLC verification', () => {
     }
 
     expect(countMermaidDiagramCacheEntries()).toBe(MAX_MERMAID_CACHE_ENTRIES)
+  })
+
+  it('enforces AskLifecycle IndefiniteAskNeverTimesOut and PendingWithinCapacity', async () => {
+    vi.useFakeTimers()
+    try {
+      const asks = new PendingAskRegistry()
+      const indefinitePromise = asks.wait({
+        sessionId: 'sess-tla',
+        callId: 'c-indef',
+        defaultSurfaceId: 'main',
+        timeoutSeconds: -1,
+      })
+
+      await vi.advanceTimersByTimeAsync(10_000_000)
+      expect(asks.hasPending('sess-tla', 'c-indef')).toBe(true)
+
+      const settled = asks.settle('sess-tla', {
+        callId: 'c-indef',
+        action: 'confirm',
+        surfaceId: 'main',
+      })
+      expect(settled).toBe(true)
+      const outcome = await indefinitePromise
+      expect(outcome.status).toBe('answered')
+
+      const fillers: Array<Promise<unknown>> = []
+      for (let i = 0; i < 16; i++) {
+        fillers.push(
+          asks
+            .wait({
+              sessionId: 'sess-cap',
+              callId: `c-${i}`,
+              defaultSurfaceId: 'main',
+              timeoutSeconds: -1,
+            })
+            .catch(() => null),
+        )
+      }
+      expect(() => asks.assertCanWait('sess-cap', undefined, 'c-overflow')).toThrow(
+        /Too many concurrent pending a2ui_ask requests/,
+      )
+      expect(() => asks.assertCanWait('sess-cap', undefined, 'c-0')).not.toThrow()
+      asks.disposeAll()
+      await Promise.all(fillers)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('narrows A2UI protocol messages safely at boundaries without unsafe casts', () => {
+    expect(isPlainRecord({ a: 1 })).toBe(true)
+    expect(isPlainRecord([1, 2])).toBe(false)
+    expect(isPlainRecord(null)).toBe(false)
+    expect(isPlainRecord('str')).toBe(false)
+
+    const messages = [
+      {
+        createSurface: {
+          surfaceId: 's1',
+          components: [{ id: 'root', component: 'Text' }, null, 'bad'],
+          dataModel: { secret: 'x' },
+        },
+      },
+      {
+        updateComponents: {
+          surfaceId: 's2',
+          components: [{ id: 'chart', component: 'Chart', kind: 'bar' }],
+        },
+      },
+      {
+        updateDataModel: {
+          surfaceId: 's1',
+          path: '/items',
+          value: [1, 2],
+        },
+      },
+    ] as unknown as AgentToRendererMessage[]
+
+    const ids = new Set<string>()
+    collectMessageSurfaceIds(messages, ids)
+    expect([...ids]).toEqual(['s1', 's2'])
+
+    const comps: Record<string, unknown>[] = []
+    collectMessageComponents(messages, comps)
+    expect(comps).toHaveLength(2)
+    expect(comps.map((c) => c.id)).toEqual(['root', 'chart'])
+
+    expect(getMessagePayloads(messages[0]!)).toHaveLength(1)
+    expect(getCreateSurfaceDataModel(messages[0]!)).toEqual({ secret: 'x' })
+    expect(getCreateSurfaceDataModel(messages[1]!)).toBeUndefined()
+    expect(getUpdateDataModelPayload(messages[2]!)).toEqual({ path: '/items', value: [1, 2] })
+    expect(getUpdateDataModelPayload(messages[0]!)).toBeNull()
   })
 })

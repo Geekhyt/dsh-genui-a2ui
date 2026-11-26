@@ -1,7 +1,7 @@
 ---- MODULE AskLifecycle ----
 EXTENDS Naturals, FiniteSets
 
-CONSTANTS Calls
+CONSTANTS Calls, MaxPending
 
 VARIABLES
   callState,
@@ -11,10 +11,11 @@ VARIABLES
   settledCount,
   settledWithSecret,
   redactedOnSettle,
+  hasTimeout,
   sessionAlive
 
 vars ==
-  <<callState, activePending, uiState, inFlight, settledCount, settledWithSecret, redactedOnSettle, sessionAlive>>
+  <<callState, activePending, uiState, inFlight, settledCount, settledWithSecret, redactedOnSettle, hasTimeout, sessionAlive>>
 
 TerminalStates == {"answered", "skipped", "timed_out", "aborted", "superseded", "disposed"}
 CallStates == {"idle", "waiting"} \cup TerminalStates
@@ -33,6 +34,7 @@ TypeOK ==
   /\ settledCount \in [Calls -> 0..2]
   /\ settledWithSecret \subseteq Calls
   /\ redactedOnSettle \subseteq Calls
+  /\ hasTimeout \in [Calls -> BOOLEAN]
   /\ sessionAlive \in BOOLEAN
 
 Init ==
@@ -43,14 +45,17 @@ Init ==
   /\ settledCount = [c \in Calls |-> 0]
   /\ settledWithSecret = {}
   /\ redactedOnSettle = {}
+  /\ hasTimeout = [c \in Calls |-> TRUE]
   /\ sessionAlive = TRUE
 
-StartAsk(c) ==
+StartAsk(c, bounded) ==
   /\ sessionAlive
   /\ callState[c] = "idle"
+  /\ Cardinality(activePending) < MaxPending
   /\ callState' = [callState EXCEPT ![c] = "waiting"]
   /\ activePending' = activePending \cup {c}
   /\ uiState' = [uiState EXCEPT ![c] = "open"]
+  /\ hasTimeout' = [hasTimeout EXCEPT ![c] = bounded]
   /\ UNCHANGED <<inFlight, settledCount, settledWithSecret, redactedOnSettle, sessionAlive>>
 
 SupersedeDuplicateCall(c) ==
@@ -61,7 +66,7 @@ SupersedeDuplicateCall(c) ==
   /\ activePending' = activePending \ {c}
   /\ uiState' = [uiState EXCEPT ![c] = "done"]
   /\ settledCount' = [settledCount EXCEPT ![c] = @ + 1]
-  /\ UNCHANGED <<inFlight, settledWithSecret, redactedOnSettle, sessionAlive>>
+  /\ UNCHANGED <<inFlight, settledWithSecret, redactedOnSettle, hasTimeout, sessionAlive>>
 
 UserSubmit(c, kind, hasSecret) ==
   /\ sessionAlive
@@ -69,7 +74,7 @@ UserSubmit(c, kind, hasSecret) ==
   /\ ~HasInFlightFor(c)
   /\ uiState' = [uiState EXCEPT ![c] = "submitting"]
   /\ inFlight' = inFlight \cup {[callId |-> c, kind |-> kind, hasSecret |-> hasSecret]}
-  /\ UNCHANGED <<callState, activePending, settledCount, settledWithSecret, redactedOnSettle, sessionAlive>>
+  /\ UNCHANGED <<callState, activePending, settledCount, settledWithSecret, redactedOnSettle, hasTimeout, sessionAlive>>
 
 DispatchFailRollback(m) ==
   /\ m \in inFlight
@@ -78,7 +83,7 @@ DispatchFailRollback(m) ==
        IF uiState[m.callId] = "submitting" /\ callState[m.callId] = "waiting"
        THEN [uiState EXCEPT ![m.callId] = "open"]
        ELSE uiState
-  /\ UNCHANGED <<callState, activePending, settledCount, settledWithSecret, redactedOnSettle, sessionAlive>>
+  /\ UNCHANGED <<callState, activePending, settledCount, settledWithSecret, redactedOnSettle, hasTimeout, sessionAlive>>
 
 ServerSettle(m) ==
   /\ m \in inFlight
@@ -94,21 +99,22 @@ ServerSettle(m) ==
                IF m.hasSecret THEN redactedOnSettle \cup {m.callId} ELSE redactedOnSettle
           /\ UNCHANGED <<uiState>>
      ELSE /\ UNCHANGED <<callState, activePending, settledCount, settledWithSecret, redactedOnSettle, uiState>>
-  /\ UNCHANGED <<sessionAlive>>
+  /\ UNCHANGED <<hasTimeout, sessionAlive>>
 
 TimeoutFire(c) ==
   /\ c \in activePending
+  /\ hasTimeout[c]
   /\ callState' = [callState EXCEPT ![c] = "timed_out"]
   /\ activePending' = activePending \ {c}
   /\ settledCount' = [settledCount EXCEPT ![c] = @ + 1]
-  /\ UNCHANGED <<uiState, inFlight, settledWithSecret, redactedOnSettle, sessionAlive>>
+  /\ UNCHANGED <<uiState, inFlight, settledWithSecret, redactedOnSettle, hasTimeout, sessionAlive>>
 
 AbortCall(c) ==
   /\ c \in activePending
   /\ callState' = [callState EXCEPT ![c] = "aborted"]
   /\ activePending' = activePending \ {c}
   /\ settledCount' = [settledCount EXCEPT ![c] = @ + 1]
-  /\ UNCHANGED <<uiState, inFlight, settledWithSecret, redactedOnSettle, sessionAlive>>
+  /\ UNCHANGED <<uiState, inFlight, settledWithSecret, redactedOnSettle, hasTimeout, sessionAlive>>
 
 DisposeSession ==
   /\ sessionAlive
@@ -118,13 +124,13 @@ DisposeSession ==
   /\ settledCount' =
        [c \in Calls |-> IF c \in activePending THEN settledCount[c] + 1 ELSE settledCount[c]]
   /\ activePending' = {}
-  /\ UNCHANGED <<uiState, inFlight, settledWithSecret, redactedOnSettle>>
+  /\ UNCHANGED <<uiState, inFlight, settledWithSecret, redactedOnSettle, hasTimeout>>
 
 SyncUiTerminal(c) ==
   /\ callState[c] \in TerminalStates
   /\ uiState[c] # "done"
   /\ uiState' = [uiState EXCEPT ![c] = "done"]
-  /\ UNCHANGED <<callState, activePending, inFlight, settledCount, settledWithSecret, redactedOnSettle, sessionAlive>>
+  /\ UNCHANGED <<callState, activePending, inFlight, settledCount, settledWithSecret, redactedOnSettle, hasTimeout, sessionAlive>>
 
 StutterDone ==
   /\ ~sessionAlive
@@ -133,7 +139,7 @@ StutterDone ==
   /\ UNCHANGED vars
 
 Next ==
-  \/ \E c \in Calls : StartAsk(c)
+  \/ \E c \in Calls, b \in BOOLEAN : StartAsk(c, b)
   \/ \E c \in Calls : SupersedeDuplicateCall(c)
   \/ \E c \in Calls, k \in ReplyKinds, s \in BOOLEAN : UserSubmit(c, k, s)
   \/ \E m \in inFlight : DispatchFailRollback(m)
@@ -157,6 +163,12 @@ AtMostOnceSettlement ==
 ActivePendingMatchesWaiting ==
   \A c \in Calls : (c \in activePending) <=> (callState[c] = "waiting")
 
+PendingWithinCapacity ==
+  Cardinality(activePending) <= MaxPending
+
+IndefiniteAskNeverTimesOut ==
+  \A c \in Calls : ~hasTimeout[c] => callState[c] # "timed_out"
+
 NoDanglingPendingAfterDispose ==
   ~sessionAlive => activePending = {}
 
@@ -171,8 +183,11 @@ NoStuckSubmittingWhileWaiting ==
   \A c \in Calls :
     (uiState[c] = "submitting" /\ callState[c] = "waiting") => HasInFlightFor(c)
 
-EveryWaitingEventuallyResolves ==
-  \A c \in Calls : [](callState[c] = "waiting" => <>(callState[c] # "waiting"))
+BoundedWaitingEventuallyResolves ==
+  \A c \in Calls : []((callState[c] = "waiting" /\ hasTimeout[c]) => <>(callState[c] # "waiting"))
+
+InFlightMessageEventuallyDrains ==
+  \A c \in Calls : [](HasInFlightFor(c) => <>(~HasInFlightFor(c)))
 
 UiNeverStuckSubmitting ==
   \A c \in Calls : [](uiState[c] = "submitting" => <>(uiState[c] # "submitting"))

@@ -13,6 +13,7 @@ import {
 
 type SchemaCatalogInput = ConstructorParameters<typeof CatalogConfig>[0]
 
+import { getMessagePayloads, getMessageRecord, isPlainRecord } from '../shared/a2ui-message.ts'
 import { validateCalcExpression } from '../shared/calc-engine.ts'
 import {
   collectKvSecretsForDataModelUpdate,
@@ -110,11 +111,11 @@ function findExpressionInDataModel(node: unknown, currentPath = '', depth = 0): 
     }
     return null
   }
-  const rec = node as Record<string, unknown>
-  if ('@call' in rec || '@path' in rec) {
+  if (!isPlainRecord(node)) return null
+  if ('@call' in node || '@path' in node) {
     return currentPath || '/'
   }
-  for (const [k, v] of Object.entries(rec)) {
+  for (const [k, v] of Object.entries(node)) {
     const hit = findExpressionInDataModel(v, `${currentPath}/${k}`, depth + 1)
     if (hit) return hit
   }
@@ -141,31 +142,25 @@ function validateCheckConditionNode(
   compName: string,
   depth = 0,
 ): void {
-  if (depth > 8 || typeof cond !== 'object' || cond === null) return
-  const condRec = cond as Record<string, unknown>
-  const callName = condRec['@call'] ?? condRec.call
-  const args = condRec.args
-  if (typeof callName !== 'string' || typeof args !== 'object' || args === null) return
-  const argsRec = args as Record<string, unknown>
+  if (depth > 8 || !isPlainRecord(cond)) return
+  const callName = cond['@call'] ?? cond.call
+  const args = cond.args
+  if (typeof callName !== 'string' || !isPlainRecord(args)) return
   if (callName === 'and' || callName === 'or') {
-    if (Array.isArray(argsRec.values)) {
-      for (const child of argsRec.values) {
+    if (Array.isArray(args.values)) {
+      for (const child of args.values) {
         validateCheckConditionNode(child, compId, compName, depth + 1)
       }
     }
     return
   }
   if (callName === 'not') {
-    validateCheckConditionNode(argsRec.value, compId, compName, depth + 1)
+    validateCheckConditionNode(args.value, compId, compName, depth + 1)
     return
   }
   if (!CHECK_VALUE_VALIDATORS.has(callName)) return
-  const val = argsRec.value
-  const isBound =
-    typeof val === 'object' &&
-    val !== null &&
-    !Array.isArray(val) &&
-    isDynamicBindingObject(val as Record<string, unknown>)
+  const val = args.value
+  const isBound = isPlainRecord(val) && isDynamicBindingObject(val)
   if (!isBound) {
     if (callName === 'required' && typeof val === 'string') {
       throw new A2uiError(
@@ -182,14 +177,12 @@ function validateCheckConditionNode(
 
 function validateCheckRulesInComponents(components: readonly unknown[]): void {
   for (const item of components) {
-    if (typeof item !== 'object' || item === null) continue
-    const rec = item as Record<string, unknown>
-    if (!Array.isArray(rec.checks)) continue
-    const compName = typeof rec.component === 'string' ? rec.component : 'Component'
-    const compId = typeof rec.id === 'string' ? rec.id : compName
-    for (const rule of rec.checks) {
-      if (typeof rule !== 'object' || rule === null) continue
-      validateCheckConditionNode((rule as Record<string, unknown>).condition, compId, compName)
+    if (!isPlainRecord(item) || !Array.isArray(item.checks)) continue
+    const compName = typeof item.component === 'string' ? item.component : 'Component'
+    const compId = typeof item.id === 'string' ? item.id : compName
+    for (const rule of item.checks) {
+      if (!isPlainRecord(rule)) continue
+      validateCheckConditionNode(rule.condition, compId, compName)
     }
   }
 }
@@ -200,19 +193,18 @@ function validateCalcCallsInNode(node: unknown): void {
     for (const item of node) validateCalcCallsInNode(item)
     return
   }
-  const rec = node as Record<string, unknown>
-  const callName = rec['@call'] ?? rec.call
-  if (callName === 'calc' && typeof rec.args === 'object' && rec.args !== null) {
-    const args = rec.args as Record<string, unknown>
+  if (!isPlainRecord(node)) return
+  const callName = node['@call'] ?? node.call
+  if (callName === 'calc' && isPlainRecord(node.args)) {
+    const args = node.args
     if (typeof args.expr === 'string') {
       let providedVars: ReadonlySet<string> | undefined
       const rawVars = args.vars
       if (rawVars === undefined || rawVars === null) {
         providedVars = new Set<string>()
-      } else if (typeof rawVars === 'object' && !Array.isArray(rawVars)) {
-        const varsRec = rawVars as Record<string, unknown>
-        if (!isDynamicBindingObject(varsRec)) {
-          providedVars = new Set<string>(Object.keys(varsRec))
+      } else if (isPlainRecord(rawVars)) {
+        if (!isDynamicBindingObject(rawVars)) {
+          providedVars = new Set<string>(Object.keys(rawVars))
         }
       } else {
         throw new A2uiError(
@@ -226,7 +218,7 @@ function validateCalcCallsInNode(node: unknown): void {
       }
     }
   }
-  for (const val of Object.values(rec)) {
+  for (const val of Object.values(node)) {
     validateCalcCallsInNode(val)
   }
 }
@@ -311,10 +303,7 @@ function validateCompiledLimits(messages: readonly AgentToRendererMessage[]): vo
   let dataBytes = 0
 
   for (const msg of messages) {
-    const rec = msg as unknown as Record<string, unknown>
-    for (const [kind, payload] of Object.entries(rec)) {
-      if (typeof payload !== 'object' || payload === null) continue
-      const p = payload as Record<string, unknown>
+    for (const [kind, p] of getMessagePayloads(msg)) {
       const sid = typeof p.surfaceId === 'string' ? p.surfaceId : undefined
       if (sid) surfaceIds.add(sid)
 
@@ -459,13 +448,12 @@ export class SurfaceSessions {
       if (!Array.isArray(list)) return
       const rec = ensureSurface(surfaceId)
       for (const item of list) {
-        if (typeof item !== 'object' || item === null) continue
-        const comp = item as Record<string, unknown>
+        if (!isPlainRecord(item)) continue
         const id =
-          typeof comp.id === 'string' && comp.id !== ''
-            ? comp.id
+          typeof item.id === 'string' && item.id !== ''
+            ? item.id
             : `anon_${rec.componentsById.size}`
-        rec.componentsById.set(id, comp)
+        rec.componentsById.set(id, item)
       }
       const allComps = [...rec.componentsById.values()]
       resolveTemplateObscuredPointers(allComps, rec.obscuredPointers)
@@ -481,33 +469,34 @@ export class SurfaceSessions {
       const rec = ensureSurface(surfaceId)
       const listComps: Record<string, unknown>[] = []
       for (const item of list) {
-        if (typeof item === 'object' && item !== null) {
-          listComps.push(item as Record<string, unknown>)
+        if (isPlainRecord(item)) {
+          listComps.push(item)
         }
       }
       resolveTemplateKvPointers(listComps, rec.kvPointers)
     }
     for (const msg of messages) {
-      const rec = msg as unknown as Record<string, unknown>
-      if (rec.createSurface && typeof rec.createSurface === 'object') {
-        const cs = rec.createSurface as Record<string, unknown>
-        const sid = typeof cs.surfaceId === 'string' ? cs.surfaceId : ''
-        if (sid !== '') prescanKvPointers(sid, cs.components)
+      const rec = getMessageRecord(msg)
+      if (rec === null) continue
+      if (isPlainRecord(rec.createSurface)) {
+        const sid =
+          typeof rec.createSurface.surfaceId === 'string' ? rec.createSurface.surfaceId : ''
+        if (sid !== '') prescanKvPointers(sid, rec.createSurface.components)
       }
-      if (rec.updateComponents && typeof rec.updateComponents === 'object') {
-        const uc = rec.updateComponents as Record<string, unknown>
-        const sid = typeof uc.surfaceId === 'string' ? uc.surfaceId : ''
-        if (sid !== '') prescanKvPointers(sid, uc.components)
+      if (isPlainRecord(rec.updateComponents)) {
+        const sid =
+          typeof rec.updateComponents.surfaceId === 'string' ? rec.updateComponents.surfaceId : ''
+        if (sid !== '') prescanKvPointers(sid, rec.updateComponents.components)
       }
     }
     for (const msg of messages) {
-      const rec = msg as unknown as Record<string, unknown>
-      if (rec.deleteSurface && typeof rec.deleteSurface === 'object') {
-        const sid = (rec.deleteSurface as { surfaceId?: unknown }).surfaceId
-        if (typeof sid === 'string') bySurface.delete(sid)
+      const rec = getMessageRecord(msg)
+      if (rec === null) continue
+      if (isPlainRecord(rec.deleteSurface) && typeof rec.deleteSurface.surfaceId === 'string') {
+        bySurface.delete(rec.deleteSurface.surfaceId)
       }
-      if (rec.createSurface && typeof rec.createSurface === 'object') {
-        const cs = rec.createSurface as Record<string, unknown>
+      if (isPlainRecord(rec.createSurface)) {
+        const cs = rec.createSurface
         const sid = typeof cs.surfaceId === 'string' ? cs.surfaceId : ''
         if (sid !== '') {
           const prevKv = bySurface.get(sid)?.kvPointers
@@ -520,13 +509,13 @@ export class SurfaceSessions {
           if (cs.dataModel !== undefined) ingestDataModel(sid, '/', cs.dataModel)
         }
       }
-      if (rec.updateComponents && typeof rec.updateComponents === 'object') {
-        const uc = rec.updateComponents as Record<string, unknown>
+      if (isPlainRecord(rec.updateComponents)) {
+        const uc = rec.updateComponents
         const sid = typeof uc.surfaceId === 'string' ? uc.surfaceId : ''
         if (sid !== '') ingestComponents(sid, uc.components)
       }
-      if (rec.updateDataModel && typeof rec.updateDataModel === 'object') {
-        const dm = rec.updateDataModel as { surfaceId?: unknown; path?: unknown; value?: unknown }
+      if (isPlainRecord(rec.updateDataModel)) {
+        const dm = rec.updateDataModel
         const sid = typeof dm.surfaceId === 'string' ? dm.surfaceId : ''
         if (sid !== '') {
           const dmPath = normalizePointerPath(typeof dm.path === 'string' ? dm.path : '/')

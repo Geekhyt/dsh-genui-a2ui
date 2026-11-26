@@ -5,16 +5,31 @@ VARIABLES
   stack,
   globalListenerAttached,
   focusOwner,
+  hostOverlayOpen,
+  focusInUnmanagedHost,
   formValid,
   triggerVisible,
   lastAction
 
 vars ==
-  <<stack, globalListenerAttached, focusOwner, formValid, triggerVisible, lastAction>>
+  <<stack, globalListenerAttached, focusOwner, hostOverlayOpen, focusInUnmanagedHost, formValid, triggerVisible, lastAction>>
 
 Layers == {"modal", "popover", "fullscreen"}
-FocusTargets == {"page"} \cup Layers
-Actions == {"none", "open", "escape", "local", "submit", "scroll", "toggle"}
+FocusTargets == {"page", "host"} \cup Layers
+Actions == {
+  "none",
+  "open",
+  "escape",
+  "host_open",
+  "host_focus",
+  "host_close",
+  "host_escape",
+  "tab_portal",
+  "local",
+  "submit",
+  "scroll",
+  "toggle"
+}
 
 SeqContains(seq, elem) == \E i \in 1..Len(seq) : seq[i] = elem
 
@@ -29,6 +44,8 @@ TypeOK ==
   /\ Len(stack) <= Cardinality(Layers)
   /\ globalListenerAttached \in BOOLEAN
   /\ focusOwner \in FocusTargets
+  /\ hostOverlayOpen \in BOOLEAN
+  /\ focusInUnmanagedHost \in BOOLEAN
   /\ formValid \in BOOLEAN
   /\ triggerVisible \in BOOLEAN
   /\ lastAction \in Actions
@@ -37,18 +54,45 @@ Init ==
   /\ stack = <<>>
   /\ globalListenerAttached = FALSE
   /\ focusOwner = "page"
+  /\ hostOverlayOpen = FALSE
+  /\ focusInUnmanagedHost = FALSE
   /\ formValid = FALSE
   /\ triggerVisible = TRUE
   /\ lastAction = "none"
+
+OpenHostOverlay ==
+  /\ ~hostOverlayOpen
+  /\ hostOverlayOpen' = TRUE
+  /\ focusInUnmanagedHost' = TRUE
+  /\ focusOwner' = "host"
+  /\ lastAction' = "host_open"
+  /\ UNCHANGED <<stack, globalListenerAttached, formValid, triggerVisible>>
+
+FocusUnmanagedHost ==
+  /\ hostOverlayOpen
+  /\ ~focusInUnmanagedHost
+  /\ focusInUnmanagedHost' = TRUE
+  /\ focusOwner' = "host"
+  /\ lastAction' = "host_focus"
+  /\ UNCHANGED <<stack, globalListenerAttached, hostOverlayOpen, formValid, triggerVisible>>
+
+CloseHostOverlay ==
+  /\ hostOverlayOpen
+  /\ hostOverlayOpen' = FALSE
+  /\ focusInUnmanagedHost' = FALSE
+  /\ focusOwner' = TopOrPage(stack)
+  /\ lastAction' = "host_close"
+  /\ UNCHANGED <<stack, globalListenerAttached, formValid, triggerVisible>>
 
 OpenModal ==
   /\ ~SeqContains(stack, "modal")
   /\ LET next == Append(stack, "modal")
      IN /\ stack' = next
         /\ globalListenerAttached' = TRUE
+        /\ focusInUnmanagedHost' = FALSE
         /\ focusOwner' = TopOrPage(next)
         /\ lastAction' = "open"
-        /\ UNCHANGED <<formValid, triggerVisible>>
+        /\ UNCHANGED <<hostOverlayOpen, formValid, triggerVisible>>
 
 OpenPopover ==
   /\ triggerVisible
@@ -56,34 +100,58 @@ OpenPopover ==
   /\ LET next == Append(stack, "popover")
      IN /\ stack' = next
         /\ globalListenerAttached' = TRUE
+        /\ focusInUnmanagedHost' = FALSE
         /\ focusOwner' = TopOrPage(next)
         /\ lastAction' = "open"
-        /\ UNCHANGED <<formValid, triggerVisible>>
+        /\ UNCHANGED <<hostOverlayOpen, formValid, triggerVisible>>
 
 OpenFullscreen ==
   /\ ~SeqContains(stack, "fullscreen")
   /\ LET next == Append(stack, "fullscreen")
      IN /\ stack' = next
         /\ globalListenerAttached' = TRUE
+        /\ focusInUnmanagedHost' = FALSE
         /\ focusOwner' = TopOrPage(next)
         /\ lastAction' = "open"
-        /\ UNCHANGED <<formValid, triggerVisible>>
+        /\ UNCHANGED <<hostOverlayOpen, formValid, triggerVisible>>
 
-PressEscape ==
+PressEscapeInManaged ==
+  /\ ~focusInUnmanagedHost
   /\ Len(stack) > 0
   /\ LET next == SubSeq(stack, 1, Len(stack) - 1)
      IN /\ stack' = next
         /\ globalListenerAttached' = (Len(next) > 0)
         /\ focusOwner' = TopOrPage(next)
         /\ lastAction' = "escape"
-        /\ UNCHANGED <<formValid, triggerVisible>>
+        /\ UNCHANGED <<hostOverlayOpen, focusInUnmanagedHost, formValid, triggerVisible>>
+
+PressEscapeInUnmanagedHost ==
+  /\ focusInUnmanagedHost
+  /\ hostOverlayOpen
+  /\ hostOverlayOpen' = FALSE
+  /\ focusInUnmanagedHost' = FALSE
+  /\ focusOwner' = TopOrPage(stack)
+  /\ lastAction' = "host_escape"
+  /\ UNCHANGED <<stack, globalListenerAttached, formValid, triggerVisible>>
+
+TabInModalWithPortalPopover ==
+  /\ ~focusInUnmanagedHost
+  /\ SeqContains(stack, "modal")
+  /\ Len(stack) > 0
+  /\ stack[Len(stack)] = "popover"
+  /\ focusOwner = "popover"
+  /\ focusOwner' = "popover"
+  /\ lastAction' = "tab_portal"
+  /\ UNCHANGED <<stack, globalListenerAttached, hostOverlayOpen, focusInUnmanagedHost, formValid, triggerVisible>>
 
 TriggerLocalFunctionAction ==
+  /\ ~focusInUnmanagedHost
   /\ SeqContains(stack, "modal")
   /\ lastAction' = "local"
-  /\ UNCHANGED <<stack, globalListenerAttached, focusOwner, formValid, triggerVisible>>
+  /\ UNCHANGED <<stack, globalListenerAttached, focusOwner, hostOverlayOpen, focusInUnmanagedHost, formValid, triggerVisible>>
 
 SubmitInModal ==
+  /\ ~focusInUnmanagedHost
   /\ Len(stack) > 0
   /\ stack[Len(stack)] = "modal"
   /\ IF formValid
@@ -93,7 +161,7 @@ SubmitInModal ==
              /\ focusOwner' = TopOrPage(next)
      ELSE UNCHANGED <<stack, globalListenerAttached, focusOwner>>
   /\ lastAction' = "submit"
-  /\ UNCHANGED <<formValid, triggerVisible>>
+  /\ UNCHANGED <<hostOverlayOpen, focusInUnmanagedHost, formValid, triggerVisible>>
 
 ScrollTriggerOutOfView ==
   /\ triggerVisible
@@ -101,26 +169,31 @@ ScrollTriggerOutOfView ==
   /\ LET next == RemoveFromSeq(stack, "popover")
      IN /\ stack' = next
         /\ globalListenerAttached' = (Len(next) > 0)
-        /\ focusOwner' = TopOrPage(next)
+        /\ focusOwner' = IF focusInUnmanagedHost THEN "host" ELSE TopOrPage(next)
         /\ lastAction' = "scroll"
-        /\ UNCHANGED <<formValid>>
+        /\ UNCHANGED <<hostOverlayOpen, focusInUnmanagedHost, formValid>>
 
 ScrollTriggerIntoView ==
   /\ ~triggerVisible
   /\ triggerVisible' = TRUE
   /\ lastAction' = "scroll"
-  /\ UNCHANGED <<stack, globalListenerAttached, focusOwner, formValid>>
+  /\ UNCHANGED <<stack, globalListenerAttached, focusOwner, hostOverlayOpen, focusInUnmanagedHost, formValid>>
 
 ToggleFormValid ==
   /\ formValid' = ~formValid
   /\ lastAction' = "toggle"
-  /\ UNCHANGED <<stack, globalListenerAttached, focusOwner, triggerVisible>>
+  /\ UNCHANGED <<stack, globalListenerAttached, focusOwner, hostOverlayOpen, focusInUnmanagedHost, triggerVisible>>
 
 Next ==
+  \/ OpenHostOverlay
+  \/ FocusUnmanagedHost
+  \/ CloseHostOverlay
   \/ OpenModal
   \/ OpenPopover
   \/ OpenFullscreen
-  \/ PressEscape
+  \/ PressEscapeInManaged
+  \/ PressEscapeInUnmanagedHost
+  \/ TabInModalWithPortalPopover
   \/ TriggerLocalFunctionAction
   \/ SubmitInModal
   \/ ScrollTriggerOutOfView
@@ -128,7 +201,8 @@ Next ==
   \/ ToggleFormValid
 
 Fairness ==
-  WF_vars(PressEscape)
+  /\ SF_vars(PressEscapeInManaged)
+  /\ WF_vars(PressEscapeInUnmanagedHost)
 
 Spec == Init /\ [][Next]_vars /\ Fairness
 
@@ -138,8 +212,17 @@ NoDuplicateLayers ==
 ListenerMatchesNonEmptyStack ==
   globalListenerAttached <=> (Len(stack) > 0)
 
+UnmanagedHostFocusRequiresOpenHost ==
+  focusInUnmanagedHost => hostOverlayOpen
+
 FocusMatchesTopLayer ==
-  focusOwner = TopOrPage(stack)
+  IF focusInUnmanagedHost THEN focusOwner = "host" ELSE focusOwner = TopOrPage(stack)
+
+HostOverlayDoesNotBlockNestedManaged ==
+  (hostOverlayOpen /\ ~focusInUnmanagedHost /\ Len(stack) > 0) => focusOwner = stack[Len(stack)]
+
+PortalTabKeepsPopoverFocus ==
+  (lastAction = "tab_portal") => focusOwner = "popover"
 
 LocalActionNeverClosesModal ==
   (lastAction = "local") => SeqContains(stack, "modal")

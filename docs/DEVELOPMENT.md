@@ -35,21 +35,23 @@ flowchart TB
     ZOD -->|"Valid"| WIRE
   end
 
-  subgraph S3["Stage 3 · Client 4-Chunk Runtime & Native Light-DOM Slots"]
-    SHELL["Cold-Boot Shell lib/client.js (60.5 kB)"]
-    RT["Lazy Runtime client.runtime.js (64 Components + StreamingExpressSession)"]
+  subgraph S3["Stage 3 · Client 5-Chunk Runtime & Native Light-DOM Slots"]
+    SHELL["Cold-Boot Shell lib/client.js (77.0 kB)"]
+    RT["Lazy Runtime client.runtime.js (64 Components, Zero Streaming Parser)"]
+    ST["Lazy Stream Compiler client.streaming.js (60fps Incremental Express)"]
     EC["Lazy Chart Engine client.echarts.js (26 ECharts 6 Kinds)"]
     MM["Lazy Diagram Engine client.mermaid.js (Strict Sandbox Mermaid 11)"]
     SLOTS["Official DSH UI Slots (turnTail / toolview / input.dock / input.left)"]
     SIDE["Right Sidebar File Jump sidebarRight.openResource"]
     SHELL -->|"First surface mount"| RT
+    SHELL -.->|"Active tool stream"| ST
     RT -.->|"On Chart"| EC
     RT -.->|"On Mermaid"| MM
     RT --> SLOTS
     SLOTS --> SIDE
   end
 
-  LLM -->|"Streaming tool args (60fps progressive UI)"| RT
+  LLM -->|"Streaming tool args (60fps progressive UI)"| ST
   LLM -->|"a2ui_render / a2ui_ask"| COMP
   WIRE -->|"Turn-indexed projection"| RT
   SLOTS -->|"[a2ui-action] or /a2ui-answer"| LLM
@@ -83,15 +85,16 @@ flowchart TB
 | **Workspace Sidebar** | `@deepseek-ai/dsh-client-ui-sidebar-right` | Calls `sidebarRight.openResource` from `FileTree`, `DiffView`, `Code`, `LogViewer`, and `SourceList` to jump directly to workspace files and 1-based line numbers. |
 | **Client Code Splitting** | `window.__ModuleLoader__.load({ id: "dsh-genui-a2ui", entry })` | Loads heavy runtime, ECharts, and Mermaid chunks strictly on demand. |
 
-### 4-Chunk On-Demand Bundle Architecture
+### 6-Chunk On-Demand Bundle Architecture (Host + 5 Client Chunks)
 
 | Bundle Target | Raw Size | Gzip Size | Role & Load Trigger |
 | :--- | :--- | :--- | :--- |
-| `lib/client.js` | **`68.1 kB`** | **`19.2 kB`** | Cold-boot shell: registers UI Slots, bilingual chrome, empty-session toast feedback, and composer pill (enforced by `< 100 kB` build & test gate). |
-| `lib/client.runtime.js` | `1.41 MB` | ~`365 kB` | Loaded on first A2UI surface mount (`@a2ui/react`, 64-component catalog, TanStack Table, 0ms cross-filtering & anti-jank streaming). |
-| `lib/client.echarts.js` | `908 kB` | `296 kB` | Loaded only when a surface renders `Chart` (ECharts 6 modular registration for 26 chart kinds, markLines/markAreas, cross-filter highlight, 2× PNG export & 276px compact adaptation). |
-| `lib/client.mermaid.js` | `3.47 MB` | ~`930 kB` | Loaded only when a surface renders `Mermaid` (Mermaid 11 under `securityLevel: "strict"` + per-rule CSS scoping + SVG sanitizer + LRU-64 cache). |
-| `lib/index.js` | `755.0 kB` | `208.0 kB` | Self-contained Host ESM bundle (`@a2ui/agent`, domain skill compactor, linear Express lowering passes & Zod catalog) — ships with zero runtime `dependencies`. |
+| `lib/client.js` | **`77.0 kB`** | **`21.5 kB`** | Cold-boot shell: registers UI Slots, bilingual chrome, empty-session toast feedback, and composer pill (enforced by `< 100 kB` raw / `.bundle-budget.json` raw+gzip ratchet). |
+| `lib/client.runtime.js` | `1.01 MB` | `264 kB` | Loaded on first A2UI surface mount (`@a2ui/react`, 64-component catalog, TanStack Table, 0ms cross-filtering & per-widget `ErrorBoundary`; excludes streaming parser and `react-aria-components`). |
+| `lib/client.streaming.js` | `651 kB` | `171 kB` | Loaded strictly during live tool-call streaming (`StreamingExpressSession` incremental prefix cache & `@a2ui/agent` stream parser; never loaded for settled history). |
+| `lib/client.echarts.js` | `923 kB` | `303 kB` | Loaded only when a surface renders `Chart` (ECharts 6 modular registration for 26 chart kinds, markLines/markAreas, cross-filter highlight, 2× PNG export & 276px compact adaptation). |
+| `lib/client.mermaid.js` | `2.67 MB` | `702 kB` | Loaded only when a surface renders `Mermaid` (Mermaid 11 under `securityLevel: "strict"` with 16 disallowed diagram types & `katex` stripped at build time + per-rule CSS scoping + SVG sanitizer + LRU-64 cache). |
+| `lib/index.js` | `768 kB` | `211 kB` | Self-contained Host ESM bundle (`@a2ui/agent`, domain skill compactor, linear Express lowering passes & Zod catalog) — ships with zero runtime `dependencies`. |
 
 ---
 
@@ -245,8 +248,11 @@ npm run lint
 # TypeScript strict check
 npm run typecheck
 
-# Build Host ESM + 4 Client CJS chunks (enforces < 100 kB cold-boot size gate)
-npm run build
+# Build Host ESM + 5 Client CJS chunks & verify 6-chunk raw/gzip budget ratchet
+npm run build && npm run check:bundle
+
+# Run strict TLA+ formal model checking across all 4 state-machine specs
+npm run verify:tla:strict
 
 # Run all unit, React best-practice, security, contract, deterministic replay, and bundle tests
 npm test
@@ -272,8 +278,8 @@ node scripts/dev-env.mjs serve
 - `src/shared/` — Isomorphic `dshSchemaCatalog` (64 components / 28 functions), Express lowering passes (`express-preprocess.ts`), Host/Client `wire-types.ts`, `calc` parser/evaluator, secret/prototype sanitizers, temporal helpers, and shared cross-chunk i18n
 - `src/client/index.ts` — `68.1 kB` cold-boot UI slot shell & composer toggle pill
 - `src/client/dom-hooks.ts` — Sole low-level DOM / ECharts PNG export / streaming height stabilizer / Mermaid lifecycle boundary (`0` `useEffect` in `.tsx` files)
-- `src/client/chunks/` — On-demand entrypoints (`runtime-chunk.ts`, `echarts-chunk.ts`, `mermaid-chunk.ts`)
+- `src/client/chunks/` — On-demand entrypoints (`runtime-chunk.ts`, `streaming-chunk.ts`, `echarts-chunk.ts`, `mermaid-chunk.ts`)
 - `src/client/catalog/` — Light-DOM React implementations of all 64 components & 28 functions
-- `build/` — `tsdown` 5-target build preset & DSH web platform externalizer
+- `build/` — `tsdown` 6-target build preset & DSH web platform externalizer
 - `scripts/` — Host API contract verifier (`check-host-api.mjs`), LLM benchmark runner (`eval-llm.mjs`), and isolated mock dev server (`dev-env.mjs`, `mock-llm.mjs`)
 - `AGENTS.md` — `306px`-first `@container` layout rules, ECharts `276px` compact anti-collision contract, and pre-ship visual QA checklist

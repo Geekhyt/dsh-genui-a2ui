@@ -1,4 +1,5 @@
 import type { AgentToRendererMessage } from '@a2ui/agent'
+import { collectMessageComponents } from '../shared/a2ui-message.ts'
 import { createGenerator, type SkillDomain, SurfaceSessions } from './generator.ts'
 import { SKILL_DOMAINS } from './prompt-compact.ts'
 
@@ -494,28 +495,15 @@ export function extractCompiledArtifacts(messages: readonly AgentToRendererMessa
 } {
   const compSet = new Set<string>()
   const chartSet = new Set<string>()
+  const allComponents: Record<string, unknown>[] = []
+  collectMessageComponents(messages, allComponents)
 
-  const inspectList = (list: unknown) => {
-    if (!Array.isArray(list)) return
-    for (const item of list) {
-      if (typeof item !== 'object' || item === null) continue
-      const rec = item as Record<string, unknown>
-      if (typeof rec.component === 'string') {
-        compSet.add(rec.component)
-        if (rec.component === 'Chart' && typeof rec.kind === 'string') {
-          chartSet.add(rec.kind)
-        }
+  for (const rec of allComponents) {
+    if (typeof rec.component === 'string') {
+      compSet.add(rec.component)
+      if (rec.component === 'Chart' && typeof rec.kind === 'string') {
+        chartSet.add(rec.kind)
       }
-    }
-  }
-
-  for (const msg of messages) {
-    const rec = msg as Record<string, unknown>
-    if (rec.createSurface && typeof rec.createSurface === 'object') {
-      inspectList((rec.createSurface as Record<string, unknown>).components)
-    }
-    if (rec.updateComponents && typeof rec.updateComponents === 'object') {
-      inspectList((rec.updateComponents as Record<string, unknown>).components)
     }
   }
 

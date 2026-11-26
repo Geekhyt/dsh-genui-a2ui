@@ -1,5 +1,6 @@
 import { A2uiError, type AgentToRendererMessage } from '@a2ui/agent'
 import { z } from 'zod'
+import { collectMessageSurfaceIds, isPlainRecord } from '../shared/a2ui-message.ts'
 import { A2UI_LIMITS, normalizePlacement, type SurfacePlacement } from '../shared/catalog-schema.ts'
 import type { RenderMeta } from '../shared/wire-types.ts'
 import { RENDER_TOOL, type SurfaceSessions } from './generator.ts'
@@ -82,14 +83,9 @@ export function unwrapLegacyToolArgs(
 ): { readonly value: unknown; readonly rawUiFallback?: string } {
   let candidate: unknown = args
   for (let step = 0; step < 3; step++) {
-    if (
-      typeof candidate === 'object' &&
-      candidate !== null &&
-      'arguments' in candidate &&
-      !('ui' in candidate)
-    ) {
+    if (isPlainRecord(candidate) && 'arguments' in candidate && !('ui' in candidate)) {
       onLegacy?.('wrapped in { arguments }')
-      candidate = (candidate as { arguments: unknown }).arguments
+      candidate = candidate.arguments
       continue
     }
     if (typeof candidate === 'string') {
@@ -138,14 +134,7 @@ export function readArgs(args: unknown): {
 
 export function surfaceIdsOf(messages: readonly AgentToRendererMessage[]): string[] {
   const ids = new Set<string>()
-  for (const message of messages) {
-    for (const value of Object.values(message as unknown as Record<string, unknown>)) {
-      if (typeof value === 'object' && value !== null && 'surfaceId' in value) {
-        const id = (value as { surfaceId: unknown }).surfaceId
-        if (typeof id === 'string') ids.add(id)
-      }
-    }
-  }
+  collectMessageSurfaceIds(messages, ids)
   return [...ids]
 }
 

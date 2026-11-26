@@ -78,5 +78,17 @@ flowchart LR
 
 ## Consequences
 
-- Regressions in concurrency, CSS container queries, cold-boot boundaries, locale parity, and bundle size fail fast in `npm run lint`, `npm run build`, `npm test`, and `npm run verify:tla`.
+- Regressions in concurrency, CSS container queries, cold-boot boundaries, locale parity, and bundle size fail fast in `npm run lint`, `npm run build`, `npm test`, and `npm run verify:tla:strict`.
 - Adding a new concurrent state machine or fixing a recurring bug pattern follows the flywheel: reproduce via TLA+ or AST rule → fix code → lock invariant permanently.
+
+## 2026-11-26 Audit & Sync Addendum
+
+Following `v0.5.6–v0.5.9` (including [ADR-0009](./ADR-0009-modular-chunks-streaming-perf-and-catalog-convergence.md)), a formal drift audit uncovered and resolved two structural gaps:
+
+1. **Strict CI/Release TLC Enforcement**: `.github/workflows/ci.yml` and `.github/workflows/release.yml` previously ran `npm run verify:tla` without `--download --strict`, causing TLC to silently skip whenever `tla2tools.jar` was uncached on hosted runners. Added `npm run verify:tla:strict` (`node scripts/verify-tla.mjs --download --strict`), `actions/cache@v4` for `~/.cache/tla`, Windows `java.exe` / `JAVA_HOME_*` lookup, and comma-safe TLC state-count parsing.
+2. **Spec-to-Code Re-Alignment & Mutation Proofs**:
+   - `AskLifecycle.tla`: modeled indefinite waits (`timeout: -1`, `hasTimeout[c]`) and per-session pending capacity (`MaxPending`), adding `PendingWithinCapacity`, `IndefiniteAskNeverTimesOut`, `BoundedWaitingEventuallyResolves`, and `InFlightMessageEventuallyDrains`.
+   - `SurfaceTurnLifecycle.tla`: modeled cross-session draft flush (`SwitchSession` + `NoCrossSessionDirtyDraft`) and per-widget `ErrorBoundary` isolation (`WidgetRenderFail`, `WidgetErrorIsolatedFromRoot`, `DeletedHasNoWidgetError`, and `resetKey` reset on `StreamAbortToClosed`).
+   - `OverlayEscapeStack.tla`: modeled unmanaged host overlay nesting (`OpenHostOverlay`, `FocusUnmanagedHost`, `PressEscapeInUnmanagedHost`) and modal-to-portal-popover Tab focus trapping (`TabInModalWithPortalPopover`, `UnmanagedHostFocusRequiresOpenHost`, `HostOverlayDoesNotBlockNestedManaged`, `PortalTabKeepsPopoverFocus`).
+   - `ChunkAndMermaidCache.tla`: verified `in sync` against refactored `createLazyChunkStore` (`runtime`/`streaming`/`echarts`) and Mermaid LRU cache.
+   - All newly added invariants were verified able-to-fail via scratch mutation checks before advancing the Sync Anchor in `.agents/skills/formal-verify/SKILL.md`.

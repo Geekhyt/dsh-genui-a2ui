@@ -40,13 +40,19 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Cache TLA+ TLC Tools
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/tla
+          key: tla2tools-v1.7.4
+
       - name: Lint, Typecheck, Build, Budgets, TLA+ & Test
         run: |
           npm run lint
           npm run typecheck
           npm run build
           npm run check:bundle
-          npm run verify:tla
+          npm run verify:tla:strict
           npm test
           npm run eval:check
 
