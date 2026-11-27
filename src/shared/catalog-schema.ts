@@ -181,7 +181,7 @@ export const TableApi = {
           .optional(),
         title: DynamicStringSchema.describe('REF:#/$defs/DynamicString|Optional title.').optional(),
         searchable: z.boolean().default(false).describe('Local search box.').optional(),
-        pageSize: z.number().int().min(3).max(100).default(10).describe('Rows/page.').optional(),
+        pageSize: z.number().int().min(1).max(100).default(10).describe('Rows/page.').optional(),
         exportable: z.boolean().default(false).describe('CSV/MD export buttons.').optional(),
         selectable: z
           .boolean()

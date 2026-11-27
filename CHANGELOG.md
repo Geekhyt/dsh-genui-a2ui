@@ -2,6 +2,24 @@
 
 All notable changes to `dsh-genui-a2ui` are documented in this file.
 
+## [0.5.13] - 2026-11-27
+
+### Fixed
+- **Per-Surface Titles for Multi-Surface Turns & Docks (`src/client/shell/turn-surfaces.ts`, `src/client/shell/TurnTailView.tsx`, `src/client/shell/DockView.tsx`, `src/client/runtime/SurfaceView.tsx`, `src/client/SurfaceView.module.css`)**:
+  - Tracked `surfaceTitles: ReadonlyMap<string, string>` per visible `surfaceId` (included in LRU memo signatures and cleaned up on `deleteSurface`) across `resolveTurnTailBatch()` and `resolveDockBatch()` instead of stamping only the last `a2ui_render` call's `lastTitle` onto the shared outer header.
+  - When a turn or dock renders multiple surfaces with distinct titles, suppressed the misleading outer last-surface title and rendered dedicated per-surface headers (`[data-a2ui-surface-title]`) with a subtle `0.5px` divider directly above each corresponding surface, while preserving single-surface and identical-title layouts unchanged.
+- **Compact `Table.pageSize` Tolerance (`src/shared/catalog-schema.ts`, `src/client/catalog/TableWidget.tsx`)**:
+  - Lowered `Table.pageSize` minimum from `3` to `1` (both in Zod schema and runtime clamping) so compact 1–2 row comparison tables (e.g., H100 vs A100) compile and paginate on the first pass without spurious validation retries while still rejecting `<= 0`.
+- **Below-Reply Spatial Hint in `a2ui_render` Tool Receipt (`src/host/render-tool.ts`)**:
+  - Clarified `describePlacement('answer')` to state `shown directly BELOW your reply (refer to it as below/下方, never above/上方)` so models stop referring to answer-placed surfaces as "above/上方" without adding system-prompt token overhead.
+
+### Added
+- **Multi-Surface Title & Compact `Table.pageSize` Regression Tests (`tests/turn-surfaces.spec.ts`, `tests/multi-surface-titles.dom.spec.tsx`, `tests/host.spec.ts`)**:
+  - Added unit and `happy-dom` DOM regression coverage for multi-surface turn/dock `surfaceTitles` projection, `deleteSurface` title cleanup, per-surface header DOM placement order, `Table.pageSize=1/2` compilation & pagination, and `a2ui_render` below-reply receipt wording.
+
+### Changed
+- Verified full automated, formal & live release gate: **50 suites / 300 tests**, **39/39** architectural invariants, **0** comments, **4/4** strict TLA+ formal specs (**31,542** distinct states), **6/6** bundle budgets (`lib/client.js = 80.42 kB / 22.47 kB gzip`), `eval:check` (`31/31`, `64/64` components), `check:host-api`, **50/50** Dark & Light `qa:visual` runs, **26/26** live Chrome `qa:e2e` checks, and live local DeepSeek Harness (`DeepSeek-V4.1-Flash High`) 15-case generalization audit + post-fix multi-surface visual verification.
+
 ## [0.5.12] - 2026-11-27
 
 ### Added

@@ -150,6 +150,7 @@ export const A2uiDockView = memo(function A2uiDockView({
           key={sessionId ?? 'local'}
           messages={batch.messages}
           visibleSurfaceIds={batch.visibleSurfaceIds}
+          surfaceTitles={batch.surfaceTitles}
           sessionId={sessionId}
           variant="bare"
           streaming={false}

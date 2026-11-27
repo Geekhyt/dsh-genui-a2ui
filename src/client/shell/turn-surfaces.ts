@@ -380,12 +380,46 @@ export function buildReplayMessagesForSurfaceCall(
 
 export interface TurnTailBatch {
   readonly title: string | null
+  readonly surfaceTitles: ReadonlyMap<string, string>
   readonly visibleSurfaceIds: ReadonlySet<string>
   readonly supersededSurfaceIds: ReadonlySet<string>
   readonly messages: readonly AgentToRendererMessage[]
   readonly latestSeq: number
   readonly superseded: boolean
   readonly allSuperseded: boolean
+}
+
+function buildVisibleSurfaceTitles(
+  titles: ReadonlyMap<string, string>,
+  visibleIds: ReadonlySet<string>,
+): { readonly surfaceTitles: ReadonlyMap<string, string>; readonly sharedTitle: string | null } {
+  const surfaceTitles = new Map<string, string>()
+  const uniqueTitles = new Set<string>()
+  for (const id of visibleIds) {
+    const t = titles.get(id)
+    if (t !== undefined) {
+      surfaceTitles.set(id, t)
+      uniqueTitles.add(t)
+    }
+  }
+  if (visibleIds.size === 1) {
+    const onlyTitle = surfaceTitles.values().next().value
+    return { surfaceTitles, sharedTitle: onlyTitle ?? null }
+  }
+  if (uniqueTitles.size === 1 && surfaceTitles.size === visibleIds.size) {
+    const onlyTitle = uniqueTitles.values().next().value
+    return { surfaceTitles, sharedTitle: onlyTitle ?? null }
+  }
+  return { surfaceTitles, sharedTitle: null }
+}
+
+function serializeSurfaceTitles(surfaceTitles: ReadonlyMap<string, string>): string {
+  if (surfaceTitles.size === 0) return ''
+  const parts: string[] = []
+  for (const [id, title] of surfaceTitles) {
+    parts.push(`${id}=${title}`)
+  }
+  return parts.join('\u001f')
 }
 
 const turnTailBySnapshot = new WeakMap<ChatTargetSnapshot, Map<number, TurnTailBatch | null>>()
@@ -417,6 +451,7 @@ export function resolveTurnTailBatch(
   const laterUpdatedIds = new Set<string>()
   const dockedIdsUpToTurn = new Set<string>()
   const visibleSurfaceIds = new Set<string>()
+  const titleBySurface = new Map<string, string>()
   let lastTitle: string | null = null
   let latestSeq = 0
 
@@ -432,6 +467,7 @@ export function resolveTurnTailBatch(
           const del = (msg as { deleteSurface?: { surfaceId?: unknown } }).deleteSurface
           if (del && typeof del.surfaceId === 'string') {
             dockedIdsUpToTurn.delete(del.surfaceId)
+            titleBySurface.delete(del.surfaceId)
           }
           const created = (msg as { createSurface?: { surfaceId?: unknown } }).createSurface
           if (created && typeof created.surfaceId === 'string') {
@@ -440,6 +476,13 @@ export function resolveTurnTailBatch(
           }
         }
       } else {
+        if (call.title !== null) {
+          for (const id of call.surfaceIds) {
+            if (!dockedIdsUpToTurn.has(id)) {
+              titleBySurface.set(id, call.title)
+            }
+          }
+        }
         if (call.turn === turnNumber && call.placement === 'answer') {
           inThisTurnAnswer.push(call)
           if (call.title !== null) lastTitle = call.title
@@ -455,10 +498,14 @@ export function resolveTurnTailBatch(
           if (del && typeof del.surfaceId === 'string') {
             dockedIdsUpToTurn.delete(del.surfaceId)
             visibleSurfaceIds.delete(del.surfaceId)
+            titleBySurface.delete(del.surfaceId)
           }
           const created = (msg as { createSurface?: { surfaceId?: unknown } }).createSurface
           if (created && typeof created.surfaceId === 'string') {
             dockedIdsUpToTurn.delete(created.surfaceId)
+            if (call.title !== null) {
+              titleBySurface.set(created.surfaceId, call.title)
+            }
             if (call.turn === turnNumber && call.placement === 'answer') {
               visibleSurfaceIds.add(created.surfaceId)
             }
@@ -494,9 +541,15 @@ export function resolveTurnTailBatch(
     visibleSurfaceIds,
   )
 
+  const { surfaceTitles, sharedTitle } = buildVisibleSurfaceTitles(
+    titleBySurface,
+    visibleSurfaceIds,
+  )
+  const batchTitle = visibleSurfaceIds.size === 1 ? (sharedTitle ?? lastTitle) : sharedTitle
+
   const firstCallId = inThisTurnAnswer[0]?.callId ?? String(turnNumber)
   const memoKey = `${firstCallId}::${turnNumber}`
-  const sig = `${latestSeq}|${superseded ? 1 : 0}|${allSuperseded ? 1 : 0}|${[...supersededSurfaceIds].join(',')}|${messages.length}|${[...visibleSurfaceIds].join(',')}|${lastTitle ?? ''}`
+  const sig = `${latestSeq}|${superseded ? 1 : 0}|${allSuperseded ? 1 : 0}|${[...supersededSurfaceIds].join(',')}|${messages.length}|${[...visibleSurfaceIds].join(',')}|${batchTitle ?? ''}|${serializeSurfaceTitles(surfaceTitles)}`
   const prev = turnTailMemo.get(memoKey)
   if (
     prev !== undefined &&
@@ -511,7 +564,8 @@ export function resolveTurnTailBatch(
   }
 
   const batch: TurnTailBatch = {
-    title: lastTitle,
+    title: batchTitle,
+    surfaceTitles,
     visibleSurfaceIds,
     supersededSurfaceIds,
     messages,
@@ -531,6 +585,7 @@ export function resolveTurnTailBatch(
 
 export interface DockBatch {
   readonly title: string | null
+  readonly surfaceTitles: ReadonlyMap<string, string>
   readonly visibleSurfaceIds: ReadonlySet<string>
   readonly messages: readonly AgentToRendererMessage[]
   readonly latestSeq: number
@@ -572,6 +627,7 @@ export function resolveDockBatch(snapshot: ChatTargetSnapshot | undefined): Dock
   }
 
   const dockedIds = new Set<string>()
+  const titleBySurface = new Map<string, string>()
   let lastTitle: string | null = null
   let latestSeq = 0
 
@@ -580,19 +636,23 @@ export function resolveDockBatch(snapshot: ChatTargetSnapshot | undefined): Dock
     if (!touchesDock) continue
 
     let updatedExistingDocked = false
+    const touchedDockedIds = new Set<string>()
     for (const msg of call.messages) {
       const del = (msg as { deleteSurface?: { surfaceId?: unknown } }).deleteSurface
       if (del && typeof del.surfaceId === 'string') {
         dockedIds.delete(del.surfaceId)
+        titleBySurface.delete(del.surfaceId)
         continue
       }
       const created = (msg as { createSurface?: { surfaceId?: unknown } }).createSurface
       if (created && typeof created.surfaceId === 'string') {
         if (call.placement === 'dock') {
           dockedIds.add(created.surfaceId)
+          touchedDockedIds.add(created.surfaceId)
           updatedExistingDocked = true
         } else {
           dockedIds.delete(created.surfaceId)
+          titleBySurface.delete(created.surfaceId)
         }
         continue
       }
@@ -600,14 +660,21 @@ export function resolveDockBatch(snapshot: ChatTargetSnapshot | undefined): Dock
       if (sid !== null) {
         if (call.placement === 'dock') {
           dockedIds.add(sid)
+          touchedDockedIds.add(sid)
           updatedExistingDocked = true
         } else if (dockedIds.has(sid)) {
+          touchedDockedIds.add(sid)
           updatedExistingDocked = true
         }
       }
     }
     if (updatedExistingDocked) {
-      if (call.title !== null) lastTitle = call.title
+      if (call.title !== null) {
+        lastTitle = call.title
+        for (const sid of touchedDockedIds) {
+          titleBySurface.set(sid, call.title)
+        }
+      }
       if (call.seq > latestSeq) latestSeq = call.seq
     }
   }
@@ -621,8 +688,10 @@ export function resolveDockBatch(snapshot: ChatTargetSnapshot | undefined): Dock
     allCalls.flatMap((call) => call.messages),
     dockedIds,
   )
+  const { surfaceTitles, sharedTitle } = buildVisibleSurfaceTitles(titleBySurface, dockedIds)
+  const batchTitle = dockedIds.size === 1 ? (sharedTitle ?? lastTitle) : sharedTitle
   const memoKey = allCalls[0]?.callId ?? 'dock'
-  const sig = `${memoKey}::${latestSeq}|${messages.length}|${[...dockedIds].join(',')}|${lastTitle ?? ''}`
+  const sig = `${memoKey}::${latestSeq}|${messages.length}|${[...dockedIds].join(',')}|${batchTitle ?? ''}|${serializeSurfaceTitles(surfaceTitles)}`
   const prev = dockMemoByKey.get(memoKey)
   if (
     prev !== undefined &&
@@ -636,7 +705,8 @@ export function resolveDockBatch(snapshot: ChatTargetSnapshot | undefined): Dock
     return prev.batch
   }
   const batch: DockBatch = {
-    title: lastTitle,
+    title: batchTitle,
+    surfaceTitles,
     visibleSurfaceIds: dockedIds,
     messages,
     latestSeq,

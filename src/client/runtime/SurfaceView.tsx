@@ -484,6 +484,7 @@ export interface SurfaceGroupViewProps {
   readonly visibleSurfaceIds?: ReadonlySet<string> | undefined
   readonly readOnlySurfaceIds?: ReadonlySet<string> | undefined
   readonly title?: string | null | undefined
+  readonly surfaceTitles?: ReadonlyMap<string, string> | undefined
   readonly streaming?: boolean | undefined
   readonly sessionId?: string | undefined
   readonly readOnly?: boolean | undefined
@@ -921,6 +922,7 @@ export const SurfaceGroupView = memo(function SurfaceGroupView({
   visibleSurfaceIds,
   readOnlySurfaceIds,
   title,
+  surfaceTitles,
   streaming = false,
   sessionId,
   readOnly = false,
@@ -1027,7 +1029,26 @@ export const SurfaceGroupView = memo(function SurfaceGroupView({
     .filter(Boolean)
     .join(' ')
 
-  const showHeader = Boolean(title || streaming || readOnly || headerRight)
+  const usePerSurfaceTitles =
+    shown.length > 1 &&
+    surfaceTitles !== undefined &&
+    shown.some((s) => {
+      const subTitle = surfaceTitles.get(s.id)
+      return subTitle !== undefined && subTitle !== '' && subTitle !== title
+    })
+
+  const sectionLabel =
+    title ??
+    (usePerSurfaceTitles
+      ? shown
+          .map((s) => surfaceTitles?.get(s.id))
+          .filter((t): t is string => Boolean(t))
+          .join(' / ') || 'A2UI'
+      : 'A2UI')
+
+  const showHeader = Boolean(
+    (!usePerSurfaceTitles && title) || streaming || readOnly || headerRight,
+  )
 
   return (
     <section
@@ -1035,7 +1056,7 @@ export const SurfaceGroupView = memo(function SurfaceGroupView({
       data-dsh-a2ui-card=""
       data-streaming={streaming || undefined}
       data-readonly={readOnly ? 'true' : 'false'}
-      aria-label={title ?? 'A2UI'}
+      aria-label={sectionLabel}
     >
       {showHeader ? (
         <header className={css.header}>
@@ -1083,14 +1104,44 @@ export const SurfaceGroupView = memo(function SurfaceGroupView({
                       const effectiveReadOnly = Boolean(readOnly || partialReadOnly)
                       const effectiveOpener =
                         streaming || effectiveReadOnly ? undefined : openWorkspaceFile
+                      const subTitle = usePerSurfaceTitles
+                        ? (surfaceTitles?.get(surface.id) ?? null)
+                        : null
+                      const showSubHeader = Boolean(
+                        subTitle || (usePerSurfaceTitles && !streaming && partialReadOnly),
+                      )
+                      const itemClasses = [
+                        usePerSurfaceTitles ? css.subSurfaceItem : '',
+                        partialReadOnly ? css.surfaceStackReadOnly : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')
                       return (
                         <SurfaceReadOnlyContext.Provider key={surface.id} value={effectiveReadOnly}>
                           <FileOpenContext.Provider value={effectiveOpener}>
                             <div
                               ref={setSubSurfaceInertRef(partialReadOnly)}
-                              className={partialReadOnly ? css.surfaceStackReadOnly : undefined}
+                              className={itemClasses || undefined}
+                              data-surface-id={surface.id}
                               data-surface-readonly={partialReadOnly ? 'true' : undefined}
                             >
+                              {showSubHeader ? (
+                                <header
+                                  className={css.subSurfaceHeader}
+                                  data-a2ui-surface-title={surface.id}
+                                >
+                                  {subTitle ? (
+                                    <span className={css.title}>{subTitle}</span>
+                                  ) : (
+                                    <span />
+                                  )}
+                                  {!streaming && partialReadOnly ? (
+                                    <span className={css.badge} data-a2ui-readonly-badge="">
+                                      {readOnlyLabel ?? msg.readOnlySnapshot}
+                                    </span>
+                                  ) : null}
+                                </header>
+                              ) : null}
                               <SurfaceResetKeyContext.Provider
                                 value={`${storeGeneration}:${streaming ? 1 : 0}`}
                               >

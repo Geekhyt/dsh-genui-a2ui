@@ -174,7 +174,7 @@ function describePlacement(placement: SurfacePlacement): string {
     case 'inline':
       return 'shown inline in the tool stream'
     case 'answer':
-      return 'shown below your answer'
+      return 'shown directly BELOW your reply (refer to it as below/下方, never above/上方)'
   }
 }
 

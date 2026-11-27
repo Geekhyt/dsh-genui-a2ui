@@ -29,6 +29,51 @@ describe('a2ui_render host tool', () => {
 
     const renderedText = tool.output.render({}, value)
     expect(renderedText[0]?.text).toContain('budget')
+    expect(renderedText[0]?.text).toContain('BELOW')
+    expect(renderedText[0]?.text).toContain('never above')
+  })
+
+  it('accepts compact Table pageSize values of 1 and 2 while still rejecting 0', async () => {
+    const sessions = new SurfaceSessions(createGenerator())
+    const tool = createRenderTool(sessions)
+    const exec = { agent: { session: { id: 'sess-table-pagesize' } } }
+
+    const ok2 = await tool.execute(
+      {
+        ui: [
+          'surface("gpu_cmp")',
+          '$/rows = [{ gpu: "H100", tok: 265 }, { gpu: "A100", tok: 146 }]',
+          'root = Table($/rows, title="GPU 对比", pageSize=2)',
+        ].join('\n'),
+      },
+      exec,
+    )
+    expect(ok2.status).toBe('rendered')
+
+    const ok1 = await tool.execute(
+      {
+        ui: [
+          'surface("gpu_cmp_1")',
+          '$/rows = [{ gpu: "H100", tok: 265 }, { gpu: "A100", tok: 146 }]',
+          'root = Table($/rows, pageSize=1)',
+        ].join('\n'),
+      },
+      exec,
+    )
+    expect(ok1.status).toBe('rendered')
+
+    await expect(
+      tool.execute(
+        {
+          ui: [
+            'surface("gpu_cmp_0")',
+            '$/rows = [{ gpu: "H100", tok: 265 }]',
+            'root = Table($/rows, pageSize=0)',
+          ].join('\n'),
+        },
+        exec,
+      ),
+    ).rejects.toThrow(/pageSize/)
   })
 
   it('maintains per-session RendererState so surface("id", update=true) emits update messages', async () => {

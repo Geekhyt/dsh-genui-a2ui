@@ -337,7 +337,7 @@ export const TableWidget = memo(function TableWidget({
   const globalFilter = useDeferredValue(searchInput)
   const safePageSize =
     typeof pageSize === 'number' && Number.isFinite(pageSize) ? Math.trunc(pageSize) : 10
-  const clampedPageSize = Math.max(3, Math.min(100, safePageSize))
+  const clampedPageSize = Math.max(1, Math.min(100, safePageSize))
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: clampedPageSize })
   const [selectedIndices, setSelectedIndices] = useState<ReadonlySet<number>>(() => new Set())
   const [expandedIndices, setExpandedIndices] = useState<ReadonlySet<number>>(() => new Set())

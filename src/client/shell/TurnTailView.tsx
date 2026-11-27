@@ -46,6 +46,7 @@ export const A2uiTurnTailView = memo(function A2uiTurnTailView({
         visibleSurfaceIds={batch.visibleSurfaceIds}
         readOnlySurfaceIds={batch.supersededSurfaceIds}
         title={batch.title}
+        surfaceTitles={batch.surfaceTitles}
         sessionId={sessionId}
         streaming={false}
         readOnly={batch.allSuperseded}
